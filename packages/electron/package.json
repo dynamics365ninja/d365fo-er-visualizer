@@ -1,0 +1,21 @@
+{
+  "name": "@er-visualizer/electron",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter @er-visualizer/ui dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "build": "tsc -p tsconfig.json",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^33.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.0",
+    "wait-on": "^8.0.0"
+  }
+}

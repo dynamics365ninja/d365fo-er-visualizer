@@ -1,0 +1,20 @@
+{
+  "name": "d365fo-er-visualizer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Visual designer and analyzer for D365FO Electronic Reporting configurations",
+  "scripts": {
+    "dev": "pnpm --filter @er-visualizer/ui dev",
+    "dev:electron": "pnpm --filter @er-visualizer/electron dev",
+    "build": "pnpm -r build",
+    "test": "pnpm --filter @er-visualizer/core test",
+    "test:watch": "pnpm --filter @er-visualizer/core test:watch",
+    "lint": "pnpm -r lint"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron", "esbuild"]
+  }
+}
