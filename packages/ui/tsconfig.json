@@ -6,6 +6,7 @@
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
+    "types": ["vite/client"],
     "noEmit": true,
     "paths": {
       "@er-visualizer/core": ["../core/src/index.ts"]
