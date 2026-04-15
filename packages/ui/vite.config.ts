@@ -5,7 +5,7 @@ import path from 'node:path';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: './',
+  base: process.env.VERCEL ? '/' : './',
   resolve: {
     alias: {
       '@er-visualizer/core': path.resolve(__dirname, '../core/src/index.ts'),
