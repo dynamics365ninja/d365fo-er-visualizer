@@ -1,6 +1,5 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { App } from './components/App';
 import './index.css';
 
 function formatRuntimeError(value: unknown): string {
@@ -39,18 +38,21 @@ window.addEventListener('unhandledrejection', event => {
   renderFatalScreen(formatRuntimeError(event.reason));
 });
 
-try {
+async function bootstrap() {
   const container = document.getElementById('root');
   if (!container) {
     throw new Error('Missing #root element in index.html');
   }
 
+  const { App } = await import('./components/App');
   const root = createRoot(container);
   root.render(
     <React.StrictMode>
       <App />
     </React.StrictMode>
   );
-} catch (error) {
-  renderFatalScreen(formatRuntimeError(error));
 }
+
+bootstrap().catch(error => {
+  renderFatalScreen(formatRuntimeError(error));
+});
