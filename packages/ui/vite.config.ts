@@ -15,26 +15,5 @@ export default defineConfig({
     outDir: 'dist',
     target: 'es2019',
     sourcemap: true,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes('node_modules')) return undefined;
-
-          if (id.includes('@xyflow/react')) {
-            return 'xyflow';
-          }
-
-          if (id.includes('react-resizable-panels')) {
-            return 'panels';
-          }
-
-          if (id.includes('react-dom') || id.includes(`${path.sep}react${path.sep}`)) {
-            return 'react-vendor';
-          }
-
-          return 'vendor';
-        },
-      },
-    },
   },
 });
