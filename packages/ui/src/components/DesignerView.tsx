@@ -13,7 +13,8 @@ import { useAppStore, resolveDeepExpression } from '../state/store';
 import type { DeepResolutionResult } from '../state/store';
 import { ClickablePath } from './ClickablePath';
 import { DrillDownPanel } from './DrillDownPanel';
-import { t } from '../i18n';
+import { PropertyInspector } from './PropertyInspector';
+import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { buildFormatBindingPresentation, groupFormatBindingsByCategory } from '../utils/format-binding-display';
 import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/theme-colors';
@@ -24,6 +25,7 @@ export function DesignerView() {
   const tabs = useAppStore(s => s.openTabs);
   const configs = useAppStore(s => s.configurations);
   const treeNodes = useAppStore(s => s.treeNodes);
+  const selectedNode = useAppStore(s => s.selectedNode);
 
   if (!activeTabId) {
     return (
@@ -42,13 +44,35 @@ export function DesignerView() {
   const config = configs[tab.configIndex];
   if (!config) return null;
 
-  const activeNode = findTreeNodeById(treeNodes, activeTabId);
+  const tabNode = findTreeNodeById(treeNodes, activeTabId);
+
+  const activeNode = selectedNode?.configIndex === tab.configIndex
+    ? selectedNode
+    : findTreeNodeById(treeNodes, activeTabId);
+
+  if (tabNode && tabNode.type !== 'file') {
+    return <FocusedNodeTab node={tabNode} />;
+  }
 
   if (config.kind === 'DataModel') return <ModelDesigner config={config} focusNode={activeNode} />;
   if (config.kind === 'ModelMapping') return <MappingDesigner config={config} configIndex={tab.configIndex} focusNode={activeNode} />;
   if (config.kind === 'Format') return <FormatDesigner config={config} configIndex={tab.configIndex} focusNode={activeNode} />;
 
   return <div style={{ padding: 16 }}>Unsupported view for: {config.kind}</div>;
+}
+
+function FocusedNodeTab({ node }: { node: any }) {
+  return (
+    <div className="focused-node-tab">
+      <div className="focused-node-tab-header">
+        <span className="focused-node-tab-icon">{node.icon}</span>
+        <span className="focused-node-tab-title">{node.name}</span>
+      </div>
+      <div className="focused-node-tab-body">
+        <PropertyInspector nodeOverride={node} />
+      </div>
+    </div>
+  );
 }
 
 function findTreeNodeById(nodes: any[], id: string): any | null {
@@ -72,6 +96,70 @@ function findTreeNodeByMatch(node: any, predicate: (candidate: any) => boolean):
 }
 
 type DensityMode = 'comfortable' | 'compact';
+
+function getConsultantFormatTypeLabel(type: string): string {
+  const csLabels: Record<string, string> = {
+    File: 'Soubor',
+    ExcelFile: 'Excel',
+    WordFile: 'Word',
+    PDFFile: 'PDF',
+    XMLElement: 'Element',
+    XMLAttribute: 'Atribut',
+    XMLSequence: 'Sekvence',
+    String: 'Text',
+    Base64: 'Příloha',
+  };
+  const enLabels: Record<string, string> = {
+    File: 'File',
+    ExcelFile: 'Excel',
+    WordFile: 'Word',
+    PDFFile: 'PDF',
+    XMLElement: 'Element',
+    XMLAttribute: 'Attribute',
+    XMLSequence: 'Sequence',
+    String: 'Text',
+    Base64: 'Attachment',
+  };
+  const labels = locale === 'cs' ? csLabels : enLabels;
+  return labels[type] ?? type;
+}
+
+function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): string {
+  if (showTechnicalDetails) {
+    return dsGroupLabels[type] ?? `❓ ${type}`;
+  }
+
+  const csLabels: Record<string, string> = {
+    Table: '🗃️ Tabulky',
+    CalculatedField: '🧮 Vypočtené hodnoty',
+    Class: '⚙️ Logika',
+    Enum: '🔤 Hodnoty',
+    ModelEnum: '🔤 Hodnoty',
+    FormatEnum: '🔤 Hodnoty',
+    UserParameter: '👤 Parametry',
+    GroupBy: '📊 Seskupená data',
+    Container: '📦 Kontejnery',
+  };
+  const enLabels: Record<string, string> = {
+    Table: '🗃️ Tables',
+    CalculatedField: '🧮 Calculated values',
+    Class: '⚙️ Logic',
+    Enum: '🔤 Values',
+    ModelEnum: '🔤 Values',
+    FormatEnum: '🔤 Values',
+    UserParameter: '👤 Parameters',
+    GroupBy: '📊 Grouped data',
+    Container: '📦 Containers',
+  };
+  const labels = locale === 'cs' ? csLabels : enLabels;
+  return labels[type] ?? (locale === 'cs' ? '📁 Ostatní' : '📁 Other');
+}
+
+function getDatasourceGroupKey(type: string, showTechnicalDetails: boolean): string {
+  if (showTechnicalDetails) return type;
+  if (type === 'Enum' || type === 'ModelEnum' || type === 'FormatEnum') return 'Values';
+  return type;
+}
 
 // ─── Model Designer ───
 
@@ -160,6 +248,7 @@ function buildModelLayout(containers: any[]) {
 
 function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNode: any | null }) {
   const dm = (config.content as ERDataModelContent).version.model;
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -273,14 +362,16 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
                     <span style={{ color: 'var(--syn-identifier)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {f.name}
                     </span>
-                    <span style={{
-                      color: f.typeDescriptor ? 'var(--surface-info-fg)' : 'var(--syn-field-type)',
-                      fontSize: 10,
-                      fontWeight: f.typeDescriptor ? 600 : 400,
-                      flexShrink: 0,
-                    }}>
-                      {f.typeDescriptor ? `→ ${containerMap.get(f.typeDescriptor)?.name ?? f.typeDescriptor.slice(1, 9)}` : fieldTypeLabel(f.type)}
-                    </span>
+                    {showTechnicalDetails && (
+                      <span style={{
+                        color: f.typeDescriptor ? 'var(--surface-info-fg)' : 'var(--syn-field-type)',
+                        fontSize: 10,
+                        fontWeight: f.typeDescriptor ? 600 : 400,
+                        flexShrink: 0,
+                      }}>
+                        {f.typeDescriptor ? `→ ${containerMap.get(f.typeDescriptor)?.name ?? f.typeDescriptor.slice(1, 9)}` : fieldTypeLabel(f.type)}
+                      </span>
+                    )}
                   </div>
                 ))}
                 {container.items.length > 14 && (
@@ -329,7 +420,7 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
     });
 
     return { nodes, edges };
-  }, [dm, selectedId]);
+  }, [dm, selectedId, showTechnicalDetails]);
 
   // Stats
   const stats = useMemo(() => ({
@@ -391,7 +482,6 @@ function MappingDesigner({ config, configIndex, focusNode }: { config: ERConfigu
 
   useEffect(() => {
     if (!focusNode) return;
-    if (focusNode.type === 'datasource') setView('datasources');
     if (focusNode.type === 'binding' || focusNode.type === 'validation') setView('bindings');
   }, [focusNode]);
 
@@ -589,6 +679,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
   const registry = useAppStore(s => s.registry);
   const treeNodes = useAppStore(s => s.treeNodes);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
 
   const [filter, setFilter] = useState('');
   const [view, setView] = useState<'structure' | 'bindings' | 'datasources'>('structure');
@@ -611,9 +702,6 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
         setSelectedElementId(focusNode.data.componentId);
       }
       return;
-    }
-    if (focusNode.type === 'datasource') {
-      setView('datasources');
     }
   }, [focusNode]);
 
@@ -782,7 +870,10 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
     });
   }, []);
 
-  const currentViewLabel = view === 'structure' ? t.structure : view === 'bindings' ? t.bindings : t.dataSources;
+  const bindingsLabel = showTechnicalDetails ? t.bindings : t.lightBindings;
+  const dataSourcesLabel = showTechnicalDetails ? t.dataSources : t.lightDataSources;
+  const groupCountLabel = locale === 'cs' ? (showTechnicalDetails ? 'typů' : 'skupin') : (showTechnicalDetails ? 'types' : 'groups');
+  const currentViewLabel = view === 'structure' ? t.structure : view === 'bindings' ? bindingsLabel : dataSourcesLabel;
   const currentFocusLabel = selectedElement?.name ?? focusNode?.name ?? fmt.name;
 
   return (
@@ -801,8 +892,8 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
           <span className="fmt-stat fmt-stat-bound" title={`${stats.boundElements} ${t.bound}`}>✓ {stats.boundElements} {t.bound}</span>
           <span className="fmt-stat fmt-stat-unbound" title={`${stats.unboundElements} ${t.unbound}`}>○ {stats.unboundElements} {t.unbound}</span>
           <span className="fmt-stat fmt-stat-structural" title={`${stats.structuralElements} ${t.structural}`}>⬡ {stats.structuralElements} {t.structural}</span>
-          <span className="fmt-stat">↔️ {stats.bindings} bindings ({groupedBindings.length} elements / {groupedBindingsByType.length} types)</span>
-          <span className="fmt-stat">📊 {stats.datasources} DS</span>
+          <span className="fmt-stat">↔️ {stats.bindings} {bindingsLabel.toLowerCase()} ({groupedBindings.length} {t.elements} / {groupedBindingsByType.length} {groupCountLabel})</span>
+          <span className="fmt-stat">📊 {stats.datasources} {dataSourcesLabel.toLowerCase()}</span>
           {stats.enums > 0 && <span className="fmt-stat">🔤 {stats.enums} enums</span>}
           {stats.transformations > 0 && <span className="fmt-stat">🔄 {stats.transformations} {t.transforms}</span>}
         </div>
@@ -818,8 +909,8 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
               className={`fmt-tab-btn ${view === v ? 'active' : ''}`}
             >
               {v === 'structure' ? `${t.structure} (${stats.totalElements})` :
-               v === 'bindings' ? `${t.bindings} (${groupedBindingsByType.length} types)` :
-               `${t.dataSources} (${stats.datasources})`}
+               v === 'bindings' ? `${bindingsLabel} (${groupedBindingsByType.length} ${groupCountLabel})` :
+               `${dataSourcesLabel} (${stats.datasources})`}
             </button>
           ))}
         </div>
@@ -894,6 +985,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
                 onSelect={setSelectedElementId}
                 resolveDatasource={resolveDatasource}
                 registry={registry}
+                showTechnicalDetails={showTechnicalDetails}
               />
             </>
           )}
@@ -924,11 +1016,11 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
                     <div key={group.elementType} className="mm-group">
                       <div className="mm-group-header" onClick={() => toggleBindingTypeGroup(group.elementType)}>
                         <span className={`tree-chevron ${!collapsedBindingTypeGroups.has(group.elementType) ? 'open' : ''}`} />
-                        <span className="mm-group-name">{group.elementType}</span>
+                        <span className="mm-group-name">{showTechnicalDetails ? group.elementType : getConsultantFormatTypeLabel(group.elementType)}</span>
                         <span className="mm-group-count">{group.rows.length}</span>
                       </div>
                       {!collapsedBindingTypeGroups.has(group.elementType) && group.rows.map(row => (
-                        <FormatElementBindingGroup key={row.componentId} row={row} configIndex={configIndex} onNavigate={setSelectedElementId} onReveal={revealFormatElementInExplorer} />
+                        <FormatElementBindingGroup key={row.componentId} row={row} configIndex={configIndex} onNavigate={setSelectedElementId} onReveal={revealFormatElementInExplorer} showTechnicalDetails={showTechnicalDetails} />
                       ))}
                     </div>
                   ))}
@@ -944,9 +1036,11 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
         {selectedElement && view === 'structure' && (
           <div className={`fmt-detail-panel density-${density}`}>
             <div className="fmt-detail-header">
-              <span style={{ color: getFormatTypeColor(selectedElement.elementType), fontWeight: 700 }}>
-                {selectedElement.elementType}
-              </span>
+              {showTechnicalDetails && (
+                <span style={{ color: getFormatTypeColor(selectedElement.elementType), fontWeight: 700 }}>
+                  {selectedElement.elementType}
+                </span>
+              )}
               <span style={{ fontWeight: 600, marginLeft: 6 }}>{selectedElement.name}</span>
               <button
                 onClick={() => revealFormatElementInExplorer(selectedElement.id)}
@@ -970,8 +1064,8 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
                 </div>
                 {!collapsedDetailSections.has('overview') && <div className="fmt-summary-grid">
                   <div className="fmt-summary-card">
-                    <span className="fmt-summary-label">{t.propType}</span>
-                    <span className="fmt-summary-value">{selectedElement.elementType}</span>
+                    <span className="fmt-summary-label">{showTechnicalDetails ? t.propType : t.propName}</span>
+                    <span className="fmt-summary-value">{showTechnicalDetails ? selectedElement.elementType : selectedElement.name}</span>
                   </div>
                   <div className="fmt-summary-card">
                     <span className="fmt-summary-label">{t.bindings}</span>
@@ -995,17 +1089,19 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
                   {t.properties}
                 </div>
                 {!collapsedDetailSections.has('properties') && <div className="prop-grid">
-                  <div className="prop-label">{t.propId}</div>
-                  <div className="prop-value guid">{selectedElement.id}</div>
-                  <div className="prop-label">{t.propType}</div>
-                  <div className="prop-value">{selectedElement.elementType}</div>
                   <div className="prop-label">{t.propName}</div>
                   <div className="prop-value">{selectedElement.name}</div>
-                  {selectedElement.encoding && <>
+                  {showTechnicalDetails && <>
+                    <div className="prop-label">{t.propId}</div>
+                    <div className="prop-value guid">{selectedElement.id}</div>
+                    <div className="prop-label">{t.propType}</div>
+                    <div className="prop-value">{selectedElement.elementType}</div>
+                  </>}
+                  {showTechnicalDetails && selectedElement.encoding && <>
                     <div className="prop-label">{t.propEncoding}</div>
                     <div className="prop-value">{selectedElement.encoding}</div>
                   </>}
-                  {selectedElement.maximalLength != null && <>
+                  {showTechnicalDetails && selectedElement.maximalLength != null && <>
                     <div className="prop-label">{t.propMaxLen}</div>
                     <div className="prop-value">{selectedElement.maximalLength}</div>
                   </>}
@@ -1013,18 +1109,18 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
                     <div className="prop-label">{t.propValue}</div>
                     <div className="prop-value expression">{selectedElement.value}</div>
                   </>}
-                  {selectedElement.transformation && <>
+                  {showTechnicalDetails && selectedElement.transformation && <>
                     <div className="prop-label">{t.propTransform}</div>
                     <div className="prop-value">
                       {transformationMap.get(selectedElement.transformation)?.name ?? selectedElement.transformation}
                     </div>
                   </>}
-                  {selectedElement.excludedFromDataSource && <>
+                  {showTechnicalDetails && selectedElement.excludedFromDataSource && <>
                     <div className="prop-label">{t.propExcluded}</div>
                     <div className="prop-value">{t.propYes}</div>
                   </>}
                   {/* Extra attributes */}
-                  {Object.entries(selectedElement.attributes ?? {})
+                  {showTechnicalDetails && Object.entries(selectedElement.attributes ?? {})
                     .filter(([k]) => !['Encoding', 'MaximalLength', 'Value', 'Transformation', 'ExcludedFromDataSource'].includes(k))
                     .map(([k, v]) => (
                     <React.Fragment key={k}>
@@ -1050,7 +1146,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
                           <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'}`} style={{ marginRight: 6 }}>
                             {b.bindingDisplayLabel}
                           </span>
-                          {b.promotedFromChild && b.rawElementType && (
+                          {showTechnicalDetails && b.promotedFromChild && b.rawElementType && (
                             <span className="fmt-binding-origin">via {b.rawElementType}</span>
                           )}
                           <div style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 11 }}>
@@ -1081,9 +1177,11 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
                       className="fmt-detail-child"
                       onClick={() => setSelectedElementId(child.id)}
                     >
-                      <span style={{ color: getFormatTypeColor(child.elementType), fontSize: 11 }}>
-                        {child.elementType}
-                      </span>
+                      {showTechnicalDetails && (
+                        <span style={{ color: getFormatTypeColor(child.elementType), fontSize: 11 }}>
+                          {child.elementType}
+                        </span>
+                      )}
                       <span style={{ marginLeft: 6 }}>{child.name}</span>
                       {bindingMap.has(child.id) && <span style={{ marginLeft: 'auto', color: 'var(--success)', fontSize: 10 }}>●</span>}
                     </div>
@@ -1190,9 +1288,10 @@ interface FormatElementTreeProps {
   onSelect: (id: string) => void;
   resolveDatasource: (name: string, ci: number) => any;
   registry: any;
+  showTechnicalDetails: boolean;
 }
 
-function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, expandMode, expandVersion, selectedId, onSelect, resolveDatasource, registry }: FormatElementTreeProps) {
+function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, expandMode, expandVersion, selectedId, onSelect, resolveDatasource, registry, showTechnicalDetails }: FormatElementTreeProps) {
   const [expanded, setExpanded] = useState(expandMode === 'all');
   const [hoverBinding, setHoverBinding] = useState<any | null>(null);
 
@@ -1252,12 +1351,14 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
         <span className="fmt-type-icon" style={{ color: getFormatTypeColor(element.elementType) }}>
           {formatTypeIcons[element.elementType] ?? '❓'}
         </span>
-        <span className="fmt-type-badge" style={{
-          background: getFormatTypeColor(element.elementType) + '20',
-          color: getFormatTypeColor(element.elementType),
-        }}>
-          {element.elementType}
-        </span>
+        {showTechnicalDetails && (
+          <span className="fmt-type-badge" style={{
+            background: getFormatTypeColor(element.elementType) + '20',
+            color: getFormatTypeColor(element.elementType),
+          }}>
+            {element.elementType}
+          </span>
+        )}
 
         {/* Element Name */}
         <span className="fmt-element-name">{element.name}</span>
@@ -1268,12 +1369,12 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
         )}
 
         {/* Max Length */}
-        {element.maximalLength != null && (
+        {showTechnicalDetails && element.maximalLength != null && (
           <span className="fmt-meta">max:{element.maximalLength}</span>
         )}
 
         {/* Encoding */}
-        {element.encoding && (
+        {showTechnicalDetails && element.encoding && (
           <span className="fmt-meta">[{element.encoding}]</span>
         )}
 
@@ -1317,7 +1418,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
               {category.bindings.map((b: any, i: number) => (
                 <div key={`${category.key}-${i}`} className="fmt-binding-detail-row">
                   <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'}`}>{b.bindingDisplayLabel}</span>
-                  {b.promotedFromChild && b.rawElementType && (
+                  {showTechnicalDetails && b.promotedFromChild && b.rawElementType && (
                     <span className="fmt-binding-origin">via {b.rawElementType}</span>
                   )}
                   <span className="fmt-binding-formula">
@@ -1351,6 +1452,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
           onSelect={onSelect}
           resolveDatasource={resolveDatasource}
           registry={registry}
+          showTechnicalDetails={showTechnicalDetails}
         />
       ))}
     </div>
@@ -1652,11 +1754,12 @@ function FormatBindingDetail({ expression, configIndex, resolveDatasource }: {
 
 // ── Grouped binding row: shows element name + data binding + optional property bindings ──
 
-function FormatElementBindingGroup({ row, configIndex, onNavigate, onReveal }: {
+function FormatElementBindingGroup({ row, configIndex, onNavigate, onReveal, showTechnicalDetails }: {
   row: any;
   configIndex: number;
   onNavigate: (elementId: string) => void;
   onReveal?: (elementId: string) => void;
+  showTechnicalDetails: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const totalBindings = row.categories.reduce((count: number, category: any) => count + category.bindings.length, 0);
@@ -1671,22 +1774,24 @@ function FormatElementBindingGroup({ row, configIndex, onNavigate, onReveal }: {
       >
         {/* Left: type badge + element name */}
         <div className="mapping-row-path" style={{ minWidth: 180, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-          <span
-            className="badge"
-            style={{
-              color: getFormatTypeColor(row.elementType),
-              border: '1px solid currentColor',
-              background: getFormatTypeBadgeSurface(row.elementType),
-              fontSize: 9,
-              padding: '1px 5px',
-              borderRadius: 3,
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
-              flexShrink: 0,
-            }}
-          >
-            {row.elementType}
-          </span>
+          {showTechnicalDetails && (
+            <span
+              className="badge"
+              style={{
+                color: getFormatTypeColor(row.elementType),
+                border: '1px solid currentColor',
+                background: getFormatTypeBadgeSurface(row.elementType),
+                fontSize: 9,
+                padding: '1px 5px',
+                borderRadius: 3,
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                flexShrink: 0,
+              }}
+            >
+              {row.elementType}
+            </span>
+          )}
           <span style={{ fontWeight: 600, color: 'var(--syn-resolved)' }}>{row.elementName}</span>
         </div>
 
@@ -1725,7 +1830,7 @@ function FormatElementBindingGroup({ row, configIndex, onNavigate, onReveal }: {
                 <div key={`${category.key}-${i}`} className="mapping-row" style={{ paddingTop: 2, paddingBottom: 2, minHeight: 'unset' }}>
                   <div style={{ minWidth: 180, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                     <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'}`} style={{ fontSize: 9 }}>{binding.bindingDisplayLabel}</span>
-                    {binding.promotedFromChild && binding.rawElementType && (
+                    {showTechnicalDetails && binding.promotedFromChild && binding.rawElementType && (
                       <span className="fmt-binding-origin">via {binding.rawElementType}</span>
                     )}
                   </div>
@@ -1744,19 +1849,18 @@ function FormatElementBindingGroup({ row, configIndex, onNavigate, onReveal }: {
 }
 
 function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: number }) {
-  const summaryRows: Array<[string, React.ReactNode]> = [
-    [t.node, node.name],
-    [t.propType, node.type],
-  ];
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const summaryRows: Array<[string, React.ReactNode]> = [[t.node, node.name]];
 
-  if (node.data?.elementType) summaryRows.push([t.elementType, node.data.elementType]);
-  if (node.data?.type && node.type === 'datasource') summaryRows.push([t.datasourceType, node.data.type]);
+  if (showTechnicalDetails) summaryRows.push([t.propType, node.type]);
+  if (showTechnicalDetails && node.data?.elementType) summaryRows.push([t.elementType, node.data.elementType]);
+  if (showTechnicalDetails && node.data?.type && node.type === 'datasource') summaryRows.push([t.datasourceType, node.data.type]);
   if (node.data?.path) summaryRows.push([t.path, <ClickablePath expression={node.data.path} configIndex={configIndex} mode="model-path" />]);
   if (node.data?.expressionAsString) summaryRows.push([t.expression, <ClickablePath expression={node.data.expressionAsString} configIndex={configIndex} mode="binding-expr" />]);
   if (node.data?.tableInfo?.tableName) summaryRows.push([t.drillLabelTable, node.data.tableInfo.tableName]);
   if (node.data?.enumInfo?.enumName) summaryRows.push([t.drillLabelEnum, formatEnumDisplayName(node.data.enumInfo.enumName, node.data.enumInfo)]);
   if (node.data?.classInfo?.className) summaryRows.push([t.drillLabelClass, node.data.classInfo.className]);
-  if (node.data?.id) summaryRows.push([t.propId, <span className="prop-value guid" style={{ padding: 0, background: 'transparent' }}>{node.data.id}</span>]);
+  if (showTechnicalDetails && node.data?.id) summaryRows.push([t.propId, <span className="prop-value guid" style={{ padding: 0, background: 'transparent' }}>{node.data.id}</span>]);
 
   return (
     <div className="fmt-detail-section" style={{ borderBottom: '1px solid var(--border-color)' }}>
@@ -1824,14 +1928,15 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode }: {
   navigateToTreeNode: (nodeId: string) => void;
 }) {
   const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const [expanded, setExpanded] = useState(false);
 
   // Build human-readable target string
   let targetLabel: string | null = null;
   if (ds.tableInfo) {
     targetLabel = ds.tableInfo.tableName;
-    if (ds.tableInfo.isCrossCompany) targetLabel += ' (cross-company)';
-    if (ds.tableInfo.selectedFields?.length) targetLabel += ` [${ds.tableInfo.selectedFields.join(', ')}]`;
+    if (showTechnicalDetails && ds.tableInfo.isCrossCompany) targetLabel += ' (cross-company)';
+    if (showTechnicalDetails && ds.tableInfo.selectedFields?.length) targetLabel += ` [${ds.tableInfo.selectedFields.join(', ')}]`;
   } else if (ds.enumInfo) {
     targetLabel = formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo);
   } else if (ds.classInfo) {
@@ -1851,9 +1956,11 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode }: {
       >
         {/* Line 1: type badge + name + nested toggle */}
         <div className="ds-row-main">
-          <span className={`badge ${getDsBadgeClass(ds.type)}`} style={{ flexShrink: 0 }}>
-            {ds.type}
-          </span>
+          {showTechnicalDetails && (
+            <span className={`badge ${getDsBadgeClass(ds.type)}`} style={{ flexShrink: 0 }}>
+              {ds.type}
+            </span>
+          )}
           <span className="ds-row-name">{ds.name}</span>
           {ds.children?.length > 0 && (
             <span
@@ -1906,12 +2013,13 @@ function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode }:
   configIndex: number;
   navigateToTreeNode: (nodeId: string) => void;
 }) {
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   const groups = useMemo(() => {
     const map = new Map<string, any[]>();
     for (const ds of datasources) {
-      const type = ds.type || 'Unknown';
+      const type = getDatasourceGroupKey(ds.type || 'Unknown', showTechnicalDetails);
       if (!map.has(type)) map.set(type, []);
       map.get(type)!.push(ds);
     }
@@ -1922,7 +2030,7 @@ function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode }:
     }
     for (const [key, val] of map) { sorted.push([key, val]); }
     return sorted;
-  }, [datasources]);
+  }, [datasources, showTechnicalDetails]);
 
   const toggleGroup = useCallback((type: string) => {
     setCollapsedGroups(prev => {
@@ -1966,7 +2074,7 @@ function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode }:
               onClick={() => toggleGroup(type)}
             >
               <span className={`tree-chevron ${!isCollapsed ? 'open' : ''}`} />
-              <span className="ds-group-label">{dsGroupLabels[type] ?? `❓ ${type}`}</span>
+              <span className="ds-group-label">{getDatasourceGroupLabel(type, showTechnicalDetails)}</span>
               <span className="ds-group-count">{items.length}</span>
             </div>
             {!isCollapsed && items.map((ds: any, i: number) => (

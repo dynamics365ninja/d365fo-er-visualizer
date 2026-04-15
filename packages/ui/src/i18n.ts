@@ -30,6 +30,10 @@ export interface Translations {
   showExplorer: string;
   hideProperties: string;
   showProperties: string;
+  showDetails: string;
+  hideDetails: string;
+  consultantView: string;
+  technicalView: string;
   explorer: string;
   properties: string;
   configurations: string;
@@ -45,6 +49,8 @@ export interface Translations {
   structure: string;
   bindings: string;
   dataSources: string;
+  lightBindings: string;
+  lightDataSources: string;
   elements: string;
   bound: string;
   unbound: string;
@@ -144,14 +150,18 @@ const cs: Translations = {
   loadXml: 'Načíst XML',
   searchPlaceholder: 'Název tabulky, pole, cesty…',
   search: 'Hledat',
-  whereUsed: 'Where used',
-  whereUsedPlaceholder: 'např. TaxTrans, CustTable…',
-  whereUsedLabel: 'Zadej název tabulky, výčtu nebo třídy:',
+  whereUsed: 'Místa použití',
+  whereUsedPlaceholder: 'např. TaxTrans, CustTable, MyCalcField…',
+  whereUsedLabel: 'Zadej název tabulky, výčtu, třídy nebo datasource:',
   find: 'Najít',
   hideExplorer: 'Skrýt Explorer',
   showExplorer: 'Zobrazit Explorer',
   hideProperties: 'Skrýt Vlastnosti',
   showProperties: 'Zobrazit Vlastnosti',
+  showDetails: 'Zobrazit detaily',
+  hideDetails: 'Skrýt detaily',
+  consultantView: 'Konzultantský pohled',
+  technicalView: 'Technický pohled',
   explorer: 'Explorer',
   properties: 'Vlastnosti',
   configurations: 'Konfigurace',
@@ -168,6 +178,8 @@ const cs: Translations = {
   structure: 'Struktura',
   bindings: 'Binding',
   dataSources: 'Datové zdroje',
+  lightBindings: 'Napojení',
+  lightDataSources: 'Zdroje dat',
   elements: 'prvků',
   bound: 'vázaných',
   unbound: 'nevázaných',
@@ -176,7 +188,7 @@ const cs: Translations = {
   transforms: 'transformací',
   clearFilter: 'Vymazat filtr',
   clearSearch: 'Vymazat hledání',
-  clearWhereUsedSearch: 'Vymazat where-used hledání',
+  clearWhereUsedSearch: 'Vymazat hledání míst použití',
   noConfigurationsLoaded: 'Nejsou načtené žádné konfigurace.',
   loadXmlHint: 'Klikni na Načíst XML pro import ER konfiguračních souborů.',
   focusedDetail: 'Detail výběru',
@@ -269,13 +281,17 @@ const en: Translations = {
   searchPlaceholder: 'Table name, field, path…',
   search: 'Search',
   whereUsed: 'Where used',
-  whereUsedPlaceholder: 'e.g. TaxTrans, CustTable…',
-  whereUsedLabel: 'Enter table, enum or class name:',
+  whereUsedPlaceholder: 'e.g. TaxTrans, CustTable, MyCalcField…',
+  whereUsedLabel: 'Enter table, enum, class or datasource name:',
   find: 'Find',
   hideExplorer: 'Hide Explorer',
   showExplorer: 'Show Explorer',
   hideProperties: 'Hide Properties',
   showProperties: 'Show Properties',
+  showDetails: 'Show details',
+  hideDetails: 'Hide details',
+  consultantView: 'Consultant view',
+  technicalView: 'Technical view',
   explorer: 'Explorer',
   properties: 'Properties',
   configurations: 'Configurations',
@@ -291,6 +307,8 @@ const en: Translations = {
   structure: 'Structure',
   bindings: 'Bindings',
   dataSources: 'Data Sources',
+  lightBindings: 'Links',
+  lightDataSources: 'Data sources',
   elements: 'elements',
   bound: 'bound',
   unbound: 'unbound',

@@ -364,6 +364,79 @@ body {
   font-weight: 500;
   min-width: 0;
 }
+
+.tree-node-kind-pill {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-tertiary) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
+}
+
+.tree-node-accent-model {
+  background: color-mix(in srgb, var(--surface-info-bg) 36%, transparent);
+  border-color: color-mix(in srgb, var(--surface-info-border) 68%, transparent);
+}
+
+.tree-node-accent-model:hover {
+  background: color-mix(in srgb, var(--surface-info-bg) 52%, var(--bg-hover));
+  border-color: color-mix(in srgb, var(--surface-info-border) 92%, transparent);
+}
+
+.tree-node-accent-model .tree-node-kind-pill {
+  color: var(--surface-info-fg);
+  background: color-mix(in srgb, var(--surface-info-bg) 80%, transparent);
+  border-color: color-mix(in srgb, var(--surface-info-border) 88%, transparent);
+}
+
+.tree-node-accent-mapping {
+  background: color-mix(in srgb, var(--surface-success-bg) 34%, transparent);
+  border-color: color-mix(in srgb, var(--surface-success-border) 68%, transparent);
+}
+
+.tree-node-accent-mapping:hover {
+  background: color-mix(in srgb, var(--surface-success-bg) 52%, var(--bg-hover));
+  border-color: color-mix(in srgb, var(--surface-success-border) 92%, transparent);
+}
+
+.tree-node-accent-mapping .tree-node-kind-pill {
+  color: var(--surface-success-fg);
+  background: color-mix(in srgb, var(--surface-success-bg) 80%, transparent);
+  border-color: color-mix(in srgb, var(--surface-success-border) 88%, transparent);
+}
+
+.tree-node-accent-format {
+  background: color-mix(in srgb, var(--surface-warning-bg) 38%, transparent);
+  border-color: color-mix(in srgb, var(--surface-warning-border) 70%, transparent);
+}
+
+.tree-node-accent-format:hover {
+  background: color-mix(in srgb, var(--surface-warning-bg) 56%, var(--bg-hover));
+  border-color: color-mix(in srgb, var(--surface-warning-border) 92%, transparent);
+}
+
+.tree-node-accent-format .tree-node-kind-pill {
+  color: var(--surface-warning-fg);
+  background: color-mix(in srgb, var(--surface-warning-bg) 82%, transparent);
+  border-color: color-mix(in srgb, var(--surface-warning-border) 88%, transparent);
+}
+
+.tree-node.selected.tree-node-accent-model,
+.tree-node.selected.tree-node-accent-mapping,
+.tree-node.selected.tree-node-accent-format {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.tree-node.ancestor.tree-node-accent-model,
+.tree-node.ancestor.tree-node-accent-mapping,
+.tree-node.ancestor.tree-node-accent-format {
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 58%, transparent);
+}
+
 .explorer-tree-shell {
   height: 100%;
   padding: 6px 0 10px;
@@ -384,12 +457,14 @@ body {
 
 .explorer-filter-input {
   width: 100%;
+  min-width: 0;
 }
 
 .panel-filter-row {
   display: flex;
   gap: 6px;
   align-items: center;
+  min-width: 0;
 }
 
 .panel-filter-input {
@@ -431,6 +506,7 @@ body {
 .explorer-toolbar {
   display: flex;
   gap: 6px;
+  align-items: center;
   padding: 8px 10px;
   border-bottom: 1px solid var(--border-color);
   background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
@@ -438,6 +514,10 @@ body {
   top: 0;
   z-index: 2;
   backdrop-filter: blur(8px);
+}
+
+.explorer-toolbar-filter {
+  flex: 1;
 }
 
 /* Badge styles */
@@ -522,6 +602,43 @@ body {
 
 .property-inspector {
   padding: 8px;
+}
+
+.focused-node-tab {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-secondary) 84%, transparent), var(--bg-primary));
+}
+
+.focused-node-tab-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+}
+
+.focused-node-tab-icon {
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.focused-node-tab-title {
+  font-weight: 700;
+  color: var(--text-accent);
+}
+
+.focused-node-tab-body {
+  flex: 1;
+  overflow: auto;
+  padding: 10px;
+}
+
+.focused-node-tab-body .property-inspector {
+  padding: 0;
 }
 
 .property-title {
@@ -723,6 +840,36 @@ body {
   font-weight: 600;
 }
 
+.search-result-footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+
+.search-result-open-btn {
+  flex: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border-color));
+  background: color-mix(in srgb, var(--bg-elevated) 88%, var(--accent) 12%);
+  color: var(--accent);
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+  padding: 5px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.search-result-open-btn:hover {
+  background: color-mix(in srgb, var(--bg-hover) 72%, var(--accent) 28%);
+}
+
+.search-result-open-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 52%, white);
+  outline-offset: 1px;
+}
+
 .search-result-secondary {
   margin-top: 2px;
 }
@@ -919,6 +1066,21 @@ body {
   flex: 1;
 }
 
+.toolbar-mode-badge {
+  font-size: 11px;
+  color: var(--surface-success-fg);
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-success-bg) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--surface-success-border) 80%, transparent);
+}
+
+.toolbar-mode-badge-technical {
+  color: var(--surface-info-fg);
+  background: color-mix(in srgb, var(--surface-info-bg) 72%, transparent);
+  border-color: color-mix(in srgb, var(--surface-info-border) 80%, transparent);
+}
+
 .toolbar-subtitle {
   font-size: 11px;
   color: var(--text-secondary);
@@ -1003,6 +1165,10 @@ body {
   background: var(--statusbar-chip-bg);
   border: 1px solid var(--statusbar-chip-border);
   font-size: 10px;
+}
+
+.app-statusbar-mode-chip {
+  background: color-mix(in srgb, var(--button-primary-fg) 12%, transparent);
 }
 
 .app-statusbar-spacer {
@@ -1220,10 +1386,15 @@ body {
   padding: 8px 10px;
   font-size: 12px;
   width: 220px;
+  min-width: 0;
   border-radius: 12px;
   border: 1px solid var(--border-color);
   background: var(--bg-primary);
   color: var(--text-primary);
+}
+
+.explorer-toolbar-filter .fmt-filter-input {
+  width: 100%;
 }
 
 .designer-context-bar {

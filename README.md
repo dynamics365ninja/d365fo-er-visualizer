@@ -12,13 +12,15 @@ Load ER XML configuration exports and explore data models, model mappings, and f
 |---|---|
 | **XML Parser** | Parses raw D365FO ER configuration XML bundles (data model, model mapping, format, format mapping) into strongly-typed TypeScript objects. |
 | **Visual Designer** | Interactive node-graph views for each component kind — powered by React Flow (`@xyflow/react`). |
-| **Config Explorer** | Tree navigator with filtering, expand/collapse all, and per-node property inspector. |
+| **Config Explorer** | Tree navigator with filtering, expand/collapse all, visual type accents, and per-node property inspector. |
 | **GUID Registry & Cross-References** | Every GUID in every loaded file is indexed; you can look up any GUID and see where it is referenced. |
-| **Where-Used Analysis** | Enter a table, enum, or class name and trace it through datasources → model bindings → format elements. |
+| **Where-Used Analysis** | Enter a table, enum, class, or datasource name and trace it through datasources → model bindings → format elements. |
 | **Expression Drill-Down** | Click any ER formula expression and trace it step by step from format binding through model mapping to the concrete data source. |
 | **Clickable Paths** | Expressions in the property inspector are clickable — identifiers resolve to their source tree node. |
+| **Search Navigation** | Search results can open the exact matching tree node directly, including GUID-owned elements such as format elements, transformations, and validation rules. |
 | **Format Binding Categories** | Format bindings are automatically classified (data / visibility / formatting / property) and grouped. |
 | **Multi-file Workspace** | Load multiple ER XML files at once; the registry merges cross-references across all loaded configurations. |
+| **Consultant / Technical View** | Toggle between a simplified consultant-friendly view and a full technical detail view; the preference is persisted locally. |
 | **Dark & Light Theme** | Full CSS-variable theme system with semantic surface/accent colors for each component type. |
 | **i18n** | Czech (cs) and English (en) UI; auto-detected from OS locale. |
 | **Electron Shell** | Optional native desktop app wrapping the web UI, with native file-open dialogs. |
@@ -60,18 +62,18 @@ React 19 SPA built with Vite 6 and Tailwind CSS 4:
 
 | Component | Purpose |
 |---|---|
-| `App` | Shell layout — three-panel (explorer / designer / properties) with resizable panels. |
+| `App` | Shell layout — three-panel (explorer / designer / properties) with resizable panels and a visible consultant/technical mode badge. |
 | `LandingPage` | Drag-and-drop / file-open entry point with hero section. |
 | `Toolbar` | File open, home button, panel toggles, search. |
 | `ConfigExplorer` | Tree view of loaded configurations, filterable, with expand/collapse. |
 | `TabBar` | Multi-tab navigation for open designer views. |
-| `DesignerView` | Routes to `ModelDesigner`, `MappingDesigner`, or `FormatDesigner` based on config kind. |
+| `DesignerView` | Routes to `ModelDesigner`, `MappingDesigner`, or `FormatDesigner` based on config kind, and renders focused detail-only tabs for non-root explorer nodes. |
 | `PropertyInspector` | Context-aware property grid for any selected tree node — files, containers, fields, datasources, bindings, format elements, enums, transformations. |
-| `SearchPanel` | Full-text search across the GUID registry + where-used trace mode. |
+| `SearchPanel` | Full-text search across the GUID registry + where-used trace mode, with direct navigation to matching nodes. |
 | `ClickablePath` | Renders ER expressions with clickable identifiers that resolve and navigate. |
 | `DrillDownPanel` | Step-by-step drill-down from a format binding expression to the underlying data source. |
 
-**State management:** Zustand store (`useAppStore`) with actions for loading XML, selecting nodes, opening tabs, resolving datasources/bindings/model paths, and where-used analysis.
+**State management:** Zustand store (`useAppStore`) with actions for loading XML, selecting nodes, opening tabs, resolving datasources/bindings/model paths, where-used analysis, and persisting the consultant/technical detail toggle.
 
 **Utilities:**
 - `file-loading.ts` — browser FileList and Electron IPC file ingestion
@@ -162,9 +164,19 @@ Runs Vitest unit tests in the `core` package (XML parser and GUID registry tests
 2. **Open the app** (web or Electron) and **drag & drop** the XML files onto the landing page.
 3. **Explore** configurations in the left-side tree explorer.
 4. **Double-click** a configuration node to open a visual designer tab.
-5. **Click** any node to see its properties in the right-side inspector.
-6. **Drill down** into format binding expressions to trace them through model mappings to source tables.
-7. **Use where-used** to find all usages of a table, enum, or class across all loaded configurations.
+5. **Double-click** a non-root explorer node to open a focused properties-only detail tab.
+6. **Click** any node to see its properties in the right-side inspector.
+7. **Drill down** into format binding expressions to trace them through model mappings to source tables.
+8. **Use where-used** to find all usages of a table, enum, class, or datasource across all loaded configurations.
+9. **Use search** to jump directly to the matching datasource, binding, format element, transformation, or validation rule.
+
+### Recommended Workflows
+
+- **Single file loaded** — explorer browsing, properties, and local search still work, but deep trace flows may stop where dependent configurations are missing.
+- **Model + Model Mapping** — model path bindings, datasource resolution, and mapping-side drill-down become fully useful.
+- **Model + Model Mapping + Format** — enables the full end-to-end workflow: format binding → model binding → datasource → where-used trace.
+- **Consultant view** — use when walking business users through structure and relationships without GUIDs, raw XML metadata, or low-level type noise.
+- **Technical view** — use for troubleshooting IDs, GUID ownership, raw datasource types, selected fields, and low-level format attributes.
 
 ---
 

@@ -201,8 +201,8 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
           />
           <HowStep
             n={4}
-            title="Where-used"
-            desc='V panelu 🔍 Hledat zadej název tabulky, třeba &quot;TaxTrans&quot;, a spusť &quot;Where used&quot;. Zobrazí se všechny formátové elementy, které z této tabulky čerpají data.'
+            title="Místa použití"
+            desc='V panelu 🔍 Hledat zadej název tabulky, třeba &quot;TaxTrans&quot;, a spusť &quot;Místa použití&quot;. Zobrazí se všechny formátové elementy, které z této tabulky čerpají data.'
           />
         </div>
       </div>

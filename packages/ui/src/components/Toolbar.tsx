@@ -14,6 +14,8 @@ interface ToolbarProps {
 
 export function Toolbar({ onToggleSearch, onToggleLeft, onToggleRight, onGoHome, showLeft, showRight }: ToolbarProps) {
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const setShowTechnicalDetails = useAppStore(s => s.setShowTechnicalDetails);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,9 +71,18 @@ export function Toolbar({ onToggleSearch, onToggleLeft, onToggleRight, onGoHome,
       <div className="toolbar-section">
         <ToolbarToggle onClick={onToggleLeft} icon="▧" label={t.explorer} active={showLeft} />
         <ToolbarToggle onClick={onToggleRight} icon="▨" label={t.properties} active={showRight} />
+        <ToolbarToggle
+          onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+          icon="☰"
+          label={showTechnicalDetails ? t.hideDetails : t.showDetails}
+          active={showTechnicalDetails}
+        />
       </div>
 
       <div className="toolbar-spacer" />
+      <span className={`toolbar-mode-badge${showTechnicalDetails ? ' toolbar-mode-badge-technical' : ''}`}>
+        {showTechnicalDetails ? t.technicalView : t.consultantView}
+      </span>
       <span className="toolbar-subtitle">{t.appSubtitle}</span>
     </div>
   );
