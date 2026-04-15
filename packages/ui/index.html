@@ -5,11 +5,74 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>D365FO ER Visualizer</title>
   <style>
-    body { margin: 0; background: #1e1e1e; overflow: hidden; }
+    :root {
+      color-scheme: dark;
+      font-family: "Segoe UI", sans-serif;
+      background: #1e1e1e;
+      color: #cccccc;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(0, 120, 212, 0.12), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(115, 201, 145, 0.09), transparent 24%),
+        #1e1e1e;
+      overflow: hidden;
+    }
+
+    .boot-screen {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .boot-screen__card {
+      width: min(760px, 100%);
+      padding: 28px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(37, 37, 38, 0.92);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+    }
+
+    .boot-screen__eyebrow {
+      margin-bottom: 10px;
+      color: #9cdcfe;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+
+    .boot-screen__title {
+      margin: 0 0 10px;
+      font-size: 30px;
+      line-height: 1.1;
+      color: #ffffff;
+    }
+
+    .boot-screen__text {
+      margin: 0;
+      color: #b7b7b7;
+      line-height: 1.6;
+    }
   </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <div class="boot-screen">
+      <div class="boot-screen__card">
+        <div class="boot-screen__eyebrow">Starting Application</div>
+        <h1 class="boot-screen__title">D365FO ER Visualizer</h1>
+        <p class="boot-screen__text">
+          If this message stays visible for more than a few seconds, the JavaScript application did not finish booting.
+        </p>
+      </div>
+    </div>
+  </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
