@@ -1,0 +1,1318 @@
+import { create } from 'zustand';
+import type {
+  ERConfiguration,
+  ERComponentKind,
+  ERDataModelContent,
+  ERModelMappingContent,
+  ERFormatContent,
+} from '@er-visualizer/core';
+import { parseERConfiguration, GUIDRegistry } from '@er-visualizer/core';
+import { buildFormatBindingPresentation } from '../utils/format-binding-display';
+
+// ─── Tree Node (unified for all component types) ───
+
+export interface TreeNode {
+  id: string;
+  name: string;
+  icon: string;
+  type: 'file' | 'solution' | 'model' | 'container' | 'field' | 'mapping'
+    | 'datasource' | 'binding' | 'validation' | 'format' | 'formatElement'
+    | 'formatBinding' | 'enum' | 'enumValue' | 'transformation' | 'section';
+  children?: TreeNode[];
+  data?: any; // reference to the original typed object
+  configIndex?: number; // index in configurations array
+}
+
+// ─── App State ───
+
+export interface AppState {
+  configurations: ERConfiguration[];
+  registry: GUIDRegistry;
+  treeNodes: TreeNode[];
+  selectedNodeId: string | null;
+  selectedNode: TreeNode | null;
+  openTabs: { id: string; label: string; configIndex: number }[];
+  activeTabId: string | null;
+  searchQuery: string;
+  searchResults: any[];
+
+  // Actions
+  loadXmlFile: (xml: string, filePath: string) => void;
+  removeConfiguration: (index: number) => void;
+  selectNode: (nodeId: string | null) => void;
+  openTab: (id: string, label: string, configIndex: number) => void;
+  closeTab: (id: string) => void;
+  setActiveTab: (id: string) => void;
+  setSearchQuery: (query: string) => void;
+  executeSearch: () => void;
+  navigateToTreeNode: (nodeId: string) => void;
+  /**
+   * Resolve a datasource name from an expression string (e.g. "CompanyInfo" from binding expr).
+   * Returns { configIndex, datasourceName, treeNodeId } or null.
+   */
+  resolveDatasource: (expressionOrName: string, fromConfigIndex: number) => {
+    configIndex: number;
+    datasourceName: string;
+    treeNodeId: string | null;
+    datasource: any;
+  } | null;
+  /**
+   * Find a binding tree node for a given model path in a mapping config.
+   */
+  resolveBinding: (modelPath: string, fromConfigIndex: number) => {
+    configIndex: number;
+    treeNodeId: string | null;
+    binding: any;
+  } | null;
+  /**
+   * Find the tree node matching a datasource by name within a given config
+   */
+  findDatasourceNode: (dsName: string, configIndex: number, parentPath?: string) => string | null;
+  /**
+   * Find the tree node matching a binding by model path within a given config
+   */
+  findBindingNode: (modelPath: string, configIndex: number) => string | null;
+  /**
+   * Resolve a model path (e.g. "model.CompanyInformation.Name") through model mapping
+   * to find the actual datasource (table, enum, class).
+   * Returns the mapping binding, resolved datasource, and full chain.
+   */
+  resolveModelPath: (modelDotPath: string) => {
+    modelPath: string;
+    binding: any;
+    bindingConfigIndex: number;
+    bindingTreeNodeId: string | null;
+    datasource: any | null;
+    datasourceConfigIndex: number | null;
+    datasourceTreeNodeId: string | null;
+  } | null;
+  /**
+   * Where-used: find all occurrences of a table / enum / class name across all loaded configs.
+   * Returns a flat list of trace links from the entity → datasource → model binding → format element.
+   */
+  whereUsed: (entityName: string) => WhereUsedEntry[];
+}
+
+// ─── Where-Used types ───
+
+export interface WhereUsedEntry {
+  /** The matched entity name (table, enum, class) */
+  entityName: string;
+  entityType: 'Table' | 'Enum' | 'Class' | 'Other';
+  /** The datasource in a mapping or format that references the entity */
+  datasource: {
+    name: string;
+    parentPath?: string;
+    configIndex: number;
+    configName: string;
+    kind: 'ModelMapping' | 'Format';
+  };
+  /** Model binding paths that reach the datasource (from a ModelMapping config) */
+  modelPaths: Array<{
+    path: string;
+    expr: string;
+    configIndex: number;
+    configName: string;
+  }>;
+  /** Format elements (in Format configs) that use those model paths or the datasource directly */
+  formatUsages: Array<{
+    elementId: string;
+    elementName: string;
+    elementType: string;
+    expression: string;
+    configIndex: number;
+    configName: string;
+  }>;
+}
+
+interface EntityMatchResult {
+  matched: boolean;
+  entityType: WhereUsedEntry['entityType'];
+  entityName: string;
+  score: 0 | 1 | 2 | 3;
+}
+
+function findNodeById(nodes: TreeNode[], id: string): TreeNode | null {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    if (node.children) {
+      const found = findNodeById(node.children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+export const useAppStore = create<AppState>((set, get) => ({
+  configurations: [],
+  registry: new GUIDRegistry(),
+  treeNodes: [],
+  selectedNodeId: null,
+  selectedNode: null,
+  openTabs: [],
+  activeTabId: null,
+  searchQuery: '',
+  searchResults: [],
+
+  loadXmlFile: (xml: string, filePath: string) => {
+    try {
+      const config = parseERConfiguration(xml, filePath);
+      const state = get();
+      const newConfigs = [...state.configurations, config];
+
+      // Rebuild registry
+      const registry = new GUIDRegistry();
+      for (const c of newConfigs) {
+        registry.indexConfiguration(c);
+      }
+
+      // Build tree
+      const treeNodes = newConfigs.map((c, i) => buildTreeForConfig(c, i));
+
+      set({ configurations: newConfigs, registry, treeNodes });
+    } catch (e) {
+      console.error('Failed to parse ER configuration:', e);
+      throw e;
+    }
+  },
+
+  removeConfiguration: (index: number) => {
+    const state = get();
+    const newConfigs = state.configurations.filter((_, i) => i !== index);
+    const registry = new GUIDRegistry();
+    for (const c of newConfigs) {
+      registry.indexConfiguration(c);
+    }
+    const treeNodes = newConfigs.map((c, i) => buildTreeForConfig(c, i));
+    set({ configurations: newConfigs, registry, treeNodes, selectedNodeId: null, selectedNode: null });
+  },
+
+  selectNode: (nodeId: string | null) => {
+    if (!nodeId) {
+      set({ selectedNodeId: null, selectedNode: null });
+      return;
+    }
+    const state = get();
+    const node = findNodeById(state.treeNodes, nodeId);
+    set({ selectedNodeId: nodeId, selectedNode: node });
+  },
+
+  openTab: (id: string, label: string, configIndex: number) => {
+    const state = get();
+    if (!state.openTabs.find(t => t.id === id)) {
+      set({ openTabs: [...state.openTabs, { id, label, configIndex }], activeTabId: id });
+    } else {
+      set({ activeTabId: id });
+    }
+  },
+
+  closeTab: (id: string) => {
+    const state = get();
+    const newTabs = state.openTabs.filter(t => t.id !== id);
+    const newActive = state.activeTabId === id
+      ? (newTabs.length > 0 ? newTabs[newTabs.length - 1].id : null)
+      : state.activeTabId;
+    set({ openTabs: newTabs, activeTabId: newActive });
+  },
+
+  setActiveTab: (id: string) => set({ activeTabId: id }),
+
+  setSearchQuery: (query: string) => set({ searchQuery: query }),
+
+  executeSearch: () => {
+    const state = get();
+    if (!state.searchQuery.trim()) {
+      set({ searchResults: [] });
+      return;
+    }
+    const results = state.registry.search(state.searchQuery);
+    set({ searchResults: results });
+  },
+
+  navigateToTreeNode: (nodeId: string) => {
+    const state = get();
+    const node = findNodeById(state.treeNodes, nodeId);
+    if (!node) return;
+    // Select the node
+    set({ selectedNodeId: nodeId, selectedNode: node });
+    // Also open the tab for its config
+    if (node.configIndex != null) {
+      const config = state.configurations[node.configIndex];
+      if (config) {
+        const rootNode = state.treeNodes[node.configIndex];
+        if (rootNode) {
+          const existingTab = state.openTabs.find(t => t.configIndex === node.configIndex);
+          if (!existingTab) {
+            set({
+              openTabs: [...state.openTabs, { id: rootNode.id, label: rootNode.name, configIndex: node.configIndex }],
+              activeTabId: rootNode.id,
+            });
+          } else {
+            set({ activeTabId: existingTab.id });
+          }
+        }
+      }
+    }
+  },
+
+  resolveDatasource: (expressionOrName: string, fromConfigIndex: number) => {
+    const state = get();
+    // Extract the root datasource name from an expression like "CompanyInfo.'name()'" or just "CompanyInfo"
+    const dsName = expressionOrName.split('.')[0].split('(')[0].replace(/['"]/g, '').trim();
+    if (!dsName) return null;
+
+    // Search in the same config first, then in others
+    const searchOrder = [fromConfigIndex, ...state.configurations.map((_, i) => i).filter(i => i !== fromConfigIndex)];
+
+    for (const ci of searchOrder) {
+      const config = state.configurations[ci];
+      if (!config) continue;
+
+      let datasources: any[] = [];
+      if (config.content.kind === 'ModelMapping') {
+        datasources = (config.content as ERModelMappingContent).version.mapping.datasources;
+      } else if (config.content.kind === 'Format') {
+        datasources = (config.content as ERFormatContent).formatMappingVersion.formatMapping.datasources;
+      }
+
+      const ds = findDatasourceByName(datasources, dsName);
+      if (ds) {
+        const treeNodeId = get().findDatasourceNode(dsName, ci);
+        return { configIndex: ci, datasourceName: dsName, treeNodeId, datasource: ds };
+      }
+    }
+    return null;
+  },
+
+  resolveBinding: (modelPath: string, fromConfigIndex: number) => {
+    const state = get();
+    const searchOrder = [fromConfigIndex, ...state.configurations.map((_, i) => i).filter(i => i !== fromConfigIndex)];
+
+    for (const ci of searchOrder) {
+      const config = state.configurations[ci];
+      if (!config) continue;
+
+      let bindings: any[] = [];
+      if (config.content.kind === 'ModelMapping') {
+        bindings = (config.content as ERModelMappingContent).version.mapping.bindings;
+      }
+
+      const binding = bindings.find((b: any) => b.path === modelPath);
+      if (binding) {
+        const treeNodeId = get().findBindingNode(modelPath, ci);
+        return { configIndex: ci, treeNodeId, binding };
+      }
+    }
+    return null;
+  },
+
+  findDatasourceNode: (dsName: string, configIndex: number, parentPath?: string) => {
+    const state = get();
+    const rootNode = state.treeNodes[configIndex];
+    if (!rootNode) return null;
+    const normalizedLookupKey = buildDatasourceLookupKey(dsName, parentPath);
+    return findNodeByMatch(
+      rootNode,
+      n => n.type === 'datasource'
+        && buildDatasourceLookupKey(n.name, n.data?.parentPath) === normalizedLookupKey,
+    )?.id ?? null;
+  },
+
+  findBindingNode: (modelPath: string, configIndex: number) => {
+    const state = get();
+    const rootNode = state.treeNodes[configIndex];
+    if (!rootNode) return null;
+    return findNodeByMatch(rootNode, n => n.type === 'binding' && n.data?.path === modelPath)?.id ?? null;
+  },
+
+  resolveModelPath: (modelDotPath: string) => {
+    const state = get();
+    let path = modelDotPath;
+    if (path.toLowerCase().startsWith('model.')) path = path.substring(6);
+    else if (path.toLowerCase().startsWith('model\\')) path = path.substring(6);
+
+    // Normalise backslashes → dots so parseDottedPath can handle both separators,
+    // then strip single-quotes from segment names (ER expressions quote names that
+    // contain spaces/special chars, but the XML binding path stores them plain).
+    const normPath = path.replace(/\\/g, '.');
+    const segments = parseDottedPath(normPath).filter(Boolean);
+    const buildVariants = (segs: string[]) => [
+      segs.join('\\'),   // backslash (most common in D365 ER XML)
+      segs.join('.'),    // dot
+      segs.join('/'),    // forward slash (some older ER versions)
+    ];
+
+    // Build a ranked list of paths to try: from most specific (full path) to shortest (root segment only)
+    const pathVariants: string[] = [];
+    for (let len = segments.length; len >= 1; len--) {
+      const segs = segments.slice(0, len);
+      for (const v of buildVariants(segs)) {
+        if (!pathVariants.includes(v)) pathVariants.push(v);
+      }
+    }
+
+    // Search all ModelMapping configs for a matching binding
+    for (let ci = 0; ci < state.configurations.length; ci++) {
+      const config = state.configurations[ci];
+      if (config.content.kind !== 'ModelMapping') continue;
+      const mm = (config.content as ERModelMappingContent).version.mapping;
+
+      for (const tryPath of pathVariants) {
+        // Case-insensitive comparison
+        const binding = mm.bindings.find((b: any) =>
+          b.path === tryPath || b.path.toLowerCase() === tryPath.toLowerCase()
+        );
+        if (binding) {
+          const bindingTreeNodeId = get().findBindingNode(binding.path, ci);
+          const dsName = binding.expressionAsString.split(/[.(]/)[0].replace(/['"]/g, '').trim();
+          let datasource: any = null;
+          let datasourceConfigIndex: number | null = null;
+          let datasourceTreeNodeId: string | null = null;
+          if (dsName) {
+            const dsResult = get().resolveDatasource(dsName, ci);
+            if (dsResult) {
+              datasource = dsResult.datasource;
+              datasourceConfigIndex = dsResult.configIndex;
+              datasourceTreeNodeId = dsResult.treeNodeId;
+            }
+          }
+          return {
+            modelPath: binding.path,
+            binding,
+            bindingConfigIndex: ci,
+            bindingTreeNodeId,
+            datasource,
+            datasourceConfigIndex,
+            datasourceTreeNodeId,
+          };
+        }
+      }
+    }
+    return null;
+  },
+
+  whereUsed: (entityName: string): WhereUsedEntry[] => {
+    if (!entityName.trim()) return [];
+    const state = get();
+    const normalizedEntityName = normalizeIdentifier(entityName);
+    const scoredResults: Array<{ score: number; entry: WhereUsedEntry }> = [];
+
+    // Collect all flat datasources (including children) that match
+    function collectMatchingDs(datasources: any[]): Array<{ ds: any; match: EntityMatchResult }> {
+      const out: Array<{ ds: any; match: any }> = [];
+      for (const ds of datasources) {
+        const r = getEntityMatch(ds, normalizedEntityName);
+        if (r.matched) out.push({ ds, match: r });
+        if (ds.children?.length) {
+          out.push(...collectMatchingDs(ds.children));
+        }
+      }
+      return out;
+    }
+
+    for (let ci = 0; ci < state.configurations.length; ci++) {
+      const config = state.configurations[ci];
+      const configName = config.solutionVersion.solution.name;
+
+      if (config.content.kind === 'ModelMapping') {
+        const mm = (config.content as ERModelMappingContent).version.mapping;
+        const matchingDs = collectMatchingDs(mm.datasources);
+
+        for (const { ds, match } of matchingDs) {
+          const relatedBindings = mm.bindings.filter((b: any) =>
+            expressionReferencesDatasource(b.expressionAsString, ds),
+          );
+
+          // For each model path in those bindings, find format elements in Format configs
+          const modelPaths = relatedBindings.map((b: any) => ({
+            path: b.path,
+            expr: b.expressionAsString,
+            configIndex: ci,
+            configName,
+          }));
+
+          // Now search all Format configs for format elements that bind to these model paths
+          const formatUsages: WhereUsedEntry['formatUsages'] = [];
+          for (let fci = 0; fci < state.configurations.length; fci++) {
+            const fc = state.configurations[fci];
+            if (fc.content.kind !== 'Format') continue;
+            const fc2 = fc.content as ERFormatContent;
+            const fmtMap = fc2.formatMappingVersion.formatMapping;
+            const fmtConfigName = fc.solutionVersion.solution.name;
+
+            // Build elementId → element name lookup
+            const elementNames = new Map<string, { name: string; type: string }>();
+            function indexElements(el: any) {
+              elementNames.set(el.id, { name: el.name, type: el.elementType });
+              for (const child of el.children ?? []) indexElements(child);
+            }
+            indexElements(fc2.formatVersion.format.rootElement);
+
+            for (const b of fmtMap.bindings) {
+              const expr = b.expressionAsString ?? '';
+              // Check if this format binding expression references any of our model paths
+              const isModelRef = expr.toLowerCase().startsWith('model.');
+              if (isModelRef) {
+                const modelPath = normalizeModelPath(expr.slice(6));
+                const matchesPath = modelPaths.some(mp =>
+                  isSameOrDescendantModelPath(modelPath, mp.path),
+                );
+                if (matchesPath) {
+                  const el = elementNames.get(b.componentId);
+                  formatUsages.push({
+                    elementId: b.componentId,
+                    elementName: el?.name ?? b.componentId.slice(1, 9),
+                    elementType: el?.type ?? 'Unknown',
+                    expression: expr,
+                    configIndex: fci,
+                    configName: fmtConfigName,
+                  });
+                }
+              } else {
+                if (expressionReferencesDatasource(expr, ds)) {
+                  const el = elementNames.get(b.componentId);
+                  formatUsages.push({
+                    elementId: b.componentId,
+                    elementName: el?.name ?? b.componentId.slice(1, 9),
+                    elementType: el?.type ?? 'Unknown',
+                    expression: expr,
+                    configIndex: fci,
+                    configName: fmtConfigName,
+                  });
+                }
+              }
+            }
+          }
+
+          // Deduplicate format usages by elementId+expression
+          const seenFmt = new Set<string>();
+          const uniqueFormatUsages = formatUsages.filter(u => {
+            const k = `${u.elementId}:${u.expression}`;
+            if (seenFmt.has(k)) return false;
+            seenFmt.add(k);
+            return true;
+          });
+
+          scoredResults.push({
+            score: match.score,
+            entry: {
+              entityName: match.entityName,
+              entityType: match.entityType,
+              datasource: {
+                name: ds.name,
+                parentPath: ds.parentPath,
+                configIndex: ci,
+                configName,
+                kind: 'ModelMapping',
+              },
+              modelPaths,
+              formatUsages: uniqueFormatUsages,
+            },
+          });
+        }
+      }
+
+      if (config.content.kind === 'Format') {
+        const fc = config.content as ERFormatContent;
+        const fmtMap = fc.formatMappingVersion.formatMapping;
+        const matchingDs = collectMatchingDs(fmtMap.datasources);
+
+        for (const { ds, match } of matchingDs) {
+          // Build element name lookup
+          const elementNames = new Map<string, { name: string; type: string }>();
+          function indexElsFmt(el: any) {
+            elementNames.set(el.id, { name: el.name, type: el.elementType });
+            for (const child of el.children ?? []) indexElsFmt(child);
+          }
+          indexElsFmt(fc.formatVersion.format.rootElement);
+
+          // Find format bindings that reference this datasource
+          const formatUsages: WhereUsedEntry['formatUsages'] = [];
+          for (const b of fmtMap.bindings) {
+            const expr = b.expressionAsString ?? '';
+            if (expressionReferencesDatasource(expr, ds)) {
+              const el = elementNames.get(b.componentId);
+              formatUsages.push({
+                elementId: b.componentId,
+                elementName: el?.name ?? b.componentId.slice(1, 9),
+                elementType: el?.type ?? 'Unknown',
+                expression: expr,
+                configIndex: ci,
+                configName: configName,
+              });
+            }
+          }
+
+          if (formatUsages.length > 0) {
+            scoredResults.push({
+              score: match.score,
+              entry: {
+                entityName: match.entityName,
+                entityType: match.entityType,
+                datasource: {
+                  name: ds.name,
+                  parentPath: ds.parentPath,
+                  configIndex: ci,
+                  configName,
+                  kind: 'Format',
+                },
+                modelPaths: [],
+                formatUsages,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    if (scoredResults.length === 0) return [];
+
+    const highestScore = Math.max(...scoredResults.map(result => result.score));
+    const results = scoredResults
+      .filter(result => result.score === highestScore)
+      .map(result => result.entry);
+
+    const seen = new Set<string>();
+    return results.filter(r => {
+      const modelPathKey = r.modelPaths.map(mp => `${mp.configIndex}:${normalizeModelPath(mp.path)}`).sort().join('|');
+      const formatKey = r.formatUsages.map(u => `${u.configIndex}:${u.elementId}:${u.expression}`).sort().join('|');
+      const k = `${r.datasource.configIndex}:${buildDatasourceLookupKey(r.datasource.name, r.datasource.parentPath)}:${r.entityType}:${r.entityName}:${modelPathKey}:${formatKey}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).sort((left, right) => {
+      const byEntity = left.entityName.localeCompare(right.entityName, undefined, { sensitivity: 'base' });
+      if (byEntity !== 0) return byEntity;
+      return left.datasource.name.localeCompare(right.datasource.name, undefined, { sensitivity: 'base' });
+    });
+  },
+}));
+
+// ─── Helper: find datasource by name (recursive through children) ───
+
+function findDatasourceByName(datasources: any[], name: string): any | null {
+  for (const ds of datasources) {
+    if (ds.name === name) return ds;
+    if (ds.children) {
+      const found = findDatasourceByName(ds.children, name);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function normalizeIdentifier(value: string): string {
+  return value.replace(/['"]/g, '').trim().toLowerCase();
+}
+
+function normalizeModelPath(path: string): string {
+  return path
+    .replace(/^model[./\\]/i, '')
+    .replace(/[./]/g, '\\')
+    .replace(/\\+/g, '\\')
+    .replace(/^\\|\\$/g, '')
+    .toLowerCase();
+}
+
+function isSameOrDescendantModelPath(candidate: string, basePath: string): boolean {
+  const normalizedCandidate = normalizeModelPath(candidate);
+  const normalizedBase = normalizeModelPath(basePath);
+  return normalizedCandidate === normalizedBase || normalizedCandidate.startsWith(`${normalizedBase}\\`);
+}
+
+function getEntityMatch(ds: any, normalizedQuery: string): EntityMatchResult {
+  const candidates: Array<{ entityType: WhereUsedEntry['entityType']; entityName?: string }> = [
+    { entityType: 'Table', entityName: ds.tableInfo?.tableName },
+    { entityType: 'Enum', entityName: ds.enumInfo?.enumName },
+    { entityType: 'Class', entityName: ds.classInfo?.className },
+  ];
+
+  let bestMatch: EntityMatchResult = {
+    matched: false,
+    entityType: 'Other',
+    entityName: normalizedQuery,
+    score: 0,
+  };
+
+  for (const candidate of candidates) {
+    const entityName = candidate.entityName;
+    if (!entityName) continue;
+
+    const normalizedEntity = normalizeIdentifier(entityName);
+    const score = getMatchScore(normalizedEntity, normalizedQuery);
+    if (score > bestMatch.score) {
+      bestMatch = {
+        matched: score > 0,
+        entityType: candidate.entityType,
+        entityName,
+        score,
+      };
+    }
+  }
+
+  return bestMatch;
+}
+
+function getMatchScore(candidate: string, query: string): 0 | 1 | 2 | 3 {
+  if (!candidate || !query) return 0;
+  if (candidate === query) return 3;
+  if (candidate.startsWith(query)) return 2;
+  if (candidate.includes(query)) return 1;
+  return 0;
+}
+
+function buildDatasourceLookupKey(name: string, parentPath?: string): string {
+  const normalizedName = name.replace(/^[$#]/, '').trim().toLowerCase();
+  if (!parentPath) return normalizedName;
+  const normalizedParent = parentPath
+    .split('/')
+    .map(segment => segment.trim().replace(/^[$#]/, ''))
+    .filter(Boolean)
+    .join('/')
+    .toLowerCase();
+  return normalizedParent ? `${normalizedParent}/${normalizedName}` : normalizedName;
+}
+
+function expressionReferencesDatasource(expression: string, ds: any): boolean {
+  if (!expression) return false;
+
+  const datasourcePathSegments = buildDatasourcePathSegments(ds);
+  const normalizedRootNames = new Set<string>([
+    normalizeIdentifier(ds.name),
+    normalizeIdentifier(ds.name.replace(/^[$#]/, '')),
+  ]);
+
+  for (const reference of extractExpressionReferences(expression)) {
+    const segments = parseDottedPath(reference).map(segment => normalizeIdentifier(segment.replace(/^[$#]/, '')));
+    const rootSegment = segments[0];
+    if (!rootSegment) continue;
+
+    if (matchesDatasourcePath(segments, datasourcePathSegments) || normalizedRootNames.has(rootSegment)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function buildDatasourcePathSegments(ds: any): string[] {
+  const segments: string[] = [];
+  if (typeof ds.parentPath === 'string' && ds.parentPath.trim()) {
+    segments.push(
+      ...ds.parentPath
+        .split('/')
+        .map((segment: string) => normalizeIdentifier(segment.replace(/^[$#]/, '')))
+        .filter(Boolean),
+    );
+  }
+
+  segments.push(normalizeIdentifier(String(ds.name ?? '').replace(/^[$#]/, '')));
+  return segments.filter(Boolean);
+}
+
+function matchesDatasourcePath(referenceSegments: string[], datasourceSegments: string[]): boolean {
+  if (referenceSegments.length < datasourceSegments.length || datasourceSegments.length === 0) {
+    return false;
+  }
+
+  return datasourceSegments.every((segment, index) => referenceSegments[index] === segment);
+}
+
+// ─── Deep expression analysis: resolve nested DS paths and trace calculated field dependencies ───
+
+export interface DeepDatasourceInfo {
+  name: string;
+  type: string;
+  tableName?: string;
+  enumName?: string;
+  enumSourceKind?: 'Ax' | 'DataModel' | 'Format';
+  className?: string;
+  formula?: string;
+  isModelEnum?: boolean;
+}
+
+export interface DeepResolutionResult {
+  /** The root datasource (e.g. ReportFields) */
+  rootDs: any | null;
+  rootDsConfigIndex: number | null;
+  /** The nested child datasource (e.g. $PurchaseVATDeductionAdjustStandardAmount) */
+  nestedDs: any | null;
+  /** Full path segments resolved */
+  pathSegments: string[];
+  /** The calculated field formula (if the resolved DS is a calc field) */
+  formula: string | null;
+  /** All datasources involved (tables, enums, classes, etc.) found by tracing the formula recursively */
+  involvedDatasources: DeepDatasourceInfo[];
+  /** Chain of calculated fields traversed */
+  calculatedFieldChain: { name: string; formula: string }[];
+}
+
+/**
+ * Parse a dotted expression path handling quoted segments like ReportFields.'$Field'
+ * Returns array of segment names (without quotes).
+ */
+function parseDottedPath(expr: string): string[] {
+  const segments: string[] = [];
+  let current = '';
+  let inQuote = false;
+  let quoteChar = '';
+
+  for (let i = 0; i < expr.length; i++) {
+    const ch = expr[i];
+    if (inQuote) {
+      if (ch === quoteChar) {
+        inQuote = false;
+      } else {
+        current += ch;
+      }
+    } else if (ch === "'" || ch === '"') {
+      inQuote = true;
+      quoteChar = ch;
+    } else if (ch === '.') {
+      if (current) segments.push(current);
+      current = '';
+    } else if (ch === '(' || ch === ')' || ch === ' ') {
+      // stop at function calls or spaces
+      break;
+    } else {
+      current += ch;
+    }
+  }
+  if (current) segments.push(current);
+  return segments;
+}
+
+/**
+ * Extract all datasource identifiers referenced in an ER expression string.
+ * Finds identifiers that appear at the start of dotted paths (e.g. "DS.field" → "DS").
+ * Also extracts nested dot-path references like "ReportFields.'$Child'" as full paths.
+ */
+function extractExpressionReferences(expr: string): string[] {
+  if (!expr) return [];
+  const refs: string[] = [];
+  // Match identifier patterns: word optionally followed by .'quoted' or .word chains
+  // This catches: SimpleDS, DS.field, DS.'$Field', ReportFields.'$Child'.value
+  const pattern = /(?<![.'"\w])([A-Za-z_]\w*(?:\s*\.\s*(?:'[^']*'|"[^"]*"|[A-Za-z_]\w*))*)/g;
+  let match;
+  while ((match = pattern.exec(expr)) !== null) {
+    const full = match[1].replace(/\s+/g, '');
+    // Skip known ER functions and keywords
+    if (/^(IF|AND|OR|NOT|ABS|ROUND|FORMAT|TEXT|CONCATENATE|LEFT|RIGHT|MID|LEN|TRIM|REPLACE|FIND|VALUE|INT64VALUE|INTVALUE|INT|NUMBERFORMAT|STRINGJOIN|ORDERBY|WHERE|FILTER|FIRSTORNULL|FIRST|COUNT|SUMIF|SUM|MIN|MAX|AVG|LISTJOIN|SPLIT|EMPTYLIST|ISEMPTY|ENUMERATE|ALLITEMS|ALLITEMSQUERY|REVERSE|VALUEIN|VALUEINLARGE|CONVERTCURRENCY|ROUNDAMOUNT|CH_BANK|FA_BALANCE|FA_SUM|CASE|NUMSEQVALUE|GETENUMVALUEBYNAME|GUIDVALUE|DATETIMEFORMAT|DATEFORMAT|ADDDAYS|SESSIONTODAY|SESSIONNOW|TODAY|NOW|DAYOFYEAR|NULLDATE|NULLDATETIME|DATETIMEVALUE|DATEVALUE|NULLCONTAINER|BASE64STRINGTOCONTAINER|true|false|null)$/i.test(full)) {
+      continue;
+    }
+    refs.push(full);
+  }
+  return [...new Set(refs)];
+}
+
+/**
+ * Navigate a datasource tree following a path of segment names.
+ * E.g. ["ReportFields", "$PurchaseVATDeductionAdjustStandardAmount"] →
+ *   find "ReportFields" root DS, then find "$PurchaseVATDeductionAdjustStandardAmount" child.
+ */
+function navigateDatasourcePath(datasources: any[], segments: string[]): { rootDs: any | null; leafDs: any | null } {
+  if (segments.length === 0) return { rootDs: null, leafDs: null };
+
+  // Find root — strip leading $ if present for matching
+  const rootName = segments[0].replace(/^\$/, '');
+  let rootDs = findDatasourceByName(datasources, segments[0]) ??
+               findDatasourceByName(datasources, rootName);
+  if (!rootDs) return { rootDs: null, leafDs: null };
+
+  let current = rootDs;
+  for (let i = 1; i < segments.length; i++) {
+    const seg = segments[i].replace(/^\$/, '');
+    const child = current.children?.find((c: any) =>
+      c.name === segments[i] || c.name === seg || c.name === '$' + seg
+    );
+    if (!child) break;
+    current = child;
+  }
+
+  return { rootDs, leafDs: current };
+}
+
+/**
+ * Recursively trace all datasources involved in a calculated field's expression.
+ * Handles nested calculated fields that reference other calculated fields.
+ * Searches across all provided datasource pools (from multiple configs).
+ */
+function traceCalculatedFieldDeps(
+  ds: any,
+  allDatasourcePools: any[][],
+  visited: Set<string>,
+  involvedDatasources: DeepDatasourceInfo[],
+  calcChain: { name: string; formula: string }[],
+): void {
+  const dsKey = ds.parentPath ? `${ds.parentPath}/${ds.name}` : ds.name;
+  if (visited.has(dsKey)) return; // prevent circular refs
+  visited.add(dsKey);
+
+  // Record this DS info
+  const info: DeepDatasourceInfo = { name: ds.name, type: ds.type };
+  if (ds.tableInfo) info.tableName = ds.tableInfo.tableName;
+  if (ds.enumInfo) {
+    info.enumName = ds.enumInfo.enumName;
+    info.isModelEnum = ds.enumInfo.isModelEnum;
+    info.enumSourceKind = ds.enumInfo.sourceKind;
+  }
+  if (ds.classInfo) info.className = ds.classInfo.className;
+  if (ds.calculatedField?.expressionAsString) info.formula = ds.calculatedField.expressionAsString;
+
+  // Only add non-calculated-field datasources as "involved" (tables, enums, classes)
+  // Always add if it has concrete type info
+  if (ds.tableInfo || ds.enumInfo || ds.classInfo) {
+    if (!involvedDatasources.some(d => d.name === ds.name && d.type === ds.type)) {
+      involvedDatasources.push(info);
+    }
+  }
+
+  // If it's a calculated field, trace its formula
+  if (ds.calculatedField?.expressionAsString) {
+    calcChain.push({ name: ds.name, formula: ds.calculatedField.expressionAsString });
+    const refs = extractExpressionReferences(ds.calculatedField.expressionAsString);
+    for (const ref of refs) {
+      const refSegments = parseDottedPath(ref);
+      const found = findDsAcrossPools(allDatasourcePools, refSegments);
+      if (found) {
+        traceCalculatedFieldDeps(found, allDatasourcePools, visited, involvedDatasources, calcChain);
+      }
+    }
+  }
+
+  // Also trace children that are used
+  if (ds.groupByInfo) {
+    // GroupBy references a list datasource
+    const listRef = ds.groupByInfo.listToGroup;
+    if (listRef) {
+      const refSegments = parseDottedPath(listRef);
+      const found = findDsAcrossPools(allDatasourcePools, refSegments);
+      if (found) {
+        traceCalculatedFieldDeps(found, allDatasourcePools, visited, involvedDatasources, calcChain);
+      }
+    }
+  }
+}
+
+/**
+ * Try to find a datasource by navigating a dotted path across multiple datasource pools.
+ * Falls back to simple name search if path navigation fails.
+ */
+function findDsAcrossPools(pools: any[][], segments: string[]): any | null {
+  for (const pool of pools) {
+    const { leafDs } = navigateDatasourcePath(pool, segments);
+    if (leafDs) return leafDs;
+  }
+  // Fallback: try simple name match for single-segment refs
+  if (segments.length === 1) {
+    for (const pool of pools) {
+      const found = findDatasourceByName(pool, segments[0]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * Main deep resolution function: resolve an expression path to its nested datasource
+ * and trace all dependencies through calculated fields.
+ */
+export function resolveDeepExpression(
+  expression: string,
+  configurations: any[],
+  fromConfigIndex: number,
+): DeepResolutionResult | null {
+  const pathSegments = parseDottedPath(expression);
+  if (pathSegments.length === 0) return null;
+
+  // Collect all datasource pools from all configs for cross-config tracing
+  const allDatasourcePools: any[][] = [];
+  const configDatasources = new Map<number, any[]>();
+  for (let i = 0; i < configurations.length; i++) {
+    const config = configurations[i];
+    if (!config) continue;
+    let datasources: any[] = [];
+    if (config.content.kind === 'ModelMapping') {
+      datasources = config.content.version.mapping.datasources;
+    } else if (config.content.kind === 'Format') {
+      datasources = config.content.formatMappingVersion.formatMapping.datasources;
+    }
+    if (datasources.length > 0) {
+      configDatasources.set(i, datasources);
+      allDatasourcePools.push(datasources);
+    }
+  }
+
+  // Search configs for the root DS, starting with fromConfigIndex
+  const searchOrder = [fromConfigIndex, ...configurations.map((_: any, i: number) => i).filter((i: number) => i !== fromConfigIndex)];
+
+  for (const ci of searchOrder) {
+    const datasources = configDatasources.get(ci);
+    if (!datasources) continue;
+
+    const { rootDs, leafDs } = navigateDatasourcePath(datasources, pathSegments);
+    if (!rootDs) continue;
+
+    const result: DeepResolutionResult = {
+      rootDs,
+      rootDsConfigIndex: ci,
+      nestedDs: leafDs !== rootDs ? leafDs : null,
+      pathSegments,
+      formula: leafDs?.calculatedField?.expressionAsString ?? null,
+      involvedDatasources: [],
+      calculatedFieldChain: [],
+    };
+
+    // Trace dependencies from the leaf DS across all configs' datasources
+    if (leafDs) {
+      traceCalculatedFieldDeps(leafDs, allDatasourcePools, new Set(), result.involvedDatasources, result.calculatedFieldChain);
+    }
+
+    // If we found something meaningful, return it
+    if (result.rootDs) return result;
+  }
+
+  return null;
+}
+
+function findNodeByMatch(node: TreeNode, predicate: (n: TreeNode) => boolean): TreeNode | null {
+  if (predicate(node)) return node;
+  if (node.children) {
+    for (const child of node.children) {
+      const found = findNodeByMatch(child, predicate);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+// ─── Tree Building ───
+
+const kindIcons: Record<ERComponentKind, string> = {
+  DataModel: '📐',
+  ModelMapping: '🔗',
+  Format: '📄',
+};
+
+const fieldTypeIcons: Record<number, string> = {
+  1: '☑', // Boolean
+  3: '#',  // Int64
+  4: '#',  // Integer
+  5: '🔢', // Real
+  6: '📝', // String
+  7: '📅', // Date
+  9: '🔤', // Enum
+  10: '📦', // Container
+  11: '📋', // RecordList
+  13: '💾', // Binary
+};
+
+const dsTypeIcons: Record<string, string> = {
+  Table: '🗃️',
+  Enum: '🔤',
+  ModelEnum: '📋',
+  FormatEnum: '🏷️',
+  Class: '⚙️',
+  UserParameter: '👤',
+  CalculatedField: '🧮',
+  GroupBy: '📊',
+  Container: '📦',
+  Unknown: '❓',
+};
+
+const dsGroupOrder = ['Table', 'CalculatedField', 'Class', 'Enum', 'ModelEnum', 'FormatEnum', 'UserParameter', 'GroupBy', 'Container', 'Join', 'Object'];
+const dsGroupLabels: Record<string, string> = {
+  Table: 'Tables',
+  CalculatedField: 'Calculated Fields',
+  Class: 'Classes',
+  Enum: 'Ax Enums',
+  ModelEnum: 'Data model Enums',
+  FormatEnum: 'Format enums',
+  UserParameter: 'User Parameters',
+  GroupBy: 'Group By',
+  Container: 'Containers',
+  Join: 'Joins',
+  Object: 'Objects',
+};
+
+function groupDatasourceNodes(dsNodes: TreeNode[], prefix: string): TreeNode[] {
+  const groups = new Map<string, TreeNode[]>();
+  for (const node of dsNodes) {
+    const type = node.data?.type || 'Unknown';
+    if (!groups.has(type)) groups.set(type, []);
+    groups.get(type)!.push(node);
+  }
+  const result: TreeNode[] = [];
+  for (const key of dsGroupOrder) {
+    const items = groups.get(key);
+    if (items && items.length > 0) {
+      result.push({
+        id: `${prefix}-dsgrp-${key}`,
+        name: `${dsGroupLabels[key] ?? key} (${items.length})`,
+        icon: dsTypeIcons[key] ?? '❓',
+        type: 'section',
+        children: items,
+      });
+      groups.delete(key);
+    }
+  }
+  for (const [key, items] of groups) {
+    result.push({
+      id: `${prefix}-dsgrp-${key}`,
+      name: `${dsGroupLabels[key] ?? key} (${items.length})`,
+      icon: dsTypeIcons[key] ?? '❓',
+      type: 'section',
+      children: items,
+    });
+  }
+  return result;
+}
+
+function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
+  const sol = config.solutionVersion.solution;
+  const children: TreeNode[] = [];
+  const prefix = `cfg-${index}`;
+
+  if (config.content.kind === 'DataModel') {
+    const dm = (config.content as ERDataModelContent).version;
+    const containerNodes = dm.model.containers.map((c, ci) => ({
+      id: `${prefix}-container-${ci}`,
+      name: c.name,
+      icon: c.isEnum ? '🔤' : c.isRoot ? '🏠' : '📦',
+      type: 'container' as const,
+      data: c,
+      configIndex: index,
+      children: c.items.map((item, fi) => ({
+        id: `${prefix}-container-${ci}-field-${fi}`,
+        name: item.name,
+        icon: fieldTypeIcons[item.type] ?? '❓',
+        type: 'field' as const,
+        data: item,
+        configIndex: index,
+      })),
+    }));
+
+    children.push({
+      id: `${prefix}-model`,
+      name: `Data Model: ${dm.model.name}`,
+      icon: '📐',
+      type: 'model',
+      configIndex: index,
+      data: dm.model,
+      children: [
+        {
+          id: `${prefix}-model-roots`,
+          name: 'Root Containers',
+          icon: '📂',
+          type: 'section',
+          children: containerNodes.filter(c => c.data.isRoot),
+        },
+        {
+          id: `${prefix}-model-enums`,
+          name: 'Enumerations',
+          icon: '📂',
+          type: 'section',
+          children: containerNodes.filter(c => c.data.isEnum),
+        },
+        {
+          id: `${prefix}-model-records`,
+          name: 'Records',
+          icon: '📂',
+          type: 'section',
+          children: containerNodes.filter(c => !c.data.isRoot && !c.data.isEnum),
+        },
+      ],
+    });
+  }
+
+  if (config.content.kind === 'ModelMapping') {
+    const mm = (config.content as ERModelMappingContent).version;
+
+    const dsNodes = mm.mapping.datasources.map((ds, di) =>
+      buildDatasourceTree(ds, `${prefix}-ds-${di}`, index),
+    );
+
+    const bindingNodes = mm.mapping.bindings.map((b, bi) => ({
+      id: `${prefix}-binding-${bi}`,
+      name: b.path,
+      icon: '↔️',
+      type: 'binding' as const,
+      data: b,
+      configIndex: index,
+    }));
+
+    const valNodes = mm.mapping.validations.map((v, vi) => ({
+      id: `${prefix}-val-${vi}`,
+      name: v.path,
+      icon: '✅',
+      type: 'validation' as const,
+      data: v,
+      configIndex: index,
+    }));
+
+    children.push({
+      id: `${prefix}-mapping`,
+      name: `Mapping: ${mm.mapping.name}`,
+      icon: '🔗',
+      type: 'mapping',
+      configIndex: index,
+      data: mm.mapping,
+      children: [
+        { id: `${prefix}-ds-section`, name: `Data Sources (${dsNodes.length})`, icon: '📂', type: 'section', children: groupDatasourceNodes(dsNodes, prefix) },
+        { id: `${prefix}-bind-section`, name: `Bindings (${bindingNodes.length})`, icon: '📂', type: 'section', children: bindingNodes },
+        { id: `${prefix}-val-section`, name: `Validations (${valNodes.length})`, icon: '📂', type: 'section', children: valNodes },
+      ],
+    });
+  }
+
+  if (config.content.kind === 'Format') {
+    const fc = config.content as ERFormatContent;
+    const fmt = fc.formatVersion;
+    const fmtMap = fc.formatMappingVersion;
+
+    const formatTree = buildFormatElementTree(fmt.format.rootElement, `${prefix}-fmt`, index);
+
+    const fmtBindingPresentation = buildFormatBindingPresentation(fmt.format.rootElement, fmtMap.formatMapping.bindings);
+
+    const fmtBindingTypeGroups = new Map<string, typeof fmtBindingPresentation.groups>();
+    for (const bindingGroup of fmtBindingPresentation.groups) {
+      const existing = fmtBindingTypeGroups.get(bindingGroup.elementType) ?? [];
+      existing.push(bindingGroup);
+      fmtBindingTypeGroups.set(bindingGroup.elementType, existing);
+    }
+
+    const fmtBindNodes = Array.from(fmtBindingTypeGroups.entries())
+      .sort(([leftType], [rightType]) => leftType.localeCompare(rightType))
+      .map(([elementType, groups], typeIndex) => ({
+        id: `${prefix}-fmtbind-type-${typeIndex}`,
+        name: `${elementType} (${groups.length})`,
+        icon: '📂',
+        type: 'section' as const,
+        children: groups
+          .sort((left, right) => left.elementName.localeCompare(right.elementName))
+          .map((g, bi) => {
+            const primaryDataExpr = g.dataBindings[0]?.expressionAsString ?? '';
+            const nonDataCategories = g.categories.filter(category => category.key !== 'data');
+            const label = primaryDataExpr
+              ? `${g.elementName}  ←  ${primaryDataExpr.substring(0, 50)}`
+              : `${g.elementName} (${nonDataCategories.map(category => `${category.label}: ${category.bindings.length}`).join(', ') || 'no bindings'})`;
+            return {
+              id: `${prefix}-fmtbind-${typeIndex}-${bi}`,
+              name: label,
+              icon: primaryDataExpr ? '↔️' : '⚙️',
+              type: 'formatBinding' as const,
+              data: { componentId: g.componentId, expressionAsString: primaryDataExpr, propBindings: g.bindings.filter(binding => binding.bindingCategory !== 'data') },
+              configIndex: index,
+              children: nonDataCategories.length > 0 ? nonDataCategories.map((category, ci) => ({
+                id: `${prefix}-fmtbind-${typeIndex}-${bi}-cat-${ci}`,
+                name: `${category.label} (${category.bindings.length})`,
+                icon: '📂',
+                type: 'section' as const,
+                children: category.bindings.map((binding, pi) => ({
+                  id: `${prefix}-fmtbind-${typeIndex}-${bi}-cat-${ci}-prop-${pi}`,
+                  name: `${binding.bindingDisplayLabel}  ←  ${binding.expressionAsString.substring(0, 45)}`,
+                  icon: category.key === 'visibility' ? '👁️' : '⚙️',
+                  type: 'formatBinding' as const,
+                  data: binding,
+                  configIndex: index,
+                })),
+              })) : undefined,
+            };
+          }),
+      }));
+
+    const enumNodes = fmt.format.enumDefinitions.map((e, ei) => ({
+      id: `${prefix}-enum-${ei}`,
+      name: e.name,
+      icon: '🔤',
+      type: 'enum' as const,
+      data: e,
+      configIndex: index,
+      children: e.values.map((v, vi) => ({
+        id: `${prefix}-enum-${ei}-val-${vi}`,
+        name: v.name,
+        icon: '·',
+        type: 'enumValue' as const,
+        data: v,
+        configIndex: index,
+      })),
+    }));
+
+    const transNodes = fmt.format.transformations.map((t, ti) => ({
+      id: `${prefix}-trans-${ti}`,
+      name: t.name,
+      icon: '🔄',
+      type: 'transformation' as const,
+      data: t,
+      configIndex: index,
+    }));
+
+    const fmtDsNodes = fmtMap.formatMapping.datasources.map((ds, di) =>
+      buildDatasourceTree(ds, `${prefix}-fmtds-${di}`, index),
+    );
+
+    children.push({
+      id: `${prefix}-format`,
+      name: `Format: ${fmt.format.name}`,
+      icon: '📄',
+      type: 'format',
+      configIndex: index,
+      data: fmt.format,
+      children: [
+        { id: `${prefix}-fmt-structure`, name: 'Output Structure', icon: '📂', type: 'section', children: [formatTree] },
+        { id: `${prefix}-fmt-enums`, name: `Enumerations (${enumNodes.length})`, icon: '📂', type: 'section', children: enumNodes },
+        { id: `${prefix}-fmt-trans`, name: `Transformations (${transNodes.length})`, icon: '📂', type: 'section', children: transNodes },
+        { id: `${prefix}-fmt-ds`, name: `Data Sources (${fmtDsNodes.length})`, icon: '📂', type: 'section', children: groupDatasourceNodes(fmtDsNodes, `${prefix}-fmt`) },
+        { id: `${prefix}-fmt-bindings`, name: `Bindings (${fmtBindNodes.length})`, icon: '📂', type: 'section', children: fmtBindNodes },
+      ],
+    });
+  }
+
+  return {
+    id: prefix,
+    name: sol.name,
+    icon: kindIcons[config.kind] ?? '📄',
+    type: 'file',
+    configIndex: index,
+    data: config,
+    children,
+  };
+}
+
+function buildDatasourceTree(ds: any, prefix: string, configIndex: number): TreeNode {
+  return {
+    id: prefix,
+    name: ds.name,
+    icon: dsTypeIcons[ds.type] ?? '❓',
+    type: 'datasource',
+    data: ds,
+    configIndex,
+    children: ds.children?.map((child: any, i: number) =>
+      buildDatasourceTree(child, `${prefix}-${i}`, configIndex),
+    ),
+  };
+}
+
+function buildFormatElementTree(element: any, prefix: string, configIndex: number): TreeNode {
+  const typeIcons: Record<string, string> = {
+    File: '📁',
+    XMLElement: '🏷️',
+    XMLAttribute: '@',
+    XMLSequence: '🔁',
+    String: '📝',
+    Base64: '💾',
+    Unknown: '❓',
+  };
+
+  return {
+    id: prefix,
+    name: element.name || element.elementType,
+    icon: typeIcons[element.elementType] ?? '❓',
+    type: 'formatElement',
+    data: element,
+    configIndex,
+    children: element.children?.map((child: any, i: number) =>
+      buildFormatElementTree(child, `${prefix}-${i}`, configIndex),
+    ),
+  };
+}
