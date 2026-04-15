@@ -1,6 +1,29 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { t } from '../i18n';
+import { locale, t } from '../i18n';
 import { useAppStore, type TreeNode } from '../state/store';
+
+function getExplorerNodeAccentClass(node: TreeNode): string {
+  const kind = node.type === 'file' ? node.data?.kind : undefined;
+
+  if (kind === 'DataModel' || node.type === 'model') return 'tree-node-accent-model';
+  if (kind === 'ModelMapping' || node.type === 'mapping') return 'tree-node-accent-mapping';
+  if (kind === 'Format' || node.type === 'format') return 'tree-node-accent-format';
+
+  return '';
+}
+
+function getExplorerKindLabel(node: TreeNode): string | null {
+  const kind = node.type === 'file' ? node.data?.kind : undefined;
+  const labels = locale === 'cs'
+    ? { DataModel: 'Model', ModelMapping: 'Mapování', Format: 'Formát', model: 'Model', mapping: 'Mapování', format: 'Formát' }
+    : { DataModel: 'Model', ModelMapping: 'Mapping', Format: 'Format', model: 'Model', mapping: 'Mapping', format: 'Format' };
+
+  if (kind === 'DataModel' || node.type === 'model') return labels.DataModel;
+  if (kind === 'ModelMapping' || node.type === 'mapping') return labels.ModelMapping;
+  if (kind === 'Format' || node.type === 'format') return labels.Format;
+
+  return null;
+}
 
 function filterTreeNodes(nodes: TreeNode[], query: string): TreeNode[] {
   const needle = query.trim().toLowerCase();
@@ -46,6 +69,7 @@ function collectAncestorIds(nodes: TreeNode[], targetId: string | null): Set<str
 export function ConfigExplorer() {
   const treeNodes = useAppStore(s => s.treeNodes);
   const selectedNodeId = useAppStore(s => s.selectedNodeId);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const selectNode = useAppStore(s => s.selectNode);
   const openTab = useAppStore(s => s.openTab);
   const [expandMode, setExpandMode] = useState<'default' | 'all' | 'none'>('default');
@@ -80,24 +104,24 @@ export function ConfigExplorer() {
         >
           {t.collapse}
         </button>
-      </div>
-      <div className="explorer-filter-row">
-        <input
-          type="text"
-          value={filterQuery}
-          onChange={event => setFilterQuery(event.target.value)}
-          placeholder={t.explorerFilterPlaceholder}
-          className="fmt-filter-input explorer-filter-input"
-        />
-        {filterQuery && (
-          <button
-            className="fmt-action-btn"
-            onClick={() => setFilterQuery('')}
-            title={t.clearFilter}
-          >
-            ✕
-          </button>
-        )}
+        <div className="panel-filter-row explorer-toolbar-filter">
+          <input
+            type="text"
+            value={filterQuery}
+            onChange={event => setFilterQuery(event.target.value)}
+            placeholder={t.explorerFilterPlaceholder}
+            className="fmt-filter-input explorer-filter-input"
+          />
+          {filterQuery && (
+            <button
+              className="fmt-action-btn"
+              onClick={() => setFilterQuery('')}
+              title={t.clearFilter}
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
       {filteredTreeNodes.length === 0 ? (
         <div className="explorer-empty-state">
@@ -110,6 +134,7 @@ export function ConfigExplorer() {
           depth={0}
           selectedId={selectedNodeId}
           selectedPathIds={selectedPathIds}
+          showTechnicalDetails={showTechnicalDetails}
           onSelect={selectNode}
           expandMode={expandMode}
           expandVersion={expandVersion}
@@ -129,13 +154,14 @@ interface TreeNodeRowProps {
   depth: number;
   selectedId: string | null;
   selectedPathIds: Set<string>;
+  showTechnicalDetails: boolean;
   onSelect: (id: string) => void;
   expandMode: 'default' | 'all' | 'none';
   expandVersion: number;
   onDoubleClick: (node: TreeNode) => void;
 }
 
-function TreeNodeRow({ node, depth, selectedId, selectedPathIds, onSelect, expandMode, expandVersion, onDoubleClick }: TreeNodeRowProps) {
+function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDetails, onSelect, expandMode, expandVersion, onDoubleClick }: TreeNodeRowProps) {
   const [expanded, setExpanded] = useState(depth === 0);
   const hasChildren = node.children && node.children.length > 0;
 
@@ -162,11 +188,13 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, onSelect, expan
 
   const isSelected = node.id === selectedId;
   const isAncestor = !isSelected && selectedPathIds.has(node.id);
+  const accentClass = getExplorerNodeAccentClass(node);
+  const kindLabel = getExplorerKindLabel(node);
 
   return (
     <>
       <div
-        className={`tree-node tree-node-${node.type} ${isSelected ? 'selected' : ''} ${isAncestor ? 'ancestor' : ''}`}
+        className={`tree-node tree-node-${node.type} ${accentClass} ${isSelected ? 'selected' : ''} ${isAncestor ? 'ancestor' : ''}`}
         data-depth={depth}
         style={{ paddingLeft: 8 + depth * 16 }}
         onClick={handleClick}
@@ -179,7 +207,8 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, onSelect, expan
         )}
         <span className="icon">{node.icon}</span>
         <span className="tree-node-label">{node.name}</span>
-        {node.type === 'datasource' && node.data?.type && (
+        {kindLabel && <span className="tree-node-kind-pill">{kindLabel}</span>}
+        {showTechnicalDetails && node.type === 'datasource' && node.data?.type && (
           <span className={`badge badge-${node.data.type.toLowerCase()}`} style={{ marginLeft: 6 }}>
             {node.data.type}
           </span>
@@ -192,6 +221,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, onSelect, expan
           depth={depth + 1}
           selectedId={selectedId}
           selectedPathIds={selectedPathIds}
+          showTechnicalDetails={showTechnicalDetails}
           onSelect={onSelect}
           expandMode={expandMode}
           expandVersion={expandVersion}

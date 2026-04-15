@@ -2,11 +2,20 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '../state/store';
 import type { TreeNode } from '../state/store';
 import type { WhereUsedEntry } from '../state/store';
+import type { GUIDEntry } from '@er-visualizer/core';
 import { ClickablePath } from './ClickablePath';
 import { t } from '../i18n';
 import { getFormatTypeThemeColor } from '../utils/theme-colors';
 
 type Mode = 'search' | 'where-used';
+
+type SearchResultEntry = {
+  target: string;
+  targetType: string;
+  sourceConfigPath: string;
+  sourceComponent: string;
+  sourceContext: string;
+};
 
 function findTreeNodeByMatch(nodes: TreeNode[], predicate: (node: TreeNode) => boolean): TreeNode | null {
   for (const node of nodes) {
@@ -29,6 +38,7 @@ export function SearchPanel() {
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
   const treeNodes = useAppStore(s => s.treeNodes);
+  const configurations = useAppStore(s => s.configurations);
 
   const [mode, setMode] = useState<Mode>('search');
   const [whereUsedQuery, setWhereUsedQuery] = useState('');
@@ -120,15 +130,15 @@ export function SearchPanel() {
               <div className="search-section-caption">
               {t.searchResultCount(searchResults.length)}
               </div>
-              {searchResults.slice(0, 100).map((r: any, i: number) => (
-                <div key={i} className="search-result-card">
-                  <div className="search-result-header">
-                    <span className={`badge badge-${r.targetType?.toLowerCase()}`}>{r.targetType}</span>
-                    <span className="search-result-target">{r.target}</span>
-                  </div>
-                  <div className="search-result-secondary">{r.sourceContext}</div>
-                  <div className="search-result-secondary">in: {r.sourceComponent} ({r.sourceConfigPath})</div>
-                </div>
+              {searchResults.slice(0, 100).map((result: SearchResultEntry, i: number) => (
+                <SearchResultCard
+                  key={`${result.sourceConfigPath}:${result.target}:${i}`}
+                  result={result}
+                  configurations={configurations}
+                  treeNodes={treeNodes}
+                  registry={registry}
+                  navigateToTreeNode={navigateToTreeNode}
+                />
               ))}
             </div>
           )}
@@ -217,6 +227,46 @@ export function SearchPanel() {
   );
 }
 
+function SearchResultCard({
+  result,
+  configurations,
+  treeNodes,
+  registry,
+  navigateToTreeNode,
+}: {
+  result: SearchResultEntry;
+  configurations: Array<{ filePath: string }>;
+  treeNodes: TreeNode[];
+  registry: { lookup: (guid: string) => GUIDEntry | undefined };
+  navigateToTreeNode: (nodeId: string) => void;
+}) {
+  const targetNode = findNodeForSearchResult(result, configurations, treeNodes, registry);
+  const content = (
+    <>
+      <div className="search-result-header">
+        <span className={`badge badge-${result.targetType?.toLowerCase()}`}>{result.targetType}</span>
+        <span className="search-result-target">{result.target}</span>
+      </div>
+      <div className="search-result-secondary">{result.sourceContext}</div>
+      <div className="search-result-footer">
+        <div className="search-result-secondary">in: {result.sourceComponent} ({result.sourceConfigPath})</div>
+        {targetNode && (
+          <button
+            type="button"
+            className="search-result-open-btn"
+            onClick={() => navigateToTreeNode(targetNode.id)}
+            title={t.openInExplorerAction}
+          >
+            ↗ {t.explorerActionShort}
+          </button>
+        )}
+      </div>
+    </>
+  );
+
+  return <div className="search-result-card">{content}</div>;
+}
+
 // ─── Where-Used Card ───
 
 function WhereUsedCard({ entry, navigateToTreeNode, findDatasourceNode, treeNodes }: {
@@ -227,9 +277,7 @@ function WhereUsedCard({ entry, navigateToTreeNode, findDatasourceNode, treeNode
 }) {
   const [expanded, setExpanded] = useState(true);
 
-  const entityBadgeColor = entry.entityType === 'Table' ? 'badge-table'
-    : entry.entityType === 'Enum' ? 'badge-enum'
-    : 'badge-class';
+  const entityBadgeColor = getWhereUsedBadgeClass(entry.entityType);
 
   const navigateToDs = () => {
     const nodeId = findDatasourceNode(
@@ -337,5 +385,209 @@ function WhereUsedCard({ entry, navigateToTreeNode, findDatasourceNode, treeNode
       )}
     </div>
   );
+}
+
+function findNodeForSearchResult(
+  result: SearchResultEntry,
+  configurations: Array<{ filePath: string }>,
+  treeNodes: TreeNode[],
+  registry: { lookup: (guid: string) => GUIDEntry | undefined },
+): TreeNode | null {
+  const configIndex = configurations.findIndex(config => config.filePath === result.sourceConfigPath);
+  if (configIndex < 0) return null;
+
+  const rootNode = treeNodes[configIndex];
+  if (!rootNode) return null;
+
+  const sourceExpr = extractExpressionFromContext(result.sourceContext);
+
+  if (result.sourceContext === 'TypeDescriptor reference in model field') {
+    return findFieldNode(rootNode, result.sourceComponent);
+  }
+
+  if (result.sourceContext === 'Model mapping references data model') {
+    return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'mapping');
+  }
+
+  if (result.sourceContext === 'Format mapping references format definition') {
+    return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'format');
+  }
+
+  if (result.sourceContext === 'Base model reference') {
+    return rootNode;
+  }
+
+  if (result.sourceContext.startsWith('Binding:')) {
+    return findTreeNodeByMatch(rootNode.children ?? [], node =>
+      node.type === 'binding' && node.data?.path === result.target,
+    );
+  }
+
+  if (result.sourceContext.startsWith('Binding for ')) {
+    const bindingPath = result.sourceContext.slice('Binding for '.length).split(':')[0]?.trim();
+    if (bindingPath) {
+      return findTreeNodeByMatch(rootNode.children ?? [], node =>
+        node.type === 'binding' && node.data?.path === bindingPath,
+      );
+    }
+  }
+
+  if (result.sourceContext.startsWith('Format binding to component:')) {
+    return findTreeNodeByMatch(rootNode.children ?? [], node =>
+      (node.type === 'formatElement' && node.data?.id === result.target)
+      || (node.type === 'formatBinding' && node.data?.componentId === result.target),
+    );
+  }
+
+  if (result.sourceContext.startsWith('Format binding expression:') && sourceExpr) {
+    const bindingNode = findFormatBindingNode(rootNode, sourceExpr);
+    if (bindingNode) return bindingNode;
+  }
+
+  if (result.targetType === 'GUID') {
+    const guidNode = resolveGuidTargetNode(result.target, treeNodes, configurations, registry)
+      ?? findTreeNodeByMatch(rootNode.children ?? [], node =>
+        (node.type === 'formatElement' && node.data?.id === result.target)
+        || node.data?.id === result.target,
+      );
+    if (guidNode) return guidNode;
+  }
+
+  if (result.targetType === 'ModelPath') {
+    const bindingNode = findTreeNodeByMatch(rootNode.children ?? [], node =>
+      node.type === 'binding' && node.data?.path === result.target,
+    );
+    if (bindingNode) return bindingNode;
+  }
+
+  if (result.targetType === 'Formula') {
+    if (sourceExpr) {
+      const formatBindingNode = findFormatBindingNode(rootNode, sourceExpr);
+      if (formatBindingNode) return formatBindingNode;
+    }
+
+    const bindingPath = result.sourceContext.startsWith('Binding for ')
+      ? result.sourceContext.slice('Binding for '.length).split(':')[0]?.trim()
+      : null;
+    if (bindingPath) {
+      const bindingNode = findTreeNodeByMatch(rootNode.children ?? [], node =>
+        node.type === 'binding' && node.data?.path === bindingPath,
+      );
+      if (bindingNode) return bindingNode;
+    }
+  }
+
+  return findTreeNodeByMatch(rootNode.children ?? [], node =>
+    node.type === 'datasource' && node.name === result.sourceComponent,
+  );
+}
+
+function findFieldNode(rootNode: TreeNode, sourceComponent: string): TreeNode | null {
+  const [containerName, fieldName] = sourceComponent.split('.');
+  return findTreeNodeWithAncestors(rootNode.children ?? [], [], (node, ancestors) => {
+    if (node.type !== 'field' || node.name !== fieldName) return false;
+    const parentContainer = ancestors[ancestors.length - 1];
+    return parentContainer?.type === 'container' && parentContainer.name === containerName;
+  });
+}
+
+function findFormatBindingNode(rootNode: TreeNode, expression: string): TreeNode | null {
+  return findTreeNodeByMatch(rootNode.children ?? [], node =>
+    node.type === 'formatBinding' && node.data?.expressionAsString === expression,
+  );
+}
+
+function resolveGuidTargetNode(
+  guid: string,
+  treeNodes: TreeNode[],
+  configurations: Array<{ filePath: string }>,
+  registry: { lookup: (guid: string) => GUIDEntry | undefined },
+): TreeNode | null {
+  const entry = registry.lookup(guid);
+  if (!entry) return null;
+
+  const configIndex = configurations.findIndex(config => config.filePath === entry.configFilePath);
+  if (configIndex < 0) return null;
+
+  const rootNode = treeNodes[configIndex];
+  if (!rootNode) return null;
+
+  switch (entry.kind) {
+    case 'Solution':
+      return rootNode;
+    case 'ModelVersion':
+      return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'model');
+    case 'MappingVersion':
+      return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'mapping');
+    case 'FormatVersion':
+    case 'FormatMappingVersion':
+      return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'format');
+    case 'Container':
+      return findTreeNodeByMatch(rootNode.children ?? [], node =>
+        node.type === 'container' && node.data?.id === guid,
+      );
+    case 'FormatElement':
+      return findTreeNodeByMatch(rootNode.children ?? [], node =>
+        node.type === 'formatElement' && node.data?.id === guid,
+      );
+    case 'FormatEnum':
+      return findTreeNodeByMatch(rootNode.children ?? [], node =>
+        node.type === 'enum' && node.data?.id === guid,
+      );
+    case 'Transformation':
+      return findTreeNodeByMatch(rootNode.children ?? [], node =>
+        node.type === 'transformation' && node.data?.id === guid,
+      );
+    case 'ValidationRule':
+      return findTreeNodeByMatch(rootNode.children ?? [], node =>
+        node.type === 'validation' && Array.isArray(node.data?.conditions)
+          && node.data.conditions.some((condition: { id?: string }) => condition.id === guid),
+      );
+    default:
+      return findTreeNodeByMatch(rootNode.children ?? [], node => node.data?.id === guid);
+  }
+}
+
+function findTreeNodeWithAncestors(
+  nodes: TreeNode[],
+  ancestors: TreeNode[],
+  predicate: (node: TreeNode, ancestors: TreeNode[]) => boolean,
+): TreeNode | null {
+  for (const node of nodes) {
+    if (predicate(node, ancestors)) return node;
+    if (node.children) {
+      const found = findTreeNodeWithAncestors(node.children, [...ancestors, node], predicate);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function extractExpressionFromContext(sourceContext: string): string | null {
+  const separatorIndex = sourceContext.indexOf(': ');
+  if (separatorIndex === -1) return null;
+  return sourceContext.slice(separatorIndex + 2).trim() || null;
+}
+
+function getWhereUsedBadgeClass(entityType: WhereUsedEntry['entityType']): string {
+  switch (entityType) {
+    case 'Table':
+      return 'badge-table';
+    case 'Enum':
+      return 'badge-enum';
+    case 'Class':
+      return 'badge-class';
+    case 'CalculatedField':
+      return 'badge-calc';
+    case 'UserParameter':
+      return 'badge-param';
+    case 'GroupBy':
+    case 'Join':
+    case 'Container':
+    case 'Object':
+      return 'badge-success';
+    default:
+      return 'badge-xml';
+  }
 }
 

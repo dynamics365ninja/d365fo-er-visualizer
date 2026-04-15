@@ -115,6 +115,7 @@ export function App() {
 function StatusBar({ onOpenLanding }: { onOpenLanding: () => void }) {
   const configs = useAppStore(s => s.configurations);
   const registry = useAppStore(s => s.registry);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
 
   return (
     <div className="app-statusbar">
@@ -125,7 +126,10 @@ function StatusBar({ onOpenLanding }: { onOpenLanding: () => void }) {
           {c.kind === 'DataModel' ? '📐' : c.kind === 'ModelMapping' ? '🔗' : '📄'} {c.solutionVersion.solution.name.slice(0, 25)}
         </span>
       ))}
-      <span className="app-statusbar-spacer">GUIDs: {registry.guidCount}</span>
+      <span className="app-statusbar-chip app-statusbar-mode-chip">
+        {showTechnicalDetails ? t.technicalView : t.consultantView}
+      </span>
+      {showTechnicalDetails && <span className="app-statusbar-spacer">GUIDs: {registry.guidCount}</span>}
     </div>
   );
 }

@@ -9,6 +9,26 @@ import type {
 import { parseERConfiguration, GUIDRegistry } from '@er-visualizer/core';
 import { buildFormatBindingPresentation } from '../utils/format-binding-display';
 
+const TECHNICAL_DETAILS_STORAGE_KEY = 'er-visualizer.showTechnicalDetails';
+
+function readStoredTechnicalDetails(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(TECHNICAL_DETAILS_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function persistTechnicalDetails(show: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(TECHNICAL_DETAILS_STORAGE_KEY, String(show));
+  } catch {
+    // Ignore storage failures and keep in-memory state only.
+  }
+}
+
 // ─── Tree Node (unified for all component types) ───
 
 export interface TreeNode {
@@ -35,6 +55,7 @@ export interface AppState {
   activeTabId: string | null;
   searchQuery: string;
   searchResults: any[];
+  showTechnicalDetails: boolean;
 
   // Actions
   loadXmlFile: (xml: string, filePath: string) => void;
@@ -43,6 +64,7 @@ export interface AppState {
   openTab: (id: string, label: string, configIndex: number) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
+  setShowTechnicalDetails: (show: boolean) => void;
   setSearchQuery: (query: string) => void;
   executeSearch: () => void;
   navigateToTreeNode: (nodeId: string) => void;
@@ -98,7 +120,7 @@ export interface AppState {
 export interface WhereUsedEntry {
   /** The matched entity name (table, enum, class) */
   entityName: string;
-  entityType: 'Table' | 'Enum' | 'Class' | 'Other';
+  entityType: 'Table' | 'Enum' | 'Class' | 'CalculatedField' | 'GroupBy' | 'Join' | 'Container' | 'Object' | 'UserParameter' | 'Other';
   /** The datasource in a mapping or format that references the entity */
   datasource: {
     name: string;
@@ -153,6 +175,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeTabId: null,
   searchQuery: '',
   searchResults: [],
+  showTechnicalDetails: readStoredTechnicalDetails(),
 
   loadXmlFile: (xml: string, filePath: string) => {
     try {
@@ -216,6 +239,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setActiveTab: (id: string) => set({ activeTabId: id }),
+
+  setShowTechnicalDetails: (show: boolean) => {
+    persistTechnicalDetails(show);
+    set({ showTechnicalDetails: show });
+  },
 
   setSearchQuery: (query: string) => set({ searchQuery: query }),
 
@@ -625,7 +653,15 @@ function getEntityMatch(ds: any, normalizedQuery: string): EntityMatchResult {
     { entityType: 'Table', entityName: ds.tableInfo?.tableName },
     { entityType: 'Enum', entityName: ds.enumInfo?.enumName },
     { entityType: 'Class', entityName: ds.classInfo?.className },
+    { entityType: 'UserParameter', entityName: ds.userParamInfo?.extendedDataTypeName },
   ];
+
+  if (ds.name) {
+    const datasourceType = mapDatasourceTypeToWhereUsedType(ds.type);
+    if (datasourceType) {
+      candidates.push({ entityType: datasourceType, entityName: ds.name });
+    }
+  }
 
   let bestMatch: EntityMatchResult = {
     matched: false,
@@ -651,6 +687,25 @@ function getEntityMatch(ds: any, normalizedQuery: string): EntityMatchResult {
   }
 
   return bestMatch;
+}
+
+function mapDatasourceTypeToWhereUsedType(dsType?: string): WhereUsedEntry['entityType'] | null {
+  switch (dsType) {
+    case 'CalculatedField':
+      return 'CalculatedField';
+    case 'GroupBy':
+      return 'GroupBy';
+    case 'Join':
+      return 'Join';
+    case 'Container':
+      return 'Container';
+    case 'Object':
+      return 'Object';
+    case 'UserParameter':
+      return 'UserParameter';
+    default:
+      return null;
+  }
 }
 
 function getMatchScore(candidate: string, query: string): 0 | 1 | 2 | 3 {
