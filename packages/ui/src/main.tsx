@@ -1,5 +1,3 @@
-import React from 'react';
-import { createRoot } from 'react-dom/client';
 import './index.css';
 
 function formatRuntimeError(value: unknown): string {
@@ -44,12 +42,16 @@ async function bootstrap() {
     throw new Error('Missing #root element in index.html');
   }
 
+  const React = await import('react');
+  const { createRoot } = await import('react-dom/client');
   const { App } = await import('./components/App');
   const root = createRoot(container);
   root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
+    React.createElement(
+      React.StrictMode,
+      null,
+      React.createElement(App)
+    )
   );
 }
 
