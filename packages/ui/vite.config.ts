@@ -13,6 +13,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    target: 'es2019',
+    sourcemap: true,
     rollupOptions: {
       output: {
         manualChunks(id) {
