@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { useAppStore } from '../state/store';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
+import { t } from '../i18n';
 
 type LandingAccentTone = 'info' | 'success' | 'purple';
 
@@ -67,12 +68,9 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
         <div className="landing-hero-logo">
           <span className="landing-hero-logo-icon">⚡</span>
         </div>
-        <div className="landing-hero-badge">D365 Finance &amp; Operations · Electronic Reporting</div>
-        <h1 className="landing-hero-title">D365FO ER Visualizer</h1>
-        <p className="landing-hero-sub">
-          Přehledné pracovní místo pro konfigurace elektronického výkaznictví: modely, mapování i formáty na jednom místě.
-          Snadno se proklikáš od formulí až ke zdrojovým tabulkám, dohledáš where-used vazby a přeskakuješ mezi souvisejícími soubory.
-        </p>
+        <div className="landing-hero-badge">{t.landingBadge}</div>
+        <h1 className="landing-hero-title">{t.landingTitle}</h1>
+        <p className="landing-hero-sub">{t.landingSub}</p>
       </div>
 
       {/* ── Drop Zone ── */}
@@ -82,7 +80,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
         onKeyDown={e => e.key === 'Enter' && handleOpenFiles()}
         role="button"
         tabIndex={0}
-        aria-label="Drop XML files here"
+        aria-label={t.landingDropAriaLabel}
       >
         <input
           ref={fileInputRef}
@@ -95,19 +93,19 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
         {loading ? (
           <div className="landing-dropzone-inner">
             <div className="landing-spinner">⏳</div>
-            <div className="landing-dropzone-primary">Načítání souborů…</div>
+            <div className="landing-dropzone-primary">{t.landingLoading}</div>
           </div>
         ) : (
           <div className="landing-dropzone-inner">
             <div className="landing-dropzone-icon">{isDragging ? '📥' : '📂'}</div>
             <div className="landing-dropzone-primary">
-              {isDragging ? 'Pusť soubory' : 'Přetáhni ER XML soubory sem'}
+              {isDragging ? t.landingDropRelease : t.landingDropPrimary}
             </div>
-            <div className="landing-dropzone-secondary">nebo klikni pro výběr · můžeš načíst více souborů najednou</div>
+            <div className="landing-dropzone-secondary">{t.landingDropSecondary}</div>
             <div className="landing-dropzone-types">
-              <span className="landing-type-pill landing-accent-info">📐 Model</span>
-              <span className="landing-type-pill landing-accent-success">🔗 Mapování</span>
-              <span className="landing-type-pill landing-accent-purple">📄 Formát</span>
+              <span className="landing-type-pill landing-accent-info">{t.landingPillModel}</span>
+              <span className="landing-type-pill landing-accent-success">{t.landingPillMapping}</span>
+              <span className="landing-type-pill landing-accent-purple">{t.landingPillFormat}</span>
             </div>
           </div>
         )}
@@ -116,20 +114,20 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
       {/* ── Errors ── */}
       {errors.length > 0 && (
         <div className="landing-errors">
-          <div className="landing-errors-title">⚠️ Chyby načítání</div>
+          <div className="landing-errors-title">{t.landingErrors}</div>
           {errors.map((e, i) => (
             <div key={i} className="landing-error-item">{e}</div>
           ))}
-          <button className="landing-error-dismiss" onClick={() => setErrors([])}>Zavřít</button>
+          <button className="landing-error-dismiss" onClick={() => setErrors([])}>{t.landingDismiss}</button>
         </div>
       )}
 
       {/* ── Already loaded ── */}
       {configs.length > 0 && (
         <div className="landing-loaded-bar">
-          <span>✅ {configs.length} konfigurace načteny</span>
+          <span>{t.landingLoaded(configs.length)}</span>
           <button className="landing-loaded-open" onClick={onFilesLoaded}>
-            Přejít do návrháře →
+            {t.landingOpen}
           </button>
         </div>
       )}
@@ -139,77 +137,46 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
         <ComponentCard
           accentTone="info"
           icon="📐"
-          title="Data Model"
-          subtitle="Abstraktní schéma dat"
-          description="Hierarchická datová struktura ERP systému. Obsahuje kontejnery (záznamy, seznamy záznamů, výčty) a jejich pole s typy."
-          features={[
-            'Vizualizace jako hierarchický diagram',
-            'Přehled polí a datových typů',
-            'Navigace po vazbách typeDescriptor',
-            'Barevné rozlišení root / record / enum',
-          ]}
-          fileHint="Tax declaration model.xml"
+          title={t.landingCardModelTitle}
+          subtitle={t.landingCardModelSubtitle}
+          description={t.landingCardModelDesc}
+          features={t.landingCardModelFeatures}
+          fileHint={t.landingCardModelHint}
         />
         <ComponentCard
           accentTone="success"
           icon="🔗"
-          title="Model Mapping"
-          subtitle="Napojení modelu na D365 FO"
-          description="Propojuje abstraktní model s konkrétními datovými zdroji D365 FO — tabulkami, pohledy, třídami, výčty a vypočtenými poli."
-          features={[
-            'Prohlížeč vazeb (model path ← výraz)',
-            'Strom datových zdrojů',
-            'Rozpad vypočtených polí krok za krokem',
-            'Sledování závislostí na tabulky a třídy',
-          ]}
-          fileHint="Tax declaration model mapping.xml"
+          title={t.landingCardMappingTitle}
+          subtitle={t.landingCardMappingSubtitle}
+          description={t.landingCardMappingDesc}
+          features={t.landingCardMappingFeatures}
+          fileHint={t.landingCardMappingHint}
         />
         <ComponentCard
           accentTone="purple"
           icon="📄"
-          title="Format"
-          subtitle="Výstupní / vstupní soubor"
-          description="Definuje strukturu výstupního (nebo vstupního) souboru. Podporuje XML, Excel, Word, PDF, CSV a plain-text formáty."
-          features={[
-            'Rozpoznání typu formátu (XML / Excel / Word / PDF / Text)',
-            'Strom elementů včetně vložených formulí',
-            'Proklik formule → datový zdroj → tabulka',
-            'Přehled transformací a enumerací',
-          ]}
-          fileHint="VAT declaration XML (CZ).xml"
+          title={t.landingCardFormatTitle}
+          subtitle={t.landingCardFormatSubtitle}
+          description={t.landingCardFormatDesc}
+          features={t.landingCardFormatFeatures}
+          fileHint={t.landingCardFormatHint}
         />
       </div>
 
       {/* ── How it works ── */}
       <div className="landing-how">
-        <div className="landing-section-title">Jak to funguje</div>
+        <div className="landing-section-title">{t.landingHowTitle}</div>
         <div className="landing-steps">
-          <HowStep
-            n={1}
-            title="Načti soubory"
-            desc="Přetáhni nebo vyber ER XML soubory. Nejlepší je načíst všechny tři typy (Model + Mapování + Formát), protože teprve pak funguje plný drill-down napříč konfigurací."
-          />
-          <HowStep
-            n={2}
-            title="Projdi strom konfigurace"
-            desc="V levém panelu Exploreru vidíš hierarchii celé konfigurace. Kliknutím vybereš prvek, dvojklikem si otevřeš jeho vizualizaci na nové záložce."
-          />
-          <HowStep
-            n={3}
-            title="Klikni na formuli"
-            desc="V pohledu Formát nebo Mapování klikni na libovolný výraz. Uvidíš celý řetězec vazeb: formule → vypočtená pole → zdrojová tabulka, třída nebo enum."
-          />
-          <HowStep
-            n={4}
-            title="Místa použití"
-            desc='V panelu 🔍 Hledat zadej název tabulky, třeba &quot;TaxTrans&quot;, a spusť &quot;Místa použití&quot;. Zobrazí se všechny formátové elementy, které z této tabulky čerpají data.'
-          />
+          <HowStep n={1} title={t.landingStep1Title} desc={t.landingStep1Desc} />
+          <HowStep n={2} title={t.landingStep2Title} desc={t.landingStep2Desc} />
+          <HowStep n={3} title={t.landingStep3Title} desc={t.landingStep3Desc} />
+          <HowStep n={4} title={t.landingStep4Title} desc={t.landingStep4Desc} />
         </div>
       </div>
 
       {/* ── Footer ── */}
       <div className="landing-footer">
-        D365 FO ER Visualizer &nbsp;·&nbsp; Electronic Reporting Configuration Inspector
+        {t.landingFooter}
       </div>
     </div>
   );
