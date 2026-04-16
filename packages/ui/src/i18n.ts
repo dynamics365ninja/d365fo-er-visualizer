@@ -119,16 +119,41 @@ export interface Translations {
   propYes: string;
   // Status bar
   statusConfigs: (n: number) => string;
-  // Landing page
+  // Landing page – hero
   landingBadge: string;
   landingTitle: string;
   landingSub: string;
+  // Landing page – drop zone
   landingDropPrimary: string;
+  landingDropRelease: string;
   landingDropSecondary: string;
-  landingLoaded: (n: number) => string;
-  landingOpen: string;
+  landingLoading: string;
+  landingDropAriaLabel: string;
+  landingPillModel: string;
+  landingPillMapping: string;
+  landingPillFormat: string;
+  // Landing page – errors & loaded
   landingErrors: string;
   landingDismiss: string;
+  landingLoaded: (n: number) => string;
+  landingOpen: string;
+  // Landing page – cards
+  landingCardModelTitle: string;
+  landingCardModelSubtitle: string;
+  landingCardModelDesc: string;
+  landingCardModelFeatures: string[];
+  landingCardModelHint: string;
+  landingCardMappingTitle: string;
+  landingCardMappingSubtitle: string;
+  landingCardMappingDesc: string;
+  landingCardMappingFeatures: string[];
+  landingCardMappingHint: string;
+  landingCardFormatTitle: string;
+  landingCardFormatSubtitle: string;
+  landingCardFormatDesc: string;
+  landingCardFormatFeatures: string[];
+  landingCardFormatHint: string;
+  // Landing page – how it works
   landingHowTitle: string;
   landingStep1Title: string;
   landingStep1Desc: string;
@@ -138,6 +163,8 @@ export interface Translations {
   landingStep3Desc: string;
   landingStep4Title: string;
   landingStep4Desc: string;
+  // Landing page – footer
+  landingFooter: string;
 }
 
 // ─── Translation dictionaries ─────────────────────────────────────────────
@@ -253,24 +280,61 @@ const cs: Translations = {
   statusConfigs: (n: number) => `${n} konfigurace`,
 
   // Landing page
-  landingBadge: 'D365 FO · Electronic Reporting',
-  landingTitle: 'ER Visualizer',
-  landingSub: 'Interaktivní vizualizace Dynamics 365 Finance ER konfigurací. Načti Model, ModelMapping a Format soubory pro kompletní drill-down analýzu.',
-  landingDropPrimary: 'Přetáhni XML soubory sem',
-  landingDropSecondary: 'nebo klikni pro výběr souborů',
-  landingLoaded: (n: number) => `${n} soubory načteny.`,
-  landingOpen: 'Otevřít',
-  landingErrors: 'Chyby při načítání',
+  landingBadge: 'D365 Finance & Operations · Electronic Reporting',
+  landingTitle: 'D365FO ER Visualizer',
+  landingSub: 'Přehledné pracovní místo pro konfigurace elektronického výkaznictví: modely, mapování i formáty na jednom místě. Snadno se proklikáš od formulí až ke zdrojovým tabulkám, dohledáš where-used vazby a přeskakuješ mezi souvisejícími soubory.',
+  landingDropPrimary: 'Přetáhni ER XML soubory sem',
+  landingDropRelease: 'Pusť soubory',
+  landingDropSecondary: 'nebo klikni pro výběr · můžeš načíst více souborů najednou',
+  landingLoading: 'Načítání souborů…',
+  landingDropAriaLabel: 'Přetáhni XML soubory sem',
+  landingPillModel: '📐 Model',
+  landingPillMapping: '🔗 Mapování',
+  landingPillFormat: '📄 Formát',
+  landingErrors: '⚠️ Chyby načítání',
   landingDismiss: 'Zavřít',
+  landingLoaded: (n: number) => `✅ ${n} konfigurac${n === 1 ? 'e načtena' : 'e načteny'}`,
+  landingOpen: 'Přejít do návrháře →',
+  landingCardModelTitle: 'Data Model',
+  landingCardModelSubtitle: 'Datový model konfigurované agendy',
+  landingCardModelDesc: 'Definuje, jaká data konfigurace zpracovává — záznamy, seznamy, výčtové hodnoty a jejich pole. Slouží jako společný základ, na který se napojuje mapování i formát.',
+  landingCardModelFeatures: [
+    'Vizualizace jako hierarchický strom',
+    'Přehled polí a datových typů každého záznamu',
+    'Navigace po odkazech mezi záznamy (vnořené záznamy, seznamy)',
+    'Barevné rozlišení kořenových prvků, záznamů a výčtů',
+  ],
+  landingCardModelHint: 'Tax declaration model.xml',
+  landingCardMappingTitle: 'Model Mapping',
+  landingCardMappingSubtitle: 'Napojení modelu na data v D365 FO',
+  landingCardMappingDesc: 'Určuje, odkud se data pro model berou — z tabulek, pohledů, tříd, výčtů nebo vypočítaných polí v Dynamics 365 Finance & Operations.',
+  landingCardMappingFeatures: [
+    'Prohlížeč vazeb: ke každé cestě v modelu vidíte zdrojový výraz',
+    'Strom datových zdrojů (tabulky, třídy, vypočítaná pole …)',
+    'Rozklad složených výrazů a vypočítaných polí krok za krokem',
+    'Sledování závislostí — na které tabulky a třídy se konfigurace odkazuje',
+  ],
+  landingCardMappingHint: 'Tax declaration model mapping.xml',
+  landingCardFormatTitle: 'Format',
+  landingCardFormatSubtitle: 'Šablona výstupního nebo vstupního souboru',
+  landingCardFormatDesc: 'Popisuje strukturu generovaného (nebo čteného) souboru — XML, Excel, Word, PDF, CSV či prostý text. Každý prvek může obsahovat formuli napojující data z mapování.',
+  landingCardFormatFeatures: [
+    'Rozpoznání typu souboru (XML / Excel / Word / PDF / Text)',
+    'Stromový náhled všech prvků včetně vložených formulí',
+    'Proklik z formule přes datový zdroj až ke zdrojové tabulce',
+    'Přehled transformací a výčtových hodnot definovaných ve formátu',
+  ],
+  landingCardFormatHint: 'VAT declaration XML (CZ).xml',
   landingHowTitle: 'Jak to funguje',
-  landingStep1Title: '1. Načti XML soubory',
-  landingStep1Desc: 'Nahrej DataModel, ModelMapping a Format konfigurační soubory. Pořadí nezáleží — aplikace je propojí automaticky.',
-  landingStep2Title: '2. Prozkoumej strukturu',
-  landingStep2Desc: 'Explorer zobrazuje hierarchii všech prvků. Dvojklikem otevřeš detailní vizualizaci v pravé části.',
-  landingStep3Title: '3. Drill-down na datový zdroj',
-  landingStep3Desc: 'Klikni na prvek formátu, uvidíš binding výraz. Klikni na výraz pro rekurzivní rozbalení přes kalkulovaná pole až na zdrojovou tabulku.',
-  landingStep4Title: '4. Where-used analýza',
-  landingStep4Desc: 'V panelu Where-used zadej název tabulky, výčtu nebo třídy. Aplikace ukáže všechna místa využití od DS přes mapping až na formát.',
+  landingStep1Title: 'Načti soubory',
+  landingStep1Desc: 'Přetáhni nebo vyber ER XML soubory. Nejlepší je načíst všechny tři typy (Model + Mapování + Formát), protože teprve pak funguje plný drill-down napříč konfigurací.',
+  landingStep2Title: 'Projdi strom konfigurace',
+  landingStep2Desc: 'V levém panelu Exploreru vidíš hierarchii celé konfigurace. Kliknutím vybereš prvek, dvojklikem si otevřeš jeho vizualizaci na nové záložce.',
+  landingStep3Title: 'Klikni na formuli',
+  landingStep3Desc: 'V pohledu Formát nebo Mapování klikni na libovolný výraz. Uvidíš celý řetězec vazeb: formule → vypočtená pole → zdrojová tabulka, třída nebo enum.',
+  landingStep4Title: 'Místa použití',
+  landingStep4Desc: 'V panelu 🔍 Hledat zadej název tabulky, třeba &quot;TaxTrans&quot;, a spusť &quot;Místa použití&quot;. Zobrazí se všechny formátové elementy, které z této tabulky čerpají data.',
+  landingFooter: 'D365 FO ER Visualizer · Electronic Reporting Configuration Inspector',
 };
 
 const en: Translations = {
@@ -377,24 +441,62 @@ const en: Translations = {
 
   statusConfigs: (n: number) => `${n} configuration${n === 1 ? '' : 's'}`,
 
-  landingBadge: 'D365 FO · Electronic Reporting',
-  landingTitle: 'ER Visualizer',
-  landingSub: 'Interactive visualization of Dynamics 365 Finance ER configurations. Load Model, ModelMapping and Format files for complete drill-down analysis.',
-  landingDropPrimary: 'Drop XML files here',
-  landingDropSecondary: 'or click to browse',
-  landingLoaded: (n: number) => `${n} file${n === 1 ? '' : 's'} loaded.`,
-  landingOpen: 'Open',
-  landingErrors: 'Load errors',
+  // Landing page
+  landingBadge: 'D365 Finance & Operations · Electronic Reporting',
+  landingTitle: 'D365FO ER Visualizer',
+  landingSub: 'A clear workspace for Electronic Reporting configurations: data models, mappings and formats in one place. Easily trace formulas back to source tables, find where-used references, and jump between related files.',
+  landingDropPrimary: 'Drop ER XML files here',
+  landingDropRelease: 'Release files',
+  landingDropSecondary: 'or click to browse · you can load multiple files at once',
+  landingLoading: 'Loading files…',
+  landingDropAriaLabel: 'Drop XML files here',
+  landingPillModel: '📐 Model',
+  landingPillMapping: '🔗 Mapping',
+  landingPillFormat: '📄 Format',
+  landingErrors: '⚠️ Load errors',
   landingDismiss: 'Dismiss',
+  landingLoaded: (n: number) => `✅ ${n} configuration${n === 1 ? '' : 's'} loaded`,
+  landingOpen: 'Open designer →',
+  landingCardModelTitle: 'Data Model',
+  landingCardModelSubtitle: 'Data model of the configured agenda',
+  landingCardModelDesc: 'Defines what data the configuration processes — records, lists, enumeration values and their fields. Serves as the common foundation that mapping and format connect to.',
+  landingCardModelFeatures: [
+    'Visualize as a hierarchical tree',
+    'Overview of fields and data types for each record',
+    'Navigate references between records (nested records, lists)',
+    'Color-coded root elements, records, and enumerations',
+  ],
+  landingCardModelHint: 'Tax declaration model.xml',
+  landingCardMappingTitle: 'Model Mapping',
+  landingCardMappingSubtitle: 'Connects the model to D365 FO data',
+  landingCardMappingDesc: 'Determines where the model data comes from — tables, views, classes, enums, or calculated fields in Dynamics 365 Finance & Operations.',
+  landingCardMappingFeatures: [
+    'Binding browser: see the source expression for every model path',
+    'Data-source tree (tables, classes, calculated fields …)',
+    'Step-by-step breakdown of complex expressions and calculated fields',
+    'Dependency tracking — which tables and classes the configuration references',
+  ],
+  landingCardMappingHint: 'Tax declaration model mapping.xml',
+  landingCardFormatTitle: 'Format',
+  landingCardFormatSubtitle: 'Output or input file template',
+  landingCardFormatDesc: 'Describes the structure of the generated (or consumed) file — XML, Excel, Word, PDF, CSV or plain text. Every element can contain a formula linked to mapping data.',
+  landingCardFormatFeatures: [
+    'Detect file type (XML / Excel / Word / PDF / Text)',
+    'Tree view of all elements including embedded formulas',
+    'Click through from formula via data source to source table',
+    'Overview of transformations and enumeration values defined in the format',
+  ],
+  landingCardFormatHint: 'VAT declaration XML (CZ).xml',
   landingHowTitle: 'How it works',
-  landingStep1Title: '1. Load XML files',
-  landingStep1Desc: 'Upload DataModel, ModelMapping and Format configuration files. Order does not matter — the app links them automatically.',
-  landingStep2Title: '2. Explore the structure',
-  landingStep2Desc: 'The Explorer shows the full element hierarchy. Double-click to open a detailed visualization on the right.',
-  landingStep3Title: '3. Drill down to data source',
-  landingStep3Desc: 'Click a format element to see its binding expression. Click the expression to recursively expand through calculated fields all the way to the source table.',
-  landingStep4Title: '4. Where-used analysis',
-  landingStep4Desc: 'In the Where-used panel, type a table, enum or class name. The app shows every usage from the datasource through mapping to the format element.',
+  landingStep1Title: 'Load files',
+  landingStep1Desc: 'Drag-and-drop or select ER XML files. For full cross-configuration drill-down, load all three types (Model + Mapping + Format).',
+  landingStep2Title: 'Browse the configuration tree',
+  landingStep2Desc: 'The Explorer panel on the left shows the full configuration hierarchy. Click to select an element, double-click to open its visualization in a new tab.',
+  landingStep3Title: 'Click a formula',
+  landingStep3Desc: 'In the Format or Mapping view, click any expression. You will see the full chain of bindings: formula → calculated fields → source table, class or enum.',
+  landingStep4Title: 'Where used',
+  landingStep4Desc: 'In the 🔍 Search panel, enter a table name such as &quot;TaxTrans&quot; and run &quot;Where used&quot;. All format elements that consume data from that table will be shown.',
+  landingFooter: 'D365 FO ER Visualizer · Electronic Reporting Configuration Inspector',
 };
 
 export const t: Translations = locale === 'cs' ? cs : en;
