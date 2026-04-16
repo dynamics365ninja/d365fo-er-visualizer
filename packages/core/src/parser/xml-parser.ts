@@ -2,6 +2,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import {
   ERComponentKind,
+  ERDirection,
 } from '../types/common.js';
 import type {
   ERSolutionVersion,
@@ -362,6 +363,11 @@ function parseContainer(node: any): ERDataContainerDescriptor {
 function parseModelMappingVersion(root: any): ERModelMappingVersion {
   const vNode = selectVersionNode(root, 'ERModelMappingVersion');
   if (!vNode) throw new Error('Missing ERModelMappingVersion element');
+
+  return parseModelMappingVersionNode(vNode);
+}
+
+function parseModelMappingVersionNode(vNode: any): ERModelMappingVersion {
   const idAttr = getAttr(vNode, 'ID.') ?? '';
   const id = idAttr.split(',')[0];
 
@@ -484,7 +490,165 @@ function parseDatasources(defNode: any): ERDatasource[] {
   }
   for (const ds of roots) fixUnknownTypes(ds);
 
+  function enrichGroupByInfo(ds: ERDatasource) {
+    if (ds.groupByInfo) {
+      const datasourcePath = buildDatasourcePath(ds.parentPath, ds.name).toLowerCase();
+      const descendants = flattenDatasourceDescendants(ds);
+      const groupedFields = descendants.filter(child =>
+        isGroupByMember(child, datasourcePath, 'groupbyfields'),
+      );
+      const aggregatedFields = descendants.filter(child =>
+        isGroupByMember(child, datasourcePath, 'aggregated'),
+      );
+
+      ds.groupByInfo.groupedFields = mergeGroupByFields(
+        ds.groupByInfo.groupedFields,
+        groupedFields.map(child => ({
+          name: child.name,
+          path: buildDatasourcePath(child.parentPath, child.name),
+        })),
+      );
+      ds.groupByInfo.aggregations = mergeAggregations(
+        ds.groupByInfo.aggregations,
+        aggregatedFields.map(child => ({
+          name: child.name,
+          path: buildDatasourcePath(child.parentPath, child.name),
+          function: inferAggregationFunction(child),
+        })),
+      );
+    }
+
+    for (const child of ds.children) enrichGroupByInfo(child);
+  }
+  for (const ds of roots) enrichGroupByInfo(ds);
+
   return roots;
+}
+
+function mergeGroupByFields(existing: Array<{ name: string; path: string }>, incoming: Array<{ name: string; path: string }>): Array<{ name: string; path: string }> {
+  const merged = new Map<string, { name: string; path: string }>();
+
+  for (const field of [...existing, ...incoming]) {
+    if (!field.path) continue;
+    merged.set(field.path.toLowerCase(), field);
+  }
+
+  return Array.from(merged.values());
+}
+
+function mergeAggregations(existing: Array<{ name: string; path: string; function: string }>, incoming: Array<{ name: string; path: string; function: string }>): Array<{ name: string; path: string; function: string }> {
+  const merged = new Map<string, { name: string; path: string; function: string }>();
+
+  for (const aggregation of [...existing, ...incoming]) {
+    if (!aggregation.path) continue;
+    const key = aggregation.path.toLowerCase();
+    const current = merged.get(key);
+    merged.set(key, current && current.function && !aggregation.function ? current : aggregation);
+  }
+
+  return Array.from(merged.values());
+}
+
+function flattenDatasourceDescendants(datasource: ERDatasource): ERDatasource[] {
+  const result: ERDatasource[] = [];
+
+  for (const child of datasource.children) {
+    result.push(child);
+    result.push(...flattenDatasourceDescendants(child));
+  }
+
+  return result;
+}
+
+const groupedFieldSectionAliases = new Set(['groupbyfields', 'grouped', 'groupedfields', 'groupby', 'groupfields']);
+const aggregatedSectionAliases = new Set(['aggregated', 'aggregation', 'aggregations']);
+
+function getGroupBySectionKind(pathSegment: string | undefined): 'groupedFields' | 'aggregations' | null {
+  const normalizedSegment = (pathSegment ?? '').trim().toLowerCase().replace(/^[$#]/, '');
+  if (groupedFieldSectionAliases.has(normalizedSegment)) return 'groupedFields';
+  if (aggregatedSectionAliases.has(normalizedSegment)) return 'aggregations';
+  return null;
+}
+
+function isGroupByMember(datasource: ERDatasource, groupByPath: string, sectionName: 'groupbyfields' | 'aggregated'): boolean {
+  const fullPath = buildDatasourcePath(datasource.parentPath, datasource.name);
+  const normalizedFullPath = fullPath.toLowerCase();
+  const normalizedGroupByPath = groupByPath.toLowerCase();
+
+  if (!normalizedFullPath.startsWith(`${normalizedGroupByPath}/`)) return false;
+
+  const relativePath = normalizedFullPath.slice(normalizedGroupByPath.length + 1);
+  const relativeSegments = relativePath.split('/').filter(Boolean);
+  const relativeSection = getGroupBySectionKind(relativeSegments[0]);
+  const expectedSection = sectionName === 'groupbyfields' ? 'groupedFields' : 'aggregations';
+
+  if (relativeSection !== expectedSection) return false;
+  if (relativeSegments.length <= 1) return false;
+  if (datasource.type === 'Container' && datasource.children.length > 0) return false;
+
+  return true;
+}
+
+function inferAggregationFunction(datasource: ERDatasource): string {
+  const expression = datasource.calculatedField?.expressionAsString?.trim();
+  if (!expression) return '';
+
+  const functionMatch = expression.match(/^([A-Za-z][A-Za-z0-9_]*)\s*\(/);
+  return functionMatch?.[1]?.toUpperCase() ?? '';
+}
+
+function getLeafNameFromPath(path: string | undefined): string {
+  if (!path) return '';
+  const segments = path.split('/').map(segment => segment.trim()).filter(Boolean);
+  return segments.length > 0 ? segments[segments.length - 1].replace(/^[$#]/, '') : '';
+}
+
+function parseInlineGroupByFields(groupByNode: any): Array<{ name: string; path: string }> {
+  const groupedFieldRefs = getContentsArray(
+    groupByNode?.['GroupedFields']?.['ERModelGroupByFieldReferences'],
+    'ERModelGroupByFieldReference',
+  );
+
+  return groupedFieldRefs.map((fieldRef: any) => {
+    const fieldPath = getAttr(fieldRef, 'FieldPath') ?? '';
+    return {
+      name: getLeafNameFromPath(fieldPath),
+      path: fieldPath,
+    };
+  }).filter(field => field.name && field.path);
+}
+
+function parseGroupBySelectionField(selectionField: string | undefined): string {
+  switch (selectionField) {
+    case undefined:
+      return 'AVG';
+    case '1':
+      return 'SUM';
+    case '2':
+      return 'MIN';
+    case '3':
+      return 'MAX';
+    case '4':
+      return 'COUNT';
+    default:
+      return '';
+  }
+}
+
+function parseInlineGroupByAggregations(groupByNode: any): Array<{ name: string; path: string; function: string }> {
+  const aggregationDefs = getContentsArray(
+    groupByNode?.['Aggregations']?.['ERModelGroupByAggregations'],
+    'ERModelGroupByAggregation',
+  );
+
+  return aggregationDefs.map((aggregation: any) => {
+    const fieldPath = getAttr(aggregation, 'FieldPath') ?? '';
+    return {
+      name: getAttr(aggregation, 'Name') ?? getLeafNameFromPath(fieldPath),
+      path: fieldPath,
+      function: parseGroupBySelectionField(getAttr(aggregation, 'SelectionField')),
+    };
+  }).filter(field => field.name && field.path);
 }
 
 function normalizeDatasourcePath(path: string | undefined): string {
@@ -557,6 +721,12 @@ function parseDatasourceItem(node: any): ERDatasource {
       sourceKind: 'DataModel',
       modelGuid: getAttr(e, 'ModelGuid'),
     };
+  } else if (valueSource['ERImportFormatDatasource']) {
+    const f = valueSource['ERImportFormatDatasource'];
+    ds.type = 'ImportFormat';
+    ds.importFormatInfo = {
+      formatGuid: getAttr(f, 'FormatGUID') ?? getAttr(f, 'FormatGuid') ?? '',
+    };
   } else if (genericEnumDatasource) {
     ds.type = genericEnumDatasource.type;
     ds.enumInfo = genericEnumDatasource.enumInfo;
@@ -587,8 +757,8 @@ function parseDatasourceItem(node: any): ERDatasource {
     ds.type = 'GroupBy';
     ds.groupByInfo = {
       listToGroup: getAttr(g, 'ListToGroup') ?? '',
-      groupedFields: [],
-      aggregations: [],
+      groupedFields: parseInlineGroupByFields(g),
+      aggregations: parseInlineGroupByAggregations(g),
     };
   } else if (valueSource['ERContainerDataSourceHandler']) {
     ds.type = 'Container';
@@ -670,7 +840,24 @@ function parseGenericEnumDatasource(valueSource: any): { type: Extract<ERDatasou
 
 // ─── Format ───
 
-function parseFormatVersions(root: any): { formatVersion: ERFormatVersion; formatMappingVersion: ERFormatMappingVersion } {
+function selectReferencedVersionNodes(root: any, elementName: string): any[] {
+  const contents = getContents(root);
+  const nodes = asArray(contents?.[elementName]);
+
+  if (nodes.length === 0) return [];
+
+  const refIds = new Set(getSolutionContentRefIds(root));
+  if (refIds.size === 0) return nodes;
+
+  const referencedNodes = nodes.filter(node => {
+    const versionId = getNodeVersionId(node);
+    return versionId ? refIds.has(versionId) : false;
+  });
+
+  return referencedNodes.length > 0 ? referencedNodes : nodes;
+}
+
+function parseFormatVersions(root: any): { formatVersion: ERFormatVersion; formatMappingVersion: ERFormatMappingVersion; embeddedModelMappingVersions: ERModelMappingVersion[]; direction: ERDirection } {
   const formatVersionNode = selectVersionNode(root, 'ERFormatVersion');
   const formatMappingVersionNode = selectVersionNode(root, 'ERFormatMappingVersion');
 
@@ -682,6 +869,8 @@ function parseFormatVersions(root: any): { formatVersion: ERFormatVersion; forma
 
   const formatVersion = parseFormatVersion(formatVersionNode);
   const formatMappingVersion = parseFormatMappingVersion(formatMappingVersionNode);
+  const embeddedModelMappingVersions = selectReferencedVersionNodes(root, 'ERModelMappingVersion')
+    .map(parseModelMappingVersionNode);
   const formatEnumNamesById = buildFormatEnumLookup(formatVersion.format.enumDefinitions);
 
   if (formatEnumNamesById.size > 0) {
@@ -691,7 +880,60 @@ function parseFormatVersions(root: any): { formatVersion: ERFormatVersion; forma
   return {
     formatVersion,
     formatMappingVersion,
+    embeddedModelMappingVersions,
+    direction: inferFormatDirection(formatVersion, formatMappingVersion, embeddedModelMappingVersions),
   };
+}
+
+function inferFormatDirection(
+  formatVersion: ERFormatVersion,
+  formatMappingVersion: ERFormatMappingVersion,
+  embeddedModelMappingVersions: ERModelMappingVersion[],
+): ERDirection {
+  if (embeddedModelMappingVersions.length > 0) {
+    return ERDirection.Import;
+  }
+
+  const importHints = [
+    'import',
+    'inbound',
+    'incoming',
+    'bank statement',
+    'bankstatement',
+    'mt940',
+    'camt.052',
+    'camt.053',
+    'camt.054',
+    'camt052',
+    'camt053',
+    'camt054',
+  ];
+
+  const searchSpace = collectFormatDirectionSearchSpace(formatVersion.format.rootElement)
+    .concat([
+      formatVersion.format.name,
+      formatMappingVersion.formatMapping.name,
+      ...formatMappingVersion.formatMapping.bindings.map(binding => binding.expressionAsString),
+      ...formatMappingVersion.formatMapping.bindings.map(binding => binding.propertyName ?? ''),
+    ])
+    .join(' ')
+    .toLowerCase();
+
+  if (importHints.some(hint => searchSpace.includes(hint))) {
+    return ERDirection.Import;
+  }
+
+  return ERDirection.Export;
+}
+
+function collectFormatDirectionSearchSpace(element: ERFormatElement): string[] {
+  const parts = [element.name, ...Object.keys(element.attributes), ...Object.values(element.attributes)];
+
+  for (const child of element.children) {
+    parts.push(...collectFormatDirectionSearchSpace(child));
+  }
+
+  return parts.filter(Boolean);
 }
 
 function normalizeFormatEnumRef(value: string | undefined): string {

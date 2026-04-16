@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import { useAppStore } from '../state/store';
 import { ConfigExplorer } from './ConfigExplorer';
@@ -9,20 +9,75 @@ import { DesignerView } from './DesignerView';
 import { SearchPanel } from './SearchPanel';
 import { LandingPage } from './LandingPage';
 import { t } from '../i18n';
+import { ERDirection } from '@er-visualizer/core';
+
+function getStatusConfigIcon(config: any): string {
+  if (config.kind === 'DataModel') return '📐';
+  if (config.kind === 'ModelMapping') return '🔗';
+  if (config.content?.kind === 'Format') {
+    return config.content.direction === ERDirection.Import ? '📥' : '📤';
+  }
+  return '📄';
+}
+
+function getStatusConfigSuffix(config: any): string {
+  if (config.content?.kind !== 'Format') return '';
+  return config.content.direction === ERDirection.Import ? ` • ${t.formatDirectionImport}` : ` • ${t.formatDirectionExport}`;
+}
 
 export function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [showLeft, setShowLeft] = useState(true);
   const [showRight, setShowRight] = useState(true);
   const [showLanding, setShowLanding] = useState(true);
+  const [landingPinned, setLandingPinned] = useState(false);
   const configs = useAppStore(s => s.configurations);
+  const treeNodes = useAppStore(s => s.treeNodes);
+  const activeTabId = useAppStore(s => s.activeTabId);
+  const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
+  const rebuildDerivedState = useAppStore(s => s.rebuildDerivedState);
+  const shouldAutoOpenFirstTabRef = useRef(false);
+  const previousConfigCountRef = useRef(0);
+
+  useEffect(() => {
+    if (configs.length > 0 && treeNodes.length !== configs.length) {
+      rebuildDerivedState();
+    }
+  }, [configs.length, treeNodes.length, rebuildDerivedState]);
+
+  useEffect(() => {
+    const previousCount = previousConfigCountRef.current;
+    const addedConfigs = configs.length > previousCount;
+
+    if (addedConfigs && showLanding) {
+      shouldAutoOpenFirstTabRef.current = !activeTabId;
+      setLandingPinned(false);
+      setShowLanding(false);
+    }
+
+    previousConfigCountRef.current = configs.length;
+  }, [configs.length, showLanding, activeTabId]);
+
+  useEffect(() => {
+    if (configs.length > 0 && showLanding && !landingPinned) {
+      setShowLanding(false);
+    }
+  }, [configs.length, showLanding, landingPinned]);
+
+  useEffect(() => {
+    if (!shouldAutoOpenFirstTabRef.current || showLanding || activeTabId || treeNodes.length === 0) return;
+    shouldAutoOpenFirstTabRef.current = false;
+    navigateToTreeNode(treeNodes[0].id);
+  }, [showLanding, activeTabId, treeNodes, navigateToTreeNode]);
 
   // Show landing when no files loaded, or user manually navigates back
   const isLandingVisible = showLanding || configs.length === 0;
 
   const handleFilesLoaded = useCallback(() => {
+    shouldAutoOpenFirstTabRef.current = !activeTabId;
+    setLandingPinned(false);
     setShowLanding(false);
-  }, []);
+  }, [activeTabId]);
 
   if (isLandingVisible) {
     return (
@@ -45,7 +100,10 @@ export function App() {
         }}
         onToggleLeft={() => setShowLeft(s => !s)}
         onToggleRight={() => setShowRight(s => !s)}
-        onGoHome={() => setShowLanding(true)}
+        onGoHome={() => {
+          setLandingPinned(true);
+          setShowLanding(true);
+        }}
         showLeft={showLeft}
         showRight={showRight}
       />
@@ -122,8 +180,12 @@ function StatusBar({ onOpenLanding }: { onOpenLanding: () => void }) {
       <span className="app-statusbar-home" onClick={onOpenLanding} title={t.home}>⌂ {t.home}</span>
       <span>{t.statusConfigs(configs.length)}</span>
       {configs.map((c, i) => (
-        <span key={i} className="app-statusbar-chip">
-          {c.kind === 'DataModel' ? '📐' : c.kind === 'ModelMapping' ? '🔗' : '📄'} {c.solutionVersion.solution.name.slice(0, 25)}
+        <span
+          key={i}
+          className="app-statusbar-chip"
+          title={`${c.solutionVersion.solution.name} v${c.solutionVersion.publicVersionNumber}${getStatusConfigSuffix(c)}`}
+        >
+          {getStatusConfigIcon(c)} {c.solutionVersion.solution.name.slice(0, 22)} v{c.solutionVersion.publicVersionNumber}{getStatusConfigSuffix(c)}
         </span>
       ))}
       <span className="app-statusbar-chip app-statusbar-mode-chip">

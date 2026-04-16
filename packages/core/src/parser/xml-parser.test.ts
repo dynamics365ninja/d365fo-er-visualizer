@@ -206,7 +206,23 @@ describe('parseERConfiguration', () => {
     const xml = buildSolutionEnvelope(`
       <ERModelMappingVersion ID.="{FORMAT-MAP-DS},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
         <Mapping>
-          <ERModelMapping ID.="{FORMAT-MAP-DS}" Name="Datasource mapping" DataContainerDescriptor="Document" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1" />
+          <ERModelMapping ID.="{FORMAT-MAP-DS}" Name="Datasource mapping" DataContainerDescriptor="Document" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1">
+            <Datasource>
+              <ERModelDefinition>
+                <Contents.>
+                  <ERModelItemDefinition>
+                    <ValueDefinition>
+                      <ERModelItemValueDefinition Name="format">
+                        <ValueSource>
+                          <ERImportFormatDatasource FormatGUID="{FORMAT}" />
+                        </ValueSource>
+                      </ERModelItemValueDefinition>
+                    </ValueDefinition>
+                  </ERModelItemDefinition>
+                </Contents.>
+              </ERModelDefinition>
+            </Datasource>
+          </ERModelMapping>
         </Mapping>
       </ERModelMappingVersion>
       <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
@@ -235,6 +251,13 @@ describe('parseERConfiguration', () => {
     expect(config.content.formatVersion.id).toBe('{FORMAT}');
     expect(config.content.formatVersion.format.name).toBe('ABR MT940 format');
     expect(config.content.formatMappingVersion.id).toBe('{FORMAT-MAP}');
+    expect(config.content.embeddedModelMappingVersions).toHaveLength(1);
+    expect(config.content.embeddedModelMappingVersions[0]?.id).toBe('{FORMAT-MAP-DS}');
+    expect(config.content.direction).toBe('Import');
+    expect(config.content.embeddedModelMappingVersions[0]?.mapping.datasources[0]).toMatchObject({
+      type: 'ImportFormat',
+      importFormatInfo: { formatGuid: '{FORMAT}' },
+    });
   });
 
   it('parses non-file root format components such as folders and text sequences', () => {
@@ -277,6 +300,227 @@ describe('parseERConfiguration', () => {
     expect(config.content.formatVersion.format.rootElement.children[0]?.elementType).toBe('File');
     expect(config.content.formatVersion.format.rootElement.children[0]?.children[0]?.elementType).toBe('TextSequence');
     expect(config.content.formatVersion.format.rootElement.children[0]?.children[0]?.children[0]?.elementType).toBe('DateTime');
+    expect(config.content.direction).toBe('Export');
+  });
+
+  it('recognizes import formats from format naming heuristics even without embedded mappings', () => {
+    const xml = buildSolutionEnvelope(`
+      <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Format>
+          <ERTextFormat ID.="{FORMAT}" Name="Bank statement import MT940">
+            <Root>
+              <ERTextFormatFileComponent ID.="{ROOT}" Name="BankStatementImport" />
+            </Root>
+          </ERTextFormat>
+        </Format>
+      </ERFormatVersion>
+      <ERFormatMappingVersion ID.="{FORMAT-MAP},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERFormatMapping ID.="{FORMAT-MAP}" Format="{FORMAT}" FormatVersion="{FORMAT},1" Name="Bank statement import MT940" />
+        </Mapping>
+      </ERFormatMappingVersion>
+    `, { contentRefIds: ['{FORMAT}', '{FORMAT-MAP}'] });
+
+    const config = parseERConfiguration(xml, 'bank-statement-import.xml');
+    if (config.content.kind !== 'Format') {
+      throw new Error('Expected format content');
+    }
+
+    expect(config.content.direction).toBe('Import');
+  });
+
+  it('enriches group by datasource metadata from grouped and aggregated child nodes', () => {
+    const xml = buildSolutionEnvelope(`
+      <ERModelMappingVersion ID.="{MAP},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERModelMapping ID.="{MAP}" Name="Mapping" DataContainerDescriptor="Root" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1">
+            <Datasource>
+              <ERModelDefinition>
+                <Contents.>
+                  <ERModelItemDefinition>
+                    <ValueDefinition>
+                      <ERModelItemValueDefinition Name="TaxTransViewBoxed">
+                        <ValueSource>
+                          <ERModelGroupByFunction ListToGroup="$TaxTransactions" />
+                        </ValueSource>
+                      </ERModelItemValueDefinition>
+                    </ValueDefinition>
+                  </ERModelItemDefinition>
+                  <ERModelItemDefinition ParentPath="#TaxTransViewBoxed">
+                    <ValueDefinition>
+                      <ERModelItemValueDefinition Name="groupbyfields">
+                        <ValueSource>
+                          <ERContainerDataSourceHandler />
+                        </ValueSource>
+                      </ERModelItemValueDefinition>
+                    </ValueDefinition>
+                  </ERModelItemDefinition>
+                  <ERModelItemDefinition ParentPath="#TaxTransViewBoxed/$groupbyfields">
+                    <ValueDefinition>
+                      <ERModelItemValueDefinition Name="TaxCode">
+                        <ValueSource>
+                          <ERContainerDataSourceHandler />
+                        </ValueSource>
+                      </ERModelItemValueDefinition>
+                    </ValueDefinition>
+                  </ERModelItemDefinition>
+                  <ERModelItemDefinition ParentPath="#TaxTransViewBoxed">
+                    <ValueDefinition>
+                      <ERModelItemValueDefinition Name="aggregated">
+                        <ValueSource>
+                          <ERContainerDataSourceHandler />
+                        </ValueSource>
+                      </ERModelItemValueDefinition>
+                    </ValueDefinition>
+                  </ERModelItemDefinition>
+                  <ERModelItemDefinition ParentPath="#TaxTransViewBoxed/$aggregated">
+                    <ValueDefinition>
+                      <ERModelItemValueDefinition Name="TaxBaseAmountNormalized">
+                        <ValueSource>
+                          <ERModelExpressionItem ExpressionAsString="SUM($TaxTransactions.TaxBaseAmount)">
+                            <Expression>
+                              <ERExpressionNumericSum />
+                            </Expression>
+                          </ERModelExpressionItem>
+                        </ValueSource>
+                      </ERModelItemValueDefinition>
+                    </ValueDefinition>
+                  </ERModelItemDefinition>
+                </Contents.>
+              </ERModelDefinition>
+            </Datasource>
+          </ERModelMapping>
+        </Mapping>
+      </ERModelMappingVersion>
+    `, { contentRefId: '{MAP}' });
+
+    const config = parseERConfiguration(xml, 'groupby.xml');
+    if (config.content.kind !== 'ModelMapping') {
+      throw new Error('Expected model mapping content');
+    }
+
+    const datasource = config.content.version.mapping.datasources[0];
+    expect(datasource?.groupByInfo?.listToGroup).toBe('$TaxTransactions');
+    expect(datasource?.groupByInfo?.groupedFields).toEqual([
+      { name: 'TaxCode', path: 'TaxTransViewBoxed/groupbyfields/TaxCode' },
+    ]);
+    expect(datasource?.groupByInfo?.aggregations).toEqual([
+      { name: 'TaxBaseAmountNormalized', path: 'TaxTransViewBoxed/aggregated/TaxBaseAmountNormalized', function: 'SUM' },
+    ]);
+  });
+
+  it('parses group by metadata declared inline inside ERModelGroupByFunction', () => {
+    const xml = buildSolutionEnvelope(`
+      <ERModelMappingVersion ID.="{MAP},1" DateTime="2026-04-16T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERModelMapping ID.="{MAP}" Name="Mapping" DataContainerDescriptor="Root" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1">
+            <Datasource>
+              <ERModelDefinition>
+                <Contents.>
+                  <ERModelItemDefinition ParentPath="#Annex">
+                    <ValueDefinition>
+                      <ERModelItemValueDefinition Name="$TaxTransDetailsDirectFilterJoinGroupSales">
+                        <ValueSource>
+                          <ERModelGroupByFunction ExecutionTarget="2" ListToGroup="#Annex/$TaxTransDetailsDirectFilterJoinSales">
+                            <Aggregations>
+                              <ERModelGroupByAggregations>
+                                <Contents.>
+                                  <ERModelGroupByAggregation FieldPath="#Annex/$TaxTransDetailsDirectFilterJoinSales/$TaxTransDetailsSales/TaxBaseAmountCur" SelectionField="1" />
+                                  <ERModelGroupByAggregation FieldPath="#Annex/$TaxTransDetailsDirectFilterJoinSales/$EnterpriseNumView_Counterparty/RegistrationNumber" Name="EnterpriseNumber" SelectionField="3" />
+                                </Contents.>
+                              </ERModelGroupByAggregations>
+                            </Aggregations>
+                            <GroupedFields>
+                              <ERModelGroupByFieldReferences>
+                                <Contents.>
+                                  <ERModelGroupByFieldReference FieldPath="#Annex/$TaxTransDetailsDirectFilterJoinSales/$TaxTransDetailsSales/InvoiceDate" />
+                                  <ERModelGroupByFieldReference FieldPath="#Annex/$TaxTransDetailsDirectFilterJoinSales/$TaxTransDetailsSales/TaxCode" />
+                                </Contents.>
+                              </ERModelGroupByFieldReferences>
+                            </GroupedFields>
+                          </ERModelGroupByFunction>
+                        </ValueSource>
+                      </ERModelItemValueDefinition>
+                    </ValueDefinition>
+                  </ERModelItemDefinition>
+                </Contents.>
+              </ERModelDefinition>
+            </Datasource>
+          </ERModelMapping>
+        </Mapping>
+      </ERModelMappingVersion>
+    `, { contentRefId: '{MAP}' });
+
+    const config = parseERConfiguration(xml, 'groupby-inline.xml');
+    if (config.content.kind !== 'ModelMapping') {
+      throw new Error('Expected model mapping content');
+    }
+
+    const datasource = config.content.version.mapping.datasources[0];
+    expect(datasource?.groupByInfo?.listToGroup).toBe('#Annex/$TaxTransDetailsDirectFilterJoinSales');
+    expect(datasource?.groupByInfo?.groupedFields).toEqual([
+      { name: 'InvoiceDate', path: '#Annex/$TaxTransDetailsDirectFilterJoinSales/$TaxTransDetailsSales/InvoiceDate' },
+      { name: 'TaxCode', path: '#Annex/$TaxTransDetailsDirectFilterJoinSales/$TaxTransDetailsSales/TaxCode' },
+    ]);
+    expect(datasource?.groupByInfo?.aggregations).toEqual([
+      { name: 'TaxBaseAmountCur', path: '#Annex/$TaxTransDetailsDirectFilterJoinSales/$TaxTransDetailsSales/TaxBaseAmountCur', function: 'SUM' },
+      { name: 'EnterpriseNumber', path: '#Annex/$TaxTransDetailsDirectFilterJoinSales/$EnterpriseNumView_Counterparty/RegistrationNumber', function: 'MAX' },
+    ]);
+  });
+
+  it('maps all inline group by SelectionField values to aggregation labels', () => {
+    const xml = buildSolutionEnvelope(`
+      <ERModelMappingVersion ID.="{MAP},1" DateTime="2026-04-16T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERModelMapping ID.="{MAP}" Name="Mapping" DataContainerDescriptor="Root" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1">
+            <Datasource>
+              <ERModelDefinition>
+                <Contents.>
+                  <ERModelItemDefinition>
+                    <ValueDefinition>
+                      <ERModelItemValueDefinition Name="$AllAggregations">
+                        <ValueSource>
+                          <ERModelGroupByFunction ExecutionTarget="2" ListToGroup="#Root/$Source">
+                            <Aggregations>
+                              <ERModelGroupByAggregations>
+                                <Contents.>
+                                  <ERModelGroupByAggregation FieldPath="#Root/$Source/AvgField" />
+                                  <ERModelGroupByAggregation FieldPath="#Root/$Source/SumField" SelectionField="1" />
+                                  <ERModelGroupByAggregation FieldPath="#Root/$Source/MinField" SelectionField="2" />
+                                  <ERModelGroupByAggregation FieldPath="#Root/$Source/MaxField" SelectionField="3" />
+                                  <ERModelGroupByAggregation FieldPath="#Root/$Source/CountField" SelectionField="4" />
+                                </Contents.>
+                              </ERModelGroupByAggregations>
+                            </Aggregations>
+                            <GroupedFields>
+                              <ERModelGroupByFieldReferences />
+                            </GroupedFields>
+                          </ERModelGroupByFunction>
+                        </ValueSource>
+                      </ERModelItemValueDefinition>
+                    </ValueDefinition>
+                  </ERModelItemDefinition>
+                </Contents.>
+              </ERModelDefinition>
+            </Datasource>
+          </ERModelMapping>
+        </Mapping>
+      </ERModelMappingVersion>
+    `, { contentRefId: '{MAP}' });
+
+    const config = parseERConfiguration(xml, 'groupby-inline-selection-fields.xml');
+    if (config.content.kind !== 'ModelMapping') {
+      throw new Error('Expected model mapping content');
+    }
+
+    const datasource = config.content.version.mapping.datasources[0];
+    expect(datasource?.groupByInfo?.aggregations).toEqual([
+      { name: 'AvgField', path: '#Root/$Source/AvgField', function: 'AVG' },
+      { name: 'SumField', path: '#Root/$Source/SumField', function: 'SUM' },
+      { name: 'MinField', path: '#Root/$Source/MinField', function: 'MIN' },
+      { name: 'MaxField', path: '#Root/$Source/MaxField', function: 'MAX' },
+      { name: 'CountField', path: '#Root/$Source/CountField', function: 'COUNT' },
+    ]);
   });
 
   it('parses format enum datasources as a separate datasource kind', () => {

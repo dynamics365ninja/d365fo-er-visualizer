@@ -117,6 +117,10 @@ export interface Translations {
   propTransform: string;
   propExcluded: string;
   propYes: string;
+  propDirection: string;
+  formatDirectionImport: string;
+  formatDirectionExport: string;
+  formatDirectionUnknown: string;
   // Status bar
   statusConfigs: (n: number) => string;
   // Landing page – hero
@@ -275,6 +279,10 @@ const cs: Translations = {
   propTransform: 'Transformace',
   propExcluded: 'Vyloučeno z DS',
   propYes: 'Ano',
+  propDirection: 'Směr',
+  formatDirectionImport: 'Import',
+  formatDirectionExport: 'Export',
+  formatDirectionUnknown: 'Neznámý směr',
 
   // Status bar
   statusConfigs: (n: number) => `${n} konfigurace`,
@@ -438,6 +446,10 @@ const en: Translations = {
   propTransform: 'Transformation',
   propExcluded: 'Excluded from DS',
   propYes: 'Yes',
+  propDirection: 'Direction',
+  formatDirectionImport: 'Import',
+  formatDirectionExport: 'Export',
+  formatDirectionUnknown: 'Unknown direction',
 
   statusConfigs: (n: number) => `${n} configuration${n === 1 ? '' : 's'}`,
 

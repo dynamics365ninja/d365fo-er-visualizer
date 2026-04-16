@@ -114,6 +114,8 @@ export interface ERFormatContent {
   kind: ERComponentKind.Format;
   formatVersion: ERFormatVersion;
   formatMappingVersion: ERFormatMappingVersion;
+  embeddedModelMappingVersions: ERModelMappingVersion[];
+  direction: ERDirection;
 }
 
 // Re-export version types for convenience

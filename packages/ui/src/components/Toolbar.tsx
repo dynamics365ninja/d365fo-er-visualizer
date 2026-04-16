@@ -16,6 +16,8 @@ export function Toolbar({ onToggleSearch, onToggleLeft, onToggleRight, onGoHome,
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const setShowTechnicalDetails = useAppStore(s => s.setShowTechnicalDetails);
+  const canNavigateBack = useAppStore(s => s.canNavigateBack);
+  const navigateBack = useAppStore(s => s.navigateBack);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,6 +44,10 @@ export function Toolbar({ onToggleSearch, onToggleLeft, onToggleRight, onGoHome,
 
   return (
     <div className="toolbar">
+      <ToolbarButton onClick={navigateBack} icon="←" label={t.back} disabled={!canNavigateBack} />
+
+      <div className="toolbar-divider" />
+
       <button
         onClick={onGoHome}
         title={t.home}
@@ -88,11 +94,12 @@ export function Toolbar({ onToggleSearch, onToggleLeft, onToggleRight, onGoHome,
   );
 }
 
-function ToolbarButton({ onClick, icon, label }: { onClick: () => void; icon: string; label: string }) {
+function ToolbarButton({ onClick, icon, label, disabled = false }: { onClick: () => void; icon: string; label: string; disabled?: boolean }) {
   return (
     <button
       onClick={onClick}
       className="toolbar-button"
+      disabled={disabled}
     >
       <span className="toolbar-button-icon">{icon}</span>
       <span>{label}</span>
