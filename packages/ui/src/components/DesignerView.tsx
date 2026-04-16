@@ -18,7 +18,13 @@ import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { buildFormatBindingPresentation, groupFormatBindingsByCategory } from '../utils/format-binding-display';
 import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/theme-colors';
-import type { ERConfiguration, ERDataModelContent, ERModelMappingContent, ERFormatContent } from '@er-visualizer/core';
+import { ERDirection, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent } from '@er-visualizer/core';
+
+function getFormatDirectionLabel(direction: ERDirection | undefined): string {
+  if (direction === ERDirection.Import) return t.formatDirectionImport;
+  if (direction === ERDirection.Export) return t.formatDirectionExport;
+  return t.formatDirectionUnknown;
+}
 
 export function DesignerView() {
   const activeTabId = useAppStore(s => s.activeTabId);
@@ -55,13 +61,44 @@ export function DesignerView() {
   }
 
   if (config.kind === 'DataModel') return <ModelDesigner config={config} focusNode={activeNode} />;
-  if (config.kind === 'ModelMapping') return <MappingDesigner config={config} configIndex={tab.configIndex} focusNode={activeNode} />;
+  if (config.kind === 'ModelMapping') return <MappingDesigner mapping={(config.content as ERModelMappingContent).version.mapping} configIndex={tab.configIndex} focusNode={activeNode} />;
   if (config.kind === 'Format') return <FormatDesigner config={config} configIndex={tab.configIndex} focusNode={activeNode} />;
 
   return <div style={{ padding: 16 }}>Unsupported view for: {config.kind}</div>;
 }
 
 function FocusedNodeTab({ node }: { node: any }) {
+  const configs = useAppStore(s => s.configurations);
+  const selectedNode = useAppStore(s => s.selectedNode);
+  const focusNode = selectedNode?.configIndex === node.configIndex ? selectedNode : node;
+  const config = node.configIndex != null ? configs[node.configIndex] : null;
+
+  if (!config || node.configIndex == null) {
+    return (
+      <div className="focused-node-tab">
+        <div className="focused-node-tab-header">
+          <span className="focused-node-tab-icon">{node.icon}</span>
+          <span className="focused-node-tab-title">{node.name}</span>
+        </div>
+        <div className="focused-node-tab-body">
+          <PropertyInspector nodeOverride={node} />
+        </div>
+      </div>
+    );
+  }
+
+  if (node.type === 'model' && config.kind === 'DataModel') {
+    return <ModelDesigner config={config} focusNode={focusNode} />;
+  }
+
+  if (node.type === 'mapping' && node.configIndex != null) {
+    return <MappingDesigner mapping={node.data} configIndex={node.configIndex} focusNode={focusNode} />;
+  }
+
+  if (node.type === 'format' && config.kind === 'Format') {
+    return <FormatDesigner config={config} configIndex={node.configIndex} focusNode={focusNode} />;
+  }
+
   return (
     <div className="focused-node-tab">
       <div className="focused-node-tab-header">
@@ -93,6 +130,82 @@ function findTreeNodeByMatch(node: any, predicate: (candidate: any) => boolean):
     if (found) return found;
   }
   return null;
+}
+
+function extractFirstModelReference(expression: string): string | null {
+  const match = expression.match(/model[.\\](?:'[^']*'|[A-Za-z0-9_$]+)(?:(?:[.\\])(?:'[^']*'|[A-Za-z0-9_$]+))*/i);
+  return match?.[0] ?? null;
+}
+
+function normalizeModelReferenceVariants(expression: string): string[] {
+  const reference = extractFirstModelReference(expression);
+  if (!reference) return [];
+
+  const body = reference.replace(/^model[.\\]/i, '');
+  const segments = body.split(/[.\\]/).filter(Boolean);
+  const variants = [
+    segments.join('\\'),
+    segments.join('.'),
+    segments.join('/'),
+  ];
+
+  return [...new Set(variants)];
+}
+
+function ExpressionDetailLink({ expression, configIndex, className }: { expression: string; configIndex: number; className?: string }) {
+  const configurations = useAppStore(s => s.configurations);
+  const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
+  const resolveDatasource = useAppStore(s => s.resolveDatasource);
+  const resolveBinding = useAppStore(s => s.resolveBinding);
+  const resolveModelPath = useAppStore(s => s.resolveModelPath);
+  const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
+
+  const navigateExpressionTarget = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+
+    const modelReference = extractFirstModelReference(expression);
+    if (modelReference) {
+      const resolvedModel = resolveModelPath(modelReference);
+      const targetNodeId = resolvedModel?.bindingTreeNodeId ?? resolvedModel?.datasourceTreeNodeId;
+      if (targetNodeId) {
+        navigateToTreeNode(targetNodeId);
+        return;
+      }
+
+      for (const variant of normalizeModelReferenceVariants(expression)) {
+        const bindingResult = resolveBinding(variant, configIndex);
+        if (bindingResult?.treeNodeId) {
+          navigateToTreeNode(bindingResult.treeNodeId);
+          return;
+        }
+      }
+    }
+
+    const deepResult = resolveDeepExpression(expression, configurations, configIndex);
+    const resolvedDatasource = deepResult?.nestedDs ?? deepResult?.rootDs;
+    const resolvedConfigIndex = deepResult?.rootDsConfigIndex ?? configIndex;
+    if (resolvedDatasource) {
+      const nodeId = findDatasourceNode(resolvedDatasource.name, resolvedConfigIndex, resolvedDatasource.parentPath);
+      if (nodeId) {
+        navigateToTreeNode(nodeId);
+        return;
+      }
+    }
+
+    const directDatasourceName = expression.split(/[.(]/)[0]?.replace(/['"]/g, '').trim();
+    if (!directDatasourceName) return;
+
+    const directResolution = resolveDatasource(directDatasourceName, configIndex);
+    if (directResolution?.treeNodeId) {
+      navigateToTreeNode(directResolution.treeNodeId);
+    }
+  }, [expression, configIndex, configurations, findDatasourceNode, navigateToTreeNode, resolveBinding, resolveDatasource, resolveModelPath]);
+
+  return (
+    <span className={className} onClick={navigateExpressionTarget} title={t.openInExplorerAction}>
+      <ClickablePath expression={expression} configIndex={configIndex} mode="binding-expr" interactive={false} />
+    </span>
+  );
 }
 
 type DensityMode = 'comfortable' | 'compact';
@@ -136,6 +249,7 @@ function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): s
     Enum: '🔤 Hodnoty',
     ModelEnum: '🔤 Hodnoty',
     FormatEnum: '🔤 Hodnoty',
+    ImportFormat: '📥 Importní formát',
     UserParameter: '👤 Parametry',
     GroupBy: '📊 Seskupená data',
     Container: '📦 Kontejnery',
@@ -147,6 +261,7 @@ function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): s
     Enum: '🔤 Values',
     ModelEnum: '🔤 Values',
     FormatEnum: '🔤 Values',
+    ImportFormat: '📥 Import format',
     UserParameter: '👤 Parameters',
     GroupBy: '📊 Grouped data',
     Container: '📦 Containers',
@@ -470,8 +585,8 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
 
 // ─── Mapping Designer ───
 
-function MappingDesigner({ config, configIndex, focusNode }: { config: ERConfiguration; configIndex: number; focusNode: any | null }) {
-  const mm = (config.content as ERModelMappingContent).version.mapping;
+function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; configIndex: number; focusNode: any | null }) {
+  const mm = mapping;
   const selectNode = useAppStore(s => s.selectNode);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
@@ -501,12 +616,12 @@ function MappingDesigner({ config, configIndex, focusNode }: { config: ERConfigu
     }
 
     // 2. Remove trivial constant expressions (e.g. Enabled = false)
-    const meaningful = deduped.filter(b => !isTrivialExpr(b.expressionAsString));
+    const meaningful = deduped.filter((b: any) => !isTrivialExpr(b.expressionAsString));
 
     // 3. Apply text filter
     const lower = filter.toLowerCase();
     const textFiltered = filter
-      ? meaningful.filter(b =>
+      ? meaningful.filter((b: any) =>
           b.path.toLowerCase().includes(lower) ||
           b.expressionAsString.toLowerCase().includes(lower)
         )
@@ -878,13 +993,11 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {focusNode && focusNode.type !== 'file' && focusNode.type !== 'format' && (
-        <ActiveTabNodeSummary node={focusNode} configIndex={configIndex} />
-      )}
       {/* ── Header Bar ── */}
       <div className="fmt-header">
         <FormatTypeBadge rootElement={rootElement} />
         <span className="fmt-header-title">{fmt.name}</span>
+        <span className="fmt-stat">{fc.direction === ERDirection.Import ? '📥' : '📤'} {getFormatDirectionLabel(fc.direction)}</span>
         <div className="fmt-header-stats">
           <span className="fmt-stat" title={t.statsTooltip(stats.boundElements, stats.unboundElements, stats.structuralElements)}>
             🏷️ {stats.totalElements} {t.elements}
@@ -1395,7 +1508,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
         {/* Main Binding — the original formula shown inline */}
         {mainBinding && (
           <span className="fmt-binding-inline" onClick={e => e.stopPropagation()}>
-            ← <ClickablePath expression={mainBinding.expressionAsString} configIndex={configIndex} mode="binding-expr" />
+            ← <ExpressionDetailLink expression={mainBinding.expressionAsString} configIndex={configIndex} />
           </span>
         )}
 
@@ -1422,7 +1535,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
                     <span className="fmt-binding-origin">via {b.rawElementType}</span>
                   )}
                   <span className="fmt-binding-formula">
-                    <ClickablePath expression={b.expressionAsString} configIndex={configIndex} mode="binding-expr" />
+                    <ExpressionDetailLink expression={b.expressionAsString} configIndex={configIndex} />
                   </span>
                   <DrillDownPanel
                     expression={b.expressionAsString}
@@ -1475,7 +1588,7 @@ function FormatBindingDetail({ expression, configIndex, resolveDatasource }: {
 
   // Does ANY loaded config provide a ModelMapping?
   const hasModelMapping = useMemo(
-    () => configurations.some(c => c.content.kind === 'ModelMapping'),
+    () => configurations.some(c => c.content.kind === 'ModelMapping' || (c.content.kind === 'Format' && c.content.embeddedModelMappingVersions.length > 0)),
     [configurations]
   );
 
@@ -1520,13 +1633,23 @@ function FormatBindingDetail({ expression, configIndex, resolveDatasource }: {
     if (!isModelRef || !hasModelMapping) return null;
     const info: { configName: string; samplePaths: string[]; totalBindings: number }[] = [];
     for (const cfg of configurations) {
-      if (cfg.content.kind !== 'ModelMapping') continue;
-      const mm = (cfg.content as any).version.mapping;
-      info.push({
-        configName: cfg.solutionVersion.solution.name,
-        totalBindings: mm.bindings.length,
-        samplePaths: mm.bindings.slice(0, 12).map((b: any) => b.path).filter(Boolean),
-      });
+      if (cfg.content.kind === 'ModelMapping') {
+        const mm = (cfg.content as any).version.mapping;
+        info.push({
+          configName: cfg.solutionVersion.solution.name,
+          totalBindings: mm.bindings.length,
+          samplePaths: mm.bindings.slice(0, 12).map((b: any) => b.path).filter(Boolean),
+        });
+      }
+      if (cfg.content.kind === 'Format') {
+        for (const version of cfg.content.embeddedModelMappingVersions) {
+          info.push({
+            configName: `${cfg.solutionVersion.solution.name} • ${version.mapping.name}`,
+            totalBindings: version.mapping.bindings.length,
+            samplePaths: version.mapping.bindings.slice(0, 12).map((b: any) => b.path).filter(Boolean),
+          });
+        }
+      }
     }
     return info;
   }, [isModelRef, hasModelMapping, configurations]);
@@ -1836,7 +1959,7 @@ function FormatElementBindingGroup({ row, configIndex, onNavigate, onReveal, sho
                   </div>
                   <div className="mapping-row-arrow" style={{ color: 'var(--text-secondary)' }}>←</div>
                   <div className="mapping-row-expr" style={{ flex: 1 }}>
-                    <ClickablePath expression={binding.expressionAsString} configIndex={configIndex} mode="binding-expr" />
+                    <ExpressionDetailLink expression={binding.expressionAsString} configIndex={configIndex} />
                   </div>
                 </div>
               ))}
@@ -1855,8 +1978,8 @@ function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: n
   if (showTechnicalDetails) summaryRows.push([t.propType, node.type]);
   if (showTechnicalDetails && node.data?.elementType) summaryRows.push([t.elementType, node.data.elementType]);
   if (showTechnicalDetails && node.data?.type && node.type === 'datasource') summaryRows.push([t.datasourceType, node.data.type]);
-  if (node.data?.path) summaryRows.push([t.path, <ClickablePath expression={node.data.path} configIndex={configIndex} mode="model-path" />]);
-  if (node.data?.expressionAsString) summaryRows.push([t.expression, <ClickablePath expression={node.data.expressionAsString} configIndex={configIndex} mode="binding-expr" />]);
+  if (showTechnicalDetails && node.data?.path) summaryRows.push([t.path, <ClickablePath expression={node.data.path} configIndex={configIndex} mode="model-path" />]);
+  if (showTechnicalDetails && node.data?.expressionAsString) summaryRows.push([t.expression, <ClickablePath expression={node.data.expressionAsString} configIndex={configIndex} mode="binding-expr" />]);
   if (node.data?.tableInfo?.tableName) summaryRows.push([t.drillLabelTable, node.data.tableInfo.tableName]);
   if (node.data?.enumInfo?.enumName) summaryRows.push([t.drillLabelEnum, formatEnumDisplayName(node.data.enumInfo.enumName, node.data.enumInfo)]);
   if (node.data?.classInfo?.className) summaryRows.push([t.drillLabelClass, node.data.classInfo.className]);
@@ -1896,7 +2019,7 @@ function FormatBindingRow({ binding, configIndex, registry, onNavigate }: {
       </div>
       <div className="mapping-row-arrow">←</div>
       <div className="mapping-row-expr">
-        <ClickablePath expression={binding.expressionAsString} configIndex={configIndex} mode="binding-expr" />
+        <ExpressionDetailLink expression={binding.expressionAsString} configIndex={configIndex} />
       </div>
     </div>
   );
@@ -1911,6 +2034,7 @@ function getDsBadgeClass(type: string): string {
     Enum: 'badge-enum',
     ModelEnum: 'badge-enum',
     FormatEnum: 'badge-enum',
+    ImportFormat: 'badge-import',
     UserParameter: 'badge-param',
     GroupBy: 'badge-table',
     Container: 'badge-export',
@@ -1918,6 +2042,16 @@ function getDsBadgeClass(type: string): string {
     Import: 'badge-import',
   };
   return map[type] ?? 'badge-xml';
+}
+
+function getAggregationFunctionBadgeClass(fn: string | undefined): string {
+  const normalized = (fn ?? '').trim().toUpperCase();
+  if (normalized === 'SUM') return 'ds-row-groupby-fn-sum';
+  if (normalized === 'COUNT') return 'ds-row-groupby-fn-count';
+  if (normalized === 'AVG' || normalized === 'AVERAGE') return 'ds-row-groupby-fn-avg';
+  if (normalized === 'MIN') return 'ds-row-groupby-fn-min';
+  if (normalized === 'MAX') return 'ds-row-groupby-fn-max';
+  return 'ds-row-groupby-fn-generic';
 }
 
 // ── Datasource Row (for Data Sources tab) ──
@@ -1930,6 +2064,23 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode }: {
   const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const [expanded, setExpanded] = useState(false);
+  const groupByFields = ds.groupByInfo?.groupedFields ?? [];
+  const aggregatedFields = ds.groupByInfo?.aggregations ?? [];
+  const [showGroupedFields, setShowGroupedFields] = useState(groupByFields.length > 0 && groupByFields.length <= 6);
+  const [showAggregatedFields, setShowAggregatedFields] = useState(aggregatedFields.length > 0 && aggregatedFields.length <= 6);
+  const navigateToDatasource = useCallback((name: string, parentPath?: string) => {
+    const nodeId = findDatasourceNode(name, configIndex, parentPath);
+    if (nodeId) navigateToTreeNode(nodeId);
+  }, [findDatasourceNode, configIndex, navigateToTreeNode]);
+  const getParentPathFromModelPath = useCallback((path: string) => {
+    const lastSlash = path.lastIndexOf('/');
+    return lastSlash >= 0 ? path.slice(0, lastSlash) : undefined;
+  }, []);
+
+  useEffect(() => {
+    setShowGroupedFields(groupByFields.length > 0 && groupByFields.length <= 6);
+    setShowAggregatedFields(aggregatedFields.length > 0 && aggregatedFields.length <= 6);
+  }, [ds.name, groupByFields.length, aggregatedFields.length]);
 
   // Build human-readable target string
   let targetLabel: string | null = null;
@@ -1943,6 +2094,10 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode }: {
     targetLabel = ds.classInfo.className;
   } else if (ds.calculatedField) {
     targetLabel = ds.calculatedField.expressionAsString ?? '';
+  } else if (ds.importFormatInfo) {
+    targetLabel = ds.importFormatInfo.formatGuid;
+  } else if (ds.groupByInfo) {
+    targetLabel = ds.groupByInfo.listToGroup ? `list: ${ds.groupByInfo.listToGroup}` : null;
   }
 
   return (
@@ -1950,8 +2105,7 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode }: {
       <div
         className="ds-row"
         onClick={() => {
-          const nodeId = findDatasourceNode(ds.name, configIndex);
-          if (nodeId) navigateToTreeNode(nodeId);
+          navigateToDatasource(ds.name, ds.parentPath);
         }}
       >
         {/* Line 1: type badge + name + nested toggle */}
@@ -1983,6 +2137,83 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode }: {
           </div>
         )}
       </div>
+      {ds.groupByInfo && (groupByFields.length > 0 || aggregatedFields.length > 0) && (
+        <div className="ds-row-groupby-meta">
+          <div className="ds-row-groupby-grid">
+            {groupByFields.length > 0 && (
+              <div className="ds-row-groupby-column ds-row-groupby-column-grouped">
+                <button
+                  type="button"
+                  className="ds-row-groupby-column-toggle"
+                  onClick={event => {
+                    event.stopPropagation();
+                    setShowGroupedFields(value => !value);
+                  }}
+                >
+                  <span className="fmt-ds-label">Group By</span>
+                  <span className="ds-row-groupby-count">{groupByFields.length}</span>
+                  <span className={`tree-chevron ${showGroupedFields ? 'open' : ''}`} />
+                </button>
+                {showGroupedFields && (
+                  <div className="ds-row-groupby-list">
+                    {groupByFields.map((field: any) => (
+                      <button
+                        key={field.path}
+                        type="button"
+                        className="ds-row-groupby-item"
+                        onClick={event => {
+                          event.stopPropagation();
+                          navigateToDatasource(field.name, getParentPathFromModelPath(field.path));
+                        }}
+                      >
+                        {field.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {aggregatedFields.length > 0 && (
+              <div className="ds-row-groupby-column ds-row-groupby-column-aggregated">
+                <button
+                  type="button"
+                  className="ds-row-groupby-column-toggle"
+                  onClick={event => {
+                    event.stopPropagation();
+                    setShowAggregatedFields(value => !value);
+                  }}
+                >
+                  <span className="fmt-ds-label">Aggregated</span>
+                  <span className="ds-row-groupby-count">{aggregatedFields.length}</span>
+                  <span className={`tree-chevron ${showAggregatedFields ? 'open' : ''}`} />
+                </button>
+                {showAggregatedFields && (
+                  <div className="ds-row-groupby-list">
+                    {aggregatedFields.map((field: any) => (
+                      <button
+                        key={field.path}
+                        type="button"
+                        className="ds-row-groupby-item"
+                        onClick={event => {
+                          event.stopPropagation();
+                          navigateToDatasource(field.name, getParentPathFromModelPath(field.path));
+                        }}
+                      >
+                        <span className="ds-row-groupby-item-text">{field.name}</span>
+                        {field.function && (
+                          <span className={`ds-row-groupby-fn-badge ${getAggregationFunctionBadgeClass(field.function)}`}>
+                            {field.function}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {/* Nested children (indented) */}
       {expanded && ds.children?.map((child: any, i: number) => (
         <div key={i} style={{ paddingLeft: 12, borderLeft: '2px solid var(--border-color)', marginLeft: 8 }}>

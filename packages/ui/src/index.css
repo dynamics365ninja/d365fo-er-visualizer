@@ -442,6 +442,68 @@ body {
   padding: 6px 0 10px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--bg-tertiary) 32%, transparent), transparent 20%);
 }
+
+.explorer-kind-group {
+  margin: 0 8px 10px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 78%, transparent);
+  overflow: hidden;
+}
+
+.explorer-kind-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+}
+
+.explorer-kind-group-count {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-tertiary) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 76%, transparent);
+  font-size: 10px;
+}
+
+.explorer-kind-group-body {
+  padding: 6px 0 8px;
+}
+
+.explorer-kind-group-model {
+  border-color: color-mix(in srgb, var(--surface-info-border) 74%, transparent);
+  background: color-mix(in srgb, var(--surface-info-bg) 20%, var(--bg-secondary));
+}
+
+.explorer-kind-group-model .explorer-kind-group-header {
+  color: var(--surface-info-fg);
+  background: color-mix(in srgb, var(--surface-info-bg) 55%, transparent);
+}
+
+.explorer-kind-group-mapping {
+  border-color: color-mix(in srgb, var(--surface-success-border) 74%, transparent);
+  background: color-mix(in srgb, var(--surface-success-bg) 18%, var(--bg-secondary));
+}
+
+.explorer-kind-group-mapping .explorer-kind-group-header {
+  color: var(--surface-success-fg);
+  background: color-mix(in srgb, var(--surface-success-bg) 55%, transparent);
+}
+
+.explorer-kind-group-format {
+  border-color: color-mix(in srgb, var(--surface-warning-border) 74%, transparent);
+  background: color-mix(in srgb, var(--surface-warning-bg) 22%, var(--bg-secondary));
+}
+
+.explorer-kind-group-format .explorer-kind-group-header {
+  color: var(--surface-warning-fg);
+  background: color-mix(in srgb, var(--surface-warning-bg) 58%, transparent);
+}
 .explorer-empty-state {
   padding: 22px 18px;
   color: var(--text-secondary);
@@ -508,6 +570,7 @@ body {
   gap: 6px;
   align-items: center;
   padding: 8px 10px;
+  margin-bottom: 8px;
   border-bottom: 1px solid var(--border-color);
   background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
   position: sticky;
@@ -2047,6 +2110,183 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.ds-row-groupby-meta {
+  margin: 8px 8px 8px 34px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--surface-info-border) 46%, transparent);
+  background: color-mix(in srgb, var(--surface-info-bg) 28%, transparent);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.ds-row-groupby-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ds-row-groupby-column {
+  min-width: 0;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 74%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 72%, transparent);
+}
+
+.ds-row-groupby-column-grouped {
+  border-color: color-mix(in srgb, var(--surface-info-border) 72%, transparent);
+  background: color-mix(in srgb, var(--surface-info-bg) 42%, var(--bg-secondary));
+}
+
+.ds-row-groupby-column-aggregated {
+  border-color: color-mix(in srgb, var(--surface-warning-border) 72%, transparent);
+  background: color-mix(in srgb, var(--surface-warning-bg) 34%, var(--bg-secondary));
+}
+
+.ds-row-groupby-column-grouped .fmt-ds-label {
+  color: var(--surface-info-fg);
+}
+
+.ds-row-groupby-column-aggregated .fmt-ds-label {
+  color: var(--surface-warning-fg);
+}
+
+.ds-row-groupby-column-grouped .ds-row-groupby-count {
+  border-color: color-mix(in srgb, var(--surface-info-border) 72%, transparent);
+  background: color-mix(in srgb, var(--surface-info-bg) 68%, transparent);
+  color: var(--surface-info-fg);
+}
+
+.ds-row-groupby-column-aggregated .ds-row-groupby-count {
+  border-color: color-mix(in srgb, var(--surface-warning-border) 72%, transparent);
+  background: color-mix(in srgb, var(--surface-warning-bg) 68%, transparent);
+  color: var(--surface-warning-fg);
+}
+
+.ds-row-groupby-column-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ds-row-groupby-column-toggle .fmt-ds-label {
+  margin-right: auto;
+}
+
+.ds-row-groupby-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 76%, transparent);
+  background: color-mix(in srgb, var(--bg-tertiary) 80%, transparent);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.ds-row-groupby-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.ds-row-groupby-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 76%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  color: var(--text-primary);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ds-row-groupby-item-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-row-groupby-fn-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+}
+
+.ds-row-groupby-fn-sum {
+  color: var(--surface-success-fg);
+  border-color: color-mix(in srgb, var(--surface-success-border) 74%, transparent);
+  background: color-mix(in srgb, var(--surface-success-bg) 74%, transparent);
+}
+
+.ds-row-groupby-fn-count {
+  color: var(--surface-info-fg);
+  border-color: color-mix(in srgb, var(--surface-info-border) 74%, transparent);
+  background: color-mix(in srgb, var(--surface-info-bg) 74%, transparent);
+}
+
+.ds-row-groupby-fn-avg {
+  color: var(--surface-warning-fg);
+  border-color: color-mix(in srgb, var(--surface-warning-border) 74%, transparent);
+  background: color-mix(in srgb, var(--surface-warning-bg) 74%, transparent);
+}
+
+.ds-row-groupby-fn-min {
+  color: color-mix(in srgb, var(--text-primary) 82%, #4fc3f7);
+  border-color: color-mix(in srgb, #4fc3f7 54%, transparent);
+  background: color-mix(in srgb, #4fc3f7 18%, transparent);
+}
+
+.ds-row-groupby-fn-max {
+  color: color-mix(in srgb, var(--text-primary) 82%, #ff8a65);
+  border-color: color-mix(in srgb, #ff8a65 54%, transparent);
+  background: color-mix(in srgb, #ff8a65 18%, transparent);
+}
+
+.ds-row-groupby-fn-generic {
+  color: var(--text-secondary);
+  border-color: color-mix(in srgb, var(--border-color) 74%, transparent);
+  background: color-mix(in srgb, var(--bg-tertiary) 86%, transparent);
+}
+
+.ds-row-groupby-item:hover {
+  border-color: color-mix(in srgb, var(--surface-info-border) 64%, transparent);
+  background: color-mix(in srgb, var(--surface-info-bg) 40%, var(--bg-secondary));
+}
+
+@media (max-width: 900px) {
+  .ds-row-groupby-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ─── Deep Dependency Analysis ─── */

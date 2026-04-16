@@ -10,6 +10,7 @@ interface ClickablePathProps {
   /** What kind of references to resolve */
   mode?: 'binding-expr' | 'model-path' | 'auto';
   style?: React.CSSProperties;
+  interactive?: boolean;
 }
 
 /**
@@ -17,7 +18,7 @@ interface ClickablePathProps {
  * Datasource names and model paths are resolved on hover.
  * If a reference resolves, it becomes clickable with a tooltip.
  */
-export function ClickablePath({ expression, configIndex, mode = 'auto', style }: ClickablePathProps) {
+export function ClickablePath({ expression, configIndex, mode = 'auto', style, interactive = true }: ClickablePathProps) {
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
   const resolveBinding = useAppStore(s => s.resolveBinding);
   const resolveModelPath = useAppStore(s => s.resolveModelPath);
@@ -34,6 +35,7 @@ export function ClickablePath({ expression, configIndex, mode = 'auto', style }:
           key={i}
           segment={seg}
           configIndex={configIndex}
+          interactive={interactive}
           resolveDatasource={resolveDatasource}
           resolveBinding={resolveBinding}
           resolveModelPath={resolveModelPath}
@@ -51,6 +53,11 @@ interface Segment {
   fullPath?: string;
   lookupText?: string;
   isFirstIdent?: boolean; // first identifier in an expression — likely a datasource name
+}
+
+function looksLikeDatasourceReference(value: string | undefined): boolean {
+  if (!value) return false;
+  return /^[$#A-Za-z_]/.test(value);
 }
 
 function parseSegments(expr: string, mode: string): Segment[] {
@@ -112,7 +119,13 @@ function parseSegments(expr: string, mode: string): Segment[] {
         });
         isFirstIdent = false;
       } else {
-        segments.push({ text: token, kind: 'literal' });
+        segments.push({
+          text: token,
+          kind: 'literal',
+          lookupText: looksLikeDatasourceReference(lookupText) ? lookupText : undefined,
+          fullPath: looksLikeDatasourceReference(lookupText) ? lookupText : undefined,
+          isFirstIdent,
+        });
         pathParts = [];
         isFirstIdent = true;
       }
@@ -145,6 +158,7 @@ function parseSegments(expr: string, mode: string): Segment[] {
 interface SmartSegmentProps {
   segment: Segment;
   configIndex: number;
+  interactive: boolean;
   resolveDatasource: (name: string, ci: number) => any;
   resolveBinding: (path: string, ci: number) => any;
   resolveModelPath: (modelDotPath: string) => any;
@@ -152,7 +166,7 @@ interface SmartSegmentProps {
   navigateToTreeNode: (nodeId: string) => void;
 }
 
-function SmartSegment({ segment, configIndex, resolveDatasource, resolveBinding, resolveModelPath, findDatasourceNode, navigateToTreeNode }: SmartSegmentProps) {
+function SmartSegment({ segment, configIndex, interactive, resolveDatasource, resolveBinding, resolveModelPath, findDatasourceNode, navigateToTreeNode }: SmartSegmentProps) {
   const [tooltip, setTooltip] = useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
   const [resolved, setResolved] = useState<{ treeNodeId: string | null; type: string } | null>(null);
@@ -160,10 +174,12 @@ function SmartSegment({ segment, configIndex, resolveDatasource, resolveBinding,
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const configurations = useAppStore(s => s.configurations);
 
-  const canResolve = segment.kind === 'identifier' || segment.kind === 'model-path';
+  const canResolve = interactive && (segment.kind === 'identifier'
+    || segment.kind === 'model-path'
+    || (segment.kind === 'literal' && !!segment.lookupText));
 
   const doResolve = useCallback(() => {
-    if (segment.kind === 'identifier') {
+    if (segment.kind === 'identifier' || (segment.kind === 'literal' && segment.lookupText)) {
       const referencePath = segment.fullPath ?? segment.lookupText ?? segment.text;
       const deepResult = resolveDeepExpression(referencePath, configurations, configIndex);
       const rootSegment = referencePath.split('.')[0] ?? referencePath;
@@ -235,7 +251,7 @@ function SmartSegment({ segment, configIndex, resolveDatasource, resolveBinding,
           else lines.push(`📊 DS: ${ds.name} (${ds.type})`);
         }
         // Navigate to the binding node in the mapping config
-        const navId = mapResult.datasourceTreeNodeId ?? mapResult.bindingTreeNodeId;
+        const navId = mapResult.bindingTreeNodeId ?? mapResult.datasourceTreeNodeId;
         const r = { treeNodeId: navId, type: 'model-mapping' };
         resolvedRef.current = r;
         setResolved(r);

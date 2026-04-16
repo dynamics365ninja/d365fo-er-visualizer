@@ -1,6 +1,13 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { locale, t } from '../i18n';
 import { useAppStore, type TreeNode } from '../state/store';
+import { ERDirection } from '@er-visualizer/core';
+
+function getFormatDirectionLabel(direction: ERDirection | undefined): string {
+  if (direction === ERDirection.Import) return t.formatDirectionImport;
+  if (direction === ERDirection.Export) return t.formatDirectionExport;
+  return t.formatDirectionUnknown;
+}
 
 function getExplorerNodeAccentClass(node: TreeNode): string {
   const kind = node.type === 'file' ? node.data?.kind : undefined;
@@ -13,16 +20,44 @@ function getExplorerNodeAccentClass(node: TreeNode): string {
 }
 
 function getExplorerKindLabel(node: TreeNode): string | null {
-  const kind = node.type === 'file' ? node.data?.kind : undefined;
+  const kind = getConfigurationKind(node);
   const labels = locale === 'cs'
     ? { DataModel: 'Model', ModelMapping: 'Mapování', Format: 'Formát', model: 'Model', mapping: 'Mapování', format: 'Formát' }
     : { DataModel: 'Model', ModelMapping: 'Mapping', Format: 'Format', model: 'Model', mapping: 'Mapping', format: 'Format' };
+
+  if (kind === 'Format' && node.data?.content?.kind === 'Format') {
+    return `${labels.Format} • ${getFormatDirectionLabel(node.data.content.direction)}`;
+  }
 
   if (kind === 'DataModel' || node.type === 'model') return labels.DataModel;
   if (kind === 'ModelMapping' || node.type === 'mapping') return labels.ModelMapping;
   if (kind === 'Format' || node.type === 'format') return labels.Format;
 
   return null;
+}
+
+function getConfigurationKind(node: TreeNode): 'DataModel' | 'ModelMapping' | 'Format' | undefined {
+  const kind = node.data?.kind ?? node.data?.content?.kind;
+  if (kind === 'DataModel' || kind === 'ModelMapping' || kind === 'Format') {
+    return kind;
+  }
+  return undefined;
+}
+
+function getExplorerGroupLabel(kind: 'DataModel' | 'ModelMapping' | 'Format'): string {
+  if (locale === 'cs') {
+    return kind === 'DataModel' ? 'Datové modely' : kind === 'ModelMapping' ? 'Mapování modelu' : 'Formáty';
+  }
+
+  return kind === 'DataModel' ? 'Data Models' : kind === 'ModelMapping' ? 'Model Mappings' : 'Formats';
+}
+
+function getExplorerGroupAccent(kind: 'DataModel' | 'ModelMapping' | 'Format'): string {
+  return kind === 'DataModel'
+    ? 'explorer-kind-group-model'
+    : kind === 'ModelMapping'
+      ? 'explorer-kind-group-mapping'
+      : 'explorer-kind-group-format';
 }
 
 function filterTreeNodes(nodes: TreeNode[], query: string): TreeNode[] {
@@ -71,12 +106,26 @@ export function ConfigExplorer() {
   const selectedNodeId = useAppStore(s => s.selectedNodeId);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const selectNode = useAppStore(s => s.selectNode);
-  const openTab = useAppStore(s => s.openTab);
+  const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const [expandMode, setExpandMode] = useState<'default' | 'all' | 'none'>('default');
   const [expandVersion, setExpandVersion] = useState(0);
   const [filterQuery, setFilterQuery] = useState('');
   const filteredTreeNodes = useMemo(() => filterTreeNodes(treeNodes, filterQuery), [treeNodes, filterQuery]);
   const selectedPathIds = useMemo(() => collectAncestorIds(treeNodes, selectedNodeId), [treeNodes, selectedNodeId]);
+  const groupedTreeNodes = useMemo(() => {
+    const groups = new Map<'DataModel' | 'ModelMapping' | 'Format', TreeNode[]>();
+
+    for (const node of filteredTreeNodes) {
+      const kind = getConfigurationKind(node);
+      if (!kind) continue;
+      if (!groups.has(kind)) groups.set(kind, []);
+      groups.get(kind)!.push(node);
+    }
+
+    return (['DataModel', 'ModelMapping', 'Format'] as const)
+      .map(kind => ({ kind, nodes: groups.get(kind) ?? [] }))
+      .filter(group => group.nodes.length > 0);
+  }, [filteredTreeNodes]);
 
   if (treeNodes.length === 0) {
     return (
@@ -127,24 +176,53 @@ export function ConfigExplorer() {
         <div className="explorer-empty-state">
           <p>{t.noResults}</p>
         </div>
-      ) : filteredTreeNodes.map(node => (
-        <TreeNodeRow
-          key={node.id}
-          node={node}
-          depth={0}
-          selectedId={selectedNodeId}
-          selectedPathIds={selectedPathIds}
-          showTechnicalDetails={showTechnicalDetails}
-          onSelect={selectNode}
-          expandMode={expandMode}
-          expandVersion={expandVersion}
-          onDoubleClick={(n) => {
-            if (n.configIndex != null) {
-              openTab(n.id, n.name, n.configIndex);
-            }
-          }}
-        />
-      ))}
+      ) : groupedTreeNodes.length > 0 ? groupedTreeNodes.map(group => (
+          <div key={group.kind} className={`explorer-kind-group ${getExplorerGroupAccent(group.kind)}`}>
+            <div className="explorer-kind-group-header">
+              <span>{getExplorerGroupLabel(group.kind)}</span>
+              <span className="explorer-kind-group-count">{group.nodes.length}</span>
+            </div>
+            <div className="explorer-kind-group-body">
+              {group.nodes.map(node => (
+                <TreeNodeRow
+                  key={node.id}
+                  node={node}
+                  depth={0}
+                  selectedId={selectedNodeId}
+                  selectedPathIds={selectedPathIds}
+                  showTechnicalDetails={showTechnicalDetails}
+                  onSelect={selectNode}
+                  onNavigate={navigateToTreeNode}
+                  expandMode={expandMode}
+                  expandVersion={expandVersion}
+                  onDoubleClick={(n) => {
+                    if (n.configIndex != null) {
+                      navigateToTreeNode(n.id);
+                    }
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        )) : filteredTreeNodes.map(node => (
+          <TreeNodeRow
+            key={node.id}
+            node={node}
+            depth={0}
+            selectedId={selectedNodeId}
+            selectedPathIds={selectedPathIds}
+            showTechnicalDetails={showTechnicalDetails}
+            onSelect={selectNode}
+            onNavigate={navigateToTreeNode}
+            expandMode={expandMode}
+            expandVersion={expandVersion}
+            onDoubleClick={(n) => {
+              if (n.configIndex != null) {
+                navigateToTreeNode(n.id);
+              }
+            }}
+          />
+        ))}
     </div>
   );
 }
@@ -156,12 +234,13 @@ interface TreeNodeRowProps {
   selectedPathIds: Set<string>;
   showTechnicalDetails: boolean;
   onSelect: (id: string) => void;
+  onNavigate: (id: string) => void;
   expandMode: 'default' | 'all' | 'none';
   expandVersion: number;
   onDoubleClick: (node: TreeNode) => void;
 }
 
-function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDetails, onSelect, expandMode, expandVersion, onDoubleClick }: TreeNodeRowProps) {
+function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDetails, onSelect, onNavigate, expandMode, expandVersion, onDoubleClick }: TreeNodeRowProps) {
   const [expanded, setExpanded] = useState(depth === 0);
   const hasChildren = node.children && node.children.length > 0;
 
@@ -223,6 +302,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
           selectedPathIds={selectedPathIds}
           showTechnicalDetails={showTechnicalDetails}
           onSelect={onSelect}
+          onNavigate={onNavigate}
           expandMode={expandMode}
           expandVersion={expandVersion}
           onDoubleClick={onDoubleClick}

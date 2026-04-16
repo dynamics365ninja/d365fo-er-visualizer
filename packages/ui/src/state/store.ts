@@ -43,6 +43,11 @@ export interface TreeNode {
   configIndex?: number; // index in configurations array
 }
 
+interface NavigationSnapshot {
+  activeTabId: string | null;
+  selectedNodeId: string | null;
+}
+
 // ─── App State ───
 
 export interface AppState {
@@ -56,6 +61,8 @@ export interface AppState {
   searchQuery: string;
   searchResults: any[];
   showTechnicalDetails: boolean;
+  navigationHistory: NavigationSnapshot[];
+  canNavigateBack: boolean;
 
   // Actions
   loadXmlFile: (xml: string, filePath: string) => void;
@@ -64,10 +71,12 @@ export interface AppState {
   openTab: (id: string, label: string, configIndex: number) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
+  rebuildDerivedState: () => void;
   setShowTechnicalDetails: (show: boolean) => void;
   setSearchQuery: (query: string) => void;
   executeSearch: () => void;
   navigateToTreeNode: (nodeId: string) => void;
+  navigateBack: () => void;
   /**
    * Resolve a datasource name from an expression string (e.g. "CompanyInfo" from binding expr).
    * Returns { configIndex, datasourceName, treeNodeId } or null.
@@ -154,6 +163,49 @@ interface EntityMatchResult {
   score: 0 | 1 | 2 | 3;
 }
 
+interface MappingSource {
+  mapping: any;
+  configIndex: number;
+  configName: string;
+}
+
+function getDatasourcePoolsForConfig(config: ERConfiguration): any[][] {
+  if (config.content.kind === 'ModelMapping') {
+    return [(config.content as ERModelMappingContent).version.mapping.datasources];
+  }
+
+  if (config.content.kind === 'Format') {
+    const content = config.content as ERFormatContent;
+    return [
+      ...content.embeddedModelMappingVersions.map(version => version.mapping.datasources),
+      content.formatMappingVersion.formatMapping.datasources,
+    ].filter(pool => pool.length > 0);
+  }
+
+  return [];
+}
+
+function getMappingSourcesForConfig(config: ERConfiguration, configIndex: number): MappingSource[] {
+  if (config.content.kind === 'ModelMapping') {
+    const mapping = (config.content as ERModelMappingContent).version.mapping;
+    return [{ mapping, configIndex, configName: config.solutionVersion.solution.name }];
+  }
+
+  if (config.content.kind === 'Format') {
+    return (config.content as ERFormatContent).embeddedModelMappingVersions.map(version => ({
+      mapping: version.mapping,
+      configIndex,
+      configName: `${config.solutionVersion.solution.name} • ${version.mapping.name}`,
+    }));
+  }
+
+  return [];
+}
+
+function getAllMappingSources(configurations: ERConfiguration[]): MappingSource[] {
+  return configurations.flatMap((config, configIndex) => getMappingSourcesForConfig(config, configIndex));
+}
+
 function findNodeById(nodes: TreeNode[], id: string): TreeNode | null {
   for (const node of nodes) {
     if (node.id === id) return node;
@@ -163,6 +215,16 @@ function findNodeById(nodes: TreeNode[], id: string): TreeNode | null {
     }
   }
   return null;
+}
+
+function buildDerivedState(configurations: ERConfiguration[]): { registry: GUIDRegistry; treeNodes: TreeNode[] } {
+  const registry = new GUIDRegistry();
+  for (const config of configurations) {
+    registry.indexConfiguration(config);
+  }
+
+  const treeNodes = configurations.map((config, index) => buildTreeForConfig(config, index));
+  return { registry, treeNodes };
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -176,6 +238,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   searchQuery: '',
   searchResults: [],
   showTechnicalDetails: readStoredTechnicalDetails(),
+  navigationHistory: [],
+  canNavigateBack: false,
 
   loadXmlFile: (xml: string, filePath: string) => {
     try {
@@ -183,14 +247,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const state = get();
       const newConfigs = [...state.configurations, config];
 
-      // Rebuild registry
-      const registry = new GUIDRegistry();
-      for (const c of newConfigs) {
-        registry.indexConfiguration(c);
-      }
-
-      // Build tree
-      const treeNodes = newConfigs.map((c, i) => buildTreeForConfig(c, i));
+      const { registry, treeNodes } = buildDerivedState(newConfigs);
 
       set({ configurations: newConfigs, registry, treeNodes });
     } catch (e) {
@@ -202,11 +259,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   removeConfiguration: (index: number) => {
     const state = get();
     const newConfigs = state.configurations.filter((_, i) => i !== index);
-    const registry = new GUIDRegistry();
-    for (const c of newConfigs) {
-      registry.indexConfiguration(c);
-    }
-    const treeNodes = newConfigs.map((c, i) => buildTreeForConfig(c, i));
+    const { registry, treeNodes } = buildDerivedState(newConfigs);
     set({ configurations: newConfigs, registry, treeNodes, selectedNodeId: null, selectedNode: null });
   },
 
@@ -222,10 +275,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   openTab: (id: string, label: string, configIndex: number) => {
     const state = get();
+    const navigationHistory = pushNavigationHistory(state, id, state.selectedNodeId);
     if (!state.openTabs.find(t => t.id === id)) {
-      set({ openTabs: [...state.openTabs, { id, label, configIndex }], activeTabId: id });
+      set({
+        openTabs: [...state.openTabs, { id, label, configIndex }],
+        activeTabId: id,
+        navigationHistory,
+        canNavigateBack: navigationHistory.length > 0,
+      });
     } else {
-      set({ activeTabId: id });
+      set({ activeTabId: id, navigationHistory, canNavigateBack: navigationHistory.length > 0 });
     }
   },
 
@@ -238,7 +297,30 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ openTabs: newTabs, activeTabId: newActive });
   },
 
-  setActiveTab: (id: string) => set({ activeTabId: id }),
+  setActiveTab: (id: string) => {
+    const state = get();
+    const navigationHistory = pushNavigationHistory(state, id, state.selectedNodeId);
+    set({ activeTabId: id, navigationHistory, canNavigateBack: navigationHistory.length > 0 });
+  },
+
+  rebuildDerivedState: () => {
+    const state = get();
+    const { registry, treeNodes } = buildDerivedState(state.configurations);
+    const selectedNode = state.selectedNodeId ? findNodeById(treeNodes, state.selectedNodeId) : null;
+    const openTabs = state.openTabs.filter(tab => tab.configIndex >= 0 && tab.configIndex < state.configurations.length);
+    const activeTabId = openTabs.some(tab => tab.id === state.activeTabId)
+      ? state.activeTabId
+      : (openTabs[0]?.id ?? null);
+
+    set({
+      registry,
+      treeNodes,
+      selectedNode,
+      openTabs,
+      activeTabId,
+      canNavigateBack: state.navigationHistory.length > 0,
+    });
+  },
 
   setShowTechnicalDetails: (show: boolean) => {
     persistTechnicalDetails(show);
@@ -261,54 +343,97 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     const node = findNodeById(state.treeNodes, nodeId);
     if (!node) return;
-    // Select the node
-    set({ selectedNodeId: nodeId, selectedNode: node });
-    // Also open the tab for its config
-    if (node.configIndex != null) {
-      const config = state.configurations[node.configIndex];
-      if (config) {
-        const rootNode = state.treeNodes[node.configIndex];
-        if (rootNode) {
-          const existingTab = state.openTabs.find(t => t.configIndex === node.configIndex);
-          if (!existingTab) {
-            set({
-              openTabs: [...state.openTabs, { id: rootNode.id, label: rootNode.name, configIndex: node.configIndex }],
-              activeTabId: rootNode.id,
-            });
-          } else {
-            set({ activeTabId: existingTab.id });
-          }
+
+    const targetTabId = node.configIndex == null ? state.activeTabId : node.id;
+    const navigationHistory = pushNavigationHistory(state, targetTabId, nodeId);
+
+    set({
+      selectedNodeId: nodeId,
+      selectedNode: node,
+      navigationHistory,
+      canNavigateBack: navigationHistory.length > 0,
+    });
+
+    if (node.configIndex == null) return;
+
+    const nextTabId = node.id;
+
+    const targetTabLabel = node.type === 'file'
+      ? node.name
+      : `${state.configurations[node.configIndex]?.solutionVersion.solution.name ?? node.name} • ${node.name}`;
+
+    const existingTab = state.openTabs.find(t => t.id === nextTabId);
+    if (existingTab) {
+      set({ activeTabId: existingTab.id, navigationHistory, canNavigateBack: navigationHistory.length > 0 });
+      return;
+    }
+
+    set({
+      openTabs: [...state.openTabs, { id: nextTabId, label: targetTabLabel, configIndex: node.configIndex }],
+      activeTabId: nextTabId,
+      navigationHistory,
+      canNavigateBack: navigationHistory.length > 0,
+    });
+  },
+
+  navigateBack: () => {
+    const state = get();
+    if (state.navigationHistory.length === 0) return;
+
+    const history = [...state.navigationHistory];
+    while (history.length > 0) {
+      const snapshot = history.pop()!;
+      const selectedNode = snapshot.selectedNodeId ? findNodeById(state.treeNodes, snapshot.selectedNodeId) : null;
+
+      let openTabs = state.openTabs;
+      let activeTabId = snapshot.activeTabId;
+
+      if (activeTabId && !openTabs.some(tab => tab.id === activeTabId)) {
+        if (selectedNode?.configIndex != null) {
+          const label = selectedNode.type === 'file'
+            ? selectedNode.name
+            : `${state.configurations[selectedNode.configIndex]?.solutionVersion.solution.name ?? selectedNode.name} • ${selectedNode.name}`;
+          openTabs = [...openTabs, { id: selectedNode.id, label, configIndex: selectedNode.configIndex }];
+          activeTabId = selectedNode.id;
+        } else {
+          activeTabId = openTabs[openTabs.length - 1]?.id ?? null;
         }
       }
+
+      set({
+        openTabs,
+        activeTabId,
+        selectedNodeId: selectedNode?.id ?? null,
+        selectedNode,
+        navigationHistory: history,
+        canNavigateBack: history.length > 0,
+      });
+      return;
     }
+
+    set({ navigationHistory: [], canNavigateBack: false });
   },
 
   resolveDatasource: (expressionOrName: string, fromConfigIndex: number) => {
     const state = get();
-    // Extract the root datasource name from an expression like "CompanyInfo.'name()'" or just "CompanyInfo"
     const dsName = expressionOrName.split('.')[0].split('(')[0].replace(/['"]/g, '').trim();
     if (!dsName) return null;
 
-    // Search in the same config first, then in others
     const searchOrder = [fromConfigIndex, ...state.configurations.map((_, i) => i).filter(i => i !== fromConfigIndex)];
 
     for (const ci of searchOrder) {
       const config = state.configurations[ci];
       if (!config) continue;
 
-      let datasources: any[] = [];
-      if (config.content.kind === 'ModelMapping') {
-        datasources = (config.content as ERModelMappingContent).version.mapping.datasources;
-      } else if (config.content.kind === 'Format') {
-        datasources = (config.content as ERFormatContent).formatMappingVersion.formatMapping.datasources;
-      }
-
-      const ds = findDatasourceByName(datasources, dsName);
-      if (ds) {
-        const treeNodeId = get().findDatasourceNode(dsName, ci);
-        return { configIndex: ci, datasourceName: dsName, treeNodeId, datasource: ds };
+      for (const datasources of getDatasourcePoolsForConfig(config)) {
+        const ds = findDatasourceByName(datasources, dsName);
+        if (ds) {
+          const treeNodeId = get().findDatasourceNode(dsName, ci, ds.parentPath);
+          return { configIndex: ci, datasourceName: dsName, treeNodeId, datasource: ds };
+        }
       }
     }
+
     return null;
   },
 
@@ -320,17 +445,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       const config = state.configurations[ci];
       if (!config) continue;
 
-      let bindings: any[] = [];
-      if (config.content.kind === 'ModelMapping') {
-        bindings = (config.content as ERModelMappingContent).version.mapping.bindings;
-      }
-
-      const binding = bindings.find((b: any) => b.path === modelPath);
-      if (binding) {
-        const treeNodeId = get().findBindingNode(modelPath, ci);
-        return { configIndex: ci, treeNodeId, binding };
+      for (const source of getMappingSourcesForConfig(config, ci)) {
+        const binding = source.mapping.bindings.find((b: any) => b.path === modelPath);
+        if (binding) {
+          const treeNodeId = get().findBindingNode(modelPath, ci);
+          return { configIndex: ci, treeNodeId, binding };
+        }
       }
     }
+
     return null;
   },
 
@@ -359,18 +482,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (path.toLowerCase().startsWith('model.')) path = path.substring(6);
     else if (path.toLowerCase().startsWith('model\\')) path = path.substring(6);
 
-    // Normalise backslashes → dots so parseDottedPath can handle both separators,
-    // then strip single-quotes from segment names (ER expressions quote names that
-    // contain spaces/special chars, but the XML binding path stores them plain).
     const normPath = path.replace(/\\/g, '.');
     const segments = parseDottedPath(normPath).filter(Boolean);
     const buildVariants = (segs: string[]) => [
-      segs.join('\\'),   // backslash (most common in D365 ER XML)
-      segs.join('.'),    // dot
-      segs.join('/'),    // forward slash (some older ER versions)
+      segs.join('\\'),
+      segs.join('.'),
+      segs.join('/'),
     ];
 
-    // Build a ranked list of paths to try: from most specific (full path) to shortest (root segment only)
     const pathVariants: string[] = [];
     for (let len = segments.length; len >= 1; len--) {
       const segs = segments.slice(0, len);
@@ -379,41 +498,36 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }
 
-    // Search all ModelMapping configs for a matching binding
-    for (let ci = 0; ci < state.configurations.length; ci++) {
-      const config = state.configurations[ci];
-      if (config.content.kind !== 'ModelMapping') continue;
-      const mm = (config.content as ERModelMappingContent).version.mapping;
-
+    for (const source of getAllMappingSources(state.configurations)) {
       for (const tryPath of pathVariants) {
-        // Case-insensitive comparison
-        const binding = mm.bindings.find((b: any) =>
+        const binding = source.mapping.bindings.find((b: any) =>
           b.path === tryPath || b.path.toLowerCase() === tryPath.toLowerCase()
         );
-        if (binding) {
-          const bindingTreeNodeId = get().findBindingNode(binding.path, ci);
-          const dsName = binding.expressionAsString.split(/[.(]/)[0].replace(/['"]/g, '').trim();
-          let datasource: any = null;
-          let datasourceConfigIndex: number | null = null;
-          let datasourceTreeNodeId: string | null = null;
-          if (dsName) {
-            const dsResult = get().resolveDatasource(dsName, ci);
-            if (dsResult) {
-              datasource = dsResult.datasource;
-              datasourceConfigIndex = dsResult.configIndex;
-              datasourceTreeNodeId = dsResult.treeNodeId;
-            }
+        if (!binding) continue;
+
+        const bindingTreeNodeId = get().findBindingNode(binding.path, source.configIndex);
+        const dsName = binding.expressionAsString.split(/[.(]/)[0].replace(/['"]/g, '').trim();
+        let datasource: any = null;
+        let datasourceConfigIndex: number | null = null;
+        let datasourceTreeNodeId: string | null = null;
+        if (dsName) {
+          const dsResult = get().resolveDatasource(dsName, source.configIndex);
+          if (dsResult) {
+            datasource = dsResult.datasource;
+            datasourceConfigIndex = dsResult.configIndex;
+            datasourceTreeNodeId = dsResult.treeNodeId;
           }
-          return {
-            modelPath: binding.path,
-            binding,
-            bindingConfigIndex: ci,
-            bindingTreeNodeId,
-            datasource,
-            datasourceConfigIndex,
-            datasourceTreeNodeId,
-          };
         }
+
+        return {
+          modelPath: binding.path,
+          binding,
+          bindingConfigIndex: source.configIndex,
+          bindingTreeNodeId,
+          datasource,
+          datasourceConfigIndex,
+          datasourceTreeNodeId,
+        };
       }
     }
     return null;
@@ -442,8 +556,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       const config = state.configurations[ci];
       const configName = config.solutionVersion.solution.name;
 
-      if (config.content.kind === 'ModelMapping') {
-        const mm = (config.content as ERModelMappingContent).version.mapping;
+      for (const source of getMappingSourcesForConfig(config, ci)) {
+        const mm = source.mapping;
         const matchingDs = collectMatchingDs(mm.datasources);
 
         for (const { ds, match } of matchingDs) {
@@ -451,15 +565,13 @@ export const useAppStore = create<AppState>((set, get) => ({
             expressionReferencesDatasource(b.expressionAsString, ds),
           );
 
-          // For each model path in those bindings, find format elements in Format configs
           const modelPaths = relatedBindings.map((b: any) => ({
             path: b.path,
             expr: b.expressionAsString,
             configIndex: ci,
-            configName,
+            configName: source.configName,
           }));
 
-          // Now search all Format configs for format elements that bind to these model paths
           const formatUsages: WhereUsedEntry['formatUsages'] = [];
           for (let fci = 0; fci < state.configurations.length; fci++) {
             const fc = state.configurations[fci];
@@ -468,7 +580,6 @@ export const useAppStore = create<AppState>((set, get) => ({
             const fmtMap = fc2.formatMappingVersion.formatMapping;
             const fmtConfigName = fc.solutionVersion.solution.name;
 
-            // Build elementId → element name lookup
             const elementNames = new Map<string, { name: string; type: string }>();
             function indexElements(el: any) {
               elementNames.set(el.id, { name: el.name, type: el.elementType });
@@ -478,11 +589,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
             for (const b of fmtMap.bindings) {
               const expr = b.expressionAsString ?? '';
-              // Check if this format binding expression references any of our model paths
               const isModelRef = expr.toLowerCase().startsWith('model.');
               if (isModelRef) {
                 const modelPath = normalizeModelPath(expr.slice(6));
-                const matchesPath = modelPaths.some(mp =>
+                const matchesPath = modelPaths.some((mp: { path: string }) =>
                   isSameOrDescendantModelPath(modelPath, mp.path),
                 );
                 if (matchesPath) {
@@ -496,23 +606,20 @@ export const useAppStore = create<AppState>((set, get) => ({
                     configName: fmtConfigName,
                   });
                 }
-              } else {
-                if (expressionReferencesDatasource(expr, ds)) {
-                  const el = elementNames.get(b.componentId);
-                  formatUsages.push({
-                    elementId: b.componentId,
-                    elementName: el?.name ?? b.componentId.slice(1, 9),
-                    elementType: el?.type ?? 'Unknown',
-                    expression: expr,
-                    configIndex: fci,
-                    configName: fmtConfigName,
-                  });
-                }
+              } else if (expressionReferencesDatasource(expr, ds)) {
+                const el = elementNames.get(b.componentId);
+                formatUsages.push({
+                  elementId: b.componentId,
+                  elementName: el?.name ?? b.componentId.slice(1, 9),
+                  elementType: el?.type ?? 'Unknown',
+                  expression: expr,
+                  configIndex: fci,
+                  configName: fmtConfigName,
+                });
               }
             }
           }
 
-          // Deduplicate format usages by elementId+expression
           const seenFmt = new Set<string>();
           const uniqueFormatUsages = formatUsages.filter(u => {
             const k = `${u.elementId}:${u.expression}`;
@@ -530,7 +637,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                 name: ds.name,
                 parentPath: ds.parentPath,
                 configIndex: ci,
-                configName,
+                configName: source.configName,
                 kind: 'ModelMapping',
               },
               modelPaths,
@@ -627,6 +734,37 @@ function findDatasourceByName(datasources: any[], name: string): any | null {
     }
   }
   return null;
+}
+
+function pushNavigationHistory(
+  state: Pick<AppState, 'activeTabId' | 'selectedNodeId' | 'navigationHistory'>,
+  nextActiveTabId: string | null,
+  nextSelectedNodeId: string | null,
+): NavigationSnapshot[] {
+  const currentSnapshot: NavigationSnapshot = {
+    activeTabId: state.activeTabId,
+    selectedNodeId: state.selectedNodeId,
+  };
+
+  const nextSnapshot: NavigationSnapshot = {
+    activeTabId: nextActiveTabId,
+    selectedNodeId: nextSelectedNodeId,
+  };
+
+  if (isSameNavigationSnapshot(currentSnapshot, nextSnapshot)) {
+    return state.navigationHistory;
+  }
+
+  const previous = state.navigationHistory[state.navigationHistory.length - 1];
+  if (previous && isSameNavigationSnapshot(previous, currentSnapshot)) {
+    return state.navigationHistory;
+  }
+
+  return [...state.navigationHistory, currentSnapshot].slice(-50);
+}
+
+function isSameNavigationSnapshot(left: NavigationSnapshot, right: NavigationSnapshot): boolean {
+  return left.activeTabId === right.activeTabId && left.selectedNodeId === right.selectedNodeId;
 }
 
 function normalizeIdentifier(value: string): string {
@@ -982,19 +1120,14 @@ export function resolveDeepExpression(
 
   // Collect all datasource pools from all configs for cross-config tracing
   const allDatasourcePools: any[][] = [];
-  const configDatasources = new Map<number, any[]>();
+  const configDatasources = new Map<number, any[][]>();
   for (let i = 0; i < configurations.length; i++) {
     const config = configurations[i];
     if (!config) continue;
-    let datasources: any[] = [];
-    if (config.content.kind === 'ModelMapping') {
-      datasources = config.content.version.mapping.datasources;
-    } else if (config.content.kind === 'Format') {
-      datasources = config.content.formatMappingVersion.formatMapping.datasources;
-    }
-    if (datasources.length > 0) {
-      configDatasources.set(i, datasources);
-      allDatasourcePools.push(datasources);
+    const pools = getDatasourcePoolsForConfig(config);
+    if (pools.length > 0) {
+      configDatasources.set(i, pools);
+      allDatasourcePools.push(...pools);
     }
   }
 
@@ -1002,10 +1135,19 @@ export function resolveDeepExpression(
   const searchOrder = [fromConfigIndex, ...configurations.map((_: any, i: number) => i).filter((i: number) => i !== fromConfigIndex)];
 
   for (const ci of searchOrder) {
-    const datasources = configDatasources.get(ci);
-    if (!datasources) continue;
+    const datasourcePools = configDatasources.get(ci);
+    if (!datasourcePools) continue;
 
-    const { rootDs, leafDs } = navigateDatasourcePath(datasources, pathSegments);
+    let rootDs: any = null;
+    let leafDs: any = null;
+    for (const datasources of datasourcePools) {
+      const resolved = navigateDatasourcePath(datasources, pathSegments);
+      if (resolved.rootDs) {
+        rootDs = resolved.rootDs;
+        leafDs = resolved.leafDs;
+        break;
+      }
+    }
     if (!rootDs) continue;
 
     const result: DeepResolutionResult = {
@@ -1049,6 +1191,14 @@ const kindIcons: Record<ERComponentKind, string> = {
   Format: '📄',
 };
 
+function getConfigurationIcon(config: ERConfiguration): string {
+  if (config.kind !== 'Format' || config.content.kind !== 'Format') {
+    return kindIcons[config.kind] ?? '📄';
+  }
+
+  return config.content.direction === 'Import' ? '📥' : '📤';
+}
+
 const fieldTypeIcons: Record<number, string> = {
   1: '☑', // Boolean
   3: '#',  // Int64
@@ -1067,6 +1217,7 @@ const dsTypeIcons: Record<string, string> = {
   Enum: '🔤',
   ModelEnum: '📋',
   FormatEnum: '🏷️',
+  ImportFormat: '📥',
   Class: '⚙️',
   UserParameter: '👤',
   CalculatedField: '🧮',
@@ -1075,7 +1226,7 @@ const dsTypeIcons: Record<string, string> = {
   Unknown: '❓',
 };
 
-const dsGroupOrder = ['Table', 'CalculatedField', 'Class', 'Enum', 'ModelEnum', 'FormatEnum', 'UserParameter', 'GroupBy', 'Container', 'Join', 'Object'];
+const dsGroupOrder = ['Table', 'CalculatedField', 'Class', 'Enum', 'ModelEnum', 'FormatEnum', 'ImportFormat', 'UserParameter', 'GroupBy', 'Container', 'Join', 'Object'];
 const dsGroupLabels: Record<string, string> = {
   Table: 'Tables',
   CalculatedField: 'Calculated Fields',
@@ -1083,6 +1234,7 @@ const dsGroupLabels: Record<string, string> = {
   Enum: 'Ax Enums',
   ModelEnum: 'Data model Enums',
   FormatEnum: 'Format enums',
+  ImportFormat: 'Import formats',
   UserParameter: 'User Parameters',
   GroupBy: 'Group By',
   Container: 'Containers',
@@ -1121,6 +1273,89 @@ function groupDatasourceNodes(dsNodes: TreeNode[], prefix: string): TreeNode[] {
     });
   }
   return result;
+}
+
+const groupedFieldSectionAliases = new Set(['groupbyfields', 'grouped', 'groupedfields', 'groupby', 'groupfields']);
+const aggregatedSectionAliases = new Set(['aggregated', 'aggregation', 'aggregations']);
+
+function getGroupBySectionKind(name: string | undefined): 'groupedFields' | 'aggregations' | null {
+  const normalizedName = (name ?? '').trim().toLowerCase().replace(/^[$#]/, '');
+  if (groupedFieldSectionAliases.has(normalizedName)) return 'groupedFields';
+  if (aggregatedSectionAliases.has(normalizedName)) return 'aggregations';
+  return null;
+}
+
+function collectDatasourceDescendants(datasource: any): any[] {
+  const result: any[] = [];
+
+  for (const child of datasource.children ?? []) {
+    result.push(child);
+    result.push(...collectDatasourceDescendants(child));
+  }
+
+  return result;
+}
+
+function findDatasourceByNormalizedPath(datasource: any, path: string): any | null {
+  const normalizedPath = path.trim().toLowerCase();
+  const descendants = collectDatasourceDescendants(datasource);
+
+  for (const child of descendants) {
+    const childPath = [child.parentPath, child.name]
+      .filter(Boolean)
+      .join('/');
+    const normalizedChildPath = childPath
+      .split('/')
+      .map((segment: string) => segment.trim())
+      .filter(Boolean)
+      .map((segment: string, index: number) => segment.replace(index === 0 ? /^#/ : /^\$/, ''))
+      .join('/')
+      .toLowerCase();
+
+    if (normalizedChildPath === normalizedPath) {
+      return child;
+    }
+  }
+
+  return null;
+}
+
+function buildMappingTree(mapping: any, prefix: string, configIndex: number): TreeNode {
+  const dsNodes = mapping.datasources.map((ds: any, di: number) =>
+    buildDatasourceTree(ds, `${prefix}-ds-${di}`, configIndex),
+  );
+
+  const bindingNodes = mapping.bindings.map((binding: any, bi: number) => ({
+    id: `${prefix}-binding-${bi}`,
+    name: binding.path,
+    icon: '↔️',
+    type: 'binding' as const,
+    data: binding,
+    configIndex,
+  }));
+
+  const validationNodes = mapping.validations.map((validation: any, vi: number) => ({
+    id: `${prefix}-val-${vi}`,
+    name: validation.path,
+    icon: '✅',
+    type: 'validation' as const,
+    data: validation,
+    configIndex,
+  }));
+
+  return {
+    id: prefix,
+    name: `Mapping: ${mapping.name}`,
+    icon: '🔗',
+    type: 'mapping',
+    configIndex,
+    data: mapping,
+    children: [
+      { id: `${prefix}-ds-section`, name: `Data Sources (${dsNodes.length})`, icon: '📂', type: 'section', children: groupDatasourceNodes(dsNodes, prefix) },
+      { id: `${prefix}-bind-section`, name: `Bindings (${bindingNodes.length})`, icon: '📂', type: 'section', children: bindingNodes },
+      { id: `${prefix}-val-section`, name: `Validations (${validationNodes.length})`, icon: '📂', type: 'section', children: validationNodes },
+    ],
+  };
 }
 
 function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
@@ -1182,42 +1417,7 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
 
   if (config.content.kind === 'ModelMapping') {
     const mm = (config.content as ERModelMappingContent).version;
-
-    const dsNodes = mm.mapping.datasources.map((ds, di) =>
-      buildDatasourceTree(ds, `${prefix}-ds-${di}`, index),
-    );
-
-    const bindingNodes = mm.mapping.bindings.map((b, bi) => ({
-      id: `${prefix}-binding-${bi}`,
-      name: b.path,
-      icon: '↔️',
-      type: 'binding' as const,
-      data: b,
-      configIndex: index,
-    }));
-
-    const valNodes = mm.mapping.validations.map((v, vi) => ({
-      id: `${prefix}-val-${vi}`,
-      name: v.path,
-      icon: '✅',
-      type: 'validation' as const,
-      data: v,
-      configIndex: index,
-    }));
-
-    children.push({
-      id: `${prefix}-mapping`,
-      name: `Mapping: ${mm.mapping.name}`,
-      icon: '🔗',
-      type: 'mapping',
-      configIndex: index,
-      data: mm.mapping,
-      children: [
-        { id: `${prefix}-ds-section`, name: `Data Sources (${dsNodes.length})`, icon: '📂', type: 'section', children: groupDatasourceNodes(dsNodes, prefix) },
-        { id: `${prefix}-bind-section`, name: `Bindings (${bindingNodes.length})`, icon: '📂', type: 'section', children: bindingNodes },
-        { id: `${prefix}-val-section`, name: `Validations (${valNodes.length})`, icon: '📂', type: 'section', children: valNodes },
-      ],
-    });
+    children.push(buildMappingTree(mm.mapping, `${prefix}-mapping`, index));
   }
 
   if (config.content.kind === 'Format') {
@@ -1305,6 +1505,9 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
     const fmtDsNodes = fmtMap.formatMapping.datasources.map((ds, di) =>
       buildDatasourceTree(ds, `${prefix}-fmtds-${di}`, index),
     );
+    const embeddedMappingNodes = fc.embeddedModelMappingVersions.map((version, embeddedIndex) =>
+      buildMappingTree(version.mapping, `${prefix}-embedded-mapping-${embeddedIndex}`, index),
+    );
 
     children.push({
       id: `${prefix}-format`,
@@ -1315,6 +1518,7 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
       data: fmt.format,
       children: [
         { id: `${prefix}-fmt-structure`, name: 'Output Structure', icon: '📂', type: 'section', children: [formatTree] },
+        ...(embeddedMappingNodes.length > 0 ? [{ id: `${prefix}-fmt-embedded-mappings`, name: `Model Mappings (${embeddedMappingNodes.length})`, icon: '📂', type: 'section' as const, children: embeddedMappingNodes }] : []),
         { id: `${prefix}-fmt-enums`, name: `Enumerations (${enumNodes.length})`, icon: '📂', type: 'section', children: enumNodes },
         { id: `${prefix}-fmt-trans`, name: `Transformations (${transNodes.length})`, icon: '📂', type: 'section', children: transNodes },
         { id: `${prefix}-fmt-ds`, name: `Data Sources (${fmtDsNodes.length})`, icon: '📂', type: 'section', children: groupDatasourceNodes(fmtDsNodes, `${prefix}-fmt`) },
@@ -1326,7 +1530,7 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
   return {
     id: prefix,
     name: sol.name,
-    icon: kindIcons[config.kind] ?? '📄',
+    icon: getConfigurationIcon(config),
     type: 'file',
     configIndex: index,
     data: config,
@@ -1335,6 +1539,56 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
 }
 
 function buildDatasourceTree(ds: any, prefix: string, configIndex: number): TreeNode {
+  const regularChildren = (ds.children ?? []).filter((child: any) => {
+    return getGroupBySectionKind(child.name) == null;
+  });
+
+  const groupedFieldNodes = (ds.groupByInfo?.groupedFields ?? [])
+    .map((field: any, index: number) => {
+      const matchedDatasource = findDatasourceByNormalizedPath(ds, field.path);
+      return matchedDatasource
+        ? buildDatasourceTree(matchedDatasource, `${prefix}-grouped-field-${index}`, configIndex)
+        : null;
+    })
+    .filter((node: TreeNode | null): node is TreeNode => node != null);
+
+  const aggregatedFieldNodes = (ds.groupByInfo?.aggregations ?? [])
+    .map((field: any, index: number) => {
+      const matchedDatasource = findDatasourceByNormalizedPath(ds, field.path);
+      return matchedDatasource
+        ? buildDatasourceTree(matchedDatasource, `${prefix}-aggregated-field-${index}`, configIndex)
+        : null;
+    })
+    .filter((node: TreeNode | null): node is TreeNode => node != null);
+
+  const children = ds.type === 'GroupBy'
+    ? [
+        ...(groupedFieldNodes.length > 0
+          ? [{
+              id: `${prefix}-groupby-fields`,
+              name: `Grouped By (${groupedFieldNodes.length})`,
+              icon: '📂',
+              type: 'section' as const,
+              children: groupedFieldNodes,
+            }]
+          : []),
+        ...(aggregatedFieldNodes.length > 0
+          ? [{
+              id: `${prefix}-aggregated-fields`,
+              name: `Aggregated (${aggregatedFieldNodes.length})`,
+              icon: '📂',
+              type: 'section' as const,
+              children: aggregatedFieldNodes,
+            }]
+          : []),
+        ...regularChildren.map((child: any, i: number) =>
+          buildDatasourceTree(child, `${prefix}-${i}`, configIndex),
+        ),
+      ]
+    : (ds.children ?? []).map((child: any, i: number) =>
+        buildDatasourceTree(child, `${prefix}-${i}`, configIndex),
+      );
+
   return {
     id: prefix,
     name: ds.name,
@@ -1342,9 +1596,7 @@ function buildDatasourceTree(ds: any, prefix: string, configIndex: number): Tree
     type: 'datasource',
     data: ds,
     configIndex,
-    children: ds.children?.map((child: any, i: number) =>
-      buildDatasourceTree(child, `${prefix}-${i}`, configIndex),
-    ),
+    children,
   };
 }
 

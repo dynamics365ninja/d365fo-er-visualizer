@@ -332,7 +332,7 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
   const isModel = expr.toLowerCase().startsWith('model.') || expr.toLowerCase().startsWith('model\\');
 
   const hasModelMapping = useMemo(
-    () => configurations.some(c => c.content.kind === 'ModelMapping'),
+    () => configurations.some(c => c.content.kind === 'ModelMapping' || (c.content.kind === 'Format' && c.content.embeddedModelMappingVersions.length > 0)),
     [configurations]
   );
 
@@ -365,13 +365,23 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
     if (!isModel || !hasModelMapping) return null;
     const out: { configName: string; paths: string[]; total: number }[] = [];
     for (const cfg of configurations) {
-      if (cfg.content.kind !== 'ModelMapping') continue;
-      const bindings = cfg.content.version.mapping.bindings as any[];
-      out.push({
-        configName: cfg.solutionVersion.solution.name,
-        total: bindings.length,
-        paths: bindings.slice(0, 15).map((b: any) => b.path),
-      });
+      if (cfg.content.kind === 'ModelMapping') {
+        const bindings = cfg.content.version.mapping.bindings as any[];
+        out.push({
+          configName: cfg.solutionVersion.solution.name,
+          total: bindings.length,
+          paths: bindings.slice(0, 15).map((b: any) => b.path),
+        });
+      }
+      if (cfg.content.kind === 'Format') {
+        for (const version of cfg.content.embeddedModelMappingVersions) {
+          out.push({
+            configName: `${cfg.solutionVersion.solution.name} • ${version.mapping.name}`,
+            total: version.mapping.bindings.length,
+            paths: version.mapping.bindings.slice(0, 15).map((b: any) => b.path),
+          });
+        }
+      }
     }
     return out;
   }, [isModel, hasModelMapping, configurations]);

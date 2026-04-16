@@ -38,6 +38,7 @@ export type ERDatasourceType =
   | 'Enum'
   | 'ModelEnum'
   | 'FormatEnum'
+  | 'ImportFormat'
   | 'Class'
   | 'Object'
   | 'UserParameter'
@@ -58,10 +59,15 @@ export interface ERDatasource {
   // Type-specific properties (polymorphic)
   tableInfo?: ERTableDatasource;
   enumInfo?: EREnumDatasource;
+  importFormatInfo?: ERImportFormatDatasource;
   classInfo?: ERClassDatasource;
   userParamInfo?: ERUserParamDatasource;
   calculatedField?: ERCalculatedFieldDatasource;
   groupByInfo?: ERGroupByDatasource;
+}
+
+export interface ERImportFormatDatasource {
+  formatGuid: string;
 }
 
 export type EREnumSourceKind = 'Ax' | 'DataModel' | 'Format';

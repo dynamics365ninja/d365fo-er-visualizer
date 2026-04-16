@@ -1,9 +1,15 @@
 import React from 'react';
 import { useAppStore } from '../state/store';
 import { ClickablePath } from './ClickablePath';
-import type { ERFieldType } from '@er-visualizer/core';
+import { ERDirection, type ERFieldType } from '@er-visualizer/core';
 import { getEnumTypeLabel } from '../utils/enum-display';
 import { t } from '../i18n';
+
+function getFormatDirectionLabel(direction: ERDirection | undefined): string {
+  if (direction === ERDirection.Import) return t.formatDirectionImport;
+  if (direction === ERDirection.Export) return t.formatDirectionExport;
+  return t.formatDirectionUnknown;
+}
 
 const fieldTypeNames: Record<number, string> = {
   1: 'Boolean', 3: 'Int64', 4: 'Integer', 5: 'Real',
@@ -85,6 +91,10 @@ function FileProps({ data, showTechnicalDetails }: { data: any; showTechnicalDet
     ['Vendor', sol.vendor?.name ?? '–'],
   ];
 
+  if (config.content?.kind === 'Format') {
+    items.splice(3, 0, [t.propDirection, getFormatDirectionLabel(config.content.direction)]);
+  }
+
   if (showTechnicalDetails) {
     items.splice(1, 0, ['GUID', sol.id, 'guid']);
     items.push(
@@ -163,6 +173,9 @@ function DatasourceProps({ data, configIndex, showTechnicalDetails }: { data: an
       items.push(['Model GUID', data.enumInfo.modelGuid ?? '–', 'guid']);
     }
   }
+  if (showTechnicalDetails && data.importFormatInfo) {
+    items.push(['Import Format GUID', data.importFormatInfo.formatGuid || '–', 'guid']);
+  }
   if (data.classInfo) {
     items.push(['Class Name', data.classInfo.className]);
   }
@@ -177,10 +190,12 @@ function DatasourceProps({ data, configIndex, showTechnicalDetails }: { data: an
     }
   }
   if (data.calculatedField) {
-    items.push(['Expression', <ClickablePath expression={data.calculatedField.expressionAsString} configIndex={configIndex} />]);
+    if (showTechnicalDetails) {
+      items.push(['Expression', <ClickablePath expression={data.calculatedField.expressionAsString} configIndex={configIndex} />]);
+    }
   }
   if (showTechnicalDetails && data.groupByInfo) {
-    items.push(['List to Group', data.groupByInfo.listToGroup]);
+    items.push(['List to Group', data.groupByInfo.listToGroup || '–']);
   }
 
   return <PropGrid items={items} />;
@@ -270,8 +285,10 @@ function EnumProps({ data, showTechnicalDetails }: { data: any; showTechnicalDet
 function TransformationProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
     ['Name', data.name],
-    ['Expression', <ClickablePath expression={data.expressionAsString} configIndex={configIndex} />],
   ];
+  if (showTechnicalDetails) {
+    items.push(['Expression', <ClickablePath expression={data.expressionAsString} configIndex={configIndex} />]);
+  }
   if (showTechnicalDetails) items.unshift(['GUID', data.id, 'guid']);
   return <PropGrid items={items} />;
 }
