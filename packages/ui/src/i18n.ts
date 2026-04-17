@@ -32,6 +32,8 @@ export interface Translations {
   showProperties: string;
   showDetails: string;
   hideDetails: string;
+  lightTheme: string;
+  darkTheme: string;
   consultantView: string;
   technicalView: string;
   explorer: string;
@@ -73,6 +75,7 @@ export interface Translations {
   attributes: string;
   drillSteps: (n: number) => string;
   back: string;
+  closeConfiguration: string;
   openInExplorerAction: string;
   explorerActionShort: string;
   noSelection: string;
@@ -191,6 +194,8 @@ const cs: Translations = {
   showProperties: 'Zobrazit Vlastnosti',
   showDetails: 'Zobrazit detaily',
   hideDetails: 'Skrýt detaily',
+  lightTheme: 'Světlý režim',
+  darkTheme: 'Tmavý režim',
   consultantView: 'Konzultantský pohled',
   technicalView: 'Technický pohled',
   explorer: 'Explorer',
@@ -233,6 +238,7 @@ const cs: Translations = {
   attributes: 'Atributy',
   drillSteps: (n: number) => `${n} krok${n === 1 ? '' : n < 5 ? 'y' : 'ů'}`,
   back: 'Zpět',
+  closeConfiguration: 'Zavřít konfiguraci',
   openInExplorerAction: 'Otevřít v Exploreru',
   explorerActionShort: 'Explorer',
   noSelection: 'Není vybraný žádný prvek.',
@@ -362,6 +368,8 @@ const en: Translations = {
   showProperties: 'Show Properties',
   showDetails: 'Show details',
   hideDetails: 'Hide details',
+  lightTheme: 'Light mode',
+  darkTheme: 'Dark mode',
   consultantView: 'Consultant view',
   technicalView: 'Technical view',
   explorer: 'Explorer',
@@ -403,6 +411,7 @@ const en: Translations = {
   attributes: 'Attributes',
   drillSteps: (n: number) => `${n} step${n === 1 ? '' : 's'}`,
   back: 'Back',
+  closeConfiguration: 'Close configuration',
   openInExplorerAction: 'Open in Explorer',
   explorerActionShort: 'Explorer',
   noSelection: 'No element selected.',

@@ -16,6 +16,8 @@ export function Toolbar({ onToggleSearch, onToggleLeft, onToggleRight, onGoHome,
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const setShowTechnicalDetails = useAppStore(s => s.setShowTechnicalDetails);
+  const themeMode = useAppStore(s => s.themeMode);
+  const setThemeMode = useAppStore(s => s.setThemeMode);
   const canNavigateBack = useAppStore(s => s.canNavigateBack);
   const navigateBack = useAppStore(s => s.navigateBack);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -86,6 +88,12 @@ export function Toolbar({ onToggleSearch, onToggleLeft, onToggleRight, onGoHome,
       </div>
 
       <div className="toolbar-spacer" />
+      <ToolbarIconButton
+        onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
+        icon={themeMode === 'dark' ? '🌙' : '☀️'}
+        label={themeMode === 'dark' ? t.darkTheme : t.lightTheme}
+        active={themeMode === 'dark'}
+      />
       <span className={`toolbar-mode-badge${showTechnicalDetails ? ' toolbar-mode-badge-technical' : ''}`}>
         {showTechnicalDetails ? t.technicalView : t.consultantView}
       </span>
@@ -116,6 +124,19 @@ function ToolbarToggle({ onClick, icon, label, active }: { onClick: () => void; 
     >
       <span className="toolbar-button-icon">{icon}</span>
       <span>{label}</span>
+    </button>
+  );
+}
+
+function ToolbarIconButton({ onClick, icon, label, active }: { onClick: () => void; icon: string; label: string; active: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={`toolbar-toggle toolbar-toggle-icon${active ? ' toolbar-toggle-active' : ''}`}
+    >
+      <span className="toolbar-button-icon">{icon}</span>
     </button>
   );
 }

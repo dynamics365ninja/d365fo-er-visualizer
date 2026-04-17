@@ -105,6 +105,7 @@ export function ConfigExplorer() {
   const treeNodes = useAppStore(s => s.treeNodes);
   const selectedNodeId = useAppStore(s => s.selectedNodeId);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const removeConfiguration = useAppStore(s => s.removeConfiguration);
   const selectNode = useAppStore(s => s.selectNode);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const [expandMode, setExpandMode] = useState<'default' | 'all' | 'none'>('default');
@@ -200,6 +201,11 @@ export function ConfigExplorer() {
                       navigateToTreeNode(n.id);
                     }
                   }}
+                  onCloseConfiguration={(n) => {
+                    if (n.configIndex != null) {
+                      removeConfiguration(n.configIndex);
+                    }
+                  }}
                 />
               ))}
             </div>
@@ -221,6 +227,11 @@ export function ConfigExplorer() {
                 navigateToTreeNode(n.id);
               }
             }}
+            onCloseConfiguration={(n) => {
+              if (n.configIndex != null) {
+                removeConfiguration(n.configIndex);
+              }
+            }}
           />
         ))}
     </div>
@@ -238,9 +249,10 @@ interface TreeNodeRowProps {
   expandMode: 'default' | 'all' | 'none';
   expandVersion: number;
   onDoubleClick: (node: TreeNode) => void;
+  onCloseConfiguration: (node: TreeNode) => void;
 }
 
-function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDetails, onSelect, onNavigate, expandMode, expandVersion, onDoubleClick }: TreeNodeRowProps) {
+function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDetails, onSelect, onNavigate, expandMode, expandVersion, onDoubleClick, onCloseConfiguration }: TreeNodeRowProps) {
   const [expanded, setExpanded] = useState(depth === 0);
   const hasChildren = node.children && node.children.length > 0;
 
@@ -269,6 +281,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
   const isAncestor = !isSelected && selectedPathIds.has(node.id);
   const accentClass = getExplorerNodeAccentClass(node);
   const kindLabel = getExplorerKindLabel(node);
+  const canCloseConfiguration = depth === 0 && node.configIndex != null && node.type === 'file';
 
   return (
     <>
@@ -287,6 +300,19 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
         <span className="icon">{node.icon}</span>
         <span className="tree-node-label">{node.name}</span>
         {kindLabel && <span className="tree-node-kind-pill">{kindLabel}</span>}
+        {canCloseConfiguration && (
+          <button
+            className="tree-node-close"
+            title={t.closeConfiguration}
+            aria-label={t.closeConfiguration}
+            onClick={event => {
+              event.stopPropagation();
+              onCloseConfiguration(node);
+            }}
+          >
+            ×
+          </button>
+        )}
         {showTechnicalDetails && node.type === 'datasource' && node.data?.type && (
           <span className={`badge badge-${node.data.type.toLowerCase()}`} style={{ marginLeft: 6 }}>
             {node.data.type}
@@ -306,6 +332,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
           expandMode={expandMode}
           expandVersion={expandVersion}
           onDoubleClick={onDoubleClick}
+          onCloseConfiguration={onCloseConfiguration}
         />
       ))}
     </>

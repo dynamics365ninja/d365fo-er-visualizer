@@ -227,7 +227,7 @@ describe('parseERConfiguration', () => {
       </ERModelMappingVersion>
       <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
         <Format>
-          <ERTextFormat ID.="{FORMAT}" Name="ABR MT940 format">
+          <ERTextFormat ID.="{FORMAT}" Name="ABR MT940 format" DataImportSupport="1">
             <Root>
               <ERTextFormatFileComponent ID.="{ROOT}" Name="Root" />
             </Root>
@@ -303,11 +303,11 @@ describe('parseERConfiguration', () => {
     expect(config.content.direction).toBe('Export');
   });
 
-  it('recognizes import formats from format naming heuristics even without embedded mappings', () => {
+  it('recognizes import formats from DataImportSupport="1"', () => {
     const xml = buildSolutionEnvelope(`
       <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
         <Format>
-          <ERTextFormat ID.="{FORMAT}" Name="Bank statement import MT940">
+          <ERTextFormat ID.="{FORMAT}" Name="Bank statement import MT940" DataImportSupport="1">
             <Root>
               <ERTextFormatFileComponent ID.="{ROOT}" Name="BankStatementImport" />
             </Root>
@@ -327,6 +327,32 @@ describe('parseERConfiguration', () => {
     }
 
     expect(config.content.direction).toBe('Import');
+  });
+
+  it('treats formats without DataImportSupport="1" as export even if the name looks import-like', () => {
+    const xml = buildSolutionEnvelope(`
+      <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Format>
+          <ERTextFormat ID.="{FORMAT}" Name="Bank statement import MT940">
+            <Root>
+              <ERTextFormatFileComponent ID.="{ROOT}" Name="BankStatementImport" />
+            </Root>
+          </ERTextFormat>
+        </Format>
+      </ERFormatVersion>
+      <ERFormatMappingVersion ID.="{FORMAT-MAP},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERFormatMapping ID.="{FORMAT-MAP}" Format="{FORMAT}" FormatVersion="{FORMAT},1" Name="Bank statement import MT940" />
+        </Mapping>
+      </ERFormatMappingVersion>
+    `, { contentRefIds: ['{FORMAT}', '{FORMAT-MAP}'] });
+
+    const config = parseERConfiguration(xml, 'bank-statement-export.xml');
+    if (config.content.kind !== 'Format') {
+      throw new Error('Expected format content');
+    }
+
+    expect(config.content.direction).toBe('Export');
   });
 
   it('enriches group by datasource metadata from grouped and aggregated child nodes', () => {

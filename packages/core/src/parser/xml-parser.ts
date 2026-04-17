@@ -881,59 +881,15 @@ function parseFormatVersions(root: any): { formatVersion: ERFormatVersion; forma
     formatVersion,
     formatMappingVersion,
     embeddedModelMappingVersions,
-    direction: inferFormatDirection(formatVersion, formatMappingVersion, embeddedModelMappingVersions),
+    direction: inferFormatDirection(formatVersionNode),
   };
 }
 
-function inferFormatDirection(
-  formatVersion: ERFormatVersion,
-  formatMappingVersion: ERFormatMappingVersion,
-  embeddedModelMappingVersions: ERModelMappingVersion[],
-): ERDirection {
-  if (embeddedModelMappingVersions.length > 0) {
-    return ERDirection.Import;
-  }
-
-  const importHints = [
-    'import',
-    'inbound',
-    'incoming',
-    'bank statement',
-    'bankstatement',
-    'mt940',
-    'camt.052',
-    'camt.053',
-    'camt.054',
-    'camt052',
-    'camt053',
-    'camt054',
-  ];
-
-  const searchSpace = collectFormatDirectionSearchSpace(formatVersion.format.rootElement)
-    .concat([
-      formatVersion.format.name,
-      formatMappingVersion.formatMapping.name,
-      ...formatMappingVersion.formatMapping.bindings.map(binding => binding.expressionAsString),
-      ...formatMappingVersion.formatMapping.bindings.map(binding => binding.propertyName ?? ''),
-    ])
-    .join(' ')
-    .toLowerCase();
-
-  if (importHints.some(hint => searchSpace.includes(hint))) {
-    return ERDirection.Import;
-  }
-
-  return ERDirection.Export;
-}
-
-function collectFormatDirectionSearchSpace(element: ERFormatElement): string[] {
-  const parts = [element.name, ...Object.keys(element.attributes), ...Object.values(element.attributes)];
-
-  for (const child of element.children) {
-    parts.push(...collectFormatDirectionSearchSpace(child));
-  }
-
-  return parts.filter(Boolean);
+function inferFormatDirection(formatVersionNode: any): ERDirection {
+  const formatNode = formatVersionNode?.['Format']?.['ERTextFormat'];
+  return getAttr(formatNode, 'DataImportSupport') === '1'
+    ? ERDirection.Import
+    : ERDirection.Export;
 }
 
 function normalizeFormatEnumRef(value: string | undefined): string {
