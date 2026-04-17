@@ -54,12 +54,15 @@ const xmlParserOptions = {
   allowBooleanAttributes: true,
   parseAttributeValue: false, // keep as strings
   trimValues: true,
-  processEntities: false,
+  processEntities: false, // handled in sanitizeAndDecode to also cover numeric refs and strip unsafe keys in one pass
   isArray: (name: string) => {
     // Elements that should always be arrays
     return arrayElements.has(name);
   },
 };
+
+// Keys that must never be copied from parsed data to prevent prototype pollution.
+const UNSAFE_PROTO_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 const arrayElements = new Set([
   'ERLabel',
@@ -104,7 +107,11 @@ function getContentsArray(node: any, childName: string): any[] {
   return asArray(contents[childName]);
 }
 
-/** Decode XML entities and numeric character references that processEntities:false leaves unresolved */
+/**
+ * Decode XML entities (named + numeric) that fast-xml-parser leaves unresolved
+ * when processEntities:false. Kept off by default to avoid double-decoding
+ * constructs inside ER expressions (e.g. `&quot;` inside a raw formula string).
+ */
 function decodeXmlEntities(val: string): string {
   return val
     .replace(/&amp;/g, '&')
@@ -116,18 +123,21 @@ function decodeXmlEntities(val: string): string {
     .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
 }
 
-/** Recursively decode XML entities in all string values of an object */
-function decodeEntitiesDeep(obj: any): any {
+/**
+ * Single-pass traversal that (a) decodes XML entities inside string values and
+ * (b) strips any __proto__/constructor/prototype keys from parsed objects to
+ * neutralise prototype-pollution attempts via crafted attribute names.
+ */
+function sanitizeAndDecode(obj: any): any {
   if (typeof obj === 'string') return decodeXmlEntities(obj);
-  if (Array.isArray(obj)) return obj.map(decodeEntitiesDeep);
-  if (obj != null && typeof obj === 'object') {
-    const result: any = {};
-    for (const key of Object.keys(obj)) {
-      result[key] = decodeEntitiesDeep(obj[key]);
-    }
-    return result;
+  if (obj == null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizeAndDecode);
+  const result: Record<string, unknown> = Object.create(null);
+  for (const key of Object.keys(obj)) {
+    if (UNSAFE_PROTO_KEYS.has(key)) continue;
+    result[key] = sanitizeAndDecode(obj[key]);
   }
-  return obj;
+  return result;
 }
 
 // ─── Public API ───
@@ -135,7 +145,7 @@ function decodeEntitiesDeep(obj: any): any {
 export function parseERConfiguration(xml: string, filePath: string): ERConfiguration {
   const parser = createParser();
   const rawDoc = parser.parse(xml);
-  const doc = decodeEntitiesDeep(rawDoc);
+  const doc = sanitizeAndDecode(rawDoc);
   const root = doc['ERSolutionVersion'];
   if (!root) {
     throw new Error('Invalid ER configuration XML: missing ERSolutionVersion root element');

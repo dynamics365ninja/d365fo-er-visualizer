@@ -107,6 +107,19 @@ export interface Translations {
   drillInteractiveExpr: string;
   drillConstant: string;
   drillDsNotFound: (name: string) => string;
+  drillAnalyzing: string;
+  drillHintClickable: string;
+  drillHintEmpty: string;
+  drillStepMappingTitle: string;
+  drillStepDatasourceTitle: string;
+  drillStepDepsTitle: string;
+  drillStepFormulaTitle: string;
+  drillStepChildrenTitle: string;
+  drillRestart: string;
+  drillOpenExplorerFull: string;
+  drillLegendClickable: string;
+  drillLegendFunction: string;
+  drillLegendLiteral: string;
   // Results / counts
   searchResultCount: (n: number) => string;
   propChildren: string;
@@ -126,6 +139,7 @@ export interface Translations {
   formatDirectionUnknown: string;
   // Status bar
   statusConfigs: (n: number) => string;
+  statusConfigsWord: string;
   // Landing page – hero
   landingBadge: string;
   landingTitle: string;
@@ -172,6 +186,52 @@ export interface Translations {
   landingStep4Desc: string;
   // Landing page – footer
   landingFooter: string;
+
+  // Recent files, samples, validator, shortcuts, forward nav
+  recentFiles: string;
+  noRecentFiles: string;
+  clearRecent: string;
+  loadSample: string;
+  validatorOk: string;
+  validatorIssues: (n: number) => string;
+  forward: string;
+  commandPalette: string;
+  commandPaletteHint: string;
+  cmdFilter: string;
+  cmdGroupNav: string;
+  cmdGroupOpen: string;
+  cmdGroupView: string;
+  cmdGroupTools: string;
+  cmdLoadXml: string;
+  cmdToggleSearch: string;
+  cmdToggleExplorer: string;
+  cmdToggleProperties: string;
+  cmdToggleTheme: string;
+  cmdToggleTechnical: string;
+  cmdCollapseAll: string;
+  cmdExpandAll: string;
+  cmdGoHome: string;
+  cmdBack: string;
+  cmdForward: string;
+  cmdExportWhereUsed: string;
+
+  // Toasts / errors
+  toastLoadFailed: (file: string) => string;
+  dismiss: string;
+
+  // Tooltips in ClickablePath
+  pathClickToNavigate: string;
+  pathTable: string;
+  pathEnum: string;
+  pathClass: string;
+  pathCalcField: string;
+  pathDatasource: string;
+  pathNotFound: string;
+
+  // Breadcrumb / status bar warnings
+  warnings: string;
+  noWarnings: string;
+  breadcrumbHome: string;
 }
 
 // ─── Translation dictionaries ─────────────────────────────────────────────
@@ -271,6 +331,19 @@ const cs: Translations = {
   drillInteractiveExpr: 'ER výraz — klikni na zvýrazněný odkaz pro drill-down:',
   drillConstant: 'Konstantní hodnota — žádný datový zdroj.',
   drillDsNotFound: (name: string) => `Datový zdroj „${name}" nebyl nalezen v načtených konfiguracích. Zkontroluj, zda je načten správný ModelMapping nebo Format soubor.`,
+  drillAnalyzing: 'Analyzuji výraz',
+  drillHintClickable: 'Klikni na podtržené odkazy níže pro hlubší drill-down. Funkce a operátory jsou barevně zvýrazněné pro lepší čitelnost.',
+  drillHintEmpty: 'Vyber prvek s vazbou (formulí) v Návrháři — drill-down zobrazí jeho datový zdroj a závislosti.',
+  drillStepMappingTitle: 'Mapování na model',
+  drillStepDatasourceTitle: 'Cílový datový zdroj',
+  drillStepDepsTitle: 'Závislosti výrazu',
+  drillStepFormulaTitle: 'Vzorec — klikni pro drill-down',
+  drillStepChildrenTitle: 'Vnořené datové zdroje',
+  drillRestart: 'Začít znovu',
+  drillOpenExplorerFull: 'Otevřít v Exploreru →',
+  drillLegendClickable: 'Klikatelný odkaz',
+  drillLegendFunction: 'ER funkce',
+  drillLegendLiteral: 'Literál',
 
   // Results / counts
   searchResultCount: (n: number) => `Výsledky: ${n}`,
@@ -292,6 +365,7 @@ const cs: Translations = {
 
   // Status bar
   statusConfigs: (n: number) => `${n} konfigurace`,
+  statusConfigsWord: 'konfigurace',
 
   // Landing page
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',
@@ -347,8 +421,50 @@ const cs: Translations = {
   landingStep3Title: 'Klikni na formuli',
   landingStep3Desc: 'V pohledu Formát nebo Mapování klikni na libovolný výraz. Uvidíš celý řetězec vazeb: formule → vypočtená pole → zdrojová tabulka, třída nebo enum.',
   landingStep4Title: 'Místa použití',
-  landingStep4Desc: 'V panelu 🔍 Hledat zadej název tabulky, třeba &quot;TaxTrans&quot;, a spusť &quot;Místa použití&quot;. Zobrazí se všechny formátové elementy, které z této tabulky čerpají data.',
+  landingStep4Desc: 'V panelu 🔍 Hledat zadej název tabulky, třeba „TaxTrans“, a spusť „Místa použití“. Zobrazí se všechny formátové elementy, které z této tabulky čerpají data.',
   landingFooter: 'D365 FO ER Visualizer · Electronic Reporting Configuration Inspector',
+
+  recentFiles: 'Nedávné soubory',
+  noRecentFiles: 'Žádné nedávno otevřené soubory.',
+  clearRecent: 'Vymazat historii',
+  loadSample: 'Načíst ukázkovou konfiguraci',
+  validatorOk: 'Konfigurace vypadá v pořádku.',
+  validatorIssues: (n: number) => `${n} upozornění`,
+  forward: 'Vpřed',
+  commandPalette: 'Paleta příkazů',
+  commandPaletteHint: 'Ctrl+K / Cmd+K',
+  cmdFilter: 'Zadej příkaz nebo vyhledej…',
+  cmdGroupNav: 'Navigace',
+  cmdGroupOpen: 'Soubory',
+  cmdGroupView: 'Pohled',
+  cmdGroupTools: 'Nástroje',
+  cmdLoadXml: 'Načíst ER XML…',
+  cmdToggleSearch: 'Hledat / Místa použití',
+  cmdToggleExplorer: 'Přepnout Explorer',
+  cmdToggleProperties: 'Přepnout Vlastnosti',
+  cmdToggleTheme: 'Přepnout světlý/tmavý režim',
+  cmdToggleTechnical: 'Přepnout technický pohled',
+  cmdCollapseAll: 'Sbalit celý strom',
+  cmdExpandAll: 'Rozbalit celý strom',
+  cmdGoHome: 'Přejít na úvodní obrazovku',
+  cmdBack: 'Zpět v historii',
+  cmdForward: 'Vpřed v historii',
+  cmdExportWhereUsed: 'Exportovat místa použití do CSV',
+
+  toastLoadFailed: (file: string) => `Soubor „${file}" se nepodařilo načíst.`,
+  dismiss: 'Zavřít',
+
+  pathClickToNavigate: 'Klikni pro navigaci →',
+  pathTable: 'Tabulka',
+  pathEnum: 'Výčet',
+  pathClass: 'Třída',
+  pathCalcField: 'Kalkulované pole',
+  pathDatasource: 'Datový zdroj',
+  pathNotFound: 'Nenalezeno',
+
+  warnings: 'Upozornění',
+  noWarnings: 'Žádná upozornění.',
+  breadcrumbHome: 'Domů',
 };
 
 const en: Translations = {
@@ -443,6 +559,19 @@ const en: Translations = {
   drillInteractiveExpr: 'ER formula — click a highlighted reference to drill down:',
   drillConstant: 'Constant value — no datasource.',
   drillDsNotFound: (name: string) => `Datasource "${name}" not found in loaded configurations. Check that the correct ModelMapping or Format file is loaded.`,
+  drillAnalyzing: 'Analyzing expression',
+  drillHintClickable: 'Click underlined references below to drill down. Functions and operators are color-coded for readability.',
+  drillHintEmpty: 'Pick an element with a binding (formula) in the Designer — drill-down will show its datasource and dependencies.',
+  drillStepMappingTitle: 'Model mapping',
+  drillStepDatasourceTitle: 'Target datasource',
+  drillStepDepsTitle: 'Expression dependencies',
+  drillStepFormulaTitle: 'Formula — click to drill down',
+  drillStepChildrenTitle: 'Nested datasources',
+  drillRestart: 'Restart',
+  drillOpenExplorerFull: 'Open in Explorer →',
+  drillLegendClickable: 'Clickable reference',
+  drillLegendFunction: 'ER function',
+  drillLegendLiteral: 'Literal',
 
   searchResultCount: (n: number) => `Results: ${n}`,
   propChildren: 'Children',
@@ -461,6 +590,7 @@ const en: Translations = {
   formatDirectionUnknown: 'Unknown direction',
 
   statusConfigs: (n: number) => `${n} configuration${n === 1 ? '' : 's'}`,
+  statusConfigsWord: 'configurations',
 
   // Landing page
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',
@@ -516,8 +646,50 @@ const en: Translations = {
   landingStep3Title: 'Click a formula',
   landingStep3Desc: 'In the Format or Mapping view, click any expression. You will see the full chain of bindings: formula → calculated fields → source table, class or enum.',
   landingStep4Title: 'Where used',
-  landingStep4Desc: 'In the 🔍 Search panel, enter a table name such as &quot;TaxTrans&quot; and run &quot;Where used&quot;. All format elements that consume data from that table will be shown.',
+  landingStep4Desc: 'In the 🔍 Search panel, enter a table name such as “TaxTrans” and run “Where used”. All format elements that consume data from that table will be shown.',
   landingFooter: 'D365 FO ER Visualizer · Electronic Reporting Configuration Inspector',
+
+  recentFiles: 'Recent files',
+  noRecentFiles: 'No recently opened files.',
+  clearRecent: 'Clear history',
+  loadSample: 'Load sample configuration',
+  validatorOk: 'Configuration looks fine.',
+  validatorIssues: (n: number) => `${n} warning${n === 1 ? '' : 's'}`,
+  forward: 'Forward',
+  commandPalette: 'Command palette',
+  commandPaletteHint: 'Ctrl+K / Cmd+K',
+  cmdFilter: 'Type a command or search…',
+  cmdGroupNav: 'Navigation',
+  cmdGroupOpen: 'Files',
+  cmdGroupView: 'View',
+  cmdGroupTools: 'Tools',
+  cmdLoadXml: 'Load ER XML…',
+  cmdToggleSearch: 'Search / Where used',
+  cmdToggleExplorer: 'Toggle Explorer',
+  cmdToggleProperties: 'Toggle Properties',
+  cmdToggleTheme: 'Toggle light/dark theme',
+  cmdToggleTechnical: 'Toggle technical view',
+  cmdCollapseAll: 'Collapse entire tree',
+  cmdExpandAll: 'Expand entire tree',
+  cmdGoHome: 'Go to landing',
+  cmdBack: 'Navigate back',
+  cmdForward: 'Navigate forward',
+  cmdExportWhereUsed: 'Export where-used to CSV',
+
+  toastLoadFailed: (file: string) => `Failed to load "${file}".`,
+  dismiss: 'Dismiss',
+
+  pathClickToNavigate: 'Click to navigate →',
+  pathTable: 'Table',
+  pathEnum: 'Enum',
+  pathClass: 'Class',
+  pathCalcField: 'Calculated field',
+  pathDatasource: 'Datasource',
+  pathNotFound: 'Not found',
+
+  warnings: 'Warnings',
+  noWarnings: 'No warnings.',
+  breadcrumbHome: 'Home',
 };
 
 export const t: Translations = locale === 'cs' ? cs : en;

@@ -13,6 +13,9 @@ interface LandingPageProps {
 export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
   const configs = useAppStore(s => s.configurations);
+  const recentFiles = useAppStore(s => s.recentFiles);
+  const removeRecentFile = useAppStore(s => s.removeRecentFile);
+  const clearRecentFiles = useAppStore(s => s.clearRecentFiles);
   const [isDragging, setIsDragging] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -163,6 +166,35 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
         />
       </div>
 
+      {/* ── Recent files ── */}
+      {recentFiles.length > 0 && (
+        <div className="landing-recent">
+          <div className="landing-section-title-row">
+            <div className="landing-section-title">{t.recentFiles}</div>
+            <button type="button" className="landing-recent-clear" onClick={clearRecentFiles}>
+              {t.clearRecent}
+            </button>
+          </div>
+          <ul className="landing-recent-list">
+            {recentFiles.map(rf => (
+              <li key={rf.path} className="landing-recent-item">
+                <span className="landing-recent-icon" aria-hidden="true">
+                  {rf.kind === 'DataModel' ? '📐' : rf.kind === 'ModelMapping' ? '🔗' : rf.kind === 'Format' ? '📄' : '📎'}
+                </span>
+                <span className="landing-recent-name" title={rf.path}>{rf.name}</span>
+                <span className="landing-recent-path" title={rf.path}>{rf.path}</span>
+                <button
+                  type="button"
+                  className="landing-recent-remove"
+                  aria-label={t.dismiss}
+                  onClick={e => { e.stopPropagation(); removeRecentFile(rf.path); }}
+                >×</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* ── How it works ── */}
       <div className="landing-how">
         <div className="landing-section-title">{t.landingHowTitle}</div>
@@ -219,13 +251,26 @@ function ComponentCard({
 
 // ─── How step ───
 
+/**
+ * Decode a minimal set of HTML entities that previously lived in the i18n
+ * strings (&quot;). We no longer render translated content as raw HTML — the
+ * entire string is now rendered as text, so any residual entity stays visible
+ * only for older cached translations.
+ */
+function decodeSafeEntities(input: string): string {
+  return input
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
 function HowStep({ n, title, desc }: { n: number; title: string; desc: string }) {
   return (
     <div className="landing-step">
       <div className="landing-step-num">{n}</div>
       <div className="landing-step-body">
         <div className="landing-step-title">{title}</div>
-        <div className="landing-step-desc" dangerouslySetInnerHTML={{ __html: desc }} />
+        <div className="landing-step-desc">{decodeSafeEntities(desc)}</div>
       </div>
     </div>
   );

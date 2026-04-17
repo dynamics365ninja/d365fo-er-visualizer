@@ -108,9 +108,17 @@ export function ConfigExplorer() {
   const removeConfiguration = useAppStore(s => s.removeConfiguration);
   const selectNode = useAppStore(s => s.selectNode);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
+  const explorerExpandCommand = useAppStore(s => s.explorerExpandCommand);
   const [expandMode, setExpandMode] = useState<'default' | 'all' | 'none'>('default');
   const [expandVersion, setExpandVersion] = useState(0);
   const [filterQuery, setFilterQuery] = useState('');
+
+  // React to broadcast expand/collapse commands from the panel header
+  React.useEffect(() => {
+    if (explorerExpandCommand.version === 0) return;
+    setExpandMode(explorerExpandCommand.mode);
+    setExpandVersion(version => version + 1);
+  }, [explorerExpandCommand]);
   const filteredTreeNodes = useMemo(() => filterTreeNodes(treeNodes, filterQuery), [treeNodes, filterQuery]);
   const selectedPathIds = useMemo(() => collectAncestorIds(treeNodes, selectedNodeId), [treeNodes, selectedNodeId]);
   const groupedTreeNodes = useMemo(() => {

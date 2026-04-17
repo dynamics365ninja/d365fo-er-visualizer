@@ -99,6 +99,10 @@ function FocusedNodeTab({ node }: { node: any }) {
     return <FormatDesigner config={config} configIndex={node.configIndex} focusNode={focusNode} />;
   }
 
+  if (node.type === 'formatElement' && config.kind === 'Format') {
+    return <FormatElementFocusTab node={node} configIndex={node.configIndex} />;
+  }
+
   return (
     <div className="focused-node-tab">
       <div className="focused-node-tab-header">
@@ -107,6 +111,82 @@ function FocusedNodeTab({ node }: { node: any }) {
       </div>
       <div className="focused-node-tab-body">
         <PropertyInspector nodeOverride={node} />
+      </div>
+    </div>
+  );
+}
+
+function FormatElementFocusTab({ node, configIndex }: { node: any; configIndex: number }) {
+  const configs = useAppStore(s => s.configurations);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
+
+  const { bindings, categories } = useMemo(() => {
+    const cfg = configs[configIndex];
+    if (!cfg || cfg.content.kind !== 'Format') return { bindings: [] as any[], categories: [] as any[] };
+    const fc = cfg.content as ERFormatContent;
+    const presentation = buildFormatBindingPresentation(fc.formatVersion.format.rootElement, fc.formatMappingVersion.formatMapping.bindings);
+    const b = presentation.bindingMap.get(node.data.id) ?? [];
+    return { bindings: b, categories: groupFormatBindingsByCategory(b) };
+  }, [configs, configIndex, node.data.id]);
+
+  const childTreeNodes = (node.children ?? []).filter((c: any) => c.type === 'formatElement');
+
+  return (
+    <div className="focused-node-tab">
+      <div className="focused-node-tab-body">
+        {bindings.length === 0 && childTreeNodes.length === 0 && (
+          <div style={{ padding: 16, color: 'var(--text-secondary)', fontSize: 12 }}>
+            {t.bindings}: 0
+          </div>
+        )}
+
+        {bindings.length > 0 && (
+          <div className="property-section">
+            <div className="property-section-title">{t.bindings} ({bindings.length})</div>
+            {categories.map(category => (
+              <div key={category.key}>
+                {categories.length > 1 && (
+                  <div className="fmt-detail-subsection-title">{category.label} ({category.bindings.length})</div>
+                )}
+                {category.bindings.map((b: any, i: number) => (
+                  <div key={`${category.key}-${i}`} className="fmt-detail-binding">
+                    <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'}`} style={{ marginRight: 6 }}>
+                      {b.bindingDisplayLabel}
+                    </span>
+                    {showTechnicalDetails && b.promotedFromChild && b.rawElementType && (
+                      <span className="fmt-binding-origin">via {b.rawElementType}</span>
+                    )}
+                    <div style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 11 }}>
+                      <ClickablePath expression={b.expressionAsString} configIndex={configIndex} mode="binding-expr" />
+                    </div>
+                    <DrillDownPanel
+                      expression={b.expressionAsString}
+                      configIndex={configIndex}
+                      elementName={node.data.name}
+                    />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {childTreeNodes.length > 0 && (
+          <div className="property-section">
+            <div className="property-section-title">{t.propChildren} ({childTreeNodes.length})</div>
+            {childTreeNodes.map((child: any) => (
+              <div
+                key={child.id}
+                className="fmt-detail-child"
+                onClick={() => navigateToTreeNode(child.id)}
+              >
+                <span style={{ marginRight: 6 }}>{child.icon}</span>
+                <span>{child.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -802,7 +882,6 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const [structureExpandMode, setStructureExpandMode] = useState<'all' | 'none'>('all');
   const [structureExpandVersion, setStructureExpandVersion] = useState(0);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
-  const [collapsedDetailSections, setCollapsedDetailSections] = useState<Set<string>>(() => new Set(['bindings']));
 
   useEffect(() => {
     if (!focusNode) return;
@@ -877,17 +956,6 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
     };
     return find(rootElement);
   }, [selectedElementId, rootElement]);
-
-  const selectedBindings = selectedElement ? (bindingMap.get(selectedElement.id) ?? []) : [];
-  const selectedBindingCategories = useMemo(
-    () => groupFormatBindingsByCategory(selectedBindings),
-    [selectedBindings],
-  );
-  const selectedAttributeCount = useMemo(
-    () => Object.entries(selectedElement?.attributes ?? {})
-      .filter(([key]) => !['Encoding', 'MaximalLength', 'Value', 'Transformation', 'ExcludedFromDataSource'].includes(key)).length,
-    [selectedElement],
-  );
 
   // Grouped bindings view: entries grouped by format element type first, then by concrete element
   const groupedBindings = useMemo(() => {
@@ -977,13 +1045,15 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
     if (match?.id) navigateToTreeNode(match.id);
   }, [treeNodes, configIndex, navigateToTreeNode]);
 
-  const toggleDetailSection = useCallback((sectionKey: string) => {
-    setCollapsedDetailSections(prev => {
-      const next = new Set(prev);
-      if (next.has(sectionKey)) next.delete(sectionKey); else next.add(sectionKey);
-      return next;
-    });
-  }, []);
+  const handleSelectFormatElement = useCallback((elementId: string | null) => {
+    setSelectedElementId(elementId);
+    if (elementId) {
+      const rootNode = treeNodes[configIndex];
+      if (!rootNode) return;
+      const match = findTreeNodeByMatch(rootNode, candidate => candidate.type === 'formatElement' && candidate.data?.id === elementId);
+      if (match?.id) navigateToTreeNode(match.id);
+    }
+  }, [treeNodes, configIndex, navigateToTreeNode]);
 
   const bindingsLabel = showTechnicalDetails ? t.bindings : t.lightBindings;
   const dataSourcesLabel = showTechnicalDetails ? t.dataSources : t.lightDataSources;
@@ -1095,7 +1165,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
                 expandMode={structureExpandMode}
                 expandVersion={structureExpandVersion}
                 selectedId={selectedElementId}
-                onSelect={setSelectedElementId}
+                onSelect={handleSelectFormatElement}
                 resolveDatasource={resolveDatasource}
                 registry={registry}
                 showTechnicalDetails={showTechnicalDetails}
@@ -1133,7 +1203,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
                         <span className="mm-group-count">{group.rows.length}</span>
                       </div>
                       {!collapsedBindingTypeGroups.has(group.elementType) && group.rows.map(row => (
-                        <FormatElementBindingGroup key={row.componentId} row={row} configIndex={configIndex} onNavigate={setSelectedElementId} onReveal={revealFormatElementInExplorer} showTechnicalDetails={showTechnicalDetails} />
+                        <FormatElementBindingGroup key={row.componentId} row={row} configIndex={configIndex} onNavigate={handleSelectFormatElement} onReveal={revealFormatElementInExplorer} showTechnicalDetails={showTechnicalDetails} />
                       ))}
                     </div>
                   ))}
@@ -1144,166 +1214,6 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
             <GroupedDatasourceList datasources={filteredDatasources} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} />
           )}
         </div>
-
-        {/* Right: Detail Panel */}
-        {selectedElement && view === 'structure' && (
-          <div className={`fmt-detail-panel density-${density}`}>
-            <div className="fmt-detail-header">
-              {showTechnicalDetails && (
-                <span style={{ color: getFormatTypeColor(selectedElement.elementType), fontWeight: 700 }}>
-                  {selectedElement.elementType}
-                </span>
-              )}
-              <span style={{ fontWeight: 600, marginLeft: 6 }}>{selectedElement.name}</span>
-              <button
-                onClick={() => revealFormatElementInExplorer(selectedElement.id)}
-                className="fmt-action-btn fmt-action-btn-compact fmt-detail-action"
-                title={t.openInExplorerAction}
-              >
-                {t.openInExplorerAction}
-              </button>
-              <button
-                onClick={() => setSelectedElementId(null)}
-                className="fmt-detail-close"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="fmt-detail-body">
-              <div className="fmt-detail-section">
-                <div className="fmt-detail-section-title fmt-detail-section-toggle" onClick={() => toggleDetailSection('overview')}>
-                  <span className={`tree-chevron ${!collapsedDetailSections.has('overview') ? 'open' : ''}`} />
-                  {t.detailOverview}
-                </div>
-                {!collapsedDetailSections.has('overview') && <div className="fmt-summary-grid">
-                  <div className="fmt-summary-card">
-                    <span className="fmt-summary-label">{showTechnicalDetails ? t.propType : t.propName}</span>
-                    <span className="fmt-summary-value">{showTechnicalDetails ? selectedElement.elementType : selectedElement.name}</span>
-                  </div>
-                  <div className="fmt-summary-card">
-                    <span className="fmt-summary-label">{t.bindings}</span>
-                    <span className="fmt-summary-value">{selectedBindings.length}</span>
-                  </div>
-                  <div className="fmt-summary-card">
-                    <span className="fmt-summary-label">{t.propChildren}</span>
-                    <span className="fmt-summary-value">{selectedElement.children?.length ?? 0}</span>
-                  </div>
-                  <div className="fmt-summary-card">
-                    <span className="fmt-summary-label">{t.attributes}</span>
-                    <span className="fmt-summary-value">{selectedAttributeCount}</span>
-                  </div>
-                </div>}
-              </div>
-
-              {/* Properties */}
-              <div className="fmt-detail-section">
-                <div className="fmt-detail-section-title fmt-detail-section-toggle" onClick={() => toggleDetailSection('properties')}>
-                  <span className={`tree-chevron ${!collapsedDetailSections.has('properties') ? 'open' : ''}`} />
-                  {t.properties}
-                </div>
-                {!collapsedDetailSections.has('properties') && <div className="prop-grid">
-                  <div className="prop-label">{t.propName}</div>
-                  <div className="prop-value">{selectedElement.name}</div>
-                  {showTechnicalDetails && <>
-                    <div className="prop-label">{t.propId}</div>
-                    <div className="prop-value guid">{selectedElement.id}</div>
-                    <div className="prop-label">{t.propType}</div>
-                    <div className="prop-value">{selectedElement.elementType}</div>
-                  </>}
-                  {showTechnicalDetails && selectedElement.encoding && <>
-                    <div className="prop-label">{t.propEncoding}</div>
-                    <div className="prop-value">{selectedElement.encoding}</div>
-                  </>}
-                  {showTechnicalDetails && selectedElement.maximalLength != null && <>
-                    <div className="prop-label">{t.propMaxLen}</div>
-                    <div className="prop-value">{selectedElement.maximalLength}</div>
-                  </>}
-                  {selectedElement.value && <>
-                    <div className="prop-label">{t.propValue}</div>
-                    <div className="prop-value expression">{selectedElement.value}</div>
-                  </>}
-                  {showTechnicalDetails && selectedElement.transformation && <>
-                    <div className="prop-label">{t.propTransform}</div>
-                    <div className="prop-value">
-                      {transformationMap.get(selectedElement.transformation)?.name ?? selectedElement.transformation}
-                    </div>
-                  </>}
-                  {showTechnicalDetails && selectedElement.excludedFromDataSource && <>
-                    <div className="prop-label">{t.propExcluded}</div>
-                    <div className="prop-value">{t.propYes}</div>
-                  </>}
-                  {/* Extra attributes */}
-                  {showTechnicalDetails && Object.entries(selectedElement.attributes ?? {})
-                    .filter(([k]) => !['Encoding', 'MaximalLength', 'Value', 'Transformation', 'ExcludedFromDataSource'].includes(k))
-                    .map(([k, v]) => (
-                    <React.Fragment key={k}>
-                      <div className="prop-label">{k}</div>
-                      <div className="prop-value">{String(v)}</div>
-                    </React.Fragment>
-                  ))}
-                </div>}
-              </div>
-
-              {/* Bindings for this element */}
-              {selectedBindings.length > 0 && (
-                <div className="fmt-detail-section">
-                  <div className="fmt-detail-section-title fmt-detail-section-toggle" onClick={() => toggleDetailSection('bindings')}>
-                    <span className={`tree-chevron ${!collapsedDetailSections.has('bindings') ? 'open' : ''}`} />
-                    {t.bindings} ({selectedBindings.length})
-                  </div>
-                  {!collapsedDetailSections.has('bindings') && selectedBindingCategories.map(category => (
-                    <div key={category.key}>
-                      <div className="fmt-detail-subsection-title">{category.label} ({category.bindings.length})</div>
-                      {category.bindings.map((b, i) => (
-                        <div key={`${category.key}-${i}`} className="fmt-detail-binding">
-                          <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'}`} style={{ marginRight: 6 }}>
-                            {b.bindingDisplayLabel}
-                          </span>
-                          {showTechnicalDetails && b.promotedFromChild && b.rawElementType && (
-                            <span className="fmt-binding-origin">via {b.rawElementType}</span>
-                          )}
-                          <div style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 11 }}>
-                            <ClickablePath expression={b.expressionAsString} configIndex={configIndex} mode="binding-expr" />
-                          </div>
-                          <DrillDownPanel
-                            expression={b.expressionAsString}
-                            configIndex={configIndex}
-                            elementName={selectedElement.name}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Children summary */}
-              {selectedElement.children?.length > 0 && (
-                <div className="fmt-detail-section">
-                  <div className="fmt-detail-section-title fmt-detail-section-toggle" onClick={() => toggleDetailSection('children')}>
-                    <span className={`tree-chevron ${!collapsedDetailSections.has('children') ? 'open' : ''}`} />
-                    {t.propChildren} ({selectedElement.children.length})
-                  </div>
-                  {!collapsedDetailSections.has('children') && selectedElement.children.map((child: any, i: number) => (
-                    <div
-                      key={i}
-                      className="fmt-detail-child"
-                      onClick={() => setSelectedElementId(child.id)}
-                    >
-                      {showTechnicalDetails && (
-                        <span style={{ color: getFormatTypeColor(child.elementType), fontSize: 11 }}>
-                          {child.elementType}
-                        </span>
-                      )}
-                      <span style={{ marginLeft: 6 }}>{child.name}</span>
-                      {bindingMap.has(child.id) && <span style={{ marginLeft: 'auto', color: 'var(--success)', fontSize: 10 }}>●</span>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
