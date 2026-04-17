@@ -34,10 +34,15 @@ export function App() {
   const configs = useAppStore(s => s.configurations);
   const treeNodes = useAppStore(s => s.treeNodes);
   const activeTabId = useAppStore(s => s.activeTabId);
+  const themeMode = useAppStore(s => s.themeMode);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const rebuildDerivedState = useAppStore(s => s.rebuildDerivedState);
   const shouldAutoOpenFirstTabRef = useRef(false);
   const previousConfigCountRef = useRef(0);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode;
+  }, [themeMode]);
 
   useEffect(() => {
     if (configs.length > 0 && treeNodes.length !== configs.length) {
@@ -174,6 +179,7 @@ function StatusBar({ onOpenLanding }: { onOpenLanding: () => void }) {
   const configs = useAppStore(s => s.configurations);
   const registry = useAppStore(s => s.registry);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const removeConfiguration = useAppStore(s => s.removeConfiguration);
 
   return (
     <div className="app-statusbar">
@@ -182,10 +188,23 @@ function StatusBar({ onOpenLanding }: { onOpenLanding: () => void }) {
       {configs.map((c, i) => (
         <span
           key={i}
-          className="app-statusbar-chip"
+          className="app-statusbar-chip app-statusbar-chip-closable"
           title={`${c.solutionVersion.solution.name} v${c.solutionVersion.publicVersionNumber}${getStatusConfigSuffix(c)}`}
         >
-          {getStatusConfigIcon(c)} {c.solutionVersion.solution.name.slice(0, 22)} v{c.solutionVersion.publicVersionNumber}{getStatusConfigSuffix(c)}
+          <span>
+            {getStatusConfigIcon(c)} {c.solutionVersion.solution.name.slice(0, 22)} v{c.solutionVersion.publicVersionNumber}{getStatusConfigSuffix(c)}
+          </span>
+          <button
+            className="app-statusbar-chip-close"
+            title={t.closeConfiguration}
+            aria-label={t.closeConfiguration}
+            onClick={event => {
+              event.stopPropagation();
+              removeConfiguration(i);
+            }}
+          >
+            ×
+          </button>
         </span>
       ))}
       <span className="app-statusbar-chip app-statusbar-mode-chip">

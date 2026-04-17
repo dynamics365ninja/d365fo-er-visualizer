@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 /* ─── Dark Theme (default) ─── */
-:root {
+:root,
+:root[data-theme='dark'] {
   --bg-primary: #1e1e1e;
   --bg-secondary: #252526;
   --bg-tertiary: #2d2d30;
@@ -84,90 +85,86 @@
   color-scheme: dark;
 }
 
-/* ─── Light Theme ─── */
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg-primary: #ffffff;
-    --bg-secondary: #f3f3f3;
-    --bg-tertiary: #e8e8e8;
-    --bg-hover: #e0e0e0;
-    --bg-active: #c8ddf0;
-    --text-primary: #1e1e1e;
-    --text-secondary: #616161;
-    --text-accent: #005fb8;
-    --border-color: #d4d4d4;
-    --accent: #005fb8;
-    --accent-hover: #0070d8;
-    --button-primary-fg: #ffffff;
-    --error: #d32f2f;
-    --warning: #bf8803;
-    --success: #388e3c;
-    --info: #005fb8;
-    --surface-info-bg: #dcebfb;
-    --surface-info-fg: #0451a5;
-    --surface-info-border: #9fc2ea;
-    --surface-success-bg: #dcefe1;
-    --surface-success-fg: #206b37;
-    --surface-success-border: #9bcca8;
-    --surface-warning-bg: #f7eed8;
-    --surface-warning-fg: #7a5d00;
-    --surface-warning-border: #dcc48d;
-    --surface-danger-bg: #f7dfdf;
-    --surface-danger-fg: #a1260d;
-    --surface-danger-border: #dfaaaa;
-    --surface-purple-bg: #eee4f6;
-    --surface-purple-fg: #6a1b9a;
-    --surface-purple-border: #cdb3e2;
-    --accent-text-info: #0451a5;
-    --accent-text-success: #206b37;
-    --accent-text-warning: #7a5d00;
-    --accent-text-danger: #a1260d;
-    --accent-text-purple: #6a1b9a;
-    --format-type-file: var(--accent-text-success);
-    --format-type-xml-element: var(--accent-text-info);
-    --format-type-xml-attribute: var(--accent-text-warning);
-    --format-type-xml-sequence: var(--accent-text-purple);
-    --format-type-string: var(--accent-text-danger);
-    --format-type-numeric: var(--accent-text-success);
-    --format-type-datetime: var(--accent-text-warning);
-    --format-type-base64: var(--accent-text-info);
-    --format-type-excel-cell: var(--accent-text-info);
-    --format-type-text-sequence: var(--accent-text-purple);
-    --format-type-text-line: var(--accent-text-danger);
-    --format-type-pdf: var(--accent-text-danger);
-    --surface-hover-accent: rgba(0, 95, 184, 0.08);
-    --statusbar-chip-bg: rgba(255, 255, 255, 0.4);
-    --statusbar-chip-border: rgba(255, 255, 255, 0.48);
-    --landing-grid-primary: rgba(0, 95, 184, 0.06);
-    --landing-grid-secondary: rgba(0, 140, 100, 0.04);
-    --landing-grid-line: rgba(0, 95, 184, 0.03);
-    --landing-hero-logo-gradient: linear-gradient(135deg, var(--accent), var(--surface-success-fg));
-    --landing-hero-logo-shadow: 0 4px 24px color-mix(in srgb, var(--accent) 28%, transparent);
-    --landing-hero-title-gradient: linear-gradient(135deg, var(--accent-text-info) 0%, var(--accent-text-success) 60%, var(--accent-text-purple) 100%);
-    --landing-card-hover-shadow: 0 8px 28px var(--shadow-color);
-    --scrollbar-thumb: #c1c1c1;
-    --scrollbar-thumb-hover: #a0a0a0;
-    --shadow-color: rgba(0, 0, 0, 0.12);
-    /* Syntax / semantic colors */
-    --syn-identifier: #0451a5;
-    --syn-path: #005fb8;
-    --syn-operator: #383838;
-    --syn-literal: #a31515;
-    --syn-separator: #999;
-    --syn-resolved: #16825d;
-    --syn-field-type: #999;
-    --syn-calc: #098658;
-    --syn-node-bg: #ffffff;
-    --syn-node-border: #d4d4d4;
-    --syn-root-header: #c8ddf0;
-    --syn-enum-header: #fff3cd;
-    --syn-record-header: #f3f3f3;
-    --syn-edge: #005fb8;
-    --syn-edge-label: #616161;
-    --minimap-bg: #f3f3f3;
-    --minimap-node: #d4d4d4;
-    color-scheme: light;
-  }
+:root[data-theme='light'] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f3f3f3;
+  --bg-tertiary: #e8e8e8;
+  --bg-hover: #e0e0e0;
+  --bg-active: #c8ddf0;
+  --text-primary: #1e1e1e;
+  --text-secondary: #616161;
+  --text-accent: #005fb8;
+  --border-color: #d4d4d4;
+  --accent: #005fb8;
+  --accent-hover: #0070d8;
+  --button-primary-fg: #ffffff;
+  --error: #d32f2f;
+  --warning: #bf8803;
+  --success: #388e3c;
+  --info: #005fb8;
+  --surface-info-bg: #dcebfb;
+  --surface-info-fg: #0451a5;
+  --surface-info-border: #9fc2ea;
+  --surface-success-bg: #dcefe1;
+  --surface-success-fg: #206b37;
+  --surface-success-border: #9bcca8;
+  --surface-warning-bg: #f7eed8;
+  --surface-warning-fg: #7a5d00;
+  --surface-warning-border: #dcc48d;
+  --surface-danger-bg: #f7dfdf;
+  --surface-danger-fg: #a1260d;
+  --surface-danger-border: #dfaaaa;
+  --surface-purple-bg: #eee4f6;
+  --surface-purple-fg: #6a1b9a;
+  --surface-purple-border: #cdb3e2;
+  --accent-text-info: #0451a5;
+  --accent-text-success: #206b37;
+  --accent-text-warning: #7a5d00;
+  --accent-text-danger: #a1260d;
+  --accent-text-purple: #6a1b9a;
+  --format-type-file: var(--accent-text-success);
+  --format-type-xml-element: var(--accent-text-info);
+  --format-type-xml-attribute: var(--accent-text-warning);
+  --format-type-xml-sequence: var(--accent-text-purple);
+  --format-type-string: var(--accent-text-danger);
+  --format-type-numeric: var(--accent-text-success);
+  --format-type-datetime: var(--accent-text-warning);
+  --format-type-base64: var(--accent-text-info);
+  --format-type-excel-cell: var(--accent-text-info);
+  --format-type-text-sequence: var(--accent-text-purple);
+  --format-type-text-line: var(--accent-text-danger);
+  --format-type-pdf: var(--accent-text-danger);
+  --surface-hover-accent: rgba(0, 95, 184, 0.08);
+  --statusbar-chip-bg: rgba(255, 255, 255, 0.4);
+  --statusbar-chip-border: rgba(255, 255, 255, 0.48);
+  --landing-grid-primary: rgba(0, 95, 184, 0.06);
+  --landing-grid-secondary: rgba(0, 140, 100, 0.04);
+  --landing-grid-line: rgba(0, 95, 184, 0.03);
+  --landing-hero-logo-gradient: linear-gradient(135deg, var(--accent), var(--surface-success-fg));
+  --landing-hero-logo-shadow: 0 4px 24px color-mix(in srgb, var(--accent) 28%, transparent);
+  --landing-hero-title-gradient: linear-gradient(135deg, var(--accent-text-info) 0%, var(--accent-text-success) 60%, var(--accent-text-purple) 100%);
+  --landing-card-hover-shadow: 0 8px 28px var(--shadow-color);
+  --scrollbar-thumb: #c1c1c1;
+  --scrollbar-thumb-hover: #a0a0a0;
+  --shadow-color: rgba(0, 0, 0, 0.12);
+  --syn-identifier: #0451a5;
+  --syn-path: #005fb8;
+  --syn-operator: #383838;
+  --syn-literal: #a31515;
+  --syn-separator: #999;
+  --syn-resolved: #16825d;
+  --syn-field-type: #999;
+  --syn-calc: #098658;
+  --syn-node-bg: #ffffff;
+  --syn-node-border: #d4d4d4;
+  --syn-root-header: #c8ddf0;
+  --syn-enum-header: #fff3cd;
+  --syn-record-header: #f3f3f3;
+  --syn-edge: #005fb8;
+  --syn-edge-label: #616161;
+  --minimap-bg: #f3f3f3;
+  --minimap-node: #d4d4d4;
+  color-scheme: light;
 }
 
 * {
@@ -375,6 +372,27 @@ body {
   color: var(--text-secondary);
   background: color-mix(in srgb, var(--bg-tertiary) 72%, transparent);
   border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
+}
+
+.tree-node-close {
+  margin-left: 6px;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 74%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-primary) 24%, transparent);
+  color: var(--text-secondary);
+  cursor: pointer;
+  line-height: 1;
+  opacity: 0.72;
+}
+
+.tree-node-close:hover {
+  opacity: 1;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--surface-danger-bg) 72%, transparent);
+  border-color: color-mix(in srgb, var(--surface-danger-border) 86%, transparent);
 }
 
 .tree-node-accent-model {
@@ -1183,6 +1201,13 @@ body {
   opacity: 0.8;
 }
 
+.toolbar-toggle-icon {
+  padding: 6px;
+  min-width: 34px;
+  justify-content: center;
+  gap: 0;
+}
+
 .toolbar-toggle:hover {
   opacity: 1;
   background: color-mix(in srgb, var(--bg-hover) 70%, transparent);
@@ -1228,6 +1253,26 @@ body {
   background: var(--statusbar-chip-bg);
   border: 1px solid var(--statusbar-chip-border);
   font-size: 10px;
+}
+
+.app-statusbar-chip-closable {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-statusbar-chip-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.78;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.app-statusbar-chip-close:hover {
+  opacity: 1;
 }
 
 .app-statusbar-mode-chip {

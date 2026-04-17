@@ -10,6 +10,9 @@ import { parseERConfiguration, GUIDRegistry } from '@er-visualizer/core';
 import { buildFormatBindingPresentation } from '../utils/format-binding-display';
 
 const TECHNICAL_DETAILS_STORAGE_KEY = 'er-visualizer.showTechnicalDetails';
+const THEME_MODE_STORAGE_KEY = 'er-visualizer.themeMode';
+
+export type ThemeMode = 'dark' | 'light';
 
 function readStoredTechnicalDetails(): boolean {
   if (typeof window === 'undefined') return false;
@@ -24,6 +27,26 @@ function persistTechnicalDetails(show: boolean): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(TECHNICAL_DETAILS_STORAGE_KEY, String(show));
+  } catch {
+    // Ignore storage failures and keep in-memory state only.
+  }
+}
+
+function readStoredThemeMode(): ThemeMode {
+  if (typeof window === 'undefined') return 'dark';
+  try {
+    const stored = window.localStorage.getItem(THEME_MODE_STORAGE_KEY);
+    if (stored === 'dark' || stored === 'light') return stored;
+    return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  } catch {
+    return 'dark';
+  }
+}
+
+function persistThemeMode(mode: ThemeMode): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(THEME_MODE_STORAGE_KEY, mode);
   } catch {
     // Ignore storage failures and keep in-memory state only.
   }
@@ -48,6 +71,18 @@ interface NavigationSnapshot {
   selectedNodeId: string | null;
 }
 
+function remapTreeNodeIdAfterRemoval(nodeId: string | null, removedIndex: number): string | null {
+  if (!nodeId) return null;
+  const match = nodeId.match(/^cfg-(\d+)(.*)$/);
+  if (!match) return nodeId;
+
+  const currentIndex = parseInt(match[1], 10);
+  const suffix = match[2] ?? '';
+  if (currentIndex === removedIndex) return null;
+  if (currentIndex < removedIndex) return nodeId;
+  return `cfg-${currentIndex - 1}${suffix}`;
+}
+
 // ─── App State ───
 
 export interface AppState {
@@ -61,6 +96,7 @@ export interface AppState {
   searchQuery: string;
   searchResults: any[];
   showTechnicalDetails: boolean;
+  themeMode: ThemeMode;
   navigationHistory: NavigationSnapshot[];
   canNavigateBack: boolean;
 
@@ -73,6 +109,7 @@ export interface AppState {
   setActiveTab: (id: string) => void;
   rebuildDerivedState: () => void;
   setShowTechnicalDetails: (show: boolean) => void;
+  setThemeMode: (mode: ThemeMode) => void;
   setSearchQuery: (query: string) => void;
   executeSearch: () => void;
   navigateToTreeNode: (nodeId: string) => void;
@@ -238,6 +275,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   searchQuery: '',
   searchResults: [],
   showTechnicalDetails: readStoredTechnicalDetails(),
+  themeMode: readStoredThemeMode(),
   navigationHistory: [],
   canNavigateBack: false,
 
@@ -260,7 +298,40 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     const newConfigs = state.configurations.filter((_, i) => i !== index);
     const { registry, treeNodes } = buildDerivedState(newConfigs);
-    set({ configurations: newConfigs, registry, treeNodes, selectedNodeId: null, selectedNode: null });
+
+    const openTabs = state.openTabs
+      .filter(tab => tab.configIndex !== index)
+      .map(tab => ({
+        ...tab,
+        id: remapTreeNodeIdAfterRemoval(tab.id, index) ?? tab.id,
+        configIndex: tab.configIndex > index ? tab.configIndex - 1 : tab.configIndex,
+      }));
+
+    const activeTabId = remapTreeNodeIdAfterRemoval(state.activeTabId, index);
+    const selectedNodeId = remapTreeNodeIdAfterRemoval(state.selectedNodeId, index);
+    const selectedNode = selectedNodeId ? findNodeById(treeNodes, selectedNodeId) : null;
+    const navigationHistory = state.navigationHistory
+      .map(snapshot => ({
+        activeTabId: remapTreeNodeIdAfterRemoval(snapshot.activeTabId, index),
+        selectedNodeId: remapTreeNodeIdAfterRemoval(snapshot.selectedNodeId, index),
+      }))
+      .filter(snapshot => snapshot.activeTabId != null || snapshot.selectedNodeId != null);
+
+    const nextActiveTabId = activeTabId && openTabs.some(tab => tab.id === activeTabId)
+      ? activeTabId
+      : (openTabs[openTabs.length - 1]?.id ?? null);
+
+    set({
+      configurations: newConfigs,
+      registry,
+      treeNodes,
+      openTabs,
+      activeTabId: nextActiveTabId,
+      selectedNodeId: selectedNode?.id ?? null,
+      selectedNode,
+      navigationHistory,
+      canNavigateBack: navigationHistory.length > 0,
+    });
   },
 
   selectNode: (nodeId: string | null) => {
@@ -325,6 +396,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setShowTechnicalDetails: (show: boolean) => {
     persistTechnicalDetails(show);
     set({ showTechnicalDetails: show });
+  },
+
+  setThemeMode: (mode: ThemeMode) => {
+    persistThemeMode(mode);
+    set({ themeMode: mode });
   },
 
   setSearchQuery: (query: string) => set({ searchQuery: query }),
