@@ -11,8 +11,56 @@ import { buildFormatBindingPresentation } from '../utils/format-binding-display'
 
 const TECHNICAL_DETAILS_STORAGE_KEY = 'er-visualizer.showTechnicalDetails';
 const THEME_MODE_STORAGE_KEY = 'er-visualizer.themeMode';
+const EXPANDED_IDS_STORAGE_KEY = 'er-visualizer.expandedIds';
+const RECENT_FILES_STORAGE_KEY = 'er-visualizer.recentFiles.v1';
+const MAX_RECENT_FILES = 12;
 
 export type ThemeMode = 'dark' | 'light';
+export type ToastKind = 'info' | 'success' | 'warning' | 'error';
+
+export interface Toast {
+  id: string;
+  kind: ToastKind;
+  message: string;
+  createdAt: number;
+  /** Optional action to show inside the toast (e.g. "Retry"). */
+  action?: { label: string; onClick: () => void };
+}
+
+export interface RecentFile {
+  path: string;
+  name: string;
+  kind?: 'DataModel' | 'ModelMapping' | 'Format';
+  openedAt: number;
+}
+
+export interface ConfigWarning {
+  configIndex: number;
+  severity: 'info' | 'warning' | 'error';
+  message: string;
+  /** Optional tree node id to navigate to when clicked. */
+  nodeId?: string;
+}
+
+function loadJSON<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveJSON(key: string, value: unknown): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage failures (quota, private mode, etc.)
+  }
+}
 
 function readStoredTechnicalDetails(): boolean {
   if (typeof window === 'undefined') return false;
@@ -98,7 +146,14 @@ export interface AppState {
   showTechnicalDetails: boolean;
   themeMode: ThemeMode;
   navigationHistory: NavigationSnapshot[];
+  navigationForward: NavigationSnapshot[];
   canNavigateBack: boolean;
+  canNavigateForward: boolean;
+  toasts: Toast[];
+  expandedIds: Set<string>;
+  explorerExpandCommand: { mode: 'default' | 'all' | 'none'; version: number };
+  recentFiles: RecentFile[];
+  warnings: ConfigWarning[];
 
   // Actions
   loadXmlFile: (xml: string, filePath: string) => void;
@@ -114,6 +169,26 @@ export interface AppState {
   executeSearch: () => void;
   navigateToTreeNode: (nodeId: string) => void;
   navigateBack: () => void;
+  navigateForward: () => void;
+
+  // Toasts
+  pushToast: (toast: Omit<Toast, 'id' | 'createdAt'>) => string;
+  dismissToast: (id: string) => void;
+  clearToasts: () => void;
+
+  // Tree expansion (global, persisted)
+  isNodeExpanded: (nodeId: string) => boolean;
+  toggleNodeExpanded: (nodeId: string, defaultExpanded?: boolean) => void;
+  setNodeExpanded: (nodeId: string, expanded: boolean) => void;
+  expandAll: (rootNodeIds?: string[]) => void;
+  collapseAll: () => void;
+  /** Broadcast an expand/collapse command to the explorer tree (non-persistent UX signal). */
+  requestExplorerExpand: (mode: 'all' | 'none' | 'default') => void;
+
+  // Recent files
+  addRecentFile: (file: Omit<RecentFile, 'openedAt'>) => void;
+  removeRecentFile: (path: string) => void;
+  clearRecentFiles: () => void;
   /**
    * Resolve a datasource name from an expression string (e.g. "CompanyInfo" from binding expr).
    * Returns { configIndex, datasourceName, treeNodeId } or null.
@@ -254,14 +329,73 @@ function findNodeById(nodes: TreeNode[], id: string): TreeNode | null {
   return null;
 }
 
-function buildDerivedState(configurations: ERConfiguration[]): { registry: GUIDRegistry; treeNodes: TreeNode[] } {
+function buildDerivedState(configurations: ERConfiguration[]): { registry: GUIDRegistry; treeNodes: TreeNode[]; warnings: ConfigWarning[] } {
   const registry = new GUIDRegistry();
   for (const config of configurations) {
     registry.indexConfiguration(config);
   }
 
   const treeNodes = configurations.map((config, index) => buildTreeForConfig(config, index));
-  return { registry, treeNodes };
+  const warnings = collectConfigurationWarnings(configurations);
+  return { registry, treeNodes, warnings };
+}
+
+/**
+ * Lightweight validator that walks the parsed configurations and reports
+ * issues surfaced to the status bar. Intentionally fast: runs only at load.
+ */
+function collectConfigurationWarnings(configurations: ERConfiguration[]): ConfigWarning[] {
+  const warnings: ConfigWarning[] = [];
+  const hasModel = configurations.some(c => c.content.kind === 'DataModel');
+  const hasMapping = configurations.some(c => c.content.kind === 'ModelMapping');
+  const hasFormat = configurations.some(c => c.content.kind === 'Format');
+
+  if (configurations.length > 0 && !hasModel) {
+    warnings.push({
+      configIndex: -1,
+      severity: 'info',
+      message: 'Pro plný drill-down načti i Data Model soubor.',
+    });
+  }
+  if (hasFormat && !hasMapping && !configurations.some(c => c.content.kind === 'Format' && (c.content as ERFormatContent).embeddedModelMappingVersions?.length > 0)) {
+    warnings.push({
+      configIndex: -1,
+      severity: 'warning',
+      message: 'Formát bez Model Mapping — výrazy nebude možné trasovat na zdrojové tabulky.',
+    });
+  }
+
+  configurations.forEach((config, ci) => {
+    if (config.content.kind === 'Format') {
+      const fmtMap = (config.content as ERFormatContent).formatMappingVersion.formatMapping;
+      const dsNames = new Set<string>();
+      const walkDs = (list: any[]) => {
+        for (const d of list) {
+          dsNames.add(d.name);
+          if (d.children) walkDs(d.children);
+        }
+      };
+      walkDs(fmtMap.datasources);
+      // Count bindings whose expression root is unknown datasource.
+      let brokenRefs = 0;
+      for (const b of fmtMap.bindings) {
+        const expr = (b.expressionAsString ?? '').trim();
+        if (!expr) continue;
+        const root = expr.split(/[.(\[]/)[0].replace(/['"]/g, '').trim();
+        if (!root || root.startsWith('"') || /^\d/.test(root) || root === '@' || root.toLowerCase() === 'model') continue;
+        if (!dsNames.has(root)) brokenRefs++;
+      }
+      if (brokenRefs > 5) {
+        warnings.push({
+          configIndex: ci,
+          severity: 'warning',
+          message: `Formát "${config.solutionVersion.solution.name}" obsahuje ${brokenRefs} výrazů odkazujících na neznámý datový zdroj.`,
+        });
+      }
+    }
+  });
+
+  return warnings;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -277,7 +411,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   showTechnicalDetails: readStoredTechnicalDetails(),
   themeMode: readStoredThemeMode(),
   navigationHistory: [],
+  navigationForward: [],
   canNavigateBack: false,
+  canNavigateForward: false,
+  toasts: [],
+  expandedIds: new Set<string>(loadJSON<string[]>(EXPANDED_IDS_STORAGE_KEY, [])),
+  explorerExpandCommand: { mode: 'default', version: 0 },
+  recentFiles: loadJSON<RecentFile[]>(RECENT_FILES_STORAGE_KEY, []),
+  warnings: [],
 
   loadXmlFile: (xml: string, filePath: string) => {
     try {
@@ -285,11 +426,30 @@ export const useAppStore = create<AppState>((set, get) => ({
       const state = get();
       const newConfigs = [...state.configurations, config];
 
-      const { registry, treeNodes } = buildDerivedState(newConfigs);
+      const { registry, treeNodes, warnings } = buildDerivedState(newConfigs);
 
-      set({ configurations: newConfigs, registry, treeNodes });
+      // Add recent entry
+      const recentName = filePath.split(/[\\/]/).pop() ?? filePath;
+      const recentKind = config.content.kind;
+      const nextRecent: RecentFile[] = [
+        { path: filePath, name: recentName, kind: recentKind, openedAt: Date.now() },
+        ...state.recentFiles.filter(r => r.path !== filePath),
+      ].slice(0, MAX_RECENT_FILES);
+      saveJSON(RECENT_FILES_STORAGE_KEY, nextRecent);
+
+      set({
+        configurations: newConfigs,
+        registry,
+        treeNodes,
+        warnings,
+        recentFiles: nextRecent,
+      });
     } catch (e) {
       console.error('Failed to parse ER configuration:', e);
+      // Surface as a toast instead of letting a window error propagate.
+      const message = e instanceof Error ? e.message : String(e);
+      const fileName = filePath.split(/[\\/]/).pop() ?? filePath;
+      get().pushToast({ kind: 'error', message: `Chyba při načítání ${fileName}: ${message}` });
       throw e;
     }
   },
@@ -297,7 +457,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   removeConfiguration: (index: number) => {
     const state = get();
     const newConfigs = state.configurations.filter((_, i) => i !== index);
-    const { registry, treeNodes } = buildDerivedState(newConfigs);
+    const { registry, treeNodes, warnings } = buildDerivedState(newConfigs);
 
     const openTabs = state.openTabs
       .filter(tab => tab.configIndex !== index)
@@ -325,12 +485,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       configurations: newConfigs,
       registry,
       treeNodes,
+      warnings,
       openTabs,
       activeTabId: nextActiveTabId,
       selectedNodeId: selectedNode?.id ?? null,
       selectedNode,
       navigationHistory,
+      navigationForward: [],
       canNavigateBack: navigationHistory.length > 0,
+      canNavigateForward: false,
     });
   },
 
@@ -352,10 +515,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         openTabs: [...state.openTabs, { id, label, configIndex }],
         activeTabId: id,
         navigationHistory,
+        navigationForward: [],
         canNavigateBack: navigationHistory.length > 0,
+        canNavigateForward: false,
       });
     } else {
-      set({ activeTabId: id, navigationHistory, canNavigateBack: navigationHistory.length > 0 });
+      set({
+        activeTabId: id,
+        navigationHistory,
+        navigationForward: [],
+        canNavigateBack: navigationHistory.length > 0,
+        canNavigateForward: false,
+      });
     }
   },
 
@@ -371,12 +542,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   setActiveTab: (id: string) => {
     const state = get();
     const navigationHistory = pushNavigationHistory(state, id, state.selectedNodeId);
-    set({ activeTabId: id, navigationHistory, canNavigateBack: navigationHistory.length > 0 });
+    set({
+      activeTabId: id,
+      navigationHistory,
+      navigationForward: [],
+      canNavigateBack: navigationHistory.length > 0,
+      canNavigateForward: false,
+    });
   },
 
   rebuildDerivedState: () => {
     const state = get();
-    const { registry, treeNodes } = buildDerivedState(state.configurations);
+    const { registry, treeNodes, warnings } = buildDerivedState(state.configurations);
     const selectedNode = state.selectedNodeId ? findNodeById(treeNodes, state.selectedNodeId) : null;
     const openTabs = state.openTabs.filter(tab => tab.configIndex >= 0 && tab.configIndex < state.configurations.length);
     const activeTabId = openTabs.some(tab => tab.id === state.activeTabId)
@@ -386,6 +563,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       registry,
       treeNodes,
+      warnings,
       selectedNode,
       openTabs,
       activeTabId,
@@ -427,7 +605,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedNodeId: nodeId,
       selectedNode: node,
       navigationHistory,
+      navigationForward: [],
       canNavigateBack: navigationHistory.length > 0,
+      canNavigateForward: false,
     });
 
     if (node.configIndex == null) return;
@@ -440,7 +620,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const existingTab = state.openTabs.find(t => t.id === nextTabId);
     if (existingTab) {
-      set({ activeTabId: existingTab.id, navigationHistory, canNavigateBack: navigationHistory.length > 0 });
+      set({
+        activeTabId: existingTab.id,
+        navigationHistory,
+        navigationForward: [],
+        canNavigateBack: navigationHistory.length > 0,
+        canNavigateForward: false,
+      });
       return;
     }
 
@@ -448,7 +634,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       openTabs: [...state.openTabs, { id: nextTabId, label: targetTabLabel, configIndex: node.configIndex }],
       activeTabId: nextTabId,
       navigationHistory,
+      navigationForward: [],
       canNavigateBack: navigationHistory.length > 0,
+      canNavigateForward: false,
     });
   },
 
@@ -457,6 +645,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (state.navigationHistory.length === 0) return;
 
     const history = [...state.navigationHistory];
+    const currentSnapshot: NavigationSnapshot = {
+      activeTabId: state.activeTabId,
+      selectedNodeId: state.selectedNodeId,
+    };
+    const forward = [...state.navigationForward, currentSnapshot].slice(-50);
+
     while (history.length > 0) {
       const snapshot = history.pop()!;
       const selectedNode = snapshot.selectedNodeId ? findNodeById(state.treeNodes, snapshot.selectedNodeId) : null;
@@ -482,12 +676,132 @@ export const useAppStore = create<AppState>((set, get) => ({
         selectedNodeId: selectedNode?.id ?? null,
         selectedNode,
         navigationHistory: history,
+        navigationForward: forward,
         canNavigateBack: history.length > 0,
+        canNavigateForward: forward.length > 0,
       });
       return;
     }
 
     set({ navigationHistory: [], canNavigateBack: false });
+  },
+
+  navigateForward: () => {
+    const state = get();
+    if (state.navigationForward.length === 0) return;
+    const forward = [...state.navigationForward];
+    const snapshot = forward.pop()!;
+    const currentSnapshot: NavigationSnapshot = {
+      activeTabId: state.activeTabId,
+      selectedNodeId: state.selectedNodeId,
+    };
+    const history = [...state.navigationHistory, currentSnapshot].slice(-50);
+    const selectedNode = snapshot.selectedNodeId ? findNodeById(state.treeNodes, snapshot.selectedNodeId) : null;
+
+    let openTabs = state.openTabs;
+    let activeTabId = snapshot.activeTabId;
+    if (activeTabId && !openTabs.some(tab => tab.id === activeTabId)) {
+      if (selectedNode?.configIndex != null) {
+        const label = selectedNode.type === 'file'
+          ? selectedNode.name
+          : `${state.configurations[selectedNode.configIndex]?.solutionVersion.solution.name ?? selectedNode.name} • ${selectedNode.name}`;
+        openTabs = [...openTabs, { id: selectedNode.id, label, configIndex: selectedNode.configIndex }];
+        activeTabId = selectedNode.id;
+      }
+    }
+
+    set({
+      openTabs,
+      activeTabId,
+      selectedNodeId: selectedNode?.id ?? null,
+      selectedNode,
+      navigationHistory: history,
+      navigationForward: forward,
+      canNavigateBack: history.length > 0,
+      canNavigateForward: forward.length > 0,
+    });
+  },
+
+  // ─── Toasts ───
+  pushToast: (toast) => {
+    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const entry: Toast = { id, createdAt: Date.now(), ...toast };
+    set({ toasts: [...get().toasts, entry] });
+    // Auto-dismiss after 6s for non-error kinds.
+    if (toast.kind !== 'error') {
+      if (typeof window !== 'undefined') {
+        window.setTimeout(() => {
+          const current = get().toasts;
+          if (current.some(t => t.id === id)) {
+            set({ toasts: current.filter(t => t.id !== id) });
+          }
+        }, 6000);
+      }
+    }
+    return id;
+  },
+  dismissToast: (id: string) => set({ toasts: get().toasts.filter(t => t.id !== id) }),
+  clearToasts: () => set({ toasts: [] }),
+
+  // ─── Tree expansion ───
+  isNodeExpanded: (nodeId: string) => get().expandedIds.has(nodeId),
+  toggleNodeExpanded: (nodeId: string, defaultExpanded = false) => {
+    const current = get().expandedIds;
+    const next = new Set(current);
+    const isExpanded = current.has(nodeId) ? true : defaultExpanded;
+    if (isExpanded) next.delete(nodeId); else next.add(nodeId);
+    saveJSON(EXPANDED_IDS_STORAGE_KEY, Array.from(next));
+    set({ expandedIds: next });
+  },
+  setNodeExpanded: (nodeId: string, expanded: boolean) => {
+    const next = new Set(get().expandedIds);
+    if (expanded) next.add(nodeId); else next.delete(nodeId);
+    saveJSON(EXPANDED_IDS_STORAGE_KEY, Array.from(next));
+    set({ expandedIds: next });
+  },
+  expandAll: (rootNodeIds?: string[]) => {
+    const next = new Set(get().expandedIds);
+    const roots = rootNodeIds ?? get().treeNodes.map(n => n.id);
+    const walk = (nodes: TreeNode[]) => {
+      for (const n of nodes) {
+        next.add(n.id);
+        if (n.children) walk(n.children);
+      }
+    };
+    const byId = (id: string) => findNodeById(get().treeNodes, id);
+    for (const id of roots) {
+      const root = byId(id);
+      if (root) walk([root]);
+    }
+    saveJSON(EXPANDED_IDS_STORAGE_KEY, Array.from(next));
+    set({ expandedIds: next });
+  },
+  collapseAll: () => {
+    saveJSON(EXPANDED_IDS_STORAGE_KEY, []);
+    set({ expandedIds: new Set<string>() });
+  },
+  requestExplorerExpand: (mode) => {
+    const current = get().explorerExpandCommand;
+    set({ explorerExpandCommand: { mode, version: current.version + 1 } });
+  },
+
+  // ─── Recent files ───
+  addRecentFile: (file) => {
+    const next: RecentFile[] = [
+      { ...file, openedAt: Date.now() },
+      ...get().recentFiles.filter(r => r.path !== file.path),
+    ].slice(0, MAX_RECENT_FILES);
+    saveJSON(RECENT_FILES_STORAGE_KEY, next);
+    set({ recentFiles: next });
+  },
+  removeRecentFile: (path: string) => {
+    const next = get().recentFiles.filter(r => r.path !== path);
+    saveJSON(RECENT_FILES_STORAGE_KEY, next);
+    set({ recentFiles: next });
+  },
+  clearRecentFiles: () => {
+    saveJSON(RECENT_FILES_STORAGE_KEY, []);
+    set({ recentFiles: [] });
   },
 
   resolveDatasource: (expressionOrName: string, fromConfigIndex: number) => {

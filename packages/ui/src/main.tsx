@@ -8,33 +8,36 @@ function formatRuntimeError(value: unknown): string {
   return String(value);
 }
 
-function renderFatalScreen(message: string) {
+/**
+ * Render a minimal fallback screen ONLY when bootstrap (React mount) itself
+ * fails. Runtime errors inside the component tree are caught by ErrorBoundary
+ * components and do not tear down the whole UI.
+ */
+function renderBootstrapError(message: string) {
   const container = document.getElementById('root');
-  if (!container) {
-    return;
-  }
+  if (!container) return;
 
-  container.innerHTML = `
-    <div class="fatal-screen">
-      <div class="fatal-screen__card">
-        <div class="fatal-screen__eyebrow">Application Error</div>
-        <h1 class="fatal-screen__title">D365FO ER Visualizer failed to start</h1>
-        <p class="fatal-screen__text">
-          The application loaded, but the client runtime crashed before the UI could render.
-        </p>
-        <pre class="fatal-screen__details">${message.replace(/[&<>]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[char]!))}</pre>
-      </div>
-    </div>
-  `;
+  const root = document.createElement('div');
+  root.className = 'fatal-screen';
+  const card = document.createElement('div');
+  card.className = 'fatal-screen__card';
+  const eyebrow = document.createElement('div');
+  eyebrow.className = 'fatal-screen__eyebrow';
+  eyebrow.textContent = 'Application Error';
+  const title = document.createElement('h1');
+  title.className = 'fatal-screen__title';
+  title.textContent = 'D365FO ER Visualizer failed to start';
+  const text = document.createElement('p');
+  text.className = 'fatal-screen__text';
+  text.textContent = 'The application loaded, but the client runtime crashed before the UI could render.';
+  const pre = document.createElement('pre');
+  pre.className = 'fatal-screen__details';
+  pre.textContent = message;
+  card.append(eyebrow, title, text, pre);
+  root.appendChild(card);
+
+  container.replaceChildren(root);
 }
-
-window.addEventListener('error', event => {
-  renderFatalScreen(formatRuntimeError(event.error ?? event.message));
-});
-
-window.addEventListener('unhandledrejection', event => {
-  renderFatalScreen(formatRuntimeError(event.reason));
-});
 
 async function bootstrap() {
   const container = document.getElementById('root');
@@ -56,5 +59,5 @@ async function bootstrap() {
 }
 
 bootstrap().catch(error => {
-  renderFatalScreen(formatRuntimeError(error));
+  renderBootstrapError(formatRuntimeError(error));
 });

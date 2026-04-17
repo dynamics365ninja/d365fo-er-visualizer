@@ -15,7 +15,6 @@
     "@xyflow/react": "^12.8.2",
     "react-arborist": "^3.4.0",
     "zustand": "^5.0.0",
-    "@monaco-editor/react": "^4.7.0",
     "react-resizable-panels": "^2.1.0"
   },
   "devDependencies": {

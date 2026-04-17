@@ -27,10 +27,13 @@ export interface CrossRefEntry {
 export class GUIDRegistry {
   private entries = new Map<string, GUIDEntry>();
   private crossRefs: CrossRefEntry[] = [];
+  /** Secondary index: normalized target → cross-refs. Built lazily, invalidated on mutation. */
+  private targetIndex: Map<string, CrossRefEntry[]> | null = null;
 
   clear(): void {
     this.entries.clear();
     this.crossRefs = [];
+    this.targetIndex = null;
   }
 
   register(entry: GUIDEntry): void {
@@ -49,15 +52,26 @@ export class GUIDRegistry {
 
   addCrossRef(ref: CrossRefEntry): void {
     this.crossRefs.push(ref);
+    this.targetIndex = null; // invalidate
   }
 
-  /** Find all cross-references pointing to a given target */
+  private ensureTargetIndex(): Map<string, CrossRefEntry[]> {
+    if (this.targetIndex) return this.targetIndex;
+    const index = new Map<string, CrossRefEntry[]>();
+    for (const ref of this.crossRefs) {
+      const key = ref.target.toLowerCase();
+      const bucket = index.get(key);
+      if (bucket) bucket.push(ref); else index.set(key, [ref]);
+    }
+    this.targetIndex = index;
+    return index;
+  }
+
+  /** Find all cross-references pointing to a given target. O(1) average via secondary index. */
   findRefsTo(target: string, targetType?: CrossRefEntry['targetType']): CrossRefEntry[] {
-    const lowerTarget = target.toLowerCase();
-    return this.crossRefs.filter(r => {
-      const matches = r.target.toLowerCase() === lowerTarget;
-      return targetType ? matches && r.targetType === targetType : matches;
-    });
+    const bucket = this.ensureTargetIndex().get(target.toLowerCase());
+    if (!bucket) return [];
+    return targetType ? bucket.filter(r => r.targetType === targetType) : bucket.slice();
   }
 
   /** Find all cross-references from a given source config */

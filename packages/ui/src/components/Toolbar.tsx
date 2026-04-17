@@ -4,33 +4,35 @@ import { t } from '../i18n';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 
 interface ToolbarProps {
-  onToggleSearch: () => void;
-  onToggleLeft: () => void;
-  onToggleRight: () => void;
-  onGoHome: () => void;
-  showLeft: boolean;
-  showRight: boolean;
+  breadcrumb?: React.ReactNode;
 }
 
-export function Toolbar({ onToggleSearch, onToggleLeft, onToggleRight, onGoHome, showLeft, showRight }: ToolbarProps) {
+/**
+ * Slim top toolbar - focused on file/history operations. View-toggles, theme,
+ * and palette were moved to the left ActivityBar so this bar stays clean.
+ */
+export function Toolbar({ breadcrumb }: ToolbarProps) {
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
-  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
-  const setShowTechnicalDetails = useAppStore(s => s.setShowTechnicalDetails);
-  const themeMode = useAppStore(s => s.themeMode);
-  const setThemeMode = useAppStore(s => s.setThemeMode);
   const canNavigateBack = useAppStore(s => s.canNavigateBack);
+  const canNavigateForward = useAppStore(s => s.canNavigateForward);
   const navigateBack = useAppStore(s => s.navigateBack);
+  const navigateForward = useAppStore(s => s.navigateForward);
+  const pushToast = useAppStore(s => s.pushToast);
+  const configs = useAppStore(s => s.configurations);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const reportLoadErrors = useCallback((errors: string[]) => {
+    for (const err of errors) {
+      pushToast({ kind: 'error', message: err });
+    }
+  }, [pushToast]);
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const result = await loadBrowserFiles(e.target.files, loadXmlFile);
-    if (result.errors.length > 0) {
-      alert(result.errors.join('\n'));
-    }
-
-    // Reset so same file can be re-selected
+    if (result.errors.length > 0) reportLoadErrors(result.errors);
     if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [loadXmlFile]);
+  }, [loadXmlFile, reportLoadErrors]);
 
   const handleOpenFiles = useCallback(async () => {
     const result = await openFilesWithSystemDialog(loadXmlFile);
@@ -38,31 +40,17 @@ export function Toolbar({ onToggleSearch, onToggleLeft, onToggleRight, onGoHome,
       fileInputRef.current?.click();
       return;
     }
-
-    if (result.errors.length > 0) {
-      alert(result.errors.join('\n'));
-    }
-  }, [loadXmlFile]);
+    if (result.errors.length > 0) reportLoadErrors(result.errors);
+  }, [loadXmlFile, reportLoadErrors]);
 
   return (
-    <div className="toolbar">
-      <ToolbarButton onClick={navigateBack} icon="←" label={t.back} disabled={!canNavigateBack} />
+    <div className="toolbar toolbar--slim">
+      <div className="toolbar__nav">
+        <IconButton onClick={navigateBack} icon="←" label={t.back} disabled={!canNavigateBack} shortcut="Alt+←" />
+        <IconButton onClick={navigateForward} icon="→" label={t.forward} disabled={!canNavigateForward} shortcut="Alt+→" />
+      </div>
 
-      <div className="toolbar-divider" />
-
-      <button
-        onClick={onGoHome}
-        title={t.home}
-        className="toolbar-home"
-      >
-        <span className="toolbar-home-icon">⚡</span>
-        <span className="toolbar-home-copy">
-          <span className="toolbar-home-kicker">Workspace</span>
-          <span className="toolbar-home-title">ER Visualizer</span>
-        </span>
-      </button>
-
-      <div className="toolbar-divider" />
+      <div className="toolbar__sep" aria-hidden="true" />
 
       <input
         ref={fileInputRef}
@@ -73,70 +61,40 @@ export function Toolbar({ onToggleSearch, onToggleLeft, onToggleRight, onGoHome,
         className="toolbar-file-input"
         id="file-input"
       />
-      <ToolbarButton onClick={handleOpenFiles} icon="📂" label={t.loadXml} />
-      <ToolbarButton onClick={onToggleSearch} icon="🔍" label={`${t.search} / ${t.whereUsed}`} />
+      <button type="button" className="toolbar__primary" onClick={handleOpenFiles} title={t.loadXml}>
+        <span aria-hidden="true">📂</span>
+        <span>{t.loadXml}</span>
+      </button>
 
-      <div className="toolbar-section">
-        <ToolbarToggle onClick={onToggleLeft} icon="▧" label={t.explorer} active={showLeft} />
-        <ToolbarToggle onClick={onToggleRight} icon="▨" label={t.properties} active={showRight} />
-        <ToolbarToggle
-          onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-          icon="☰"
-          label={showTechnicalDetails ? t.hideDetails : t.showDetails}
-          active={showTechnicalDetails}
-        />
+      <div className="toolbar__sep" aria-hidden="true" />
+
+      <div className="toolbar__breadcrumb">{breadcrumb}</div>
+
+      <div className="toolbar__right">
+        {configs.length > 0 && (
+          <span className="toolbar__count" title={t.statusConfigs(configs.length)}>
+            {configs.length} <span className="toolbar__count-word">{t.statusConfigsWord}</span>
+          </span>
+        )}
+        <span className={`toolbar__mode${showTechnicalDetails ? ' toolbar__mode--tech' : ''}`}>
+          {showTechnicalDetails ? t.technicalView : t.consultantView}
+        </span>
       </div>
-
-      <div className="toolbar-spacer" />
-      <ToolbarIconButton
-        onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
-        icon={themeMode === 'dark' ? '🌙' : '☀️'}
-        label={themeMode === 'dark' ? t.darkTheme : t.lightTheme}
-        active={themeMode === 'dark'}
-      />
-      <span className={`toolbar-mode-badge${showTechnicalDetails ? ' toolbar-mode-badge-technical' : ''}`}>
-        {showTechnicalDetails ? t.technicalView : t.consultantView}
-      </span>
-      <span className="toolbar-subtitle">{t.appSubtitle}</span>
     </div>
   );
 }
 
-function ToolbarButton({ onClick, icon, label, disabled = false }: { onClick: () => void; icon: string; label: string; disabled?: boolean }) {
+function IconButton({ onClick, icon, label, disabled = false, shortcut }: { onClick: () => void; icon: string; label: string; disabled?: boolean; shortcut?: string }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="toolbar-button"
+      className="toolbar__icon-btn"
       disabled={disabled}
-    >
-      <span className="toolbar-button-icon">{icon}</span>
-      <span>{label}</span>
-    </button>
-  );
-}
-
-function ToolbarToggle({ onClick, icon, label, active }: { onClick: () => void; icon: string; label: string; active: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      title={label}
-      className={`toolbar-toggle${active ? ' toolbar-toggle-active' : ''}`}
-    >
-      <span className="toolbar-button-icon">{icon}</span>
-      <span>{label}</span>
-    </button>
-  );
-}
-
-function ToolbarIconButton({ onClick, icon, label, active }: { onClick: () => void; icon: string; label: string; active: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      title={label}
+      title={shortcut ? `${label} (${shortcut})` : label}
       aria-label={label}
-      className={`toolbar-toggle toolbar-toggle-icon${active ? ' toolbar-toggle-active' : ''}`}
     >
-      <span className="toolbar-button-icon">{icon}</span>
+      {icon}
     </button>
   );
 }

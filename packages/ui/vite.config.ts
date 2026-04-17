@@ -13,7 +13,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    target: 'es2019',
+    target: 'es2022',
     sourcemap: true,
+    chunkSizeWarningLimit: 900,
   },
 });

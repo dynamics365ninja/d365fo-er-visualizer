@@ -392,7 +392,10 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
   if (isModel && !hasModelMapping) {
     return (
       <div className="dd-hint dd-hint-info">
-        📋 {t.drillNoModelMapping}
+        <span className="dd-hint__icon" aria-hidden>📋</span>
+        <div className="dd-hint__body">
+          <div className="dd-hint__text">{t.drillNoModelMapping}</div>
+        </div>
       </div>
     );
   }
@@ -403,26 +406,38 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
   if (isModel && hasModelMapping && !modelResult) {
     return (
       <div className="dd-hint dd-hint-warn">
-        {cleanModelExpr !== expr && (
-          <div className="dd-unres-expr dd-gap-bottom">
-            <span className="dd-unres-text">{expr}</span>
-          </div>
-        )}
-        <div className="dd-gap-bottom">⚠️ {t.drillPathNotFound(stripModel(cleanModelExpr))}</div>
-        {mappingPaths?.map((mp, i) => (
-          <div key={i} className="dd-debug-block">
-            <div className="dd-debug-title">
-              {mp.configName} — {mp.total} bindings{mp.total > 15 ? ` (${t.drillMore(mp.total - 15)})` : ''}:
+        <span className="dd-hint__icon" aria-hidden>⚠️</span>
+        <div className="dd-hint__body">
+          {cleanModelExpr !== expr && (
+            <div className="dd-unres-expr dd-gap-bottom">
+              <span className="dd-unres-text">{expr}</span>
             </div>
-            {mp.paths.map((p, j) => (
-              <div key={j} className="dd-debug-path"
-                onClick={() => onPush({ label: p, expression: 'model.' + p.replace(/\\/g, '.'), configIndex: ci })}
-              >
-                {p}
-              </div>
-            ))}
-          </div>
-        ))}
+          )}
+          <div className="dd-hint__text dd-gap-bottom">{t.drillPathNotFound(stripModel(cleanModelExpr))}</div>
+          {mappingPaths && mappingPaths.length > 0 && (
+            <div className="dd-hint__suggest">
+              <div className="dd-hint__suggest-title">{t.drillActualPaths}</div>
+              {mappingPaths.map((mp, i) => (
+                <div key={i} className="dd-debug-block">
+                  <div className="dd-debug-title">
+                    {mp.configName} — {mp.total}{mp.total > 15 ? ` (${t.drillMore(mp.total - 15)})` : ''}:
+                  </div>
+                  {mp.paths.map((p, j) => (
+                    <button
+                      key={j}
+                      type="button"
+                      className="dd-debug-path"
+                      onClick={() => onPush({ label: p, expression: 'model.' + p.replace(/\\/g, '.'), configIndex: ci })}
+                      title={`${t.drillDown}: ${p}`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -443,26 +458,40 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
   if (!resolvedDs && !mappingExpr) {
     // Expression is genuinely empty — no binding assigned
     if (!expr.trim()) {
-      return <div className="dd-hint dd-hint-muted">{t.drillUnbound}</div>;
+      return (
+        <div className="dd-hint dd-hint-muted">
+          <span className="dd-hint__icon" aria-hidden>○</span>
+          <div className="dd-hint__body">
+            <div className="dd-hint__text">{t.drillUnbound}</div>
+          </div>
+        </div>
+      );
     }
 
     const kind = classifyExpr(expr);
     if (kind === 'current-record') {
       return (
         <div className="dd-hint dd-hint-info">
-          <div className="dd-unres-expr">
-            <span className="dd-unres-label">@.</span>
-            <span className="dd-unres-text">{expr.slice(expr.indexOf('.') + 1)}</span>
+          <span className="dd-hint__icon" aria-hidden>📍</span>
+          <div className="dd-hint__body">
+            <div className="dd-hint__title">{t.drillLabelExpression}</div>
+            <div className="dd-unres-expr">
+              <span className="dd-unres-label">@.</span>
+              <span className="dd-unres-text">{expr.slice(expr.indexOf('.') + 1)}</span>
+            </div>
+            <div className="dd-hint__text">{t.drillCurrentRecord}</div>
           </div>
-          <div className="dd-gap-top">📍 {t.drillCurrentRecord}</div>
         </div>
       );
     }
     if (kind === 'constant') {
       return (
         <div className="dd-hint dd-hint-info">
-          <div className="dd-unres-expr"><span className="dd-unres-text">{expr}</span></div>
-          <div className="dd-gap-top">💬 {t.drillConstant}</div>
+          <span className="dd-hint__icon" aria-hidden>💬</span>
+          <div className="dd-hint__body">
+            <div className="dd-unres-expr"><span className="dd-unres-text">{expr}</span></div>
+            <div className="dd-hint__text">{t.drillConstant}</div>
+          </div>
         </div>
       );
     }
@@ -470,16 +499,22 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
     if (kind === 'er-function' || kind === 'compound') {
       return (
         <div className="dd-hint dd-hint-info">
-          <div className="dd-hint-expr-label">🔀 {t.drillInteractiveExpr}</div>
-          <ExpressionView expr={expr} configIndex={ci} onPush={onPush} />
+          <span className="dd-hint__icon" aria-hidden>🔀</span>
+          <div className="dd-hint__body">
+            <div className="dd-hint__title">{t.drillInteractiveExpr}</div>
+            <ExpressionView expr={expr} configIndex={ci} onPush={onPush} />
+          </div>
         </div>
       );
     }
     // Unknown — unresolvable plain name
     return (
       <div className="dd-hint dd-hint-warn">
-        <div className="dd-unres-expr"><span className="dd-unres-text">{expr}</span></div>
-        <div className="dd-gap-top">⚠️ {t.drillDsNotFound(firstSegment(expr) || expr)}</div>
+        <span className="dd-hint__icon" aria-hidden>⚠️</span>
+        <div className="dd-hint__body">
+          <div className="dd-unres-expr"><span className="dd-unres-text">{expr}</span></div>
+          <div className="dd-hint__text">{t.drillDsNotFound(firstSegment(expr) || expr)}</div>
+        </div>
       </div>
     );
   }
@@ -488,12 +523,17 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
     <div className="dd-frame-body">
       {/* ── Step 1: model path → mapping expression (interactive) ── */}
       {mappingExpr && (
-        <div className="dd-step">
-          <div className="dd-step-label">{t.drillLabelMapping}
-            {mappingConfig && <span className="dd-step-config">{mappingConfig}</span>}
+        <section className="dd-step">
+          <header className="dd-step__head">
+            <span className="dd-step__num" aria-hidden>1</span>
+            <span className="dd-step__icon" aria-hidden>🧩</span>
+            <span className="dd-step__title">{t.drillStepMappingTitle}</span>
+            {mappingConfig && <span className="dd-step__config" title={mappingConfig}>{mappingConfig}</span>}
+          </header>
+          <div className="dd-step__body">
+            <ExpressionView expr={mappingExpr} configIndex={mappingCi} onPush={onPush} />
           </div>
-          <ExpressionView expr={mappingExpr} configIndex={mappingCi} onPush={onPush} />
-        </div>
+        </section>
       )}
 
       {/* ── Step 2: datasource card ── */}
@@ -503,12 +543,18 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
           configIndex={effectiveCi}
           configurations={configurations}
           onPush={onPush}
+          stepNumber={mappingExpr ? 2 : 1}
         />
       )}
 
       {/* ── Step 3: deep deps ── */}
       {deepResult && (deepResult.involvedDatasources.length > 0 || deepResult.calculatedFieldChain.length > 0) && (
-        <DepChain deepResult={deepResult} onPush={onPush} fromCi={effectiveCi} />
+        <DepChain
+          deepResult={deepResult}
+          onPush={onPush}
+          fromCi={effectiveCi}
+          stepNumber={(mappingExpr ? 2 : 1) + (resolvedDs ? 1 : 0)}
+        />
       )}
     </div>
   );
@@ -516,11 +562,12 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
 
 // ─── Datasource Card ─────────────────────────────────────────────────────────
 
-function DatasourceCard({ ds, configIndex, configurations, onPush }: {
+function DatasourceCard({ ds, configIndex, configurations, onPush, stepNumber }: {
   ds: any;
   configIndex: number;
   configurations: any[];
   onPush: (f: Frame) => void;
+  stepNumber?: number;
 }) {
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
@@ -535,18 +582,24 @@ function DatasourceCard({ ds, configIndex, configurations, onPush }: {
     null;
 
   return (
-    <div className="dd-ds-card">
-      <div className="dd-ds-card-header">
-        <span className="dd-ds-icon">{icon}</span>
-        <span className={`badge badge-${badge}`}>{ds.type}</span>
-        <span className="dd-ds-name">{ds.name}</span>
+    <section className="dd-step dd-ds-card">
+      <header className="dd-step__head">
+        {stepNumber !== undefined && <span className="dd-step__num" aria-hidden>{stepNumber}</span>}
+        <span className="dd-step__icon" aria-hidden>{icon}</span>
+        <span className="dd-step__title">{t.drillStepDatasourceTitle}</span>
+        <span className={`badge badge-${badge} dd-step__type`}>{ds.type}</span>
+      </header>
+
+      <div className="dd-ds-card__identity">
+        <span className="dd-ds-card__name-label">{t.propName}</span>
+        <span className="dd-ds-card__name">{ds.name}</span>
         {datasourceNodeId && (
           <button
             className="dd-action-btn"
             onClick={() => navigateToTreeNode(datasourceNodeId)}
             title={t.openInExplorerAction}
           >
-            {t.openInExplorerAction}
+            {t.drillOpenExplorerFull}
           </button>
         )}
       </div>
@@ -554,11 +607,12 @@ function DatasourceCard({ ds, configIndex, configurations, onPush }: {
       {/* Concrete target */}
       {concreteTarget && (
         <div className="dd-ds-target">
-          <span className="dd-step-label">{
+          <span className="dd-ds-target__label">{
             concreteTarget.kind === 'table' ? t.drillLabelTable :
             concreteTarget.kind === 'enum'  ? t.drillLabelEnum  :
             t.drillLabelClass
           }</span>
+          <span className="dd-ds-target__arrow" aria-hidden>→</span>
           <span className={`dd-target-name badge badge-${concreteTarget.kind}`}>
             {concreteTarget.name}
           </span>
@@ -574,7 +628,9 @@ function DatasourceCard({ ds, configIndex, configurations, onPush }: {
       {/* Calculated field — show formula with interactive drill-down tokens */}
       {ds.calculatedField?.expressionAsString && (
         <div className="dd-ds-formula">
-          <div className="dd-step-label">{t.drillLabelFormula}</div>
+          <div className="dd-ds-formula__label">
+            <span aria-hidden>🧮</span> {t.drillStepFormulaTitle}
+          </div>
           <ExpressionView
             expr={ds.calculatedField.expressionAsString}
             configIndex={configIndex}
@@ -587,7 +643,7 @@ function DatasourceCard({ ds, configIndex, configurations, onPush }: {
       {ds.children?.length > 0 && (
         <DsChildren children={ds.children} configIndex={configIndex} onPush={onPush} />
       )}
-    </div>
+    </section>
   );
 }
 
@@ -600,32 +656,49 @@ function DsChildren({ children, configIndex, onPush }: {
   if (children.length === 0) return null;
   return (
     <div className="dd-ds-children">
-      <div className="dd-ds-children-toggle" onClick={() => setOpen(o => !o)}>
-        <span className={`tree-chevron ${open ? 'open' : ''}`} /> {t.drillLabelChildren} ({children.length})
-      </div>
-      {open && children.map((child: any, i: number) => (
-        <div key={i} className="dd-ds-child dd-clickable"
-          onClick={() => onPush({ label: child.name, expression: child.name, configIndex })}
-        >
-          <span className="dd-ds-icon">{dsTypeIcon(child)}</span>
-          <span className={`badge badge-${dsTypeBadge(child)}`}>{child.type}</span>
-          <span className="dd-ds-name">{child.name}</span>
-          {child.tableInfo && <span className="dd-ds-target-inline">→ {child.tableInfo.tableName}</span>}
-          {child.enumInfo  && <span className="dd-ds-target-inline">→ {formatEnumDisplayName(child.enumInfo.enumName, child.enumInfo)}</span>}
-          {child.classInfo && <span className="dd-ds-target-inline">→ {child.classInfo.className}</span>}
-          {child.calculatedField && <span className="dd-push-icon">→</span>}
+      <button
+        type="button"
+        className="dd-ds-children__toggle"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+      >
+        <span className={`tree-chevron ${open ? 'open' : ''}`} />
+        <span aria-hidden>📦</span>
+        <span>{t.drillStepChildrenTitle}</span>
+        <span className="dd-ds-children__count">{children.length}</span>
+      </button>
+      {open && (
+        <div className="dd-ds-children__list">
+          {children.map((child: any, i: number) => (
+            <button
+              key={i}
+              type="button"
+              className="dd-ds-child dd-clickable"
+              onClick={() => onPush({ label: child.name, expression: child.name, configIndex })}
+              title={`${t.drillDown}: ${child.name}`}
+            >
+              <span className="dd-ds-icon">{dsTypeIcon(child)}</span>
+              <span className={`badge badge-${dsTypeBadge(child)}`}>{child.type}</span>
+              <span className="dd-ds-name">{child.name}</span>
+              {child.tableInfo && <span className="dd-ds-target-inline">→ {child.tableInfo.tableName}</span>}
+              {child.enumInfo  && <span className="dd-ds-target-inline">→ {formatEnumDisplayName(child.enumInfo.enumName, child.enumInfo)}</span>}
+              {child.classInfo && <span className="dd-ds-target-inline">→ {child.classInfo.className}</span>}
+              <span className="dd-push-icon" aria-hidden>›</span>
+            </button>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
 
 // ─── Dependency chain from deep resolution ───────────────────────────────────
 
-function DepChain({ deepResult, onPush, fromCi }: {
+function DepChain({ deepResult, onPush, fromCi, stepNumber }: {
   deepResult: any;
   onPush: (f: Frame) => void;
   fromCi: number;
+  stepNumber?: number;
 }) {
   const tables  = deepResult.involvedDatasources.filter((d: any) => d.tableName);
   const enums   = deepResult.involvedDatasources.filter((d: any) => d.enumName);
@@ -633,24 +706,34 @@ function DepChain({ deepResult, onPush, fromCi }: {
   const calcs   = deepResult.calculatedFieldChain as { name: string; formula: string }[];
 
   return (
-    <div className="dd-dep-chain">
+    <section className="dd-step dd-dep-chain">
+      <header className="dd-step__head">
+        {stepNumber !== undefined && <span className="dd-step__num" aria-hidden>{stepNumber}</span>}
+        <span className="dd-step__icon" aria-hidden>🔗</span>
+        <span className="dd-step__title">{t.drillStepDepsTitle}</span>
+      </header>
+      <div className="dd-step__body">
       {calcs.length > 0 && (
         <div className="dd-dep-section">
-          <div className="dd-dep-section-title">🧮 {t.drillLabelCalcField} ({calcs.length})</div>
+          <div className="dd-dep-section-title">🧮 {t.drillLabelCalcField} <span className="dd-dep-section-count">{calcs.length}</span></div>
           {calcs.map((cf, i) => (
-            <div key={i} className="dd-dep-item dd-clickable"
+            <button
+              key={i}
+              type="button"
+              className="dd-dep-item dd-clickable"
               onClick={() => onPush({ label: cf.name, expression: cf.formula, configIndex: fromCi })}
+              title={`${t.drillDown}: ${cf.name}`}
             >
               <span className="dd-dep-name">{cf.name}</span>
               <span className="dd-dep-formula">{cf.formula}</span>
-              <span className="dd-push-icon">→</span>
-            </div>
+              <span className="dd-push-icon" aria-hidden>›</span>
+            </button>
           ))}
         </div>
       )}
       {tables.length > 0 && (
         <div className="dd-dep-section">
-          <div className="dd-dep-section-title">🗃️ {t.drillLabelTable} ({tables.length})</div>
+          <div className="dd-dep-section-title">🗃️ {t.drillLabelTable} <span className="dd-dep-section-count">{tables.length}</span></div>
           {tables.map((d: any, i: number) => (
             <div key={i} className="dd-dep-item">
               <span className="badge badge-table">{d.type}</span>
@@ -662,7 +745,7 @@ function DepChain({ deepResult, onPush, fromCi }: {
       )}
       {enums.length > 0 && (
         <div className="dd-dep-section">
-          <div className="dd-dep-section-title">🔤 {t.drillLabelEnum} ({enums.length})</div>
+          <div className="dd-dep-section-title">🔤 {t.drillLabelEnum} <span className="dd-dep-section-count">{enums.length}</span></div>
           {enums.map((d: any, i: number) => (
             <div key={i} className="dd-dep-item">
               <span className="badge badge-enum">{d.type}</span>
@@ -674,7 +757,7 @@ function DepChain({ deepResult, onPush, fromCi }: {
       )}
       {classes.length > 0 && (
         <div className="dd-dep-section">
-          <div className="dd-dep-section-title">⚙️ {t.drillLabelClass} ({classes.length})</div>
+          <div className="dd-dep-section-title">⚙️ {t.drillLabelClass} <span className="dd-dep-section-count">{classes.length}</span></div>
           {classes.map((d: any, i: number) => (
             <div key={i} className="dd-dep-item">
               <span className="badge badge-class">{d.type}</span>
@@ -684,7 +767,8 @@ function DepChain({ deepResult, onPush, fromCi }: {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </section>
   );
 }
 
@@ -700,60 +784,118 @@ export function DrillDownPanel({ expression, configIndex, elementName }: {
   // Don't render anything for genuinely empty expressions — the parent handles that message
   const trimmedExpr = expression?.trim() ?? '';
 
-  const [stack, setStack] = useState<Frame[]>([{
+  const initialFrame = (): Frame => ({
     label: elementName ?? (trimmedExpr.split(/[.(]/)[0] || '?'),
     expression: trimmedExpr,
     configIndex,
-  }]);
+  });
+
+  const [stack, setStack] = useState<Frame[]>([initialFrame()]);
 
   const currentFrame = stack[stack.length - 1];
 
   const push = (frame: Frame) => setStack(s => [...s, frame]);
   const jumpTo = (index: number) => setStack(s => s.slice(0, index + 1));
+  const restart = () => setStack([initialFrame()]);
 
   // Reset when expression changes
   React.useEffect(() => {
-    setStack([{
-      label: elementName ?? (trimmedExpr.split(/[.(]/)[0] || '?'),
-      expression: trimmedExpr,
-      configIndex,
-    }]);
+    setStack([initialFrame()]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trimmedExpr, configIndex, elementName]);
 
-  if (!trimmedExpr) return null;
+  if (!trimmedExpr) {
+    return (
+      <div className="dd-panel dd-panel--empty">
+        <div className="dd-empty-state">
+          <span className="dd-empty-state__icon" aria-hidden>🧭</span>
+          <div className="dd-empty-state__body">
+            <div className="dd-empty-state__title">{t.drillDown}</div>
+            <div className="dd-empty-state__text">{t.drillHintEmpty}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const atRoot = stack.length === 1;
 
   return (
     <div className="dd-panel">
-      {/* Breadcrumb */}
-      {stack.length > 1 && (
-        <div className="dd-breadcrumb">
+      {/* ── Hero header ─────────────────────────────────────────────────── */}
+      <header className="dd-hero">
+        <div className="dd-hero__top">
+          <span className="dd-hero__badge">
+            <span className="dd-hero__badge-icon" aria-hidden>🧭</span>
+            {t.drillDown}
+          </span>
+          <span className="dd-hero__meta">{t.drillSteps(stack.length)}</span>
+          <div className="dd-hero__actions">
+            {!atRoot && (
+              <button
+                type="button"
+                className="dd-hero__btn dd-hero__btn--ghost"
+                onClick={restart}
+                title={t.drillRestart}
+              >⟲ {t.drillRestart}</button>
+            )}
+            {!atRoot && (
+              <button
+                type="button"
+                className="dd-hero__btn"
+                onClick={() => setStack(s => s.slice(0, -1))}
+                title={t.back}
+              >← {t.back}</button>
+            )}
+          </div>
+        </div>
+
+        {/* Breadcrumb — always visible, highlights the drill path */}
+        <nav className="dd-hero__crumbs" aria-label="breadcrumb">
           {stack.map((f, i) => (
             <React.Fragment key={i}>
-              {i > 0 && <span className="dd-breadcrumb-sep">›</span>}
-              <span
-                className={`dd-breadcrumb-item${i === stack.length - 1 ? ' active' : ''}`}
+              {i > 0 && <span className="dd-hero__crumb-sep" aria-hidden>›</span>}
+              <button
+                type="button"
+                className={`dd-hero__crumb${i === stack.length - 1 ? ' is-active' : ''}`}
                 onClick={() => i < stack.length - 1 && jumpTo(i)}
+                disabled={i === stack.length - 1}
+                title={f.expression}
               >
                 {f.label}
-              </span>
+              </button>
             </React.Fragment>
           ))}
+        </nav>
+
+        {/* Current expression — syntax-highlighted, clickable */}
+        <div className="dd-hero__expr-wrap">
+          <div className="dd-hero__expr-label">{t.drillAnalyzing}</div>
+          <ExpressionView
+            expr={currentFrame.expression}
+            configIndex={currentFrame.configIndex}
+            onPush={push}
+          />
         </div>
-      )}
 
-      {/* Current frame title */}
-      <div className="dd-frame-title">
-        <span className="dd-frame-title-label">{t.drillDown}</span>
-        <span className="dd-frame-meta">{t.drillSteps(stack.length)}</span>
-        <span className="dd-frame-title-expr">{currentFrame.expression}</span>
-        {stack.length > 1 && (
-          <button className="dd-back-btn" onClick={() => setStack(s => s.slice(0, -1))}>
-            ← {t.back}
-          </button>
-        )}
-      </div>
+        {/* Legend — tells user what's clickable */}
+        <div className="dd-hero__legend">
+          <span className="dd-hero__legend-item">
+            <span className="dd-legend-swatch dd-legend-swatch--ds">abc</span>
+            {t.drillLegendClickable}
+          </span>
+          <span className="dd-hero__legend-item">
+            <span className="dd-legend-swatch dd-legend-swatch--func">IF</span>
+            {t.drillLegendFunction}
+          </span>
+          <span className="dd-hero__legend-item">
+            <span className="dd-legend-swatch dd-legend-swatch--str">"x"</span>
+            {t.drillLegendLiteral}
+          </span>
+        </div>
+      </header>
 
-      {/* Frame content */}
+      {/* ── Frame content ─────────────────────────────────────────────── */}
       <div className="dd-frame-content">
         <FrameView
           frame={currentFrame}
