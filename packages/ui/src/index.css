@@ -54,6 +54,8 @@
   --surface-hover-accent: rgba(79, 193, 255, 0.12);
   --statusbar-chip-bg: rgba(255, 255, 255, 0.14);
   --statusbar-chip-border: rgba(255, 255, 255, 0.18);
+  --statusbar-validator-ok: #22c55e;
+  --statusbar-validator-issues: #eab308;
   --landing-grid-primary: rgba(0, 120, 212, 0.08);
   --landing-grid-secondary: rgba(78, 201, 176, 0.06);
   --landing-grid-line: rgba(79, 193, 255, 0.03);
@@ -135,8 +137,10 @@
   --format-type-text-line: var(--accent-text-danger);
   --format-type-pdf: var(--accent-text-danger);
   --surface-hover-accent: rgba(0, 95, 184, 0.08);
-  --statusbar-chip-bg: rgba(255, 255, 255, 0.4);
-  --statusbar-chip-border: rgba(255, 255, 255, 0.48);
+  --statusbar-chip-bg: rgba(0, 0, 0, 0.22);
+  --statusbar-chip-border: rgba(255, 255, 255, 0.35);
+  --statusbar-validator-ok: #b8f5c8;
+  --statusbar-validator-issues: #ffe066;
   --landing-grid-primary: rgba(0, 95, 184, 0.06);
   --landing-grid-secondary: rgba(0, 140, 100, 0.04);
   --landing-grid-line: rgba(0, 95, 184, 0.03);
@@ -4256,8 +4260,8 @@ button.dd-dep-item { cursor: pointer; }
    Status bar validator + warnings popover
    ───────────────────────────────────────────── */
 .app-statusbar-validator { cursor: default; }
-.app-statusbar-validator--issues { cursor: pointer; color: #eab308; }
-.app-statusbar-validator--ok { color: #22c55e; }
+.app-statusbar-validator--issues { cursor: pointer; color: var(--statusbar-validator-issues); }
+.app-statusbar-validator--ok { color: var(--statusbar-validator-ok); }
 .app-statusbar-warnings-popover {
   position: absolute;
   bottom: 28px; right: 12px;
