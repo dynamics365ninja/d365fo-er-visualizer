@@ -54,6 +54,7 @@
   --surface-hover-accent: rgba(79, 193, 255, 0.12);
   --statusbar-chip-bg: rgba(255, 255, 255, 0.14);
   --statusbar-chip-border: rgba(255, 255, 255, 0.18);
+  --statusbar-mode-chip-bg: rgba(255, 255, 255, 0.18);
   --statusbar-validator-ok: #22c55e;
   --statusbar-validator-issues: #eab308;
   --landing-grid-primary: rgba(0, 120, 212, 0.08);
@@ -137,10 +138,11 @@
   --format-type-text-line: var(--accent-text-danger);
   --format-type-pdf: var(--accent-text-danger);
   --surface-hover-accent: rgba(0, 95, 184, 0.08);
-  --statusbar-chip-bg: rgba(0, 0, 0, 0.22);
-  --statusbar-chip-border: rgba(255, 255, 255, 0.35);
-  --statusbar-validator-ok: #b8f5c8;
-  --statusbar-validator-issues: #ffe066;
+  --statusbar-chip-bg: rgba(0, 0, 0, 0.32);
+  --statusbar-chip-border: rgba(255, 255, 255, 0.55);
+  --statusbar-mode-chip-bg: rgba(0, 0, 0, 0.38);
+  --statusbar-validator-ok: #86efac;
+  --statusbar-validator-issues: #fde047;
   --landing-grid-primary: rgba(0, 95, 184, 0.06);
   --landing-grid-secondary: rgba(0, 140, 100, 0.04);
   --landing-grid-line: rgba(0, 95, 184, 0.03);
@@ -531,6 +533,30 @@ body {
   color: var(--text-secondary);
   text-align: center;
   line-height: 1.6;
+}
+
+.explorer-dropzone {
+  position: relative;
+}
+
+.explorer-dropzone-dragging {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.explorer-dropzone-overlay {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  padding: 4px 12px;
+  background: var(--accent);
+  color: var(--button-primary-fg);
+  font-weight: 600;
+  font-size: 12px;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  z-index: 5;
 }
 
 .explorer-filter-row {
@@ -1233,8 +1259,8 @@ body {
 
 .app-statusbar {
   height: 24px;
-  background: var(--accent);
-  color: var(--button-primary-fg);
+  background: #007acc;
+  color: #ffffff;
   display: flex;
   align-items: center;
   padding: 0 12px;
@@ -1242,20 +1268,29 @@ body {
   gap: 16px;
 }
 
+.app-statusbar > span,
+.app-statusbar > span > span {
+  color: #ffffff;
+}
+
 .app-statusbar-home {
   cursor: pointer;
-  opacity: 0.8;
+  color: #ffffff;
+  opacity: 1;
+  font-weight: 600;
 }
 
 .app-statusbar-home:hover {
   opacity: 1;
+  text-decoration: underline;
 }
 
 .app-statusbar-chip {
   padding: 1px 6px;
   border-radius: 3px;
-  background: var(--statusbar-chip-bg);
-  border: 1px solid var(--statusbar-chip-border);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: #ffffff;
   font-size: 10px;
 }
 
@@ -1268,9 +1303,9 @@ body {
 .app-statusbar-chip-close {
   border: none;
   background: transparent;
-  color: inherit;
+  color: #ffffff;
   cursor: pointer;
-  opacity: 0.78;
+  opacity: 0.95;
   font-size: 12px;
   line-height: 1;
 }
@@ -1280,11 +1315,12 @@ body {
 }
 
 .app-statusbar-mode-chip {
-  background: color-mix(in srgb, var(--button-primary-fg) 12%, transparent);
+  background: rgba(0, 0, 0, 0.38);
 }
 
 .app-statusbar-spacer {
   margin-left: auto;
+  color: #ffffff;
 }
 
 /* Resizable panel handles — VS Code-style thin */
@@ -4599,9 +4635,8 @@ button.dd-dep-item { cursor: pointer; }
 /* ─── Statusbar polish ─── */
 .app-statusbar {
   position: relative;
-  background: linear-gradient(180deg,
-    color-mix(in srgb, var(--bg-tertiary) 92%, transparent),
-    color-mix(in srgb, var(--bg-secondary) 96%, transparent));
+  background: #007acc;
+  color: #ffffff;
 }
 
 /* Tab polish for smaller tab-bar look */
