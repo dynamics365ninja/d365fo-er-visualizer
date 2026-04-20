@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { locale, t } from '../i18n';
 import { useAppStore, type TreeNode } from '../state/store';
 import { ERDirection } from '@er-visualizer/core';
+import { loadBrowserFiles } from '../utils/file-loading';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -109,9 +110,36 @@ export function ConfigExplorer() {
   const selectNode = useAppStore(s => s.selectNode);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const explorerExpandCommand = useAppStore(s => s.explorerExpandCommand);
+  const loadXmlFile = useAppStore(s => s.loadXmlFile);
+  const pushToast = useAppStore(s => s.pushToast);
   const [expandMode, setExpandMode] = useState<'default' | 'all' | 'none'>('default');
   const [expandVersion, setExpandVersion] = useState(0);
   const [filterQuery, setFilterQuery] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = useCallback((event: React.DragEvent) => {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((event: React.DragEvent) => {
+    // Only clear when leaving the container itself (not moving to a child)
+    if (event.currentTarget === event.target) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(async (event: React.DragEvent) => {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    setIsDragging(false);
+    const { errors } = await loadBrowserFiles(event.dataTransfer.files, loadXmlFile);
+    for (const err of errors) {
+      pushToast({ kind: 'error', message: err });
+    }
+  }, [loadXmlFile, pushToast]);
 
   // React to broadcast expand/collapse commands from the panel header
   React.useEffect(() => {
@@ -138,15 +166,27 @@ export function ConfigExplorer() {
 
   if (treeNodes.length === 0) {
     return (
-      <div className="explorer-empty-state">
+      <div
+        className={`explorer-empty-state explorer-dropzone ${isDragging ? 'explorer-dropzone-dragging' : ''}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <p style={{ marginBottom: 8 }}>{t.noConfigurationsLoaded}</p>
         <p style={{ fontSize: 11 }}>{t.loadXmlHint}</p>
+        {isDragging && <div className="explorer-dropzone-overlay">{t.landingDropRelease}</div>}
       </div>
     );
   }
 
   return (
-    <div className="explorer-tree-shell">
+    <div
+      className={`explorer-tree-shell explorer-dropzone ${isDragging ? 'explorer-dropzone-dragging' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragging && <div className="explorer-dropzone-overlay">{t.landingDropRelease}</div>}
       <div className="explorer-toolbar">
         <button
           className="fmt-action-btn"
