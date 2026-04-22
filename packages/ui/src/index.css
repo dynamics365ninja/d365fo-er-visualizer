@@ -1452,6 +1452,138 @@ body {
   white-space: nowrap;
 }
 
+/* ─── Format Bindings tab: element card with inline binding list ─── */
+.fmt-bind-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid var(--border-color);
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+
+.fmt-bind-card:hover {
+  background: color-mix(in srgb, var(--text-primary) 3%, transparent);
+}
+
+.density-compact .fmt-bind-card {
+  padding: 4px 10px 5px;
+}
+
+.fmt-bind-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.fmt-bind-card-name {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--syn-resolved);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fmt-bind-card-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.fmt-bind-type-badge {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.fmt-bind-card-reveal {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.fmt-bind-card-reveal:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.fmt-bind-card-reveal:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.fmt-bind-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 2px;
+}
+
+.fmt-bind-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+  min-width: 0;
+}
+
+.fmt-bind-row-label {
+  flex-shrink: 0;
+  font-size: 9px;
+}
+
+.fmt-bind-row-arrow {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  font-size: 11px;
+  align-self: center;
+}
+
+.fmt-bind-row-expr {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+}
+
+.fmt-bind-row-expr > .dd-trigger-expr {
+  display: block;
+  width: 100%;
+}
+
 /* ─── Format Designer (Primary View) ─── */
 
 .fmt-header {
