@@ -507,26 +507,17 @@ body {
   display: none;
 }
 
-/* Group containers: neutral surface, coloured dot indicator + text */
+/* Group containers: neutral surface, coloured text label only */
 .explorer-kind-group-model .explorer-kind-group-header {
   color: var(--surface-info-fg);
-}
-.explorer-kind-group-model .explorer-kind-group-header-left::before {
-  background: color-mix(in srgb, var(--surface-info-fg) 85%, transparent);
 }
 
 .explorer-kind-group-mapping .explorer-kind-group-header {
   color: var(--surface-success-fg);
 }
-.explorer-kind-group-mapping .explorer-kind-group-header-left::before {
-  background: color-mix(in srgb, var(--surface-success-fg) 85%, transparent);
-}
 
 .explorer-kind-group-format .explorer-kind-group-header {
   color: var(--surface-warning-fg);
-}
-.explorer-kind-group-format .explorer-kind-group-header-left::before {
-  background: color-mix(in srgb, var(--surface-warning-fg) 85%, transparent);
 }
 .explorer-empty-state {
   padding: 22px 18px;
@@ -5090,16 +5081,6 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-}
-
-.explorer-kind-group-header-left::before {
-  content: '';
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--text-secondary);
-  flex-shrink: 0;
 }
 
 .explorer-kind-group-chevron {
