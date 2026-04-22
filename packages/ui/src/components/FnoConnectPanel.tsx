@@ -133,7 +133,13 @@ type ConnectionState =
   | { kind: 'connected'; account: string }
   | { kind: 'error'; message: string };
 
-const DEFAULT_CLIENT_ID = 'a5191df1-dea6-4df3-a36e-ce3fa1406c9d';
+/**
+ * The client ID must be a Microsoft Entra app registration in YOUR tenant
+ * with delegated permission on the target F&O environment and
+ * "Allow public client flows = Yes". We intentionally ship no default — using
+ * someone else's clientId triggers AADSTS700016 ("app not found in tenant").
+ */
+const DEFAULT_CLIENT_ID = '';
 
 export const FnoConnectPanel: React.FC = () => {
   const styles = useStyles();
@@ -208,7 +214,7 @@ export const FnoConnectPanel: React.FC = () => {
         setLoadingSolutions(false);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = explainAuthError(err);
       setConnState({ kind: 'error', message });
       pushToast({ kind: 'error', message: t.fnoSignInFailed(message) });
     }
@@ -456,4 +462,32 @@ export const FnoConnectPanel: React.FC = () => {
 
 function componentKey(c: ErConfigSummary): string {
   return `${c.solutionName}::${c.configurationName}::${c.componentType}::${c.version ?? ''}`;
+}
+
+/**
+ * Turn an MSAL / network error into a human-readable hint. The canonical
+ * AADSTS codes that users hit first on F&O integration are called out by
+ * name so the UI can guide them to Entra portal settings.
+ */
+function explainAuthError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  const code = raw.match(/AADSTS(\d{4,6})/)?.[1];
+  switch (code) {
+    case '700016':
+      return 'AADSTS700016: Application (client) ID v tomto tenantu neexistuje. Zaregistruj app v Microsoft Entra ID (App registrations → New registration), povol „Allow public client flows", přidej redirect URI „http://localhost" a použij přesně to Application ID.';
+    case '65001':
+      return 'AADSTS65001: Uživatel/administrátor neudělil consent. V Entra portálu otevři registraci aplikace → API permissions → Grant admin consent pro F&O (Dynamics ERP) user_impersonation.';
+    case '500011':
+      return 'AADSTS500011: Scope (envUrl) neodpovídá žádnému service principálu. Ověř přesnou URL prostředí (bez lomítka na konci) a že v daném tenantu je Dynamics 365 F&O nainstalován.';
+    case '50020':
+      return 'AADSTS50020: Uživatel není v domovském tenantu této aplikace. Buď přihlaš se guest účtem přijatým v tomto tenantu, nebo změň registraci aplikace na „Accounts in any organizational directory".';
+    case '54005':
+    case '9002313':
+      return `AADSTS${code}: Autorizační kód byl již použit nebo je neplatný. Zkus se přihlásit znovu.`;
+    case '50076':
+    case '50079':
+      return `AADSTS${code}: Je vyžadováno MFA. Projdi výzvou v prohlížeči a zkus to znovu.`;
+    default:
+      return code ? `AADSTS${code}: ${raw}` : raw;
+  }
 }
