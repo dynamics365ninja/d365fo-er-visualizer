@@ -414,6 +414,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const removeRecentSession = useAppStore(s => s.removeRecentSession);
   const clearRecentSessions = useAppStore(s => s.clearRecentSessions);
   const loadRecentSession = useAppStore(s => s.loadRecentSession);
+  const cachedPaths = useAppStore(s => s.cachedPaths);
   const [isDragging, setIsDragging] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -630,14 +631,16 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
           </div>
           <div className={styles.recentList}>
             {recentSessions.map(session => {
-              const canLoad = session.files.some(f => f.content);
+              const canLoad = session.files.some(f => cachedPaths.has(f.path));
               const primaryName = session.files[0]?.name ?? '';
               const title = session.files.length === 1
                 ? primaryName
                 : t.recentSessionTitle(session.files.length);
               const handleLoad = () => {
                 if (!canLoad) return;
-                if (loadRecentSession(session.id)) onFilesLoaded();
+                void loadRecentSession(session.id).then(ok => {
+                  if (ok) onFilesLoaded();
+                });
               };
               return (
                 <div
@@ -703,10 +706,12 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
           </div>
           <div className={styles.recentList}>
             {recentFiles.map(rf => {
-              const canReload = Boolean(rf.content);
+              const canReload = cachedPaths.has(rf.path);
               const handleReload = () => {
                 if (!canReload) return;
-                if (reloadRecentFile(rf.path)) onFilesLoaded();
+                void reloadRecentFile(rf.path).then(ok => {
+                  if (ok) onFilesLoaded();
+                });
               };
               return (
                 <div

@@ -8,6 +8,13 @@ import type {
 } from '@er-visualizer/core';
 import { parseERConfiguration, GUIDRegistry } from '@er-visualizer/core';
 import { buildFormatBindingPresentation } from '../utils/format-binding-display';
+import {
+  saveFileContent,
+  readFileContent,
+  deleteFileContent,
+  clearAllFileContent,
+  listCachedPaths,
+} from '../utils/content-cache';
 
 const TECHNICAL_DETAILS_STORAGE_KEY = 'er-visualizer.showTechnicalDetails';
 const THEME_MODE_STORAGE_KEY = 'er-visualizer.themeMode';
@@ -84,70 +91,35 @@ function saveJSON(key: string, value: unknown): void {
 }
 
 /**
- * Persist the recent-files list. If localStorage rejects the payload (most
- * likely a quota error because cached XML is large), progressively strip
- * cached `content` from the oldest entries and retry. Metadata is preserved
- * as long as possible so the recent list itself stays intact.
+ * Persist the recent-files list. Cached XML content lives in IndexedDB, so
+ * localStorage only ever sees the metadata subset.
  */
 function saveRecentFiles(files: RecentFile[]): RecentFile[] {
   if (typeof window === 'undefined') return files;
-  const attempt = (candidate: RecentFile[]): boolean => {
-    try {
-      window.localStorage.setItem(RECENT_FILES_STORAGE_KEY, JSON.stringify(candidate));
-      return true;
-    } catch {
-      return false;
-    }
-  };
-  if (attempt(files)) return files;
-
-  // Strip content from the oldest entries one by one until it fits.
-  const trimmed = files.map(f => ({ ...f }));
-  for (let i = trimmed.length - 1; i >= 0; i--) {
-    if (trimmed[i].content !== undefined) {
-      trimmed[i] = { ...trimmed[i], content: undefined };
-      if (attempt(trimmed)) return trimmed;
-    }
-  }
-  // Last resort: metadata-only for all entries.
   const metadataOnly = files.map(({ content: _c, ...meta }) => meta as RecentFile);
-  attempt(metadataOnly);
+  try {
+    window.localStorage.setItem(RECENT_FILES_STORAGE_KEY, JSON.stringify(metadataOnly));
+  } catch {
+    // Ignore storage failures — recent list is a convenience feature.
+  }
   return metadataOnly;
 }
 
 /**
- * Persist the recent-sessions list. Uses the same quota fallback strategy as
- * `saveRecentFiles` — strip cached XML from the oldest session's files first,
- * then progressively from newer sessions.
+ * Persist the recent-sessions list. Cached XML content lives in IndexedDB,
+ * so only metadata is kept in localStorage.
  */
 function saveRecentSessions(sessions: RecentSession[]): RecentSession[] {
   if (typeof window === 'undefined') return sessions;
-  const attempt = (candidate: RecentSession[]): boolean => {
-    try {
-      window.localStorage.setItem(RECENT_SESSIONS_STORAGE_KEY, JSON.stringify(candidate));
-      return true;
-    } catch {
-      return false;
-    }
-  };
-  if (attempt(sessions)) return sessions;
-
-  const trimmed = sessions.map(s => ({ ...s, files: s.files.map(f => ({ ...f })) }));
-  // Oldest session first — drop content from its files progressively.
-  for (let si = trimmed.length - 1; si >= 0; si--) {
-    const files = trimmed[si].files;
-    for (let fi = files.length - 1; fi >= 0; fi--) {
-      if (files[fi].content !== undefined) {
-        files[fi] = { ...files[fi], content: undefined };
-        if (attempt(trimmed)) return trimmed;
-      }
-    }
-  }
   const metadataOnly = sessions.map(s => ({
     ...s,
     files: s.files.map(({ content: _c, ...meta }) => meta as RecentFile),
   }));
-  attempt(metadataOnly);
+  try {
+    window.localStorage.setItem(RECENT_SESSIONS_STORAGE_KEY, JSON.stringify(metadataOnly));
+  } catch {
+    // Ignore.
+  }
   return metadataOnly;
 }
 
@@ -262,6 +234,8 @@ export interface AppState {
   explorerExpandCommand: { mode: 'default' | 'all' | 'none'; version: number };
   recentFiles: RecentFile[];
   recentSessions: RecentSession[];
+  /** Set of file paths whose XML content is currently cached in IndexedDB. */
+  cachedPaths: Set<string>;
   warnings: ConfigWarning[];
 
   // Actions
@@ -300,13 +274,13 @@ export interface AppState {
   removeRecentFile: (path: string) => void;
   clearRecentFiles: () => void;
   /** Re-load a recent file from its cached XML content. Returns true on success. */
-  reloadRecentFile: (path: string) => boolean;
+  reloadRecentFile: (path: string) => Promise<boolean>;
 
   // Recent sessions
   removeRecentSession: (id: string) => void;
   clearRecentSessions: () => void;
   /** Replace the current analysis by re-loading all files of a saved session. */
-  loadRecentSession: (id: string) => boolean;
+  loadRecentSession: (id: string) => Promise<boolean>;
   /**
    * Resolve a datasource name from an expression string (e.g. "CompanyInfo" from binding expr).
    * Returns { configIndex, datasourceName, treeNodeId } or null.
@@ -537,6 +511,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   explorerExpandCommand: { mode: 'default', version: 0 },
   recentFiles: loadJSON<RecentFile[]>(RECENT_FILES_STORAGE_KEY, []),
   recentSessions: loadJSON<RecentSession[]>(RECENT_SESSIONS_STORAGE_KEY, []),
+  cachedPaths: new Set<string>(),
   warnings: [],
 
   loadXmlFile: (xml: string, filePath: string) => {
@@ -551,7 +526,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const recentName = filePath.split(/[\\/]/).pop() ?? filePath;
       const recentKind = config.content.kind;
       const candidateRecent: RecentFile[] = [
-        { path: filePath, name: recentName, kind: recentKind, openedAt: Date.now(), content: xml },
+        { path: filePath, name: recentName, kind: recentKind, openedAt: Date.now() },
         ...state.recentFiles.filter(r => r.path !== filePath),
       ].slice(0, MAX_RECENT_FILES);
       const nextRecent = saveRecentFiles(candidateRecent);
@@ -566,14 +541,12 @@ export const useAppStore = create<AppState>((set, get) => ({
           name: c.filePath.split(/[\\/]/).pop() ?? c.filePath,
           kind: c.content.kind,
           openedAt: cachedFromList?.openedAt ?? Date.now(),
-          content: c.filePath === filePath ? xml : cachedFromList?.content,
         };
       });
       const newSessionId = sessionFingerprint(sessionFiles.map(f => f.path));
       const newSessionPathSet = new Set(sessionFiles.map(f => f.path));
       const keptSessions = state.recentSessions.filter(s => {
         if (s.id === newSessionId) return false;
-        // Drop sessions whose path set is a proper subset of the new one.
         if (s.files.length >= sessionFiles.length) return true;
         return !s.files.every(f => newSessionPathSet.has(f.path));
       });
@@ -583,6 +556,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       ].slice(0, MAX_RECENT_SESSIONS);
       const nextSessions = saveRecentSessions(candidateSessions);
 
+      // Persist full XML to IndexedDB (best effort).
+      void saveFileContent(filePath, xml);
+      const nextCachedPaths = new Set(state.cachedPaths);
+      nextCachedPaths.add(filePath);
+
       set({
         configurations: newConfigs,
         registry,
@@ -590,6 +568,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         warnings,
         recentFiles: nextRecent,
         recentSessions: nextSessions,
+        cachedPaths: nextCachedPaths,
       });
     } catch (e) {
       console.error('Failed to parse ER configuration:', e);
@@ -972,27 +951,32 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   removeRecentFile: (path: string) => {
     const next = saveRecentFiles(get().recentFiles.filter(r => r.path !== path));
-    set({ recentFiles: next });
+    const nextCachedPaths = new Set(get().cachedPaths);
+    nextCachedPaths.delete(path);
+    set({ recentFiles: next, cachedPaths: nextCachedPaths });
+    void deleteFileContent(path);
   },
   clearRecentFiles: () => {
     saveRecentFiles([]);
-    set({ recentFiles: [] });
+    set({ recentFiles: [], cachedPaths: new Set<string>() });
+    void clearAllFileContent();
   },
-  reloadRecentFile: (path: string) => {
+  reloadRecentFile: async (path: string) => {
     const entry = get().recentFiles.find(r => r.path === path);
     if (!entry) return false;
-    if (!entry.content) {
+    // Avoid reloading a config that's already loaded under the same path.
+    const alreadyLoaded = get().configurations.some(c => c.filePath === entry.path);
+    if (alreadyLoaded) return true;
+    const content = await readFileContent(path);
+    if (!content) {
       get().pushToast({
         kind: 'warning',
         message: `Obsah „${entry.name}“ už není v mezipaměti, otevřete soubor znovu ručně.`,
       });
       return false;
     }
-    // Avoid reloading a config that's already loaded under the same path.
-    const alreadyLoaded = get().configurations.some(c => c.filePath === entry.path);
-    if (alreadyLoaded) return true;
     try {
-      get().loadXmlFile(entry.content, entry.path);
+      get().loadXmlFile(content, entry.path);
       return true;
     } catch {
       return false;
@@ -1008,17 +992,25 @@ export const useAppStore = create<AppState>((set, get) => ({
     saveRecentSessions([]);
     set({ recentSessions: [] });
   },
-  loadRecentSession: (id: string) => {
+  loadRecentSession: async (id: string) => {
     const session = get().recentSessions.find(s => s.id === id);
     if (!session) return false;
-    const missing = session.files.filter(f => !f.content).map(f => f.name);
-    if (missing.length === session.files.length) {
+
+    // Fetch all content from IDB up-front so we can reset state only after
+    // we know at least one file is actually available.
+    const contents = await Promise.all(
+      session.files.map(async f => ({ file: f, content: await readFileContent(f.path) })),
+    );
+    const missing = contents.filter(c => !c.content).map(c => c.file.name);
+    const available = contents.filter(c => c.content);
+    if (available.length === 0) {
       get().pushToast({
         kind: 'warning',
         message: `Obsah relace už není v mezipaměti, otevřete soubory znovu ručně.`,
       });
       return false;
     }
+
     // Reset workspace-level state so the session replaces the current analysis.
     set({
       configurations: [],
@@ -1037,10 +1029,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       searchResults: [],
     });
     let loaded = 0;
-    for (const file of session.files) {
-      if (!file.content) continue;
+    for (const { file, content } of available) {
+      if (!content) continue;
       try {
-        get().loadXmlFile(file.content, file.path);
+        get().loadXmlFile(content, file.path);
         loaded++;
       } catch {
         // loadXmlFile already surfaces a toast on parse failure.
@@ -1363,6 +1355,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 }));
+
+// Populate the cachedPaths set from IndexedDB on startup so the landing page
+// can indicate which recent files/sessions are actually reloadable.
+if (typeof window !== 'undefined') {
+  void listCachedPaths().then(paths => {
+    if (paths.length === 0) return;
+    useAppStore.setState({ cachedPaths: new Set(paths) });
+  });
+}
 
 // ─── Helper: find datasource by name (recursive through children) ───
 
