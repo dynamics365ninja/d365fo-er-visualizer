@@ -5310,12 +5310,22 @@ body {
   align-items: center;
   gap: 8px;
   color: var(--text-primary);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+  line-height: 1.35;
 }
 
 .dd-dialog-title__name {
-  color: var(--text-secondary);
-  font-weight: 500;
-  margin-left: 4px;
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+  flex: 1;
+  min-width: 0;
 }
 
 .dd-panel--dialog {

@@ -868,8 +868,7 @@ export function DrillDownPanel({ expression, configIndex, elementName }: {
             >
               <span className="dd-dialog-title">
                 <CompassNorthwestRegular fontSize={16} />
-                {t.drillDown}
-                {elementName && <span className="dd-dialog-title__name">· {elementName}</span>}
+                {elementName && <span className="dd-dialog-title__name">{elementName}</span>}
               </span>
             </DialogTitle>
             <DialogContent className="dd-dialog-content">
