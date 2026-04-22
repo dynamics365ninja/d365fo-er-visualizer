@@ -812,46 +812,54 @@ function DepChain({ deepResult, onPush, fromCi, stepNumber }: {
 // ─── Main DrillDownPanel ──────────────────────────────────────────────────────
 
 /**
- * Inline drill-down panel used in binding rows. By default the panel is
- * collapsed and shows only a compact trigger. Single-click on the trigger
- * expands the drill-down inline; double-click opens it as its own tab.
-/**
- * Inline drill-down trigger used in binding rows. Single-click opens the
- * analysis in a Fluent Dialog popup; double-click opens it as its own tab.
- * The panel itself is never rendered inline — the trigger is purely a launcher.
+ * Clickable expression wrapper — single-click opens the drill-down analysis
+ * in a Fluent Dialog popup, double-click opens it as its own tab.
+ *
+ * Usage:
+ *   <DrillDownTrigger expression="model.Invoice.Amount" configIndex={0} elementName="Amount">
+ *     model.Invoice.Amount
+ *   </DrillDownTrigger>
  */
-export function DrillDownPanel({ expression, configIndex, elementName }: {
+export function DrillDownTrigger({ expression, configIndex, elementName, className, children }: {
   expression: string;
   configIndex: number;
   elementName?: string;
+  className?: string;
+  children: React.ReactNode;
 }) {
   const trimmedExpr = expression?.trim() ?? '';
   const openDrillDownTab = useAppStore(s => s.openDrillDownTab);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  if (!trimmedExpr) return null;
+  if (!trimmedExpr) {
+    return <span className={className}>{children}</span>;
+  }
 
   const openAsTab = () => openDrillDownTab(trimmedExpr, configIndex, elementName);
 
   return (
     <>
-      <div className="dd-collapsible">
-        <button
-          type="button"
-          className="dd-collapsible__trigger"
-          onClick={() => setIsDialogOpen(true)}
-          onDoubleClick={(e) => {
+      <span
+        role="button"
+        tabIndex={0}
+        className={`dd-trigger-expr ${className ?? ''}`}
+        onClick={(e) => { e.stopPropagation(); setIsDialogOpen(true); }}
+        onDoubleClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDialogOpen(false);
+          openAsTab();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            e.stopPropagation();
-            setIsDialogOpen(false);
-            openAsTab();
-          }}
-          title={t.drillClickToToggle}
-        >
-          <CompassNorthwestRegular fontSize={14} aria-hidden />
-          <span className="dd-collapsible__label">{t.drillCollapsibleLabel}</span>
-        </button>
-      </div>
+            setIsDialogOpen(true);
+          }
+        }}
+        title={t.drillClickToToggle}
+      >
+        {children}
+      </span>
       <Dialog open={isDialogOpen} onOpenChange={(_, d) => setIsDialogOpen(d.open)} modalType="non-modal">
         <DialogSurface className="dd-dialog-surface">
           <DialogBody>
@@ -888,6 +896,30 @@ export function DrillDownPanel({ expression, configIndex, elementName }: {
         </DialogSurface>
       </Dialog>
     </>
+  );
+}
+
+/**
+ * Legacy trigger-button variant. Kept for any existing call-sites that want a
+ * discrete "Show analysis" button. Prefer `DrillDownTrigger` — wrap the formula
+ * text itself so the entire expression becomes the clickable target.
+ */
+export function DrillDownPanel({ expression, configIndex, elementName }: {
+  expression: string;
+  configIndex: number;
+  elementName?: string;
+}) {
+  if (!expression?.trim()) return null;
+  return (
+    <DrillDownTrigger
+      expression={expression}
+      configIndex={configIndex}
+      elementName={elementName}
+      className="dd-collapsible__trigger dd-collapsible__trigger--legacy"
+    >
+      <CompassNorthwestRegular fontSize={14} aria-hidden />
+      <span className="dd-collapsible__label">{t.drillCollapsibleLabel}</span>
+    </DrillDownTrigger>
   );
 }
 
