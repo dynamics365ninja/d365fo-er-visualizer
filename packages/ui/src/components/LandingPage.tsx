@@ -40,6 +40,8 @@ import {
   OpenRegular,
   DeleteRegular,
   SparkleFilled,
+  WeatherMoonRegular,
+  WeatherSunnyRegular,
 } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
 import { t } from '../i18n';
@@ -58,6 +60,17 @@ const useStyles = makeStyles({
     gap: '32px',
     backgroundColor: tokens.colorNeutralBackground1,
     backgroundImage: `radial-gradient(ellipse at top, ${tokens.colorBrandBackground2} 0%, transparent 55%), linear-gradient(180deg, ${tokens.colorNeutralBackground1} 0%, ${tokens.colorNeutralBackground2} 100%)`,
+    position: 'relative',
+    '@media (max-width: 480px)': {
+      padding: '24px 12px 48px',
+      gap: '24px',
+    },
+  },
+  themeToggle: {
+    position: 'absolute',
+    top: '16px',
+    right: '16px',
+    zIndex: 10,
   },
   hero: {
     width: '100%',
@@ -176,7 +189,7 @@ const useStyles = makeStyles({
     width: '100%',
     maxWidth: '1160px',
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))',
     gap: '20px',
   },
   card: {
@@ -277,7 +290,7 @@ const useStyles = makeStyles({
   },
   recentList: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(min(260px, 100%), 1fr))',
     gap: '8px',
   },
   recentItem: {
@@ -366,7 +379,7 @@ const useStyles = makeStyles({
     width: '100%',
     maxWidth: '1160px',
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))',
     gap: '16px',
     animationName: {
       from: { opacity: 0 },
@@ -434,6 +447,8 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const clearRecentSessions = useAppStore(s => s.clearRecentSessions);
   const loadRecentSession = useAppStore(s => s.loadRecentSession);
   const cachedPaths = useAppStore(s => s.cachedPaths);
+  const themeMode = useAppStore(s => s.themeMode);
+  const setThemeMode = useAppStore(s => s.setThemeMode);
   const [isDragging, setIsDragging] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -492,6 +507,17 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
       <div className="lp-orb lp-orb-1" aria-hidden="true" />
       <div className="lp-orb lp-orb-2" aria-hidden="true" />
       <div className="lp-orb lp-orb-3" aria-hidden="true" />
+
+      {/* Theme toggle */}
+      <Button
+        className={styles.themeToggle}
+        appearance="subtle"
+        shape="circular"
+        icon={themeMode === 'dark' ? <WeatherSunnyRegular /> : <WeatherMoonRegular />}
+        aria-label={themeMode === 'dark' ? t.lightTheme : t.darkTheme}
+        title={themeMode === 'dark' ? t.lightTheme : t.darkTheme}
+        onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
+      />
 
       {/* Hero */}
       <div className={mergeClasses(styles.hero, 'lp-above')} style={{ position: 'relative' }}>

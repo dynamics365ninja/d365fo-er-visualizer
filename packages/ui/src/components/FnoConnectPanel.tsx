@@ -91,6 +91,9 @@ const useStyles = makeStyles({
     gridTemplateColumns: '320px 1fr',
     gap: tokens.spacingHorizontalM,
     minHeight: '320px',
+    '@media (max-width: 720px)': {
+      gridTemplateColumns: '1fr',
+    },
   },
   listBox: {
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
