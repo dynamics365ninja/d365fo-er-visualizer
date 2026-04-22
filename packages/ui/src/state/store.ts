@@ -13,7 +13,9 @@ const TECHNICAL_DETAILS_STORAGE_KEY = 'er-visualizer.showTechnicalDetails';
 const THEME_MODE_STORAGE_KEY = 'er-visualizer.themeMode';
 const EXPANDED_IDS_STORAGE_KEY = 'er-visualizer.expandedIds';
 const RECENT_FILES_STORAGE_KEY = 'er-visualizer.recentFiles.v1';
+const RECENT_SESSIONS_STORAGE_KEY = 'er-visualizer.recentSessions.v1';
 const MAX_RECENT_FILES = 12;
+const MAX_RECENT_SESSIONS = 12;
 
 export type ThemeMode = 'dark' | 'light';
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';
@@ -38,6 +40,19 @@ export interface RecentFile {
    * is hit. Undefined means the content is no longer cached.
    */
   content?: string;
+}
+
+/**
+ * A recent analysis session — a set of files that were loaded together. Each
+ * time the user loads an additional file, the growing session supersedes any
+ * recent session whose path set is a strict subset, so incremental loads
+ * collapse into one final session entry.
+ */
+export interface RecentSession {
+  /** Stable id derived from sorted file paths (fingerprint). */
+  id: string;
+  openedAt: number;
+  files: RecentFile[];
 }
 
 export interface ConfigWarning {
@@ -98,6 +113,46 @@ function saveRecentFiles(files: RecentFile[]): RecentFile[] {
   const metadataOnly = files.map(({ content: _c, ...meta }) => meta as RecentFile);
   attempt(metadataOnly);
   return metadataOnly;
+}
+
+/**
+ * Persist the recent-sessions list. Uses the same quota fallback strategy as
+ * `saveRecentFiles` — strip cached XML from the oldest session's files first,
+ * then progressively from newer sessions.
+ */
+function saveRecentSessions(sessions: RecentSession[]): RecentSession[] {
+  if (typeof window === 'undefined') return sessions;
+  const attempt = (candidate: RecentSession[]): boolean => {
+    try {
+      window.localStorage.setItem(RECENT_SESSIONS_STORAGE_KEY, JSON.stringify(candidate));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (attempt(sessions)) return sessions;
+
+  const trimmed = sessions.map(s => ({ ...s, files: s.files.map(f => ({ ...f })) }));
+  // Oldest session first — drop content from its files progressively.
+  for (let si = trimmed.length - 1; si >= 0; si--) {
+    const files = trimmed[si].files;
+    for (let fi = files.length - 1; fi >= 0; fi--) {
+      if (files[fi].content !== undefined) {
+        files[fi] = { ...files[fi], content: undefined };
+        if (attempt(trimmed)) return trimmed;
+      }
+    }
+  }
+  const metadataOnly = sessions.map(s => ({
+    ...s,
+    files: s.files.map(({ content: _c, ...meta }) => meta as RecentFile),
+  }));
+  attempt(metadataOnly);
+  return metadataOnly;
+}
+
+function sessionFingerprint(paths: string[]): string {
+  return [...paths].sort().join('\u0001');
 }
 
 function readStoredTechnicalDetails(): boolean {
@@ -206,6 +261,7 @@ export interface AppState {
   expandedIds: Set<string>;
   explorerExpandCommand: { mode: 'default' | 'all' | 'none'; version: number };
   recentFiles: RecentFile[];
+  recentSessions: RecentSession[];
   warnings: ConfigWarning[];
 
   // Actions
@@ -245,6 +301,12 @@ export interface AppState {
   clearRecentFiles: () => void;
   /** Re-load a recent file from its cached XML content. Returns true on success. */
   reloadRecentFile: (path: string) => boolean;
+
+  // Recent sessions
+  removeRecentSession: (id: string) => void;
+  clearRecentSessions: () => void;
+  /** Replace the current analysis by re-loading all files of a saved session. */
+  loadRecentSession: (id: string) => boolean;
   /**
    * Resolve a datasource name from an expression string (e.g. "CompanyInfo" from binding expr).
    * Returns { configIndex, datasourceName, treeNodeId } or null.
@@ -474,6 +536,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   expandedIds: new Set<string>(loadJSON<string[]>(EXPANDED_IDS_STORAGE_KEY, [])),
   explorerExpandCommand: { mode: 'default', version: 0 },
   recentFiles: loadJSON<RecentFile[]>(RECENT_FILES_STORAGE_KEY, []),
+  recentSessions: loadJSON<RecentSession[]>(RECENT_SESSIONS_STORAGE_KEY, []),
   warnings: [],
 
   loadXmlFile: (xml: string, filePath: string) => {
@@ -493,12 +556,40 @@ export const useAppStore = create<AppState>((set, get) => ({
       ].slice(0, MAX_RECENT_FILES);
       const nextRecent = saveRecentFiles(candidateRecent);
 
+      // Build/upsert a recent session that reflects the full set of currently
+      // loaded configurations. Older sessions whose file set is a strict
+      // subset of the new session are removed so incremental loads collapse.
+      const sessionFiles: RecentFile[] = newConfigs.map(c => {
+        const cachedFromList = nextRecent.find(r => r.path === c.filePath);
+        return {
+          path: c.filePath,
+          name: c.filePath.split(/[\\/]/).pop() ?? c.filePath,
+          kind: c.content.kind,
+          openedAt: cachedFromList?.openedAt ?? Date.now(),
+          content: c.filePath === filePath ? xml : cachedFromList?.content,
+        };
+      });
+      const newSessionId = sessionFingerprint(sessionFiles.map(f => f.path));
+      const newSessionPathSet = new Set(sessionFiles.map(f => f.path));
+      const keptSessions = state.recentSessions.filter(s => {
+        if (s.id === newSessionId) return false;
+        // Drop sessions whose path set is a proper subset of the new one.
+        if (s.files.length >= sessionFiles.length) return true;
+        return !s.files.every(f => newSessionPathSet.has(f.path));
+      });
+      const candidateSessions: RecentSession[] = [
+        { id: newSessionId, openedAt: Date.now(), files: sessionFiles },
+        ...keptSessions,
+      ].slice(0, MAX_RECENT_SESSIONS);
+      const nextSessions = saveRecentSessions(candidateSessions);
+
       set({
         configurations: newConfigs,
         registry,
         treeNodes,
         warnings,
         recentFiles: nextRecent,
+        recentSessions: nextSessions,
       });
     } catch (e) {
       console.error('Failed to parse ER configuration:', e);
@@ -906,6 +997,62 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch {
       return false;
     }
+  },
+
+  // ─── Recent sessions ───
+  removeRecentSession: (id: string) => {
+    const next = saveRecentSessions(get().recentSessions.filter(s => s.id !== id));
+    set({ recentSessions: next });
+  },
+  clearRecentSessions: () => {
+    saveRecentSessions([]);
+    set({ recentSessions: [] });
+  },
+  loadRecentSession: (id: string) => {
+    const session = get().recentSessions.find(s => s.id === id);
+    if (!session) return false;
+    const missing = session.files.filter(f => !f.content).map(f => f.name);
+    if (missing.length === session.files.length) {
+      get().pushToast({
+        kind: 'warning',
+        message: `Obsah relace už není v mezipaměti, otevřete soubory znovu ručně.`,
+      });
+      return false;
+    }
+    // Reset workspace-level state so the session replaces the current analysis.
+    set({
+      configurations: [],
+      registry: new GUIDRegistry(),
+      treeNodes: [],
+      warnings: [],
+      openTabs: [],
+      activeTabId: null,
+      selectedNodeId: null,
+      selectedNode: null,
+      navigationHistory: [],
+      navigationForward: [],
+      canNavigateBack: false,
+      canNavigateForward: false,
+      searchQuery: '',
+      searchResults: [],
+    });
+    let loaded = 0;
+    for (const file of session.files) {
+      if (!file.content) continue;
+      try {
+        get().loadXmlFile(file.content, file.path);
+        loaded++;
+      } catch {
+        // loadXmlFile already surfaces a toast on parse failure.
+      }
+    }
+    if (missing.length > 0) {
+      get().pushToast({
+        kind: 'warning',
+        message: `Některé soubory v relaci nebyly načteny (chybí mezipaměť): ${missing.join(', ')}.`,
+      });
+    }
+    return loaded > 0;
   },
 
   resolveDatasource: (expressionOrName: string, fromConfigIndex: number) => {
