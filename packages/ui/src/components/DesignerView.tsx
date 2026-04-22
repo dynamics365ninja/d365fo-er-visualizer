@@ -1110,6 +1110,48 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
           ))}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
+          {(view === 'structure' || view === 'bindings') && (
+            <div className="fmt-toolbar-iconbtns" role="group" aria-label={`${t.expand} / ${t.collapse}`}>
+              <button
+                type="button"
+                className="fmt-iconbtn"
+                onClick={() => {
+                  if (view === 'structure') {
+                    setStructureExpandMode('all');
+                    setStructureExpandVersion(version => version + 1);
+                  } else {
+                    expandAllBindingTypeGroups();
+                  }
+                }}
+                title={t.expand}
+                aria-label={t.expand}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 6 L8 2 L12 6" />
+                  <path d="M4 10 L8 14 L12 10" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="fmt-iconbtn"
+                onClick={() => {
+                  if (view === 'structure') {
+                    setStructureExpandMode('none');
+                    setStructureExpandVersion(version => version + 1);
+                  } else {
+                    collapseAllBindingTypeGroups();
+                  }
+                }}
+                title={t.collapse}
+                aria-label={t.collapse}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 3 L8 7 L12 3" />
+                  <path d="M4 13 L8 9 L12 13" />
+                </svg>
+              </button>
+            </div>
+          )}
           <div className="panel-filter-row">
             <input
               type="text"
@@ -1144,65 +1186,25 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
         {/* Left: tree / list */}
         <div className={`designer-list-pane density-${density}`}>
           {view === 'structure' && (
-            <>
-              <div className="explorer-toolbar">
-                <button
-                  onClick={() => {
-                    setStructureExpandMode('all');
-                    setStructureExpandVersion(version => version + 1);
-                  }}
-                  className="fmt-action-btn"
-                  title={t.expand}
-                >
-                  {t.expand}
-                </button>
-                <button
-                  onClick={() => {
-                    setStructureExpandMode('none');
-                    setStructureExpandVersion(version => version + 1);
-                  }}
-                  className="fmt-action-btn"
-                  title={t.collapse}
-                >
-                  {t.collapse}
-                </button>
-              </div>
-              <FormatElementTree
-                element={rootElement}
-                depth={0}
-                bindingMap={bindingMap}
-                transformationMap={transformationMap}
-                configIndex={configIndex}
-                filter={filter}
-                expandMode={structureExpandMode}
-                expandVersion={structureExpandVersion}
-                selectedId={selectedElementId}
-                onSelect={handleSelectFormatElement}
-                resolveDatasource={resolveDatasource}
-                registry={registry}
-                showTechnicalDetails={showTechnicalDetails}
-              />
-            </>
+            <FormatElementTree
+              element={rootElement}
+              depth={0}
+              bindingMap={bindingMap}
+              transformationMap={transformationMap}
+              configIndex={configIndex}
+              filter={filter}
+              expandMode={structureExpandMode}
+              expandVersion={structureExpandVersion}
+              selectedId={selectedElementId}
+              onSelect={handleSelectFormatElement}
+              resolveDatasource={resolveDatasource}
+              registry={registry}
+              showTechnicalDetails={showTechnicalDetails}
+            />
           )}
 
           {view === 'bindings' && (
             <>
-              <div className="explorer-toolbar">
-                <button
-                  onClick={expandAllBindingTypeGroups}
-                  className="fmt-action-btn"
-                  title={t.expand}
-                >
-                  {t.expand}
-                </button>
-                <button
-                  onClick={collapseAllBindingTypeGroups}
-                  className="fmt-action-btn"
-                  title={t.collapse}
-                >
-                  {t.collapse}
-                </button>
-              </div>
               {groupedBindingsByType.length === 0
                 ? <div style={{ color: 'var(--text-secondary)', fontSize: 12, padding: 16 }}>
                     {filter ? t.noResults : `${t.bindings}: 0`}

@@ -1452,8 +1452,44 @@ body {
   white-space: nowrap;
 }
 
-/* ─── Format Bindings tab: element card with inline binding list ─── */
-.fmt-bind-card {
+/* ─── Compact icon buttons in the format toolbar (expand / collapse) ─── */
+.fmt-toolbar-iconbtns {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+}
+
+.fmt-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.fmt-iconbtn:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.fmt-iconbtn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
+/* ─── Format Bindings tab: element card with inline binding list ─── */.fmt-bind-card {
   display: flex;
   flex-direction: column;
   gap: 2px;
