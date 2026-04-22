@@ -271,7 +271,7 @@ export function ConfigExplorer() {
       onDrop={handleDrop}
     >
       {isDragging && <div className="explorer-dropzone-overlay">{t.landingDropRelease}</div>}
-      <div className="explorer-toolbar">
+      <div className="explorer-toolbar config-explorer-toolbar">
         <div className="panel-filter-row explorer-toolbar-filter">
           <Input
             size="small"
