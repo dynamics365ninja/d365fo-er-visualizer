@@ -71,6 +71,14 @@ export interface Translations {
   path: string;
   expression: string;
   explorerFilterPlaceholder: string;
+  explorerFilterByKind: string;
+  explorerSort: string;
+  explorerSortLoadOrder: string;
+  explorerSortNameAsc: string;
+  explorerSortNameDesc: string;
+  explorerResultsCount: (visible: number, total: number) => string;
+  explorerMoreActions: string;
+  explorerOpenInTab: string;
   detailOverview: string;
   attributes: string;
   drillSteps: (n: number) => string;
@@ -144,6 +152,9 @@ export interface Translations {
   landingBadge: string;
   landingTitle: string;
   landingSub: string;
+  landingStatLoaded: string;
+  landingStatRecent: string;
+  landingStatTypes: string;
   // Landing page – drop zone
   landingDropPrimary: string;
   landingDropRelease: string;
@@ -294,6 +305,14 @@ const cs: Translations = {
   path: 'Cesta',
   expression: 'Výraz',
   explorerFilterPlaceholder: 'Filtrovat explorer…',
+  explorerFilterByKind: 'Filtrovat podle druhu',
+  explorerSort: 'Řazení',
+  explorerSortLoadOrder: 'Pořadí načtení',
+  explorerSortNameAsc: 'Název vzestupně (A–Z)',
+  explorerSortNameDesc: 'Název sestupně (Z–A)',
+  explorerResultsCount: (v, t) => `Zobrazeno ${v} z ${t}`,
+  explorerMoreActions: 'Další akce',
+  explorerOpenInTab: 'Otevřít v záložce',
   detailOverview: 'Přehled výběru',
   attributes: 'Atributy',
   drillSteps: (n: number) => `${n} krok${n === 1 ? '' : n < 5 ? 'y' : 'ů'}`,
@@ -371,6 +390,9 @@ const cs: Translations = {
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',
   landingTitle: 'D365FO ER Visualizer',
   landingSub: 'Přehledné pracovní místo pro konfigurace elektronického výkaznictví: modely, mapování i formáty na jednom místě. Snadno se proklikáš od formulí až ke zdrojovým tabulkám, dohledáš where-used vazby a přeskakuješ mezi souvisejícími soubory.',
+  landingStatLoaded: 'Načteno',
+  landingStatRecent: 'Historie',
+  landingStatTypes: 'Typy souborů',
   landingDropPrimary: 'Přetáhni ER XML soubory sem',
   landingDropRelease: 'Pusť soubory',
   landingDropSecondary: 'nebo klikni pro výběr · můžeš načíst více souborů najednou',
@@ -523,6 +545,14 @@ const en: Translations = {
   path: 'Path',
   expression: 'Expression',
   explorerFilterPlaceholder: 'Filter explorer…',
+  explorerFilterByKind: 'Filter by kind',
+  explorerSort: 'Sort',
+  explorerSortLoadOrder: 'Load order',
+  explorerSortNameAsc: 'Name ascending (A–Z)',
+  explorerSortNameDesc: 'Name descending (Z–A)',
+  explorerResultsCount: (v, t) => `Showing ${v} of ${t}`,
+  explorerMoreActions: 'More actions',
+  explorerOpenInTab: 'Open in tab',
   detailOverview: 'Selection Overview',
   attributes: 'Attributes',
   drillSteps: (n: number) => `${n} step${n === 1 ? '' : 's'}`,
@@ -596,6 +626,9 @@ const en: Translations = {
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',
   landingTitle: 'D365FO ER Visualizer',
   landingSub: 'A clear workspace for Electronic Reporting configurations: data models, mappings and formats in one place. Easily trace formulas back to source tables, find where-used references, and jump between related files.',
+  landingStatLoaded: 'Loaded',
+  landingStatRecent: 'Recent',
+  landingStatTypes: 'File types',
   landingDropPrimary: 'Drop ER XML files here',
   landingDropRelease: 'Release files',
   landingDropSecondary: 'or click to browse · you can load multiple files at once',

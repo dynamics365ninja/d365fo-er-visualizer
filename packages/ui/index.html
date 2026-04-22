@@ -3,74 +3,198 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: http://localhost:5173; object-src 'none'; base-uri 'self'; frame-ancestors 'none';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: http://localhost:5173; object-src 'none'; base-uri 'self'; frame-ancestors 'none';" />
   <title>D365FO ER Visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
       color-scheme: dark;
-      font-family: "Segoe UI", sans-serif;
-      background: #1e1e1e;
-      color: #cccccc;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      background: #0f1419;
+      color: #f1f5f9;
     }
 
     body {
       margin: 0;
       min-height: 100vh;
-      background:
-        radial-gradient(circle at top left, rgba(0, 120, 212, 0.12), transparent 28%),
-        radial-gradient(circle at bottom right, rgba(115, 201, 145, 0.09), transparent 24%),
-        #1e1e1e;
+      background: #0f1419;
       overflow: hidden;
     }
 
-    .boot-screen {
-      min-height: 100vh;
+    @media (prefers-color-scheme: light) {
+      :root { color-scheme: light; background: #f0f4f8; color: #0f172a; }
+      body  { background: #f0f4f8; }
+    }
+
+    .boot {
+      position: fixed;
+      inset: 0;
       display: grid;
       place-items: center;
-      padding: 24px;
+      background: #0f1419;
+      overflow: hidden;
+      z-index: 9999;
     }
-
-    .boot-screen__card {
-      width: min(760px, 100%);
-      padding: 28px;
-      border-radius: 18px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(37, 37, 38, 0.92);
-      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+    .boot::before,
+    .boot::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(90px);
+      pointer-events: none;
+      opacity: 0.55;
     }
-
-    .boot-screen__eyebrow {
-      margin-bottom: 10px;
-      color: #9cdcfe;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 1.2px;
+    .boot::before {
+      width: 540px; height: 540px;
+      top: -180px; left: -120px;
+      background: radial-gradient(circle, rgba(3, 131, 135, 0.45), transparent 70%);
+      animation: boot-float-a 14s ease-in-out infinite;
+    }
+    .boot::after {
+      width: 440px; height: 440px;
+      bottom: -160px; right: -120px;
+      background: radial-gradient(circle, rgba(55, 169, 135, 0.38), transparent 70%);
+      animation: boot-float-b 18s ease-in-out infinite;
+    }
+    @keyframes boot-float-a {
+      0%, 100% { transform: translate(0,0) scale(1); }
+      50%      { transform: translate(60px, 50px) scale(1.08); }
+    }
+    @keyframes boot-float-b {
+      0%, 100% { transform: translate(0,0) scale(1); }
+      50%      { transform: translate(-50px, -40px) scale(1.06); }
+    }
+    .boot__inner {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      text-align: center;
+      animation: boot-fade 600ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    @keyframes boot-fade {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .boot__ring {
+      position: relative;
+      width: 72px;
+      height: 72px;
+    }
+    .boot__ring svg {
+      width: 100%;
+      height: 100%;
+      animation: boot-spin 1.1s linear infinite;
+    }
+    .boot__ring circle {
+      fill: none;
+      stroke-width: 3;
+      stroke-linecap: round;
+    }
+    .boot__ring .track {
+      stroke: rgba(255, 255, 255, 0.08);
+    }
+    .boot__ring .arc {
+      stroke: url(#boot-gradient);
+      stroke-dasharray: 60 200;
+    }
+    .boot__dot {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+      font-weight: 800;
+      font-size: 24px;
+      background: linear-gradient(135deg, #a8edea 0%, #038387 50%, #37a987 100%);
+      -webkit-background-clip: text;
+              background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: boot-pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes boot-spin { to { transform: rotate(360deg); } }
+    @keyframes boot-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.65; transform: scale(0.94); }
+    }
+    .boot__badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 14px;
+      border-radius: 100px;
+      font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
+      color: #2dcfd3;
+      background: rgba(3, 131, 135, 0.1);
+      border: 1px solid rgba(3, 131, 135, 0.28);
+      box-shadow: 0 0 24px rgba(3, 131, 135, 0.18);
     }
-
-    .boot-screen__title {
-      margin: 0 0 10px;
-      font-size: 30px;
-      line-height: 1.1;
-      color: #ffffff;
+    .boot__badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #05a2a7;
+      box-shadow: 0 0 8px rgba(5, 162, 167, 0.8);
+      animation: boot-dot 1.6s ease-in-out infinite;
     }
-
-    .boot-screen__text {
+    @keyframes boot-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.4; transform: scale(0.7); }
+    }
+    .boot__title {
+      margin: 2px 0 0;
+      font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: #f1f5f9;
+    }
+    .boot__hint {
       margin: 0;
-      color: #b7b7b7;
-      line-height: 1.6;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      font-size: 12px;
+      color: #64748b;
+      max-width: 360px;
+    }
+    @media (prefers-color-scheme: light) {
+      .boot { background: #f0f4f8; }
+      .boot__ring .track { stroke: rgba(3, 131, 135, 0.1); }
+      .boot__title { color: #0f172a; }
     }
   </style>
 </head>
 <body>
   <div id="root">
-    <div class="boot-screen">
-      <div class="boot-screen__card">
-        <div class="boot-screen__eyebrow">Starting Application</div>
-        <h1 class="boot-screen__title">D365FO ER Visualizer</h1>
-        <p class="boot-screen__text">
-          If this message stays visible for more than a few seconds, the JavaScript application did not finish booting.
-        </p>
+    <div class="boot" role="status" aria-live="polite">
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <defs>
+          <linearGradient id="boot-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#a8edea" />
+            <stop offset="50%" stop-color="#038387" />
+            <stop offset="100%" stop-color="#37a987" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <div class="boot__inner">
+        <div class="boot__ring" aria-hidden="true">
+          <svg viewBox="0 0 72 72">
+            <circle class="track" cx="36" cy="36" r="32"></circle>
+            <circle class="arc" cx="36" cy="36" r="32"></circle>
+          </svg>
+          <div class="boot__dot">ER</div>
+        </div>
+        <span class="boot__badge">
+          <span class="boot__badge-dot" aria-hidden="true"></span>
+          Loading workspace
+        </span>
+        <h1 class="boot__title">D365FO ER Visualizer</h1>
+        <p class="boot__hint">Preparing Electronic Reporting designer…</p>
       </div>
     </div>
   </div>

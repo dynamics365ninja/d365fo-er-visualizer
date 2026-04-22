@@ -1,5 +1,45 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
+import {
+  makeStyles,
+  tokens,
+  mergeClasses,
+  shorthands,
+  Button,
+  Tooltip,
+  Badge,
+  CounterBadge,
+  Tag,
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbDivider,
+  BreadcrumbButton,
+  Popover,
+  PopoverTrigger,
+  PopoverSurface,
+  Caption1,
+  Caption1Strong,
+  Body1Strong,
+  Subtitle2,
+  Divider,
+} from '@fluentui/react-components';
+import {
+  HomeRegular,
+  ChevronRightRegular,
+  ExpandUpRightRegular,
+  ArrowMinimizeRegular,
+  DismissRegular,
+  DocumentRegular,
+  DocumentArrowDownRegular,
+  DocumentArrowUpRegular,
+  DataBarVerticalRegular,
+  LinkRegular,
+  WarningRegular,
+  CheckmarkCircleRegular,
+  FolderRegular,
+  SearchRegular,
+  AppsListDetailRegular,
+} from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
 import { ConfigExplorer } from './ConfigExplorer';
 import { PropertyInspector } from './PropertyInspector';
@@ -15,21 +55,287 @@ import { ActivityBar } from './ActivityBar';
 import { t } from '../i18n';
 import { ERDirection } from '@er-visualizer/core';
 
-function getStatusConfigIcon(config: any): string {
-  if (config.kind === 'DataModel') return '📐';
-  if (config.kind === 'ModelMapping') return '🔗';
+// ────────────────────────── helpers ──────────────────────────
+
+function getConfigIcon(config: any): React.ReactElement {
+  if (config.kind === 'DataModel') return <DataBarVerticalRegular />;
+  if (config.kind === 'ModelMapping') return <LinkRegular />;
   if (config.content?.kind === 'Format') {
-    return config.content.direction === ERDirection.Import ? '📥' : '📤';
+    return config.content.direction === ERDirection.Import
+      ? <DocumentArrowDownRegular />
+      : <DocumentArrowUpRegular />;
   }
-  return '📄';
+  return <DocumentRegular />;
 }
 
-function getStatusConfigSuffix(config: any): string {
+function getConfigDirectionLabel(config: any): string {
   if (config.content?.kind !== 'Format') return '';
-  return config.content.direction === ERDirection.Import ? ` • ${t.formatDirectionImport}` : ` • ${t.formatDirectionExport}`;
+  return config.content.direction === ERDirection.Import
+    ? t.formatDirectionImport
+    : t.formatDirectionExport;
 }
+
+// ────────────────────────── styles ──────────────────────────
+
+const useAppStyles = makeStyles({
+  landingShell: {
+    position: 'fixed',
+    inset: 0,
+    overflow: 'auto',
+    backgroundColor: tokens.colorNeutralBackground1,
+  },
+  shell: {
+    position: 'fixed',
+    inset: 0,
+    display: 'flex',
+    overflow: 'hidden',
+    backgroundColor: tokens.colorNeutralBackground1,
+    color: tokens.colorNeutralForeground1,
+    fontFamily: tokens.fontFamilyBase,
+    animationName: {
+      from: { opacity: 0 },
+      to: { opacity: 1 },
+    },
+    animationDuration: '260ms',
+    animationTimingFunction: 'ease-out',
+    animationFillMode: 'both',
+  },
+  workarea: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+    minHeight: 0,
+  },
+  main: {
+    flex: 1,
+    display: 'flex',
+    minHeight: 0,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  sidebar: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    minHeight: 0,
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
+    animationName: {
+      from: { opacity: 0, transform: 'translateX(-8px)' },
+      to: { opacity: 1, transform: 'translateX(0)' },
+    },
+    animationDuration: '220ms',
+    animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+    animationFillMode: 'both',
+  },
+  sidebarRight: {
+    borderRight: 'none',
+    borderLeft: `1px solid ${tokens.colorNeutralStroke2}`,
+    animationName: {
+      from: { opacity: 0, transform: 'translateX(8px)' },
+      to: { opacity: 1, transform: 'translateX(0)' },
+    },
+  },
+  center: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    minHeight: 0,
+    minWidth: 0,
+    backgroundColor: tokens.colorNeutralBackground1,
+  },
+  panelContent: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'auto',
+    animationName: {
+      from: { opacity: 0, transform: 'translateY(4px)' },
+      to: { opacity: 1, transform: 'translateY(0)' },
+    },
+    animationDuration: '260ms',
+    animationTimingFunction: 'ease-out',
+    animationFillMode: 'both',
+  },
+  resizeHandle: {
+    width: '4px',
+    backgroundColor: 'transparent',
+    position: 'relative',
+    cursor: 'col-resize',
+    transitionProperty: 'background-color',
+    transitionDuration: '160ms',
+    ':hover': {
+      backgroundColor: tokens.colorBrandBackground,
+    },
+    ':active': {
+      backgroundColor: tokens.colorBrandBackgroundPressed,
+    },
+  },
+  panelHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+    padding: '0 12px',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    backgroundColor: tokens.colorNeutralBackground1,
+    height: '40px',
+    minHeight: '40px',
+    flexShrink: 0,
+  },
+  panelHeaderTitle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    minWidth: 0,
+    flex: 1,
+  },
+  panelHeaderActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '2px',
+  },
+});
+
+const useBreadcrumbStyles = makeStyles({
+  root: {
+    minWidth: 0,
+  },
+});
+
+const useStatusBarStyles = makeStyles({
+  root: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '0 12px',
+    height: '28px',
+    minHeight: '28px',
+    backgroundColor: '#038387',
+    backgroundImage: 'linear-gradient(90deg, #005b70 0%, #038387 50%, #37a987 100%)',
+    color: '#ffffff',
+    fontSize: tokens.fontSizeBase100,
+    fontFamily: 'var(--font-display, Space Grotesk, sans-serif)',
+    letterSpacing: '0.02em',
+    borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+    flexShrink: 0,
+    animationName: {
+      from: { opacity: 0, transform: 'translateY(6px)' },
+      to: { opacity: 1, transform: 'translateY(0)' },
+    },
+    animationDuration: '260ms',
+    animationDelay: '80ms',
+    animationTimingFunction: 'ease-out',
+    animationFillMode: 'both',
+  },
+  homeBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    backgroundColor: 'transparent',
+    color: tokens.colorNeutralForegroundOnBrand,
+    border: 'none',
+    padding: '2px 6px',
+    borderRadius: tokens.borderRadiusSmall,
+    cursor: 'pointer',
+    transitionProperty: 'background-color, transform',
+    transitionDuration: '160ms',
+    ':hover': {
+      backgroundColor: 'rgba(255,255,255,0.15)',
+      transform: 'translateY(-1px)',
+    },
+  },
+  info: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    opacity: 0.9,
+  },
+  chip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '2px 6px 2px 8px',
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    fontSize: tokens.fontSizeBase100,
+    maxWidth: '240px',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    transitionProperty: 'background-color, transform',
+    transitionDuration: '160ms',
+    ':hover': {
+      backgroundColor: 'rgba(255,255,255,0.25)',
+    },
+  },
+  chipClose: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '16px',
+    height: '16px',
+    backgroundColor: 'transparent',
+    color: 'inherit',
+    border: 'none',
+    borderRadius: tokens.borderRadiusSmall,
+    cursor: 'pointer',
+    padding: 0,
+    ':hover': {
+      backgroundColor: 'rgba(255,255,255,0.25)',
+    },
+  },
+  spacer: { marginLeft: 'auto' },
+  warnBtn: {
+    cursor: 'pointer',
+  },
+  warnOk: {},
+  warnIssues: {
+    backgroundColor: tokens.colorPaletteRedBackground3,
+    color: tokens.colorNeutralForegroundOnBrand,
+  },
+  popover: {
+    minWidth: '320px',
+    maxWidth: '480px',
+    padding: 0,
+  },
+  popoverHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '8px 12px',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  popoverList: {
+    margin: 0,
+    padding: 0,
+    listStyle: 'none',
+    maxHeight: '280px',
+    overflow: 'auto',
+  },
+  popoverItem: {
+    padding: '8px 12px',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    fontSize: tokens.fontSizeBase200,
+  },
+  popoverItemWarning: {
+    borderLeftWidth: '3px',
+    borderLeftStyle: 'solid',
+    borderLeftColor: tokens.colorPaletteYellowBorderActive,
+  },
+  popoverItemError: {
+    borderLeftWidth: '3px',
+    borderLeftStyle: 'solid',
+    borderLeftColor: tokens.colorPaletteRedBorderActive,
+  },
+});
+
+// ────────────────────────── App ──────────────────────────
 
 export function App() {
+  const styles = useAppStyles();
   const [showSearch, setShowSearch] = useState(false);
   const [showLeft, setShowLeft] = useState(true);
   const [showRight, setShowRight] = useState(true);
@@ -89,7 +395,6 @@ export function App() {
     navigateToTreeNode(treeNodes[0].id);
   }, [showLanding, activeTabId, treeNodes, navigateToTreeNode]);
 
-  // Show landing when no files loaded, or user manually navigates back
   const isLandingVisible = showLanding || configs.length === 0;
 
   const handleFilesLoaded = useCallback(() => {
@@ -106,14 +411,12 @@ export function App() {
     });
   }, []);
 
-  // Global keyboard shortcuts.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       const target = e.target as HTMLElement | null;
       const inEditable = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || (target as HTMLElement).isContentEditable);
 
-      // Ctrl/Cmd+K — command palette (works even when focused in an input).
       if (mod && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         setPaletteOpen(p => !p);
@@ -121,25 +424,21 @@ export function App() {
       }
       if (inEditable) return;
 
-      // Ctrl/Cmd+F — focus search
       if (mod && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault();
         toggleSearch();
         return;
       }
-      // Ctrl/Cmd+B — toggle explorer
       if (mod && (e.key === 'b' || e.key === 'B')) {
         e.preventDefault();
         setShowLeft(s => !s);
         return;
       }
-      // Ctrl/Cmd+J — toggle properties
       if (mod && (e.key === 'j' || e.key === 'J')) {
         e.preventDefault();
         setShowRight(s => !s);
         return;
       }
-      // Alt+Left/Right — history
       if (e.altKey && e.key === 'ArrowLeft') {
         e.preventDefault();
         navigateBack();
@@ -170,7 +469,7 @@ export function App() {
 
   if (isLandingVisible) {
     return (
-      <div className="app-landing-shell">
+      <div className={styles.landingShell}>
         <ErrorBoundary label="Landing">
           <LandingPage onFilesLoaded={handleFilesLoaded} />
         </ErrorBoundary>
@@ -180,99 +479,102 @@ export function App() {
   }
 
   return (
-    <div className="app-shell">
-      <div className="app-root">
-        <ActivityBar
-          showLeft={showLeft}
-          showRight={showRight}
-          showSearch={showSearch}
-          onToggleLeft={() => setShowLeft(s => !s)}
-          onToggleRight={() => setShowRight(s => !s)}
-          onToggleSearch={toggleSearch}
-          onGoHome={() => { setLandingPinned(true); setShowLanding(true); }}
-          onOpenPalette={() => setPaletteOpen(true)}
-          onToggleWarnings={() => setStatusWarningsOpen(v => !v)}
-          warningsOpen={statusWarningsOpen}
+    <div className={styles.shell}>
+      <ActivityBar
+        showLeft={showLeft}
+        showRight={showRight}
+        showSearch={showSearch}
+        onToggleLeft={() => setShowLeft(s => !s)}
+        onToggleRight={() => setShowRight(s => !s)}
+        onToggleSearch={toggleSearch}
+        onGoHome={() => { setLandingPinned(true); setShowLanding(true); }}
+        onOpenPalette={() => setPaletteOpen(true)}
+        onToggleWarnings={() => setStatusWarningsOpen(v => !v)}
+        warningsOpen={statusWarningsOpen}
+      />
+      <div className={styles.workarea}>
+        <Toolbar
+          breadcrumb={<AppBreadcrumb onOpenHome={() => { setLandingPinned(true); setShowLanding(true); }} />}
         />
-        <div className="app-workarea">
-          <Toolbar
-            breadcrumb={<Breadcrumb onOpenHome={() => { setLandingPinned(true); setShowLanding(true); }} />}
-          />
-          <div className="app-main app-main-shell">
-            <PanelGroup direction="horizontal">
-              {/* Left sidebar: Explorer */}
-              {showLeft && (
-                <>
-                  <Panel defaultSize={22} minSize={15} maxSize={40}>
-                    <div className="app-sidebar app-sidebar-left app-panel-shell app-panel-shell-left">
-                      <ExplorerHeader />
-                      <div className="app-panel-content">
-                        <ErrorBoundary label="Explorer">
-                          <ConfigExplorer />
-                        </ErrorBoundary>
-                      </div>
+        <div className={styles.main}>
+          <PanelGroup direction="horizontal">
+            {showLeft && (
+              <>
+                <Panel defaultSize={22} minSize={15} maxSize={40}>
+                  <div className={styles.sidebar}>
+                    <ExplorerHeader />
+                    <div className={styles.panelContent}>
+                      <ErrorBoundary label="Explorer">
+                        <ConfigExplorer />
+                      </ErrorBoundary>
                     </div>
-                  </Panel>
-                  <PanelResizeHandle />
-                </>
-              )}
-
-              {/* Center: Tabs + Designer */}
-              <Panel defaultSize={showLeft && showRight ? 56 : showLeft || showRight ? 78 : 100} minSize={30}>
-                <div className="app-center">
-                  <TabBar />
-                  <div className="app-panel-content app-center-content">
-                    <ErrorBoundary label="Designer">
-                      <DesignerView />
-                    </ErrorBoundary>
                   </div>
-                </div>
-              </Panel>
+                </Panel>
+                <PanelResizeHandle className={styles.resizeHandle} />
+              </>
+            )}
 
-              {/* Right sidebar: Properties + Search */}
-              {showRight && (
-                <>
-                  <PanelResizeHandle />
-                  <Panel defaultSize={22} minSize={15} maxSize={40}>
-                    <div className="app-sidebar app-sidebar-right app-panel-shell app-panel-shell-right">
-                      {showSearch ? (
-                        <>
-                          <div className="panel-header panel-header--rich panel-header-split">
-                            <span className="panel-header__title"><span className="panel-header__icon">🔍</span>{t.search}</span>
-                            <button
-                              onClick={() => setShowSearch(false)}
-                              className="panel-header-close"
-                              aria-label={t.dismiss}
-                            >✕</button>
-                          </div>
-                          <ErrorBoundary label="Search">
-                            <SearchPanel />
+            <Panel defaultSize={showLeft && showRight ? 56 : showLeft || showRight ? 78 : 100} minSize={30}>
+              <div className={styles.center}>
+                <TabBar />
+                <div className={styles.panelContent}>
+                  <ErrorBoundary label="Designer">
+                    <DesignerView />
+                  </ErrorBoundary>
+                </div>
+              </div>
+            </Panel>
+
+            {showRight && (
+              <>
+                <PanelResizeHandle className={styles.resizeHandle} />
+                <Panel defaultSize={22} minSize={15} maxSize={40}>
+                  <div className={mergeClasses(styles.sidebar, styles.sidebarRight)}>
+                    {showSearch ? (
+                      <>
+                        <PanelHeader
+                          icon={<SearchRegular />}
+                          title={t.search}
+                          actions={
+                            <Tooltip content={t.dismiss} relationship="label" withArrow>
+                              <Button
+                                appearance="subtle"
+                                size="small"
+                                icon={<DismissRegular />}
+                                onClick={() => setShowSearch(false)}
+                                aria-label={t.dismiss}
+                              />
+                            </Tooltip>
+                          }
+                        />
+                        <ErrorBoundary label="Search">
+                          <SearchPanel />
+                        </ErrorBoundary>
+                      </>
+                    ) : (
+                      <>
+                        <PanelHeader
+                          icon={<AppsListDetailRegular />}
+                          title={t.properties}
+                        />
+                        <div className={styles.panelContent}>
+                          <ErrorBoundary label="Inspector">
+                            <PropertyInspector />
                           </ErrorBoundary>
-                        </>
-                      ) : (
-                        <>
-                          <div className="panel-header panel-header--rich">
-                            <span className="panel-header__title"><span className="panel-header__icon">📋</span>{t.properties}</span>
-                          </div>
-                          <div className="app-panel-content">
-                            <ErrorBoundary label="Inspector">
-                              <PropertyInspector />
-                            </ErrorBoundary>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </Panel>
-                </>
-              )}
-            </PanelGroup>
-          </div>
-          <StatusBar
-            onOpenLanding={() => setShowLanding(true)}
-            warningsOpen={statusWarningsOpen}
-            setWarningsOpen={setStatusWarningsOpen}
-          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </Panel>
+              </>
+            )}
+          </PanelGroup>
         </div>
+        <StatusBar
+          onOpenLanding={() => setShowLanding(true)}
+          warningsOpen={statusWarningsOpen}
+          setWarningsOpen={setStatusWarningsOpen}
+        />
       </div>
       <ToastHost />
       <CommandPalette
@@ -284,129 +586,70 @@ export function App() {
   );
 }
 
-function StatusBar({ onOpenLanding, warningsOpen, setWarningsOpen }: {
-  onOpenLanding: () => void;
-  warningsOpen: boolean;
-  setWarningsOpen: (v: boolean | ((prev: boolean) => boolean)) => void;
-}) {
-  const configs = useAppStore(s => s.configurations);
-  const registry = useAppStore(s => s.registry);
-  const warnings = useAppStore(s => s.warnings);
-  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
-  const removeConfiguration = useAppStore(s => s.removeConfiguration);
+// ────────────────────────── PanelHeader ──────────────────────────
 
+function PanelHeader({ icon, title, count, actions }: {
+  icon?: React.ReactNode;
+  title: string;
+  count?: number;
+  actions?: React.ReactNode;
+}) {
+  const styles = useAppStyles();
   return (
-    <div className="app-statusbar">
-      <span className="app-statusbar-home" onClick={onOpenLanding} title={t.home}>⌂ {t.home}</span>
-      <span>{t.statusConfigs(configs.length)}</span>
-      {configs.map((c, i) => (
-        <span
-          key={i}
-          className="app-statusbar-chip app-statusbar-chip-closable"
-          title={`${c.solutionVersion.solution.name} v${c.solutionVersion.publicVersionNumber}${getStatusConfigSuffix(c)}`}
-        >
-          <span>
-            {getStatusConfigIcon(c)} {c.solutionVersion.solution.name.slice(0, 22)} v{c.solutionVersion.publicVersionNumber}{getStatusConfigSuffix(c)}
-          </span>
-          <button
-            className="app-statusbar-chip-close"
-            title={t.closeConfiguration}
-            aria-label={t.closeConfiguration}
-            onClick={event => {
-              event.stopPropagation();
-              removeConfiguration(i);
-            }}
-          >
-            ×
-          </button>
-        </span>
-      ))}
-      <span
-        className={`app-statusbar-chip app-statusbar-validator ${warnings.length === 0 ? 'app-statusbar-validator--ok' : 'app-statusbar-validator--issues'}`}
-        onClick={() => warnings.length > 0 && setWarningsOpen(v => !v)}
-        title={warnings.length === 0 ? t.validatorOk : t.validatorIssues(warnings.length)}
-      >
-        {warnings.length === 0 ? `✓ ${t.validatorOk}` : `! ${t.validatorIssues(warnings.length)}`}
-      </span>
-      <span className="app-statusbar-chip app-statusbar-mode-chip">
-        {showTechnicalDetails ? t.technicalView : t.consultantView}
-      </span>
-      {showTechnicalDetails && <span className="app-statusbar-spacer">GUIDs: {registry.guidCount}</span>}
-      {warningsOpen && warnings.length > 0 && (
-        <div className="app-statusbar-warnings-popover" role="dialog" aria-label={t.warnings}>
-          <div className="app-statusbar-warnings-header">
-            <span>{t.warnings} ({warnings.length})</span>
-            <button type="button" onClick={() => setWarningsOpen(false)} aria-label={t.dismiss}>×</button>
-          </div>
-          <ul className="app-statusbar-warnings-list">
-            {warnings.map((w, i) => {
-              const cfg = configs[w.configIndex];
-              const cfgName = cfg ? cfg.solutionVersion.solution.name : `#${w.configIndex}`;
-              return (
-                <li key={i} className={`app-statusbar-warnings-item app-statusbar-warnings-item--${w.severity}`}>
-                  <strong>{cfgName}</strong>
-                  <span>{w.message}</span>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
+    <div className={styles.panelHeader}>
+      <div className={styles.panelHeaderTitle}>
+        {icon && <span aria-hidden="true" style={{ display: 'inline-flex' }}>{icon}</span>}
+        <Subtitle2>{title}</Subtitle2>
+        {typeof count === 'number' && count > 0 && (
+          <CounterBadge count={count} size="small" appearance="filled" color="informative" />
+        )}
+      </div>
+      {actions && <div className={styles.panelHeaderActions}>{actions}</div>}
     </div>
   );
 }
 
-/**
- * Rich header for the Explorer panel: icon + title + item count + quick
- * collapse/expand actions. Replaces the plain uppercase label.
- */
 function ExplorerHeader() {
   const treeNodes = useAppStore(s => s.treeNodes);
   const requestExplorerExpand = useAppStore(s => s.requestExplorerExpand);
   const expandAll = useAppStore(s => s.expandAll);
   const collapseAll = useAppStore(s => s.collapseAll);
 
-  const handleExpand = () => {
-    expandAll();
-    requestExplorerExpand('all');
-  };
-  const handleCollapse = () => {
-    collapseAll();
-    requestExplorerExpand('none');
-  };
-
   return (
-    <div className="panel-header panel-header--rich">
-      <span className="panel-header__title">
-        <span className="panel-header__icon">📁</span>
-        {t.explorer}
-        {treeNodes.length > 0 && <span className="panel-header__count">{treeNodes.length}</span>}
-      </span>
-      <span className="panel-header__actions">
-        <button
-          type="button"
-          className="panel-header__action"
-          onClick={handleExpand}
-          title={t.cmdExpandAll}
-          aria-label={t.cmdExpandAll}
-        >⊞</button>
-        <button
-          type="button"
-          className="panel-header__action"
-          onClick={handleCollapse}
-          title={t.cmdCollapseAll}
-          aria-label={t.cmdCollapseAll}
-        >⊟</button>
-      </span>
-    </div>
+    <PanelHeader
+      icon={<FolderRegular />}
+      title={t.explorer}
+      count={treeNodes.length}
+      actions={
+        <>
+          <Tooltip content={t.cmdExpandAll} relationship="label" withArrow>
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<ExpandUpRightRegular />}
+              onClick={() => { expandAll(); requestExplorerExpand('all'); }}
+              aria-label={t.cmdExpandAll}
+            />
+          </Tooltip>
+          <Tooltip content={t.cmdCollapseAll} relationship="label" withArrow>
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<ArrowMinimizeRegular />}
+              onClick={() => { collapseAll(); requestExplorerExpand('none'); }}
+              aria-label={t.cmdCollapseAll}
+            />
+          </Tooltip>
+        </>
+      }
+    />
   );
 }
 
-/**
- * Small breadcrumb strip showing the current active configuration & tab label.
- * Keeps orientation clear when many tabs are open.
- */
-function Breadcrumb({ onOpenHome }: { onOpenHome: () => void }) {
+// ────────────────────────── Breadcrumb ──────────────────────────
+
+function AppBreadcrumb({ onOpenHome }: { onOpenHome: () => void }) {
+  const styles = useBreadcrumbStyles();
   const openTabs = useAppStore(s => s.openTabs);
   const activeTabId = useAppStore(s => s.activeTabId);
   const configurations = useAppStore(s => s.configurations);
@@ -419,14 +662,127 @@ function Breadcrumb({ onOpenHome }: { onOpenHome: () => void }) {
   if (active.label && active.label !== parts[0]) parts.push(active.label);
 
   return (
-    <nav className="app-breadcrumb" aria-label="breadcrumb">
-      <button type="button" className="app-breadcrumb-home" onClick={onOpenHome} title={t.breadcrumbHome}>⌂</button>
+    <Breadcrumb className={styles.root} size="small">
+      <BreadcrumbItem>
+        <BreadcrumbButton icon={<HomeRegular />} onClick={onOpenHome} aria-label={t.breadcrumbHome} />
+      </BreadcrumbItem>
       {parts.map((part, i) => (
         <React.Fragment key={i}>
-          <span className="app-breadcrumb-sep" aria-hidden="true">›</span>
-          <span className={`app-breadcrumb-part${i === parts.length - 1 ? ' app-breadcrumb-part--last' : ''}`}>{part}</span>
+          <BreadcrumbDivider>
+            <ChevronRightRegular />
+          </BreadcrumbDivider>
+          <BreadcrumbItem>
+            <BreadcrumbButton current={i === parts.length - 1}>{part}</BreadcrumbButton>
+          </BreadcrumbItem>
         </React.Fragment>
       ))}
-    </nav>
+    </Breadcrumb>
+  );
+}
+
+// ────────────────────────── StatusBar ──────────────────────────
+
+function StatusBar({ onOpenLanding, warningsOpen, setWarningsOpen }: {
+  onOpenLanding: () => void;
+  warningsOpen: boolean;
+  setWarningsOpen: (v: boolean | ((prev: boolean) => boolean)) => void;
+}) {
+  const styles = useStatusBarStyles();
+  const configs = useAppStore(s => s.configurations);
+  const registry = useAppStore(s => s.registry);
+  const warnings = useAppStore(s => s.warnings);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const removeConfiguration = useAppStore(s => s.removeConfiguration);
+
+  return (
+    <div className={styles.root} role="status">
+      <button type="button" className={styles.homeBtn} onClick={onOpenLanding} title={t.home}>
+        <HomeRegular fontSize={14} />
+        <span>{t.home}</span>
+      </button>
+      <span className={styles.info}>{t.statusConfigs(configs.length)}</span>
+
+      {configs.map((c, i) => {
+        const dir = getConfigDirectionLabel(c);
+        return (
+          <span
+            key={i}
+            className={styles.chip}
+            title={`${c.solutionVersion.solution.name} v${c.solutionVersion.publicVersionNumber}${dir ? ` • ${dir}` : ''}`}
+          >
+            <span aria-hidden="true" style={{ display: 'inline-flex' }}>{getConfigIcon(c)}</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {c.solutionVersion.solution.name.slice(0, 22)} v{c.solutionVersion.publicVersionNumber}
+              {dir ? ` • ${dir}` : ''}
+            </span>
+            <button
+              type="button"
+              className={styles.chipClose}
+              title={t.closeConfiguration}
+              aria-label={t.closeConfiguration}
+              onClick={event => { event.stopPropagation(); removeConfiguration(i); }}
+            >
+              <DismissRegular fontSize={12} />
+            </button>
+          </span>
+        );
+      })}
+
+      <div className={styles.spacer} />
+
+      <Popover
+        open={warningsOpen && warnings.length > 0}
+        onOpenChange={(_, d) => setWarningsOpen(Boolean(d.open))}
+        withArrow
+        positioning="above-end"
+      >
+        <PopoverTrigger disableButtonEnhancement>
+          <span
+            className={mergeClasses(styles.chip, styles.warnBtn, warnings.length === 0 ? styles.warnOk : styles.warnIssues)}
+            onClick={() => warnings.length > 0 && setWarningsOpen(v => !v)}
+            title={warnings.length === 0 ? t.validatorOk : t.validatorIssues(warnings.length)}
+            role="button"
+            tabIndex={0}
+          >
+            {warnings.length === 0
+              ? <CheckmarkCircleRegular fontSize={14} />
+              : <WarningRegular fontSize={14} />}
+            <span>
+              {warnings.length === 0 ? t.validatorOk : t.validatorIssues(warnings.length)}
+            </span>
+          </span>
+        </PopoverTrigger>
+        <PopoverSurface className={styles.popover}>
+          <div className={styles.popoverHeader}>
+            <Body1Strong>{t.warnings} ({warnings.length})</Body1Strong>
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<DismissRegular />}
+              onClick={() => setWarningsOpen(false)}
+              aria-label={t.dismiss}
+            />
+          </div>
+          <ul className={styles.popoverList}>
+            {warnings.map((w, i) => {
+              const cfg = configs[w.configIndex];
+              const cfgName = cfg ? cfg.solutionVersion.solution.name : `#${w.configIndex}`;
+              const severity = w.severity === 'error' ? styles.popoverItemError : styles.popoverItemWarning;
+              return (
+                <li key={i} className={mergeClasses(styles.popoverItem, severity)}>
+                  <Caption1Strong>{cfgName}</Caption1Strong>
+                  <Caption1>{w.message}</Caption1>
+                </li>
+              );
+            })}
+          </ul>
+        </PopoverSurface>
+      </Popover>
+
+      <span className={styles.chip}>
+        {showTechnicalDetails ? t.technicalView : t.consultantView}
+      </span>
+      {showTechnicalDetails && <span className={styles.info}>GUIDs: {registry.guidCount}</span>}
+    </div>
   );
 }

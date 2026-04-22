@@ -1,4 +1,18 @@
 ﻿import React, { useCallback, useRef } from 'react';
+import {
+  Button,
+  Tooltip,
+  Divider,
+  makeStyles,
+  tokens,
+  mergeClasses,
+  shorthands,
+} from '@fluentui/react-components';
+import {
+  ArrowLeftRegular,
+  ArrowRightRegular,
+  FolderOpenRegular,
+} from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
 import { t } from '../i18n';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
@@ -7,11 +21,76 @@ interface ToolbarProps {
   breadcrumb?: React.ReactNode;
 }
 
+const useStyles = makeStyles({
+  root: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '0 12px',
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    height: '44px',
+    minHeight: '44px',
+    flexShrink: 0,
+  },
+  leftGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  rightGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    marginLeft: 'auto',
+    flexShrink: 0,
+  },
+  nav: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '2px',
+  },
+  sep: {
+    height: '20px',
+    margin: '0 2px',
+  },
+  breadcrumb: {
+    minWidth: 0,
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
+    textOverflow: 'ellipsis',
+    paddingLeft: '4px',
+  },
+  chip: {
+    fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+    fontSize: '11px',
+    fontWeight: 600,
+    letterSpacing: '0.04em',
+    padding: '3px 10px',
+    borderRadius: '100px',
+    backgroundColor: 'rgba(3, 131, 135, 0.1)',
+    color: 'var(--brand-1, #038387)',
+    ...shorthands.border('1px', 'solid', 'rgba(3, 131, 135, 0.22)'),
+  },
+  chipTech: {
+    backgroundImage: 'linear-gradient(135deg, #038387, #005b70)',
+    color: '#fff',
+    ...shorthands.borderColor('transparent'),
+    boxShadow: '0 2px 10px rgba(3, 131, 135, 0.3)',
+  },
+  hiddenInput: {
+    display: 'none',
+  },
+});
+
 /**
- * Slim top toolbar - focused on file/history operations. View-toggles, theme,
- * and palette were moved to the left ActivityBar so this bar stays clean.
+ * Slim top toolbar — file/history operations + breadcrumb. View toggles,
+ * theme, and the command palette live on the left ActivityBar.
  */
 export function Toolbar({ breadcrumb }: ToolbarProps) {
+  const styles = useStyles();
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
   const canNavigateBack = useAppStore(s => s.canNavigateBack);
   const canNavigateForward = useAppStore(s => s.canNavigateForward);
@@ -44,57 +123,67 @@ export function Toolbar({ breadcrumb }: ToolbarProps) {
   }, [loadXmlFile, reportLoadErrors]);
 
   return (
-    <div className="toolbar toolbar--slim">
-      <div className="toolbar__nav">
-        <IconButton onClick={navigateBack} icon="←" label={t.back} disabled={!canNavigateBack} shortcut="Alt+←" />
-        <IconButton onClick={navigateForward} icon="→" label={t.forward} disabled={!canNavigateForward} shortcut="Alt+→" />
+    <div className={styles.root}>
+      <div className={styles.leftGroup}>
+        <div className={styles.nav}>
+          <Tooltip content={`${t.back} (Alt+←)`} relationship="label" withArrow>
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<ArrowLeftRegular />}
+              disabled={!canNavigateBack}
+              onClick={navigateBack}
+              aria-label={t.back}
+            />
+          </Tooltip>
+          <Tooltip content={`${t.forward} (Alt+→)`} relationship="label" withArrow>
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<ArrowRightRegular />}
+              disabled={!canNavigateForward}
+              onClick={navigateForward}
+              aria-label={t.forward}
+            />
+          </Tooltip>
+        </div>
+
+        <Divider vertical className={styles.sep} />
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".xml"
+          onChange={handleFileSelect}
+          className={styles.hiddenInput}
+          id="file-input"
+        />
+        <Tooltip content={t.loadXml} relationship="label" withArrow>
+          <Button
+            appearance="primary"
+            size="small"
+            icon={<FolderOpenRegular />}
+            onClick={handleOpenFiles}
+          >
+            {t.loadXml}
+          </Button>
+        </Tooltip>
+
+        {breadcrumb && <Divider vertical className={styles.sep} />}
+        <div className={styles.breadcrumb}>{breadcrumb}</div>
       </div>
 
-      <div className="toolbar__sep" aria-hidden="true" />
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept=".xml"
-        onChange={handleFileSelect}
-        className="toolbar-file-input"
-        id="file-input"
-      />
-      <button type="button" className="toolbar__primary" onClick={handleOpenFiles} title={t.loadXml}>
-        <span aria-hidden="true">📂</span>
-        <span>{t.loadXml}</span>
-      </button>
-
-      <div className="toolbar__sep" aria-hidden="true" />
-
-      <div className="toolbar__breadcrumb">{breadcrumb}</div>
-
-      <div className="toolbar__right">
+      <div className={styles.rightGroup}>
         {configs.length > 0 && (
-          <span className="toolbar__count" title={t.statusConfigs(configs.length)}>
-            {configs.length} <span className="toolbar__count-word">{t.statusConfigsWord}</span>
+          <span className={styles.chip} title={t.statusConfigs(configs.length)}>
+            {configs.length} {t.statusConfigsWord}
           </span>
         )}
-        <span className={`toolbar__mode${showTechnicalDetails ? ' toolbar__mode--tech' : ''}`}>
+        <span className={mergeClasses(styles.chip, showTechnicalDetails && styles.chipTech)}>
           {showTechnicalDetails ? t.technicalView : t.consultantView}
         </span>
       </div>
     </div>
-  );
-}
-
-function IconButton({ onClick, icon, label, disabled = false, shortcut }: { onClick: () => void; icon: string; label: string; disabled?: boolean; shortcut?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="toolbar__icon-btn"
-      disabled={disabled}
-      title={shortcut ? `${label} (${shortcut})` : label}
-      aria-label={label}
-    >
-      {icon}
-    </button>
   );
 }

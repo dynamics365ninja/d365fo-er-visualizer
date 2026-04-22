@@ -47,13 +47,13 @@ async function bootstrap() {
 
   const React = await import('react');
   const { createRoot } = await import('react-dom/client');
-  const { App } = await import('./components/App');
+  const { FluentRoot } = await import('./components/FluentRoot');
   const root = createRoot(container);
   root.render(
     React.createElement(
       React.StrictMode,
       null,
-      React.createElement(App)
+      React.createElement(FluentRoot)
     )
   );
 }
