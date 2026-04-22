@@ -6,6 +6,7 @@ import {
   makeStyles,
   tokens,
   mergeClasses,
+  shorthands,
 } from '@fluentui/react-components';
 import {
   ArrowLeftRegular,
@@ -24,12 +25,26 @@ const useStyles = makeStyles({
   root: {
     display: 'flex',
     alignItems: 'center',
-    gap: '4px',
-    padding: '0 8px',
+    gap: '8px',
+    padding: '0 12px',
     backgroundColor: tokens.colorNeutralBackground1,
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    height: '40px',
-    minHeight: '40px',
+    height: '44px',
+    minHeight: '44px',
+    flexShrink: 0,
+  },
+  leftGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  rightGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    marginLeft: 'auto',
     flexShrink: 0,
   },
   nav: {
@@ -39,30 +54,31 @@ const useStyles = makeStyles({
   },
   sep: {
     height: '20px',
-    margin: '0 4px',
+    margin: '0 2px',
   },
   breadcrumb: {
-    flex: 1,
     minWidth: 0,
     overflow: 'hidden',
     whiteSpace: 'nowrap',
     textOverflow: 'ellipsis',
-  },
-  right: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground2,
+    paddingLeft: '4px',
   },
   chip: {
-    padding: '2px 6px',
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground3,
+    fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+    fontSize: '11px',
+    fontWeight: 600,
+    letterSpacing: '0.04em',
+    padding: '3px 10px',
+    borderRadius: '100px',
+    backgroundColor: 'rgba(3, 131, 135, 0.1)',
+    color: 'var(--brand-1, #038387)',
+    ...shorthands.border('1px', 'solid', 'rgba(3, 131, 135, 0.22)'),
   },
   chipTech: {
-    background: tokens.colorBrandBackground,
-    color: tokens.colorNeutralForegroundOnBrand,
+    backgroundImage: 'linear-gradient(135deg, #038387, #005b70)',
+    color: '#fff',
+    ...shorthands.borderColor('transparent'),
+    boxShadow: '0 2px 10px rgba(3, 131, 135, 0.3)',
   },
   hiddenInput: {
     display: 'none',
@@ -108,56 +124,57 @@ export function Toolbar({ breadcrumb }: ToolbarProps) {
 
   return (
     <div className={styles.root}>
-      <div className={styles.nav}>
-        <Tooltip content={`${t.back} (Alt+←)`} relationship="label" withArrow>
+      <div className={styles.leftGroup}>
+        <div className={styles.nav}>
+          <Tooltip content={`${t.back} (Alt+←)`} relationship="label" withArrow>
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<ArrowLeftRegular />}
+              disabled={!canNavigateBack}
+              onClick={navigateBack}
+              aria-label={t.back}
+            />
+          </Tooltip>
+          <Tooltip content={`${t.forward} (Alt+→)`} relationship="label" withArrow>
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<ArrowRightRegular />}
+              disabled={!canNavigateForward}
+              onClick={navigateForward}
+              aria-label={t.forward}
+            />
+          </Tooltip>
+        </div>
+
+        <Divider vertical className={styles.sep} />
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".xml"
+          onChange={handleFileSelect}
+          className={styles.hiddenInput}
+          id="file-input"
+        />
+        <Tooltip content={t.loadXml} relationship="label" withArrow>
           <Button
-            appearance="subtle"
+            appearance="primary"
             size="small"
-            icon={<ArrowLeftRegular />}
-            disabled={!canNavigateBack}
-            onClick={navigateBack}
-            aria-label={t.back}
-          />
+            icon={<FolderOpenRegular />}
+            onClick={handleOpenFiles}
+          >
+            {t.loadXml}
+          </Button>
         </Tooltip>
-        <Tooltip content={`${t.forward} (Alt+→)`} relationship="label" withArrow>
-          <Button
-            appearance="subtle"
-            size="small"
-            icon={<ArrowRightRegular />}
-            disabled={!canNavigateForward}
-            onClick={navigateForward}
-            aria-label={t.forward}
-          />
-        </Tooltip>
+
+        {breadcrumb && <Divider vertical className={styles.sep} />}
+        <div className={styles.breadcrumb}>{breadcrumb}</div>
       </div>
 
-      <Divider vertical className={styles.sep} />
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept=".xml"
-        onChange={handleFileSelect}
-        className={styles.hiddenInput}
-        id="file-input"
-      />
-      <Tooltip content={t.loadXml} relationship="label" withArrow>
-        <Button
-          appearance="primary"
-          size="small"
-          icon={<FolderOpenRegular />}
-          onClick={handleOpenFiles}
-        >
-          {t.loadXml}
-        </Button>
-      </Tooltip>
-
-      <Divider vertical className={styles.sep} />
-
-      <div className={styles.breadcrumb}>{breadcrumb}</div>
-
-      <div className={styles.right}>
+      <div className={styles.rightGroup}>
         {configs.length > 0 && (
           <span className={styles.chip} title={t.statusConfigs(configs.length)}>
             {configs.length} {t.statusConfigsWord}

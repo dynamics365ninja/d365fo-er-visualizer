@@ -79,7 +79,18 @@ const useStyles = makeStyles({
   },
   btnActive: {
     backgroundColor: tokens.colorSubtleBackgroundSelected,
-    borderLeft: `2px solid ${tokens.colorBrandBackground}`,
+    position: 'relative',
+    '::before': {
+      content: '""',
+      position: 'absolute',
+      left: 0,
+      top: '8px',
+      bottom: '8px',
+      width: '3px',
+      borderRadius: '0 2px 2px 0',
+      backgroundImage: 'linear-gradient(180deg, #038387 0%, #37a987 100%)',
+      boxShadow: '0 0 8px rgba(3, 131, 135, 0.6)',
+    },
   },
   badge: {
     position: 'absolute',

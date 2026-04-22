@@ -180,12 +180,12 @@
 }
 
 body {
-  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-sans, 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif);
   font-size: 13px;
   color: var(--text-primary);
   background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 10%, transparent), transparent 28%),
-    radial-gradient(circle at bottom right, color-mix(in srgb, var(--surface-success-fg) 8%, transparent), transparent 24%),
+    radial-gradient(circle at top left, rgba(3, 131, 135, 0.14), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(55, 169, 135, 0.10), transparent 28%),
     var(--bg-primary);
   overflow: hidden;
   height: 100vh;
