@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useAppStore, resolveDeepExpression } from '../state/store';
 import { formatEnumDisplayName } from '../utils/enum-display';
+import { PathTooltipCard, type PathTooltipData, type PathTooltipRow } from './PathTooltipCard';
 
 interface ClickablePathProps {
   /** The expression or path string, e.g. "model.CompanyInfo.Name" or "CompanyInfo.'name()'" */
@@ -167,8 +168,8 @@ interface SmartSegmentProps {
 }
 
 function SmartSegment({ segment, configIndex, interactive, resolveDatasource, resolveBinding, resolveModelPath, findDatasourceNode, navigateToTreeNode }: SmartSegmentProps) {
-  const [tooltip, setTooltip] = useState<string | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const [tooltip, setTooltip] = useState<PathTooltipData | null>(null);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const [resolved, setResolved] = useState<{ treeNodeId: string | null; type: string } | null>(null);
   const resolvedRef = useRef<{ treeNodeId: string | null; type: string } | null>(null);
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -178,52 +179,66 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
     || segment.kind === 'model-path'
     || (segment.kind === 'literal' && !!segment.lookupText));
 
-  const doResolve = useCallback(() => {
+  const doResolve = useCallback((): PathTooltipData | null => {
     if (segment.kind === 'identifier' || (segment.kind === 'literal' && segment.lookupText)) {
       const referencePath = segment.fullPath ?? segment.lookupText ?? segment.text;
       const deepResult = resolveDeepExpression(referencePath, configurations, configIndex);
       const rootSegment = referencePath.split('.')[0] ?? referencePath;
 
-      // First try direct datasource resolution (for format/mapping local DS)
       const dsResult = resolveDatasource(rootSegment, configIndex);
       const resolvedDatasource = deepResult?.nestedDs ?? deepResult?.rootDs ?? dsResult?.datasource;
       const datasourceConfigIndex = deepResult?.rootDsConfigIndex ?? dsResult?.configIndex ?? configIndex;
 
       if (resolvedDatasource) {
         const ds = resolvedDatasource;
-        const info = ds.tableInfo ? `Table: ${ds.tableInfo.tableName}` :
-          ds.enumInfo ? `Enum: ${formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo)}` :
-          ds.classInfo ? `Class: ${ds.classInfo.className}` :
-          ds.calculatedField ? `Calc: ${ds.calculatedField.expressionAsString?.substring(0, 50)}` :
-          ds.userParamInfo ? `User Param: ${ds.userParamInfo.extendedDataTypeName ?? ds.name}` :
-          `Type: ${ds.type}`;
+        const rows: PathTooltipRow[] = [];
 
-        const treeNodeId = findDatasourceNode(ds.name, datasourceConfigIndex, ds.parentPath)
-          ?? dsResult?.treeNodeId
-          ?? null;
+        if (ds.tableInfo) {
+          rows.push({ icon: 'table', label: 'Table', value: ds.tableInfo.tableName, mono: true });
+        } else if (ds.enumInfo) {
+          rows.push({ icon: 'enum', label: 'Enum', value: formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo), mono: true });
+        } else if (ds.classInfo) {
+          rows.push({ icon: 'class', label: 'Class', value: ds.classInfo.className, mono: true });
+        } else if (ds.calculatedField) {
+          rows.push({ icon: 'calc', label: 'Expr', value: ds.calculatedField.expressionAsString ?? '', mono: true });
+        } else if (ds.userParamInfo) {
+          rows.push({ label: 'Param', value: ds.userParamInfo.extendedDataTypeName ?? ds.name });
+        } else {
+          rows.push({ label: 'Type', value: String(ds.type), muted: true });
+        }
 
-        const lines: string[] = [`📊 ${ds.name}`, info];
         if (deepResult?.nestedDs && deepResult.rootDs && deepResult.nestedDs !== deepResult.rootDs) {
-          lines.push(`↳ Nested under: ${deepResult.rootDs.name}`);
+          rows.push({ icon: 'branch', label: 'Nested in', value: deepResult.rootDs.name, mono: true });
         }
         if (deepResult) {
           const tables = deepResult.involvedDatasources.filter(d => d.tableName);
           const classes = deepResult.involvedDatasources.filter(d => d.className);
           const enums = deepResult.involvedDatasources.filter(d => d.enumName);
-          if (tables.length > 0) lines.push(`🗃️ Tables: ${tables.map(t => t.tableName).join(', ')}`);
-          if (classes.length > 0) lines.push(`⚙️ Classes: ${classes.map(c => c.className).join(', ')}`);
-          if (enums.length > 0) lines.push(`🔤 Enums: ${enums.map(e => formatEnumDisplayName(e.enumName!, e)).join(', ')}`);
-          if (deepResult.calculatedFieldChain.length > 0) lines.push(`🧮 ${deepResult.calculatedFieldChain.length} calc field(s) in chain`);
+          if (tables.length > 1) rows.push({ icon: 'table', value: tables.map(t => t.tableName).join(', '), mono: true, muted: true });
+          if (classes.length > 1) rows.push({ icon: 'class', value: classes.map(c => c.className).join(', '), mono: true, muted: true });
+          if (enums.length > 1) rows.push({ icon: 'enum', value: enums.map(e => formatEnumDisplayName(e.enumName!, e)).join(', '), mono: true, muted: true });
+          if (deepResult.calculatedFieldChain.length > 0) {
+            rows.push({ icon: 'calc', value: `${deepResult.calculatedFieldChain.length} calc field(s) in chain`, muted: true });
+          }
         }
+
+        const treeNodeId = findDatasourceNode(ds.name, datasourceConfigIndex, ds.parentPath)
+          ?? dsResult?.treeNodeId
+          ?? null;
 
         const r = { treeNodeId, type: 'datasource' };
         resolvedRef.current = r;
         setResolved(r);
-        lines.push(treeNodeId ? 'Click to navigate →' : '');
-        return lines.filter(Boolean).join('\n');
+
+        return {
+          kind: 'datasource',
+          title: ds.name,
+          subtitle: 'Data source',
+          rows,
+          canNavigate: !!treeNodeId,
+        };
       }
 
-      // Try model path resolution if this looks like a model reference
       if (segment.text === 'model') {
         resolvedRef.current = null;
         setResolved(null);
@@ -236,52 +251,56 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
     }
 
     if (segment.kind === 'model-path' && segment.fullPath) {
-      // First try model mapping resolution to find actual datasource
       const mapResult = resolveModelPath(segment.fullPath);
       if (mapResult) {
-        const lines: string[] = [];
-        lines.push(`🔗 Model path: ${mapResult.modelPath}`);
-        lines.push(`📋 Mapping expr: ${mapResult.binding.expressionAsString}`);
+        const rows: PathTooltipRow[] = [];
+        rows.push({ label: 'Expr', value: mapResult.binding.expressionAsString ?? '', mono: true });
         if (mapResult.datasource) {
           const ds = mapResult.datasource;
-          if (ds.tableInfo) lines.push(`🗃️ Table: ${ds.tableInfo.tableName}`);
-          else if (ds.enumInfo) lines.push(`🔤 Enum: ${formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo)}`);
-          else if (ds.classInfo) lines.push(`⚙️ Class: ${ds.classInfo.className}`);
-          else if (ds.calculatedField) lines.push(`🧮 Calc: ${ds.calculatedField.expressionAsString?.substring(0, 60)}`);
-          else lines.push(`📊 DS: ${ds.name} (${ds.type})`);
+          if (ds.tableInfo) rows.push({ icon: 'table', label: 'Table', value: ds.tableInfo.tableName, mono: true });
+          else if (ds.enumInfo) rows.push({ icon: 'enum', label: 'Enum', value: formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo), mono: true });
+          else if (ds.classInfo) rows.push({ icon: 'class', label: 'Class', value: ds.classInfo.className, mono: true });
+          else if (ds.calculatedField) rows.push({ icon: 'calc', label: 'Calc', value: ds.calculatedField.expressionAsString ?? '', mono: true });
+          else rows.push({ label: 'DS', value: `${ds.name} (${ds.type})` });
         }
-        // Navigate to the binding node in the mapping config
         const navId = mapResult.bindingTreeNodeId ?? mapResult.datasourceTreeNodeId;
         const r = { treeNodeId: navId, type: 'model-mapping' };
         resolvedRef.current = r;
         setResolved(r);
-        lines.push(navId ? 'Click to navigate →' : '');
-        return lines.filter(Boolean).join('\n');
+        return {
+          kind: 'model-mapping',
+          title: mapResult.modelPath,
+          subtitle: 'Model mapping',
+          rows,
+          canNavigate: !!navId,
+        };
       }
 
-      // Fallback: try resolveBinding directly
       const bindResult = resolveBinding(segment.fullPath, configIndex);
       if (bindResult) {
-        const lines: string[] = [];
-        lines.push(`🔗 Binding: ${bindResult.binding.path}`);
-        lines.push(`Expr: ${bindResult.binding.expressionAsString?.substring(0, 60)}`);
-        // Also resolve the datasource from the binding expression
+        const rows: PathTooltipRow[] = [];
+        rows.push({ label: 'Expr', value: bindResult.binding.expressionAsString ?? '', mono: true });
         const dsName = bindResult.binding.expressionAsString?.split('.')[0]?.split('(')[0]?.replace(/['"]/g, '').trim();
         if (dsName) {
           const dsResult = resolveDatasource(dsName, bindResult.configIndex);
           if (dsResult?.datasource) {
             const ds = dsResult.datasource;
-            if (ds.tableInfo) lines.push(`🗃️ Table: ${ds.tableInfo.tableName}`);
-            else if (ds.enumInfo) lines.push(`🔤 Enum: ${formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo)}`);
-            else if (ds.classInfo) lines.push(`⚙️ Class: ${ds.classInfo.className}`);
-            else if (ds.calculatedField) lines.push(`🧮 Calc: ${ds.calculatedField.expressionAsString?.substring(0, 60)}`);
+            if (ds.tableInfo) rows.push({ icon: 'table', label: 'Table', value: ds.tableInfo.tableName, mono: true });
+            else if (ds.enumInfo) rows.push({ icon: 'enum', label: 'Enum', value: formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo), mono: true });
+            else if (ds.classInfo) rows.push({ icon: 'class', label: 'Class', value: ds.classInfo.className, mono: true });
+            else if (ds.calculatedField) rows.push({ icon: 'calc', label: 'Calc', value: ds.calculatedField.expressionAsString ?? '', mono: true });
           }
         }
         const r = { treeNodeId: bindResult.treeNodeId, type: 'binding' };
         resolvedRef.current = r;
         setResolved(r);
-        lines.push(bindResult.treeNodeId ? 'Click to navigate →' : '');
-        return lines.filter(Boolean).join('\n');
+        return {
+          kind: 'binding',
+          title: bindResult.binding.path,
+          subtitle: 'Binding',
+          rows,
+          canNavigate: !!bindResult.treeNodeId,
+        };
       }
       resolvedRef.current = null;
       setResolved(null);
@@ -292,18 +311,19 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
   const handleMouseEnter = useCallback((e: React.MouseEvent) => {
     if (!canResolve) return;
     if (leaveTimer.current) { clearTimeout(leaveTimer.current); leaveTimer.current = null; }
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    setTooltipPos({ x: rect.left, y: rect.bottom + 4 });
-
+    setMousePos({ x: e.clientX, y: e.clientY });
     const tip = doResolve();
     setTooltip(tip);
   }, [canResolve, doResolve]);
 
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!canResolve || !tooltip) return;
+    setMousePos({ x: e.clientX, y: e.clientY });
+  }, [canResolve, tooltip]);
+
   const handleMouseLeave = useCallback(() => {
     setTooltip(null);
-    setTooltipPos(null);
-    // Delay clearing resolved so click handler can still access it
+    setMousePos(null);
     leaveTimer.current = setTimeout(() => {
       resolvedRef.current = null;
       setResolved(null);
@@ -352,25 +372,14 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
           textUnderlineOffset: '3px',
         }}
         onMouseEnter={canResolve ? handleMouseEnter : undefined}
+        onMouseMove={canResolve ? handleMouseMove : undefined}
         onMouseLeave={canResolve ? handleMouseLeave : undefined}
         onClick={isResolved ? handleClick : undefined}
       >
         {segment.text}
       </span>
-      {tooltip && tooltipPos && (
-        <div
-          className="path-tooltip"
-          style={{
-            position: 'fixed',
-            left: tooltipPos.x,
-            top: tooltipPos.y,
-            zIndex: 9999,
-          }}
-        >
-          {tooltip.split('\n').map((line, i) => (
-            <div key={i}>{line}</div>
-          ))}
-        </div>
+      {tooltip && mousePos && (
+        <PathTooltipCard data={tooltip} mouse={mousePos} />
       )}
     </>
   );
