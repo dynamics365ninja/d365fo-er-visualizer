@@ -40,7 +40,6 @@ import {
   ArrowLeftRegular,
   ChevronRightRegular,
   ChevronDownRegular,
-  OpenRegular,
   ArrowExpandRegular,
   DismissRegular,
   CircleRegular,
@@ -855,8 +854,7 @@ export function DrillDownPanel({ expression, configIndex, elementName, defaultEx
             {expanded ? <ChevronDownRegular fontSize={14} /> : <ChevronRightRegular fontSize={14} />}
           </span>
           <CompassNorthwestRegular fontSize={14} aria-hidden />
-          <span className="dd-collapsible__label">{t.drillDown}</span>
-          <span className="dd-collapsible__hint">{t.drillDblClickToOpenTab}</span>
+          <span className="dd-collapsible__label">{t.drillCollapsibleLabel}</span>
         </button>
         {expanded && (
           <DrillDownBody
@@ -864,7 +862,6 @@ export function DrillDownPanel({ expression, configIndex, elementName, defaultEx
             configIndex={configIndex}
             elementName={elementName}
             onPopOut={() => setIsDialogOpen(true)}
-            onOpenTab={openAsTab}
           />
         )}
       </div>
@@ -908,13 +905,12 @@ export function DrillDownPanel({ expression, configIndex, elementName, defaultEx
   );
 }
 
-export function DrillDownBody({ expression, configIndex, elementName, variant = 'inline', onPopOut, onOpenTab }: {
+export function DrillDownBody({ expression, configIndex, elementName, variant = 'inline', onPopOut }: {
   expression: string;
   configIndex: number;
   elementName?: string;
   variant?: 'inline' | 'tab' | 'dialog';
   onPopOut?: () => void;
-  onOpenTab?: () => void;
 }) {
   const configurations = useAppStore(s => s.configurations);
   const trimmedExpr = expression?.trim() ?? '';
@@ -979,15 +975,6 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
                 onClick={() => setStack(s => s.slice(0, -1))}
                 title={t.back}
               ><ArrowLeftRegular fontSize={13} /> {t.back}</button>
-            )}
-            {onOpenTab && (
-              <button
-                type="button"
-                className="dd-hero__btn dd-hero__btn--ghost"
-                onClick={onOpenTab}
-                title={t.drillOpenInTab}
-                aria-label={t.drillOpenInTab}
-              ><OpenRegular fontSize={13} /> {t.drillOpenInTab}</button>
             )}
             {onPopOut && (
               <button

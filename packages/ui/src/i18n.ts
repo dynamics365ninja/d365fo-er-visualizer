@@ -127,7 +127,7 @@ export interface Translations {
   drillPopOut: string;
   drillOpenInTab: string;
   drillClickToToggle: string;
-  drillDblClickToOpenTab: string;
+  drillCollapsibleLabel: string;
   drillOpenExplorerFull: string;
   drillLegendClickable: string;
   drillLegendFunction: string;
@@ -365,8 +365,8 @@ const cs: Translations = {
   drillRestart: 'Začít znovu',
   drillPopOut: 'Otevřít v okně',
   drillOpenInTab: 'Otevřít v nové záložce',
-  drillClickToToggle: 'Kliknutím rozbalíte / sbalíte analýzu výrazu',
-  drillDblClickToOpenTab: 'dvojklik otevře v záložce',
+  drillClickToToggle: 'Klikněte pro zobrazení / skrytí detailu výrazu',
+  drillCollapsibleLabel: 'Zobrazit analýzu výrazu',
   drillOpenExplorerFull: 'Otevřít v Exploreru →',
   drillLegendClickable: 'Klikatelný odkaz',
   drillLegendFunction: 'ER funkce',
@@ -608,8 +608,8 @@ const en: Translations = {
   drillRestart: 'Restart',
   drillPopOut: 'Open in dialog',
   drillOpenInTab: 'Open in new tab',
-  drillClickToToggle: 'Click to expand / collapse the expression analysis',
-  drillDblClickToOpenTab: 'double-click opens in a tab',
+  drillClickToToggle: 'Click to show / hide expression detail',
+  drillCollapsibleLabel: 'Show expression analysis',
   drillOpenExplorerFull: 'Open in Explorer →',
   drillLegendClickable: 'Clickable reference',
   drillLegendFunction: 'ER function',

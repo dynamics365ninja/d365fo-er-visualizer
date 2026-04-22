@@ -3476,7 +3476,7 @@ body {
   letter-spacing: 0.5px;
   color: var(--text-secondary);
   padding: 3px 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -3680,7 +3680,7 @@ body {
   align-items: center;
   gap: 6px;
   padding: 5px 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
   border-bottom: 1px solid var(--border-color);
   flex-wrap: wrap;
 }
@@ -3969,44 +3969,54 @@ button.dd-dep-item { cursor: pointer; }
   font-family: 'Cascadia Code', 'Consolas', monospace;
 }
 
-/* Light-mode overrides */
-@media (prefers-color-scheme: light) {
-  .dd-panel {
-    background: #f5f5f5;
-    border-color: #ddd;
-  }
+/* Light-mode overrides (triggered by the app's [data-theme] attribute) */
+:root[data-theme='light'] .dd-panel {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
 
-  .dd-step {
-    background: #eeeeee;
-    border-color: #ddd;
-  }
+:root[data-theme='light'] .dd-step {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+}
 
-  .dd-ds-card {
-    background: #eeeeee;
-    border-color: #ddd;
-  }
+:root[data-theme='light'] .dd-ds-card {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+}
 
-  .dd-dep-chain {
-    background: rgba(22, 130, 93, 0.04);
-    border-color: rgba(22, 130, 93, 0.2);
-  }
+:root[data-theme='light'] .dd-dep-chain {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+}
 
-  .dd-dep-section-title {
-    border-bottom-color: rgba(0, 0, 0, 0.08);
-  }
+:root[data-theme='light'] .dd-dep-section-title {
+  border-bottom-color: color-mix(in srgb, var(--text-primary) 10%, transparent);
+}
 
-  .dd-dep-item {
-    border-bottom-color: rgba(0, 0, 0, 0.05);
-  }
+:root[data-theme='light'] .dd-dep-item {
+  border-bottom-color: color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
 
-  .dd-hint-info {
-    background: rgba(0, 95, 184, 0.05);
-    border-color: rgba(0, 95, 184, 0.2);
-  }
+:root[data-theme='light'] .dd-hint-info {
+  background: color-mix(in srgb, #005fb8 6%, transparent);
+  border-color: color-mix(in srgb, #005fb8 25%, transparent);
+}
 
-  .dd-clickable:hover {
-    background: rgba(0, 95, 184, 0.08);
-  }
+:root[data-theme='light'] .dd-clickable:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+:root[data-theme='light'] .dd-hero {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent) 7%, var(--bg-secondary)) 0%,
+      var(--bg-secondary) 100%);
+}
+
+:root[data-theme='light'] .dd-unres-expr {
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+  border-color: var(--border-color);
 }
 
 /* Unresolvable expression display */
@@ -4014,7 +4024,7 @@ button.dd-dep-item { cursor: pointer; }
   font-family: 'Cascadia Code', 'Consolas', monospace;
   font-size: 11px;
   padding: 4px 6px;
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
   border: 1px solid var(--border-color);
   border-radius: 3px;
   word-break: break-all;
@@ -5245,27 +5255,9 @@ body {
   color: var(--text-primary);
 }
 
-.dd-collapsible__hint {
+.dd-collapsible__trigger::after {
+  content: '';
   margin-left: auto;
-  font-size: 11px;
-  color: var(--text-secondary);
-  font-style: italic;
-}
-
-.dd-collapsible__open-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px 5px;
-  border-radius: 4px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
-}
-
-.dd-collapsible__open-tab:hover {
-  background: var(--brand-1, #038387);
-  color: #fff;
 }
 
 .drilldown-tab-host {
