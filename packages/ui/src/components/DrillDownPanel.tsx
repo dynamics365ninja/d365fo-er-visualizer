@@ -10,6 +10,38 @@
  * pushes a new frame. A breadcrumb bar lets you jump back to any prior frame.
  */
 import React, { useMemo, useState } from 'react';
+import {
+  Dialog,
+  DialogSurface,
+  DialogTitle,
+  DialogBody,
+  DialogContent,
+  DialogActions,
+  Button,
+} from '@fluentui/react-components';
+import {
+  CompassNorthwestRegular,
+  TableRegular,
+  TextCaseTitleRegular,
+  SettingsRegular,
+  CalculatorRegular,
+  BoxRegular,
+  LinkRegular,
+  DataBarVerticalRegular,
+  LocationRegular,
+  TextQuoteRegular,
+  ArrowShuffleRegular,
+  DocumentTextRegular,
+  WarningRegular,
+  PinRegular,
+  TagRegular,
+  BranchForkRegular,
+  ArrowClockwiseRegular,
+  ArrowLeftRegular,
+  ArrowExpandRegular,
+  DismissRegular,
+  CircleRegular,
+} from '@fluentui/react-icons';
 import { useAppStore, resolveDeepExpression } from '../state/store';
 import { t } from '../i18n';
 import { formatEnumDisplayName, getEnumTypeLabel, getEnumSourceKind } from '../utils/enum-display';
@@ -24,15 +56,21 @@ interface Frame {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function dsTypeIcon(ds: any): string {
-  if (ds.tableInfo)       return '🗃️';
-  if (ds.enumInfo)        return getEnumSourceKind(ds.enumInfo) === 'DataModel' ? '📋' : getEnumSourceKind(ds.enumInfo) === 'Format' ? '🏷️' : '🔤';
-  if (ds.classInfo)       return '⚙️';
-  if (ds.calculatedField) return '🧮';
-  if (ds.type === 'Container') return '📦';
-  if (ds.type === 'Join')      return '🔗';
-  if (ds.type === 'GroupBy')   return '📊';
-  return '📌';
+function DsTypeIcon({ ds }: { ds: any }) {
+  const common = { fontSize: 14 } as const;
+  if (ds.tableInfo)       return <TableRegular {...common} />;
+  if (ds.enumInfo) {
+    const kind = getEnumSourceKind(ds.enumInfo);
+    if (kind === 'DataModel') return <DocumentTextRegular {...common} />;
+    if (kind === 'Format')    return <TagRegular {...common} />;
+    return <TextCaseTitleRegular {...common} />;
+  }
+  if (ds.classInfo)       return <SettingsRegular {...common} />;
+  if (ds.calculatedField) return <CalculatorRegular {...common} />;
+  if (ds.type === 'Container') return <BoxRegular {...common} />;
+  if (ds.type === 'Join')      return <LinkRegular {...common} />;
+  if (ds.type === 'GroupBy')   return <DataBarVerticalRegular {...common} />;
+  return <PinRegular {...common} />;
 }
 
 function dsTypeBadge(ds: any): string {
@@ -392,7 +430,7 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
   if (isModel && !hasModelMapping) {
     return (
       <div className="dd-hint dd-hint-info">
-        <span className="dd-hint__icon" aria-hidden>📋</span>
+        <span className="dd-hint__icon" aria-hidden><DocumentTextRegular fontSize={16} /></span>
         <div className="dd-hint__body">
           <div className="dd-hint__text">{t.drillNoModelMapping}</div>
         </div>
@@ -406,7 +444,7 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
   if (isModel && hasModelMapping && !modelResult) {
     return (
       <div className="dd-hint dd-hint-warn">
-        <span className="dd-hint__icon" aria-hidden>⚠️</span>
+        <span className="dd-hint__icon" aria-hidden><WarningRegular fontSize={16} /></span>
         <div className="dd-hint__body">
           {cleanModelExpr !== expr && (
             <div className="dd-unres-expr dd-gap-bottom">
@@ -460,7 +498,7 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
     if (!expr.trim()) {
       return (
         <div className="dd-hint dd-hint-muted">
-          <span className="dd-hint__icon" aria-hidden>○</span>
+          <span className="dd-hint__icon" aria-hidden><CircleRegular fontSize={16} /></span>
           <div className="dd-hint__body">
             <div className="dd-hint__text">{t.drillUnbound}</div>
           </div>
@@ -472,7 +510,7 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
     if (kind === 'current-record') {
       return (
         <div className="dd-hint dd-hint-info">
-          <span className="dd-hint__icon" aria-hidden>📍</span>
+          <span className="dd-hint__icon" aria-hidden><LocationRegular fontSize={16} /></span>
           <div className="dd-hint__body">
             <div className="dd-hint__title">{t.drillLabelExpression}</div>
             <div className="dd-unres-expr">
@@ -487,7 +525,7 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
     if (kind === 'constant') {
       return (
         <div className="dd-hint dd-hint-info">
-          <span className="dd-hint__icon" aria-hidden>💬</span>
+          <span className="dd-hint__icon" aria-hidden><TextQuoteRegular fontSize={16} /></span>
           <div className="dd-hint__body">
             <div className="dd-unres-expr"><span className="dd-unres-text">{expr}</span></div>
             <div className="dd-hint__text">{t.drillConstant}</div>
@@ -499,7 +537,7 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
     if (kind === 'er-function' || kind === 'compound') {
       return (
         <div className="dd-hint dd-hint-info">
-          <span className="dd-hint__icon" aria-hidden>🔀</span>
+          <span className="dd-hint__icon" aria-hidden><ArrowShuffleRegular fontSize={16} /></span>
           <div className="dd-hint__body">
             <div className="dd-hint__title">{t.drillInteractiveExpr}</div>
             <ExpressionView expr={expr} configIndex={ci} onPush={onPush} />
@@ -510,7 +548,7 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
     // Unknown — unresolvable plain name
     return (
       <div className="dd-hint dd-hint-warn">
-        <span className="dd-hint__icon" aria-hidden>⚠️</span>
+        <span className="dd-hint__icon" aria-hidden><WarningRegular fontSize={16} /></span>
         <div className="dd-hint__body">
           <div className="dd-unres-expr"><span className="dd-unres-text">{expr}</span></div>
           <div className="dd-hint__text">{t.drillDsNotFound(firstSegment(expr) || expr)}</div>
@@ -526,7 +564,7 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
         <section className="dd-step">
           <header className="dd-step__head">
             <span className="dd-step__num" aria-hidden>1</span>
-            <span className="dd-step__icon" aria-hidden>🧩</span>
+            <span className="dd-step__icon" aria-hidden><BranchForkRegular fontSize={14} /></span>
             <span className="dd-step__title">{t.drillStepMappingTitle}</span>
             {mappingConfig && <span className="dd-step__config" title={mappingConfig}>{mappingConfig}</span>}
           </header>
@@ -571,7 +609,6 @@ function DatasourceCard({ ds, configIndex, configurations, onPush, stepNumber }:
 }) {
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
-  const icon  = dsTypeIcon(ds);
   const badge = dsTypeBadge(ds);
   const datasourceNodeId = findDatasourceNode(ds.name, configIndex, ds.parentPath);
 
@@ -585,7 +622,7 @@ function DatasourceCard({ ds, configIndex, configurations, onPush, stepNumber }:
     <section className="dd-step dd-ds-card">
       <header className="dd-step__head">
         {stepNumber !== undefined && <span className="dd-step__num" aria-hidden>{stepNumber}</span>}
-        <span className="dd-step__icon" aria-hidden>{icon}</span>
+        <span className="dd-step__icon" aria-hidden><DsTypeIcon ds={ds} /></span>
         <span className="dd-step__title">{t.drillStepDatasourceTitle}</span>
         <span className={`badge badge-${badge} dd-step__type`}>{ds.type}</span>
       </header>
@@ -629,7 +666,7 @@ function DatasourceCard({ ds, configIndex, configurations, onPush, stepNumber }:
       {ds.calculatedField?.expressionAsString && (
         <div className="dd-ds-formula">
           <div className="dd-ds-formula__label">
-            <span aria-hidden>🧮</span> {t.drillStepFormulaTitle}
+            <CalculatorRegular fontSize={13} aria-hidden /> {t.drillStepFormulaTitle}
           </div>
           <ExpressionView
             expr={ds.calculatedField.expressionAsString}
@@ -663,7 +700,7 @@ function DsChildren({ children, configIndex, onPush }: {
         aria-expanded={open}
       >
         <span className={`tree-chevron ${open ? 'open' : ''}`} />
-        <span aria-hidden>📦</span>
+        <BoxRegular fontSize={14} aria-hidden />
         <span>{t.drillStepChildrenTitle}</span>
         <span className="dd-ds-children__count">{children.length}</span>
       </button>
@@ -677,7 +714,7 @@ function DsChildren({ children, configIndex, onPush }: {
               onClick={() => onPush({ label: child.name, expression: child.name, configIndex })}
               title={`${t.drillDown}: ${child.name}`}
             >
-              <span className="dd-ds-icon">{dsTypeIcon(child)}</span>
+              <span className="dd-ds-icon"><DsTypeIcon ds={child} /></span>
               <span className={`badge badge-${dsTypeBadge(child)}`}>{child.type}</span>
               <span className="dd-ds-name">{child.name}</span>
               {child.tableInfo && <span className="dd-ds-target-inline">→ {child.tableInfo.tableName}</span>}
@@ -709,13 +746,13 @@ function DepChain({ deepResult, onPush, fromCi, stepNumber }: {
     <section className="dd-step dd-dep-chain">
       <header className="dd-step__head">
         {stepNumber !== undefined && <span className="dd-step__num" aria-hidden>{stepNumber}</span>}
-        <span className="dd-step__icon" aria-hidden>🔗</span>
+        <span className="dd-step__icon" aria-hidden><LinkRegular fontSize={14} /></span>
         <span className="dd-step__title">{t.drillStepDepsTitle}</span>
       </header>
       <div className="dd-step__body">
       {calcs.length > 0 && (
         <div className="dd-dep-section">
-          <div className="dd-dep-section-title">🧮 {t.drillLabelCalcField} <span className="dd-dep-section-count">{calcs.length}</span></div>
+          <div className="dd-dep-section-title"><CalculatorRegular fontSize={13} aria-hidden /> {t.drillLabelCalcField} <span className="dd-dep-section-count">{calcs.length}</span></div>
           {calcs.map((cf, i) => (
             <button
               key={i}
@@ -733,7 +770,7 @@ function DepChain({ deepResult, onPush, fromCi, stepNumber }: {
       )}
       {tables.length > 0 && (
         <div className="dd-dep-section">
-          <div className="dd-dep-section-title">🗃️ {t.drillLabelTable} <span className="dd-dep-section-count">{tables.length}</span></div>
+          <div className="dd-dep-section-title"><TableRegular fontSize={13} aria-hidden /> {t.drillLabelTable} <span className="dd-dep-section-count">{tables.length}</span></div>
           {tables.map((d: any, i: number) => (
             <div key={i} className="dd-dep-item">
               <span className="badge badge-table">{d.type}</span>
@@ -745,7 +782,7 @@ function DepChain({ deepResult, onPush, fromCi, stepNumber }: {
       )}
       {enums.length > 0 && (
         <div className="dd-dep-section">
-          <div className="dd-dep-section-title">🔤 {t.drillLabelEnum} <span className="dd-dep-section-count">{enums.length}</span></div>
+          <div className="dd-dep-section-title"><TextCaseTitleRegular fontSize={13} aria-hidden /> {t.drillLabelEnum} <span className="dd-dep-section-count">{enums.length}</span></div>
           {enums.map((d: any, i: number) => (
             <div key={i} className="dd-dep-item">
               <span className="badge badge-enum">{d.type}</span>
@@ -757,7 +794,7 @@ function DepChain({ deepResult, onPush, fromCi, stepNumber }: {
       )}
       {classes.length > 0 && (
         <div className="dd-dep-section">
-          <div className="dd-dep-section-title">⚙️ {t.drillLabelClass} <span className="dd-dep-section-count">{classes.length}</span></div>
+          <div className="dd-dep-section-title"><SettingsRegular fontSize={13} aria-hidden /> {t.drillLabelClass} <span className="dd-dep-section-count">{classes.length}</span></div>
           {classes.map((d: any, i: number) => (
             <div key={i} className="dd-dep-item">
               <span className="badge badge-class">{d.type}</span>
@@ -774,19 +811,93 @@ function DepChain({ deepResult, onPush, fromCi, stepNumber }: {
 
 // ─── Main DrillDownPanel ──────────────────────────────────────────────────────
 
+/**
+ * Inline drill-down panel rendered within a binding row. Shows a small toolbar
+ * with a "Pop out" button that opens the same drill-down inside a Fluent
+ * Dialog for a clearer, larger view.
+ */
 export function DrillDownPanel({ expression, configIndex, elementName }: {
   expression: string;
   configIndex: number;
   elementName?: string;
 }) {
+  const trimmedExpr = expression?.trim() ?? '';
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  if (!trimmedExpr) {
+    return (
+      <div className="dd-panel dd-panel--empty">
+        <div className="dd-empty-state">
+          <span className="dd-empty-state__icon" aria-hidden><CompassNorthwestRegular fontSize={22} /></span>
+          <div className="dd-empty-state__body">
+            <div className="dd-empty-state__title">{t.drillDown}</div>
+            <div className="dd-empty-state__text">{t.drillHintEmpty}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <DrillDownBody
+        expression={trimmedExpr}
+        configIndex={configIndex}
+        elementName={elementName}
+        onPopOut={() => setIsDialogOpen(true)}
+      />
+      <Dialog open={isDialogOpen} onOpenChange={(_, d) => setIsDialogOpen(d.open)} modalType="non-modal">
+        <DialogSurface className="dd-dialog-surface">
+          <DialogBody>
+            <DialogTitle
+              action={
+                <Button
+                  appearance="subtle"
+                  size="small"
+                  icon={<DismissRegular />}
+                  aria-label={t.back}
+                  onClick={() => setIsDialogOpen(false)}
+                />
+              }
+            >
+              <span className="dd-dialog-title">
+                <CompassNorthwestRegular fontSize={16} />
+                {t.drillDown}
+                {elementName && <span className="dd-dialog-title__name">· {elementName}</span>}
+              </span>
+            </DialogTitle>
+            <DialogContent className="dd-dialog-content">
+              <DrillDownBody
+                expression={trimmedExpr}
+                configIndex={configIndex}
+                elementName={elementName}
+                variant="dialog"
+              />
+            </DialogContent>
+            <DialogActions>
+              <Button appearance="primary" onClick={() => setIsDialogOpen(false)}>
+                {t.back}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+    </>
+  );
+}
+
+function DrillDownBody({ expression, configIndex, elementName, onPopOut, variant = 'inline' }: {
+  expression: string;
+  configIndex: number;
+  elementName?: string;
+  onPopOut?: () => void;
+  variant?: 'inline' | 'dialog';
+}) {
   const configurations = useAppStore(s => s.configurations);
 
-  // Don't render anything for genuinely empty expressions — the parent handles that message
-  const trimmedExpr = expression?.trim() ?? '';
-
   const initialFrame = (): Frame => ({
-    label: elementName ?? (trimmedExpr.split(/[.(]/)[0] || '?'),
-    expression: trimmedExpr,
+    label: elementName ?? (expression.split(/[.(]/)[0] || '?'),
+    expression,
     configIndex,
   });
 
@@ -802,31 +913,17 @@ export function DrillDownPanel({ expression, configIndex, elementName }: {
   React.useEffect(() => {
     setStack([initialFrame()]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trimmedExpr, configIndex, elementName]);
-
-  if (!trimmedExpr) {
-    return (
-      <div className="dd-panel dd-panel--empty">
-        <div className="dd-empty-state">
-          <span className="dd-empty-state__icon" aria-hidden>🧭</span>
-          <div className="dd-empty-state__body">
-            <div className="dd-empty-state__title">{t.drillDown}</div>
-            <div className="dd-empty-state__text">{t.drillHintEmpty}</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  }, [expression, configIndex, elementName]);
 
   const atRoot = stack.length === 1;
 
   return (
-    <div className="dd-panel">
+    <div className={`dd-panel ${variant === 'dialog' ? 'dd-panel--dialog' : ''}`}>
       {/* ── Hero header ─────────────────────────────────────────────────── */}
       <header className="dd-hero">
         <div className="dd-hero__top">
           <span className="dd-hero__badge">
-            <span className="dd-hero__badge-icon" aria-hidden>🧭</span>
+            <span className="dd-hero__badge-icon" aria-hidden><CompassNorthwestRegular fontSize={13} /></span>
             {t.drillDown}
           </span>
           <span className="dd-hero__meta">{t.drillSteps(stack.length)}</span>
@@ -837,7 +934,7 @@ export function DrillDownPanel({ expression, configIndex, elementName }: {
                 className="dd-hero__btn dd-hero__btn--ghost"
                 onClick={restart}
                 title={t.drillRestart}
-              >⟲ {t.drillRestart}</button>
+              ><ArrowClockwiseRegular fontSize={13} /> {t.drillRestart}</button>
             )}
             {!atRoot && (
               <button
@@ -845,7 +942,16 @@ export function DrillDownPanel({ expression, configIndex, elementName }: {
                 className="dd-hero__btn"
                 onClick={() => setStack(s => s.slice(0, -1))}
                 title={t.back}
-              >← {t.back}</button>
+              ><ArrowLeftRegular fontSize={13} /> {t.back}</button>
+            )}
+            {onPopOut && (
+              <button
+                type="button"
+                className="dd-hero__btn dd-hero__btn--ghost"
+                onClick={onPopOut}
+                title={t.drillPopOut}
+                aria-label={t.drillPopOut}
+              ><ArrowExpandRegular fontSize={13} /> {t.drillPopOut}</button>
             )}
           </div>
         </div>

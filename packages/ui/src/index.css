@@ -5196,3 +5196,55 @@ body {
   font-size: 12px;
   word-break: break-word;
 }
+
+/* ─── Drill-down Dialog ─────────────────────────────────────────────── */
+.dd-dialog-surface {
+  max-width: min(960px, 96vw) !important;
+  width: min(960px, 96vw);
+}
+
+.dd-dialog-content {
+  padding: 0 !important;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.dd-dialog-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+}
+
+.dd-dialog-title__name {
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.dd-panel--dialog {
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.dd-panel--dialog .dd-hero {
+  border-radius: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Keep Fluent icons inline with adjacent text in dep/step titles */
+.dd-dep-section-title,
+.dd-ds-formula__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dd-hero__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
