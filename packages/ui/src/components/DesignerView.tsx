@@ -1060,14 +1060,11 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   }, [treeNodes, configIndex, navigateToTreeNode]);
 
   const handleSelectFormatElement = useCallback((elementId: string | null) => {
+    // Single-click merely selects the element so its binding / drill-down details
+    // expand inline. Navigation to the element's own tree node is an explicit,
+    // user-initiated action — use `revealFormatElementInExplorer` for that.
     setSelectedElementId(elementId);
-    if (elementId) {
-      const rootNode = treeNodes[configIndex];
-      if (!rootNode) return;
-      const match = findTreeNodeByMatch(rootNode, candidate => candidate.type === 'formatElement' && candidate.data?.id === elementId);
-      if (match?.id) navigateToTreeNode(match.id);
-    }
-  }, [treeNodes, configIndex, navigateToTreeNode]);
+  }, []);
 
   const bindingsLabel = showTechnicalDetails ? t.bindings : t.lightBindings;
   const dataSourcesLabel = showTechnicalDetails ? t.dataSources : t.lightDataSources;
@@ -1217,7 +1214,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
                         <span className="mm-group-count">{group.rows.length}</span>
                       </div>
                       {!collapsedBindingTypeGroups.has(group.elementType) && group.rows.map(row => (
-                        <FormatElementBindingGroup key={row.componentId} row={row} configIndex={configIndex} onNavigate={handleSelectFormatElement} onReveal={revealFormatElementInExplorer} showTechnicalDetails={showTechnicalDetails} />
+                        <FormatElementBindingGroup key={row.componentId} row={row} configIndex={configIndex} onNavigate={revealFormatElementInExplorer} onReveal={revealFormatElementInExplorer} showTechnicalDetails={showTechnicalDetails} />
                       ))}
                     </div>
                   ))}
