@@ -3,12 +3,46 @@ import { useAppStore } from '../state/store';
 import { ClickablePath } from './ClickablePath';
 import { ERDirection, type ERFieldType } from '@er-visualizer/core';
 import { getEnumTypeLabel } from '../utils/enum-display';
+import { resolveLabel } from '../utils/label-resolver';
 import { t } from '../i18n';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
   if (direction === ERDirection.Export) return t.formatDirectionExport;
   return t.formatDirectionUnknown;
+}
+
+function LabelValue({ labelRef, configIndex }: { labelRef: string | null | undefined; configIndex: number }) {
+  const configurations = useAppStore(s => s.configurations);
+  if (!labelRef) return <>–</>;
+
+  const labels = configurations[configIndex]?.solutionVersion?.solution?.labels;
+  const resolved = resolveLabel(labelRef, labels);
+  if (!resolved) return <>–</>;
+
+  const hasTranslations = Boolean(resolved.enUs || resolved.localized);
+
+  return (
+    <div className="label-value">
+      <span className="label-value__id" title={resolved.raw}>{resolved.raw}</span>
+      {hasTranslations && (
+        <div className="label-value__translations">
+          {resolved.enUs && (
+            <div className="label-value__translation">
+              <span className="label-value__lang">en-us</span>
+              <span className="label-value__text">{resolved.enUs}</span>
+            </div>
+          )}
+          {resolved.localized && (
+            <div className="label-value__translation">
+              <span className="label-value__lang">{resolved.localizedLang}</span>
+              <span className="label-value__text">{resolved.localized}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const fieldTypeNames: Record<number, string> = {
@@ -47,8 +81,8 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
       )}
 
       {node.type === 'file' && data && <FileProps data={data} showTechnicalDetails={showTechnicalDetails} />}
-      {node.type === 'container' && data && <ContainerProps data={data} showTechnicalDetails={showTechnicalDetails} />}
-      {node.type === 'field' && data && <FieldProps data={data} showTechnicalDetails={showTechnicalDetails} />}
+      {node.type === 'container' && data && <ContainerProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
+      {node.type === 'field' && data && <FieldProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
       {node.type === 'datasource' && data && <DatasourceProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
       {node.type === 'binding' && data && <BindingProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
       {node.type === 'validation' && data && <ValidationProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
@@ -109,11 +143,11 @@ function FileProps({ data, showTechnicalDetails }: { data: any; showTechnicalDet
   return <PropGrid items={items} />;
 }
 
-function ContainerProps({ data, showTechnicalDetails }: { data: any; showTechnicalDetails: boolean }) {
+function ContainerProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
     ['Name', data.name],
-    ['Label', data.label ?? '–'],
-    ['Description', data.description ?? '–'],
+    ['Label', <LabelValue labelRef={data.label} configIndex={configIndex} />],
+    ['Description', <LabelValue labelRef={data.description} configIndex={configIndex} />],
     ['Fields', `${data.items?.length ?? 0}`],
   ];
 
@@ -125,11 +159,11 @@ function ContainerProps({ data, showTechnicalDetails }: { data: any; showTechnic
   return <PropGrid items={items} />;
 }
 
-function FieldProps({ data, showTechnicalDetails }: { data: any; showTechnicalDetails: boolean }) {
+function FieldProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
     ['Name', data.name],
-    ['Label', data.label ?? '–'],
-    ['Description', data.description ?? '–'],
+    ['Label', <LabelValue labelRef={data.label} configIndex={configIndex} />],
+    ['Description', <LabelValue labelRef={data.description} configIndex={configIndex} />],
   ];
 
   if (showTechnicalDetails) {
@@ -146,7 +180,7 @@ function FieldProps({ data, showTechnicalDetails }: { data: any; showTechnicalDe
 function DatasourceProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
     ['Name', data.name],
-    ['Label', data.label ?? '–'],
+    ['Label', <LabelValue labelRef={data.label} configIndex={configIndex} />],
   ];
 
   if (showTechnicalDetails) {

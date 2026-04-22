@@ -133,13 +133,28 @@ function remapTreeNodeIdAfterRemoval(nodeId: string | null, removedIndex: number
 
 // ─── App State ───
 
+/**
+ * A tab is either bound to a tree node (default) or a free-form drill-down session
+ * carrying an expression + configIndex to analyse.
+ */
+export type OpenTab =
+  | { kind?: 'node'; id: string; label: string; configIndex: number }
+  | {
+      kind: 'drillDown';
+      id: string;
+      label: string;
+      configIndex: number;
+      expression: string;
+      elementName?: string;
+    };
+
 export interface AppState {
   configurations: ERConfiguration[];
   registry: GUIDRegistry;
   treeNodes: TreeNode[];
   selectedNodeId: string | null;
   selectedNode: TreeNode | null;
-  openTabs: { id: string; label: string; configIndex: number }[];
+  openTabs: OpenTab[];
   activeTabId: string | null;
   searchQuery: string;
   searchResults: any[];
@@ -160,6 +175,7 @@ export interface AppState {
   removeConfiguration: (index: number) => void;
   selectNode: (nodeId: string | null) => void;
   openTab: (id: string, label: string, configIndex: number) => void;
+  openDrillDownTab: (expression: string, configIndex: number, elementName?: string) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   rebuildDerivedState: () => void;
@@ -459,13 +475,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     const newConfigs = state.configurations.filter((_, i) => i !== index);
     const { registry, treeNodes, warnings } = buildDerivedState(newConfigs);
 
-    const openTabs = state.openTabs
+    const openTabs: OpenTab[] = state.openTabs
       .filter(tab => tab.configIndex !== index)
-      .map(tab => ({
-        ...tab,
-        id: remapTreeNodeIdAfterRemoval(tab.id, index) ?? tab.id,
-        configIndex: tab.configIndex > index ? tab.configIndex - 1 : tab.configIndex,
-      }));
+      .map(tab => {
+        const newConfigIndex = tab.configIndex > index ? tab.configIndex - 1 : tab.configIndex;
+        if (tab.kind === 'drillDown') {
+          return {
+            ...tab,
+            configIndex: newConfigIndex,
+            id: `drilldown:${newConfigIndex}:${tab.elementName ?? ''}:${tab.expression}`,
+          };
+        }
+        return {
+          ...tab,
+          id: remapTreeNodeIdAfterRemoval(tab.id, index) ?? tab.id,
+          configIndex: newConfigIndex,
+        };
+      });
 
     const activeTabId = remapTreeNodeIdAfterRemoval(state.activeTabId, index);
     const selectedNodeId = remapTreeNodeIdAfterRemoval(state.selectedNodeId, index);
@@ -537,6 +563,25 @@ export const useAppStore = create<AppState>((set, get) => ({
       ? (newTabs.length > 0 ? newTabs[newTabs.length - 1].id : null)
       : state.activeTabId;
     set({ openTabs: newTabs, activeTabId: newActive });
+  },
+
+  openDrillDownTab: (expression: string, configIndex: number, elementName?: string) => {
+    const trimmed = expression.trim();
+    if (!trimmed) return;
+    const id = `drilldown:${configIndex}:${elementName ?? ''}:${trimmed}`;
+    const label = `⚲ ${elementName ?? trimmed.split(/[.(]/)[0] ?? trimmed}`.slice(0, 60);
+    const state = get();
+    if (!state.openTabs.find(t => t.id === id)) {
+      set({
+        openTabs: [
+          ...state.openTabs,
+          { kind: 'drillDown', id, label, configIndex, expression: trimmed, elementName },
+        ],
+        activeTabId: id,
+      });
+    } else {
+      set({ activeTabId: id });
+    }
   },
 
   setActiveTab: (id: string) => {

@@ -1737,6 +1737,15 @@ body {
 .fmt-binding-detail-row {
   padding: 3px 0;
   font-size: 11px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.fmt-binding-detail-row > .dd-collapsible {
+  flex-basis: 100%;
+  margin-top: 4px;
 }
 
 .fmt-binding-formula {
@@ -1954,6 +1963,10 @@ body {
 .fmt-detail-binding {
   padding: 6px 12px;
   border-bottom: 1px solid var(--border-color);
+}
+
+.fmt-detail-binding > .dd-collapsible {
+  margin-top: 6px;
 }
 
 .fmt-binding-origin {
@@ -3266,10 +3279,12 @@ body {
   border-radius: 4px;
   font-size: 11px;
   font-weight: 500;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.35;
 }
 .dd-hero__crumb:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
@@ -3476,7 +3491,7 @@ body {
   letter-spacing: 0.5px;
   color: var(--text-secondary);
   padding: 3px 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -3680,7 +3695,7 @@ body {
   align-items: center;
   gap: 6px;
   padding: 5px 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
   border-bottom: 1px solid var(--border-color);
   flex-wrap: wrap;
 }
@@ -3969,44 +3984,54 @@ button.dd-dep-item { cursor: pointer; }
   font-family: 'Cascadia Code', 'Consolas', monospace;
 }
 
-/* Light-mode overrides */
-@media (prefers-color-scheme: light) {
-  .dd-panel {
-    background: #f5f5f5;
-    border-color: #ddd;
-  }
+/* Light-mode overrides (triggered by the app's [data-theme] attribute) */
+:root[data-theme='light'] .dd-panel {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
 
-  .dd-step {
-    background: #eeeeee;
-    border-color: #ddd;
-  }
+:root[data-theme='light'] .dd-step {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+}
 
-  .dd-ds-card {
-    background: #eeeeee;
-    border-color: #ddd;
-  }
+:root[data-theme='light'] .dd-ds-card {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+}
 
-  .dd-dep-chain {
-    background: rgba(22, 130, 93, 0.04);
-    border-color: rgba(22, 130, 93, 0.2);
-  }
+:root[data-theme='light'] .dd-dep-chain {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+}
 
-  .dd-dep-section-title {
-    border-bottom-color: rgba(0, 0, 0, 0.08);
-  }
+:root[data-theme='light'] .dd-dep-section-title {
+  border-bottom-color: color-mix(in srgb, var(--text-primary) 10%, transparent);
+}
 
-  .dd-dep-item {
-    border-bottom-color: rgba(0, 0, 0, 0.05);
-  }
+:root[data-theme='light'] .dd-dep-item {
+  border-bottom-color: color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
 
-  .dd-hint-info {
-    background: rgba(0, 95, 184, 0.05);
-    border-color: rgba(0, 95, 184, 0.2);
-  }
+:root[data-theme='light'] .dd-hint-info {
+  background: color-mix(in srgb, #005fb8 6%, transparent);
+  border-color: color-mix(in srgb, #005fb8 25%, transparent);
+}
 
-  .dd-clickable:hover {
-    background: rgba(0, 95, 184, 0.08);
-  }
+:root[data-theme='light'] .dd-clickable:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+:root[data-theme='light'] .dd-hero {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent) 7%, var(--bg-secondary)) 0%,
+      var(--bg-secondary) 100%);
+}
+
+:root[data-theme='light'] .dd-unres-expr {
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+  border-color: var(--border-color);
 }
 
 /* Unresolvable expression display */
@@ -4014,7 +4039,7 @@ button.dd-dep-item { cursor: pointer; }
   font-family: 'Cascadia Code', 'Consolas', monospace;
   font-size: 11px;
   padding: 4px 6px;
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
   border: 1px solid var(--border-color);
   border-radius: 3px;
   word-break: break-all;
@@ -5146,4 +5171,214 @@ body {
 .tree-node-actions:hover {
   background: color-mix(in srgb, var(--brand-1) 18%, transparent);
   color: var(--text-primary);
+}
+
+/* ─── Multi-language label value (PropertyInspector) ─────────────────── */
+.label-value {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.label-value__id {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, 'JetBrains Mono', monospace);
+  font-size: 11.5px;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.label-value__translations {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px;
+  border-left: 2px solid color-mix(in srgb, var(--brand-1) 55%, transparent);
+  background: color-mix(in srgb, var(--bg-tertiary) 40%, transparent);
+  border-radius: 0 6px 6px 0;
+}
+
+.label-value__translation {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1.35;
+}
+
+.label-value__lang {
+  flex-shrink: 0;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, 'JetBrains Mono', monospace);
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--brand-1) 80%, var(--text-secondary));
+  min-width: 38px;
+}
+
+.label-value__text {
+  color: var(--text-secondary);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+/* ─── Drill-down collapsible trigger + tab host ──────────────────────── */
+.dd-collapsible {
+  margin-top: 6px;
+  border: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.18));
+  border-radius: 6px;
+  background: var(--bg-tertiary, rgba(128, 128, 128, 0.04));
+  overflow: hidden;
+  transition: border-color 120ms ease;
+}
+
+.dd-collapsible.is-open {
+  border-color: var(--brand-1, #038387);
+}
+
+.dd-collapsible__trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  user-select: none;
+}
+
+.dd-collapsible__trigger:hover {
+  background: rgba(3, 131, 135, 0.06);
+}
+
+.dd-collapsible.is-open .dd-collapsible__trigger {
+  border-bottom: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.18));
+}
+
+.dd-collapsible__chevron {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-secondary);
+}
+
+.dd-collapsible__label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dd-collapsible__trigger::after {
+  content: '';
+  margin-left: auto;
+}
+
+/* ─── Clickable expression trigger ─────────────────────────────────────── */
+.dd-trigger-expr {
+  display: inline-block;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+  outline: none;
+}
+
+.dd-trigger-expr:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.dd-trigger-expr:focus-visible {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.fmt-binding-detail-row .dd-trigger-expr,
+.fmt-detail-binding .dd-trigger-expr {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.drilldown-tab-host {
+  height: 100%;
+  overflow: auto;
+  padding: 16px;
+  background: var(--bg-primary, transparent);
+}
+
+.dd-panel--tab {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.dd-panel--tab .dd-hero {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* ─── Drill-down Dialog ─────────────────────────────────────────────── */
+.dd-dialog-surface {
+  max-width: min(960px, 96vw) !important;
+  width: min(960px, 96vw);
+}
+
+.dd-dialog-content {
+  padding: 0 !important;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.dd-dialog-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.dd-dialog-title__name {
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+  flex: 1;
+  min-width: 0;
+}
+
+.dd-panel--dialog {
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.dd-panel--dialog .dd-hero {
+  border-radius: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Keep Fluent icons inline with adjacent text in dep/step titles */
+.dd-dep-section-title,
+.dd-ds-formula__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dd-hero__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }

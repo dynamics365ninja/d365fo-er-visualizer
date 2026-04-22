@@ -124,6 +124,10 @@ export interface Translations {
   drillStepFormulaTitle: string;
   drillStepChildrenTitle: string;
   drillRestart: string;
+  drillPopOut: string;
+  drillOpenInTab: string;
+  drillClickToToggle: string;
+  drillCollapsibleLabel: string;
   drillOpenExplorerFull: string;
   drillLegendClickable: string;
   drillLegendFunction: string;
@@ -359,6 +363,10 @@ const cs: Translations = {
   drillStepFormulaTitle: 'Vzorec — klikni pro drill-down',
   drillStepChildrenTitle: 'Vnořené datové zdroje',
   drillRestart: 'Začít znovu',
+  drillPopOut: 'Otevřít v okně',
+  drillOpenInTab: 'Otevřít v nové záložce',
+  drillClickToToggle: 'Klikněte pro zobrazení / skrytí detailu výrazu',
+  drillCollapsibleLabel: 'Zobrazit analýzu výrazu',
   drillOpenExplorerFull: 'Otevřít v Exploreru →',
   drillLegendClickable: 'Klikatelný odkaz',
   drillLegendFunction: 'ER funkce',
@@ -598,6 +606,10 @@ const en: Translations = {
   drillStepFormulaTitle: 'Formula — click to drill down',
   drillStepChildrenTitle: 'Nested datasources',
   drillRestart: 'Restart',
+  drillPopOut: 'Open in dialog',
+  drillOpenInTab: 'Open in new tab',
+  drillClickToToggle: 'Click to show / hide expression detail',
+  drillCollapsibleLabel: 'Show expression analysis',
   drillOpenExplorerFull: 'Open in Explorer →',
   drillLegendClickable: 'Clickable reference',
   drillLegendFunction: 'ER function',

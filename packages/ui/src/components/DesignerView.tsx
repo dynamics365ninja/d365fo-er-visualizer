@@ -12,7 +12,7 @@ import '@xyflow/react/dist/style.css';
 import { useAppStore, resolveDeepExpression } from '../state/store';
 import type { DeepResolutionResult } from '../state/store';
 import { ClickablePath } from './ClickablePath';
-import { DrillDownPanel } from './DrillDownPanel';
+import { DrillDownBody, DrillDownTrigger } from './DrillDownPanel';
 import { PropertyInspector } from './PropertyInspector';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
@@ -49,6 +49,20 @@ export function DesignerView() {
 
   const config = configs[tab.configIndex];
   if (!config) return null;
+
+  // Drill-down tabs carry their own expression/element — render the drill-down body directly
+  if (tab.kind === 'drillDown') {
+    return (
+      <div className="drilldown-tab-host">
+        <DrillDownBody
+          expression={tab.expression}
+          configIndex={tab.configIndex}
+          elementName={tab.elementName}
+          variant="tab"
+        />
+      </div>
+    );
+  }
 
   const tabNode = findTreeNodeById(treeNodes, activeTabId);
 
@@ -158,13 +172,14 @@ function FormatElementFocusTab({ node, configIndex }: { node: any; configIndex: 
                       <span className="fmt-binding-origin">via {b.rawElementType}</span>
                     )}
                     <div style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 11 }}>
-                      <ClickablePath expression={b.expressionAsString} configIndex={configIndex} mode="binding-expr" />
+                      <DrillDownTrigger
+                        expression={b.expressionAsString}
+                        configIndex={configIndex}
+                        elementName={node.data.name}
+                      >
+                        <ClickablePath expression={b.expressionAsString} configIndex={configIndex} mode="binding-expr" interactive={false} />
+                      </DrillDownTrigger>
                     </div>
-                    <DrillDownPanel
-                      expression={b.expressionAsString}
-                      configIndex={configIndex}
-                      elementName={node.data.name}
-                    />
                   </div>
                 ))}
               </div>
@@ -232,7 +247,7 @@ function normalizeModelReferenceVariants(expression: string): string[] {
   return [...new Set(variants)];
 }
 
-function ExpressionDetailLink({ expression, configIndex, className }: { expression: string; configIndex: number; className?: string }) {
+function ExpressionDetailLink({ expression, configIndex, className, interactive = true }: { expression: string; configIndex: number; className?: string; interactive?: boolean }) {
   const configurations = useAppStore(s => s.configurations);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
@@ -282,7 +297,7 @@ function ExpressionDetailLink({ expression, configIndex, className }: { expressi
   }, [expression, configIndex, configurations, findDatasourceNode, navigateToTreeNode, resolveBinding, resolveDatasource, resolveModelPath]);
 
   return (
-    <span className={className} onClick={navigateExpressionTarget} title={t.openInExplorerAction}>
+    <span className={className} onClick={interactive ? navigateExpressionTarget : undefined} title={interactive ? t.openInExplorerAction : undefined}>
       <ClickablePath expression={expression} configIndex={configIndex} mode="binding-expr" interactive={false} />
     </span>
   );
@@ -1046,14 +1061,11 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   }, [treeNodes, configIndex, navigateToTreeNode]);
 
   const handleSelectFormatElement = useCallback((elementId: string | null) => {
+    // Single-click merely selects the element so its binding / drill-down details
+    // expand inline. Navigation to the element's own tree node is an explicit,
+    // user-initiated action — use `revealFormatElementInExplorer` for that.
     setSelectedElementId(elementId);
-    if (elementId) {
-      const rootNode = treeNodes[configIndex];
-      if (!rootNode) return;
-      const match = findTreeNodeByMatch(rootNode, candidate => candidate.type === 'formatElement' && candidate.data?.id === elementId);
-      if (match?.id) navigateToTreeNode(match.id);
-    }
-  }, [treeNodes, configIndex, navigateToTreeNode]);
+  }, []);
 
   const bindingsLabel = showTechnicalDetails ? t.bindings : t.lightBindings;
   const dataSourcesLabel = showTechnicalDetails ? t.dataSources : t.lightDataSources;
@@ -1203,7 +1215,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
                         <span className="mm-group-count">{group.rows.length}</span>
                       </div>
                       {!collapsedBindingTypeGroups.has(group.elementType) && group.rows.map(row => (
-                        <FormatElementBindingGroup key={row.componentId} row={row} configIndex={configIndex} onNavigate={handleSelectFormatElement} onReveal={revealFormatElementInExplorer} showTechnicalDetails={showTechnicalDetails} />
+                        <FormatElementBindingGroup key={row.componentId} row={row} configIndex={configIndex} onNavigate={revealFormatElementInExplorer} onReveal={revealFormatElementInExplorer} showTechnicalDetails={showTechnicalDetails} />
                       ))}
                     </div>
                   ))}
@@ -1445,13 +1457,14 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
                     <span className="fmt-binding-origin">via {b.rawElementType}</span>
                   )}
                   <span className="fmt-binding-formula">
-                    <ExpressionDetailLink expression={b.expressionAsString} configIndex={configIndex} />
+                    <DrillDownTrigger
+                      expression={b.expressionAsString}
+                      configIndex={configIndex}
+                      elementName={element.name}
+                    >
+                      <ExpressionDetailLink expression={b.expressionAsString} configIndex={configIndex} interactive={false} />
+                    </DrillDownTrigger>
                   </span>
-                  <DrillDownPanel
-                    expression={b.expressionAsString}
-                    configIndex={configIndex}
-                    elementName={element.name}
-                  />
                 </div>
               ))}
             </div>
