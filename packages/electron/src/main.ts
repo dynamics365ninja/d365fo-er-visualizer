@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { registerFnoIpc } from './fno/ipc.js';
 
 const isDev = !app.isPackaged;
 
@@ -46,8 +47,8 @@ function createWindow() {
   // Strict Content-Security-Policy for packaged renderer. Dev uses Vite HMR so we relax slightly.
   win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     const csp = isDev
-      ? "default-src 'self' http://localhost:5173 ws://localhost:5173; script-src 'self' 'unsafe-inline' http://localhost:5173; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http://localhost:5173 ws://localhost:5173;"
-      : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';";
+      ? "default-src 'self' http://localhost:5173 ws://localhost:5173; script-src 'self' 'unsafe-inline' http://localhost:5173; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http://localhost:5173 ws://localhost:5173 https://login.microsoftonline.com https://*.dynamics.com;"
+      : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://login.microsoftonline.com https://*.dynamics.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none';";
     callback({
       responseHeaders: {
         ...details.responseHeaders,
@@ -76,6 +77,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  registerFnoIpc();
   createWindow();
 
   app.on('activate', () => {

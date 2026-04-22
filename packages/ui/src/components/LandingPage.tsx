@@ -23,6 +23,10 @@ import {
   Tag,
   TagGroup,
   type TagGroupProps,
+  TabList,
+  Tab,
+  type SelectTabEvent,
+  type SelectTabData,
 } from '@fluentui/react-components';
 import {
   ArrowUploadRegular,
@@ -38,8 +42,9 @@ import {
   SparkleFilled,
 } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
-import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 import { t } from '../i18n';
+import { FnoConnectPanel } from './FnoConnectPanel';
+import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 
 // ────────────────────────── styles ──────────────────────────
 
@@ -418,6 +423,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [sourceTab, setSourceTab] = useState<'local' | 'remote'>('local');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFiles = useCallback(async (files: FileList | null) => {
@@ -505,6 +511,19 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
         <div className="lp-hero-divider" aria-hidden="true" />
       </div>
 
+      {/* Source selector */}
+      <TabList
+        selectedValue={sourceTab}
+        onTabSelect={(_: SelectTabEvent, d: SelectTabData) => setSourceTab(d.value as 'local' | 'remote')}
+        size="large"
+      >
+        <Tab value="local">{t.fnoTabLocal}</Tab>
+        <Tab value="remote">{t.fnoTabRemote}</Tab>
+      </TabList>
+
+      {sourceTab === 'remote' && <FnoConnectPanel />}
+
+      {sourceTab === 'local' && <>
       {/* Drop Zone */}
       <div
         className={mergeClasses(styles.dropzone, isDragging && styles.dropzoneDragging)}
@@ -614,6 +633,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
           fileHint={t.landingCardFormatHint}
         />
       </div>
+      </>}
 
       {/* Recent sessions */}
       {recentSessions.length > 0 && (
