@@ -4955,3 +4955,177 @@ body {
 
 /* ─── Drop zone above orbs/grid ─── */
 .lp-above { position: relative; z-index: 1; }
+
+/* ─── Enhanced ConfigExplorer ─────────────────────────────────────────── */
+
+.explorer-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 2px;
+  flex-wrap: wrap;
+}
+
+.explorer-chip-spacer {
+  flex: 1 1 auto;
+  min-width: 4px;
+}
+
+.explorer-kind-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px 3px 8px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 60%, transparent);
+  color: var(--fg-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.explorer-kind-chip:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--brand-1) 48%, var(--border-color));
+  background: color-mix(in srgb, var(--brand-1) 10%, var(--bg-secondary));
+  color: var(--fg-primary);
+  transform: translateY(-1px);
+}
+
+.explorer-kind-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.explorer-kind-chip.active {
+  color: var(--fg-primary);
+  border-color: color-mix(in srgb, var(--brand-1) 60%, transparent);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--brand-1) 22%, var(--bg-secondary)),
+    color-mix(in srgb, var(--brand-2) 18%, var(--bg-secondary)));
+  box-shadow: 0 2px 6px -2px color-mix(in srgb, var(--brand-1) 40%, transparent);
+}
+
+.explorer-kind-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+}
+
+.explorer-kind-chip.active .explorer-kind-chip-icon {
+  opacity: 1;
+}
+
+.explorer-kind-chip--model.active { border-color: color-mix(in srgb, var(--surface-info-border) 80%, transparent); }
+.explorer-kind-chip--mapping.active { border-color: color-mix(in srgb, var(--surface-success-border) 80%, transparent); }
+.explorer-kind-chip--format.active { border-color: color-mix(in srgb, var(--surface-warning-border) 80%, transparent); }
+
+.explorer-kind-chip-count {
+  min-width: 18px;
+  padding: 0 5px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-tertiary) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.explorer-result-info {
+  padding: 4px 12px 2px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--fg-tertiary);
+  letter-spacing: 0.02em;
+}
+
+/* Group header as button with chevron */
+.explorer-kind-group-header-btn {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  padding: 9px 12px;
+  transition: background 140ms ease;
+}
+
+.explorer-kind-group-header-btn:hover {
+  background: color-mix(in srgb, var(--bg-tertiary) 45%, transparent);
+}
+
+.explorer-kind-group-header-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.explorer-kind-group-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  opacity: 0.75;
+}
+
+.explorer-kind-group.collapsed .explorer-kind-group-header-btn {
+  border-bottom-color: transparent !important;
+}
+
+/* Version pill on root config nodes */
+.tree-node-version-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 6px;
+  margin-left: 6px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--brand-1) 85%, var(--fg-primary));
+  background: color-mix(in srgb, var(--brand-1) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-1) 30%, transparent);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, 'JetBrains Mono', monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Quick actions button (kebab) */
+.tree-node-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.tree-node:hover .tree-node-actions,
+.tree-node.selected .tree-node-actions,
+.tree-node-actions[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.tree-node-actions:hover {
+  background: color-mix(in srgb, var(--brand-1) 18%, transparent);
+  color: var(--fg-primary);
+}

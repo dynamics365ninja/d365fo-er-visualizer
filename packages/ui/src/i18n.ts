@@ -71,6 +71,14 @@ export interface Translations {
   path: string;
   expression: string;
   explorerFilterPlaceholder: string;
+  explorerFilterByKind: string;
+  explorerSort: string;
+  explorerSortLoadOrder: string;
+  explorerSortNameAsc: string;
+  explorerSortNameDesc: string;
+  explorerResultsCount: (visible: number, total: number) => string;
+  explorerMoreActions: string;
+  explorerOpenInTab: string;
   detailOverview: string;
   attributes: string;
   drillSteps: (n: number) => string;
@@ -297,6 +305,14 @@ const cs: Translations = {
   path: 'Cesta',
   expression: 'Výraz',
   explorerFilterPlaceholder: 'Filtrovat explorer…',
+  explorerFilterByKind: 'Filtrovat podle druhu',
+  explorerSort: 'Řazení',
+  explorerSortLoadOrder: 'Pořadí načtení',
+  explorerSortNameAsc: 'Název vzestupně (A–Z)',
+  explorerSortNameDesc: 'Název sestupně (Z–A)',
+  explorerResultsCount: (v, t) => `Zobrazeno ${v} z ${t}`,
+  explorerMoreActions: 'Další akce',
+  explorerOpenInTab: 'Otevřít v záložce',
   detailOverview: 'Přehled výběru',
   attributes: 'Atributy',
   drillSteps: (n: number) => `${n} krok${n === 1 ? '' : n < 5 ? 'y' : 'ů'}`,
@@ -529,6 +545,14 @@ const en: Translations = {
   path: 'Path',
   expression: 'Expression',
   explorerFilterPlaceholder: 'Filter explorer…',
+  explorerFilterByKind: 'Filter by kind',
+  explorerSort: 'Sort',
+  explorerSortLoadOrder: 'Load order',
+  explorerSortNameAsc: 'Name ascending (A–Z)',
+  explorerSortNameDesc: 'Name descending (Z–A)',
+  explorerResultsCount: (v, t) => `Showing ${v} of ${t}`,
+  explorerMoreActions: 'More actions',
+  explorerOpenInTab: 'Open in tab',
   detailOverview: 'Selection Overview',
   attributes: 'Attributes',
   drillSteps: (n: number) => `${n} step${n === 1 ? '' : 's'}`,

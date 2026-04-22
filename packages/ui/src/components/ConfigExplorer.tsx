@@ -1,10 +1,33 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Button, Input } from '@fluentui/react-components';
-import { DismissRegular } from '@fluentui/react-icons';
+import {
+  Button,
+  Input,
+  Menu,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItem,
+  Tooltip,
+} from '@fluentui/react-components';
+import {
+  DismissRegular,
+  MoreVerticalRegular,
+  ArrowSortRegular,
+  OpenRegular,
+  DeleteRegular,
+  ChevronDownRegular,
+  ChevronRightRegular,
+  DataBarVerticalFilled,
+  LinkFilled,
+  DocumentFilled,
+} from '@fluentui/react-icons';
 import { locale, t } from '../i18n';
 import { useAppStore, type TreeNode } from '../state/store';
 import { ERDirection } from '@er-visualizer/core';
 import { loadBrowserFiles } from '../utils/file-loading';
+
+type ConfigKind = 'DataModel' | 'ModelMapping' | 'Format';
+type SortMode = 'loadOrder' | 'nameAsc' | 'nameDesc';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -106,6 +129,7 @@ function collectAncestorIds(nodes: TreeNode[], targetId: string | null): Set<str
 
 export function ConfigExplorer() {
   const treeNodes = useAppStore(s => s.treeNodes);
+  const configurations = useAppStore(s => s.configurations);
   const selectedNodeId = useAppStore(s => s.selectedNodeId);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const removeConfiguration = useAppStore(s => s.removeConfiguration);
@@ -118,6 +142,34 @@ export function ConfigExplorer() {
   const [expandVersion, setExpandVersion] = useState(0);
   const [filterQuery, setFilterQuery] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [kindFilter, setKindFilter] = useState<Set<ConfigKind>>(new Set(['DataModel', 'ModelMapping', 'Format']));
+  const [sortMode, setSortMode] = useState<SortMode>('loadOrder');
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<ConfigKind>>(new Set());
+
+  const toggleKind = useCallback((kind: ConfigKind) => {
+    setKindFilter(prev => {
+      const next = new Set(prev);
+      if (next.has(kind)) {
+        if (next.size === 1) {
+          // Clicking the only active one -> reset to all visible
+          return new Set(['DataModel', 'ModelMapping', 'Format']);
+        }
+        next.delete(kind);
+      } else {
+        next.add(kind);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleGroup = useCallback((kind: ConfigKind) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(kind)) next.delete(kind);
+      else next.add(kind);
+      return next;
+    });
+  }, []);
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
     if (!event.dataTransfer.types.includes('Files')) return;
@@ -151,20 +203,49 @@ export function ConfigExplorer() {
   }, [explorerExpandCommand]);
   const filteredTreeNodes = useMemo(() => filterTreeNodes(treeNodes, filterQuery), [treeNodes, filterQuery]);
   const selectedPathIds = useMemo(() => collectAncestorIds(treeNodes, selectedNodeId), [treeNodes, selectedNodeId]);
+
+  // Counts across the full unfiltered set so the chip badges stay stable.
+  const kindCounts = useMemo(() => {
+    const counts: Record<ConfigKind, number> = { DataModel: 0, ModelMapping: 0, Format: 0 };
+    for (const node of treeNodes) {
+      const kind = getConfigurationKind(node);
+      if (kind) counts[kind] += 1;
+    }
+    return counts;
+  }, [treeNodes]);
+
+  const sortNodes = useCallback((nodes: TreeNode[]) => {
+    if (sortMode === 'loadOrder') return nodes;
+    const sorted = [...nodes];
+    sorted.sort((a, b) => {
+      const cmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true });
+      return sortMode === 'nameAsc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [sortMode]);
+
   const groupedTreeNodes = useMemo(() => {
-    const groups = new Map<'DataModel' | 'ModelMapping' | 'Format', TreeNode[]>();
+    const groups = new Map<ConfigKind, TreeNode[]>();
 
     for (const node of filteredTreeNodes) {
       const kind = getConfigurationKind(node);
       if (!kind) continue;
+      if (!kindFilter.has(kind)) continue;
       if (!groups.has(kind)) groups.set(kind, []);
       groups.get(kind)!.push(node);
     }
 
     return (['DataModel', 'ModelMapping', 'Format'] as const)
-      .map(kind => ({ kind, nodes: groups.get(kind) ?? [] }))
+      .map(kind => ({ kind, nodes: sortNodes(groups.get(kind) ?? []) }))
       .filter(group => group.nodes.length > 0);
-  }, [filteredTreeNodes]);
+  }, [filteredTreeNodes, kindFilter, sortNodes]);
+
+  const totalVisible = useMemo(
+    () => groupedTreeNodes.reduce((sum, g) => sum + g.nodes.length, 0),
+    [groupedTreeNodes],
+  );
+  const totalAll = kindCounts.DataModel + kindCounts.ModelMapping + kindCounts.Format;
+  const isFiltering = filterQuery.trim().length > 0 || kindFilter.size < 3;
 
   if (treeNodes.length === 0) {
     return (
@@ -190,22 +271,6 @@ export function ConfigExplorer() {
     >
       {isDragging && <div className="explorer-dropzone-overlay">{t.landingDropRelease}</div>}
       <div className="explorer-toolbar">
-        <Button
-          appearance="subtle"
-          size="small"
-          onClick={() => { setExpandMode('all'); setExpandVersion(version => version + 1); }}
-          title={t.expand}
-        >
-          {t.expand}
-        </Button>
-        <Button
-          appearance="subtle"
-          size="small"
-          onClick={() => { setExpandMode('none'); setExpandVersion(version => version + 1); }}
-          title={t.collapse}
-        >
-          {t.collapse}
-        </Button>
         <div className="panel-filter-row explorer-toolbar-filter">
           <Input
             size="small"
@@ -224,45 +289,150 @@ export function ConfigExplorer() {
             ) : undefined}
           />
         </div>
+
+        <div className="explorer-chip-row" role="toolbar" aria-label={t.explorerFilterByKind}>
+          <ExplorerKindChip
+            kind="DataModel"
+            active={kindFilter.has('DataModel')}
+            count={kindCounts.DataModel}
+            onToggle={() => toggleKind('DataModel')}
+            icon={<DataBarVerticalFilled />}
+          />
+          <ExplorerKindChip
+            kind="ModelMapping"
+            active={kindFilter.has('ModelMapping')}
+            count={kindCounts.ModelMapping}
+            onToggle={() => toggleKind('ModelMapping')}
+            icon={<LinkFilled />}
+          />
+          <ExplorerKindChip
+            kind="Format"
+            active={kindFilter.has('Format')}
+            count={kindCounts.Format}
+            onToggle={() => toggleKind('Format')}
+            icon={<DocumentFilled />}
+          />
+          <div className="explorer-chip-spacer" />
+          <Menu>
+            <MenuTrigger disableButtonEnhancement>
+              <Tooltip content={t.explorerSort} relationship="label" withArrow>
+                <Button
+                  appearance="subtle"
+                  size="small"
+                  icon={<ArrowSortRegular />}
+                  aria-label={t.explorerSort}
+                />
+              </Tooltip>
+            </MenuTrigger>
+            <MenuPopover>
+              <MenuList>
+                <MenuItem
+                  onClick={() => setSortMode('loadOrder')}
+                  disabled={sortMode === 'loadOrder'}
+                >
+                  {t.explorerSortLoadOrder}
+                </MenuItem>
+                <MenuItem
+                  onClick={() => setSortMode('nameAsc')}
+                  disabled={sortMode === 'nameAsc'}
+                >
+                  {t.explorerSortNameAsc}
+                </MenuItem>
+                <MenuItem
+                  onClick={() => setSortMode('nameDesc')}
+                  disabled={sortMode === 'nameDesc'}
+                >
+                  {t.explorerSortNameDesc}
+                </MenuItem>
+              </MenuList>
+            </MenuPopover>
+          </Menu>
+          <Tooltip content={t.expand} relationship="label" withArrow>
+            <Button
+              appearance="subtle"
+              size="small"
+              onClick={() => { setExpandMode('all'); setExpandVersion(v => v + 1); }}
+              aria-label={t.expand}
+            >
+              {t.expand}
+            </Button>
+          </Tooltip>
+          <Tooltip content={t.collapse} relationship="label" withArrow>
+            <Button
+              appearance="subtle"
+              size="small"
+              onClick={() => { setExpandMode('none'); setExpandVersion(v => v + 1); }}
+              aria-label={t.collapse}
+            >
+              {t.collapse}
+            </Button>
+          </Tooltip>
+        </div>
+
+        {isFiltering && (
+          <div className="explorer-result-info">
+            {t.explorerResultsCount(totalVisible, totalAll)}
+          </div>
+        )}
       </div>
-      {filteredTreeNodes.length === 0 ? (
+      {filteredTreeNodes.length === 0 || totalVisible === 0 ? (
         <div className="explorer-empty-state">
           <p>{t.noResults}</p>
         </div>
-      ) : groupedTreeNodes.length > 0 ? groupedTreeNodes.map(group => (
-          <div key={group.kind} className={`explorer-kind-group ${getExplorerGroupAccent(group.kind)}`}>
-            <div className="explorer-kind-group-header">
-              <span>{getExplorerGroupLabel(group.kind)}</span>
-              <span className="explorer-kind-group-count">{group.nodes.length}</span>
+      ) : groupedTreeNodes.length > 0 ? groupedTreeNodes.map(group => {
+          const isCollapsed = collapsedGroups.has(group.kind);
+          return (
+            <div key={group.kind} className={`explorer-kind-group ${getExplorerGroupAccent(group.kind)} ${isCollapsed ? 'collapsed' : ''}`}>
+              <button
+                type="button"
+                className="explorer-kind-group-header explorer-kind-group-header-btn"
+                onClick={() => toggleGroup(group.kind)}
+                aria-expanded={!isCollapsed}
+              >
+                <span className="explorer-kind-group-header-left">
+                  <span className="explorer-kind-group-chevron" aria-hidden="true">
+                    {isCollapsed ? <ChevronRightRegular /> : <ChevronDownRegular />}
+                  </span>
+                  {getExplorerGroupLabel(group.kind)}
+                </span>
+                <span className="explorer-kind-group-count">{group.nodes.length}</span>
+              </button>
+              {!isCollapsed && (
+                <div className="explorer-kind-group-body">
+                  {group.nodes.map(node => {
+                    const cfg = node.configIndex != null ? configurations[node.configIndex] : undefined;
+                    const version = cfg?.solutionVersion?.publicVersionNumber;
+                    return (
+                      <TreeNodeRow
+                        key={node.id}
+                        node={node}
+                        depth={0}
+                        selectedId={selectedNodeId}
+                        selectedPathIds={selectedPathIds}
+                        showTechnicalDetails={showTechnicalDetails}
+                        version={version}
+                        onSelect={selectNode}
+                        onNavigate={navigateToTreeNode}
+                        expandMode={expandMode}
+                        expandVersion={expandVersion}
+                        onDoubleClick={(n) => {
+                          if (n.configIndex != null) {
+                            navigateToTreeNode(n.id);
+                          }
+                        }}
+                        onCloseConfiguration={(n) => {
+                          if (n.configIndex != null) {
+                            removeConfiguration(n.configIndex);
+                          }
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </div>
-            <div className="explorer-kind-group-body">
-              {group.nodes.map(node => (
-                <TreeNodeRow
-                  key={node.id}
-                  node={node}
-                  depth={0}
-                  selectedId={selectedNodeId}
-                  selectedPathIds={selectedPathIds}
-                  showTechnicalDetails={showTechnicalDetails}
-                  onSelect={selectNode}
-                  onNavigate={navigateToTreeNode}
-                  expandMode={expandMode}
-                  expandVersion={expandVersion}
-                  onDoubleClick={(n) => {
-                    if (n.configIndex != null) {
-                      navigateToTreeNode(n.id);
-                    }
-                  }}
-                  onCloseConfiguration={(n) => {
-                    if (n.configIndex != null) {
-                      removeConfiguration(n.configIndex);
-                    }
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        )) : filteredTreeNodes.map(node => (
+          );
+        }) : filteredTreeNodes.map(node => (
           <TreeNodeRow
             key={node.id}
             node={node}
@@ -296,6 +466,7 @@ interface TreeNodeRowProps {
   selectedId: string | null;
   selectedPathIds: Set<string>;
   showTechnicalDetails: boolean;
+  version?: string | number;
   onSelect: (id: string) => void;
   onNavigate: (id: string) => void;
   expandMode: 'default' | 'all' | 'none';
@@ -304,7 +475,7 @@ interface TreeNodeRowProps {
   onCloseConfiguration: (node: TreeNode) => void;
 }
 
-function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDetails, onSelect, onNavigate, expandMode, expandVersion, onDoubleClick, onCloseConfiguration }: TreeNodeRowProps) {
+function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDetails, version, onSelect, onNavigate, expandMode, expandVersion, onDoubleClick, onCloseConfiguration }: TreeNodeRowProps) {
   const [expanded, setExpanded] = useState(depth === 0);
   const hasChildren = node.children && node.children.length > 0;
 
@@ -351,19 +522,40 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
         )}
         <span className="icon">{node.icon}</span>
         <span className="tree-node-label">{node.name}</span>
+        {version != null && depth === 0 && (
+          <span className="tree-node-version-pill" title={`v${version}`}>v{version}</span>
+        )}
         {kindLabel && <span className="tree-node-kind-pill">{kindLabel}</span>}
         {canCloseConfiguration && (
-          <button
-            className="tree-node-close"
-            title={t.closeConfiguration}
-            aria-label={t.closeConfiguration}
-            onClick={event => {
-              event.stopPropagation();
-              onCloseConfiguration(node);
-            }}
-          >
-            ×
-          </button>
+          <Menu>
+            <MenuTrigger disableButtonEnhancement>
+              <button
+                type="button"
+                className="tree-node-actions"
+                title={t.explorerMoreActions}
+                aria-label={t.explorerMoreActions}
+                onClick={event => event.stopPropagation()}
+              >
+                <MoreVerticalRegular fontSize={14} />
+              </button>
+            </MenuTrigger>
+            <MenuPopover>
+              <MenuList>
+                <MenuItem
+                  icon={<OpenRegular />}
+                  onClick={() => onNavigate(node.id)}
+                >
+                  {t.explorerOpenInTab}
+                </MenuItem>
+                <MenuItem
+                  icon={<DeleteRegular />}
+                  onClick={() => onCloseConfiguration(node)}
+                >
+                  {t.closeConfiguration}
+                </MenuItem>
+              </MenuList>
+            </MenuPopover>
+          </Menu>
         )}
         {showTechnicalDetails && node.type === 'datasource' && node.data?.type && (
           <span className={`badge badge-${node.data.type.toLowerCase()}`} style={{ marginLeft: 6 }}>
@@ -388,5 +580,34 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
         />
       ))}
     </>
+  );
+}
+
+// ─── Kind filter chip ───
+
+function ExplorerKindChip({
+  kind, active, count, onToggle, icon,
+}: {
+  kind: ConfigKind;
+  active: boolean;
+  count: number;
+  onToggle: () => void;
+  icon: React.ReactNode;
+}) {
+  const label = getExplorerGroupLabel(kind);
+  const accent = kind === 'DataModel' ? 'model' : kind === 'ModelMapping' ? 'mapping' : 'format';
+  return (
+    <button
+      type="button"
+      className={`explorer-kind-chip explorer-kind-chip--${accent} ${active ? 'active' : ''}`}
+      onClick={onToggle}
+      aria-pressed={active}
+      disabled={count === 0}
+      title={label}
+    >
+      <span className="explorer-kind-chip-icon" aria-hidden="true">{icon}</span>
+      <span className="explorer-kind-chip-label">{label}</span>
+      <span className="explorer-kind-chip-count">{count}</span>
+    </button>
   );
 }
