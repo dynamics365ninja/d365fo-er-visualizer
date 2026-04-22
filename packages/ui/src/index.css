@@ -4692,3 +4692,266 @@ button.dd-dep-item { cursor: pointer; }
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
+
+/* ════════════════════════════════════════════════════════════
+   Modern landing look — floating orbs, dot grid, shimmer text
+   Inspired by awesome-sharepoint (Sandeep-FED)
+   ════════════════════════════════════════════════════════════ */
+
+:root {
+  --font-display: 'Space Grotesk', 'Segoe UI', sans-serif;
+  --font-sans: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --brand-1: #038387;
+  --brand-2: #37a987;
+  --brand-3: #00b7c3;
+  --brand-light: #a8edea;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/* ─── Animated floating orbs ─── */
+.lp-orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(90px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.55;
+}
+:root[data-theme='light'] .lp-orb { opacity: 0.45; }
+
+.lp-orb-1 {
+  width: 640px; height: 640px; top: -220px; left: -120px;
+  background: radial-gradient(circle, rgba(3, 131, 135, 0.35), transparent 70%);
+  animation: lpOrb1 22s ease-in-out infinite;
+}
+.lp-orb-2 {
+  width: 520px; height: 520px; top: 40%; right: -160px;
+  background: radial-gradient(circle, rgba(55, 169, 135, 0.28), transparent 70%);
+  animation: lpOrb2 28s ease-in-out infinite;
+}
+.lp-orb-3 {
+  width: 420px; height: 420px; bottom: -120px; left: 30%;
+  background: radial-gradient(circle, rgba(0, 183, 195, 0.22), transparent 70%);
+  animation: lpOrb3 24s ease-in-out infinite;
+}
+@keyframes lpOrb1 {
+  0%, 100% { transform: translate(0,0) scale(1); }
+  33% { transform: translate(80px, 60px) scale(1.08); }
+  66% { transform: translate(-40px, 30px) scale(0.94); }
+}
+@keyframes lpOrb2 {
+  0%, 100% { transform: translate(0,0) scale(1); }
+  33% { transform: translate(-60px, -40px) scale(1.05); }
+  66% { transform: translate(40px, 50px) scale(0.9); }
+}
+@keyframes lpOrb3 {
+  0%, 100% { transform: translate(0,0) scale(1); }
+  50% { transform: translate(60px, -40px) scale(1.1); }
+}
+
+/* ─── Dot grid mask ─── */
+.lp-dot-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(3, 131, 135, 0.45) 1px, transparent 1px);
+  background-size: 28px 28px;
+  -webkit-mask-image: radial-gradient(ellipse 75% 85% at 50% 50%, black 30%, transparent 100%);
+          mask-image: radial-gradient(ellipse 75% 85% at 50% 50%, black 30%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+:root[data-theme='light'] .lp-dot-grid {
+  background-image: radial-gradient(circle, rgba(3, 131, 135, 0.28) 1px, transparent 1px);
+}
+
+/* ─── Animated gradient hero badge ─── */
+.lp-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 18px;
+  border-radius: 100px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--brand-1);
+  background: rgba(3, 131, 135, 0.08);
+  border: 1px solid rgba(3, 131, 135, 0.22);
+  box-shadow: 0 0 28px rgba(3, 131, 135, 0.12), inset 0 1px 0 rgba(255,255,255,0.05);
+  -webkit-backdrop-filter: blur(8px);
+          backdrop-filter: blur(8px);
+}
+:root[data-theme='light'] .lp-badge {
+  background: rgba(3, 131, 135, 0.08);
+  color: #027578;
+  border-color: rgba(3, 131, 135, 0.3);
+}
+.lp-badge::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 100px;
+  background: linear-gradient(90deg, rgba(3,131,135,0.7), rgba(55,169,135,0.4), rgba(3,131,135,0.7));
+  background-size: 200% 100%;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: lpBadgeGlow 3s ease-in-out infinite;
+  pointer-events: none;
+}
+.lp-badge-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--brand-1);
+  box-shadow: 0 0 8px rgba(3, 131, 135, 0.85);
+  animation: lpDotPulse 2s ease-in-out infinite;
+}
+@keyframes lpBadgeGlow {
+  0%, 100% { background-position: 0% 0; opacity: 0.6; }
+  50% { background-position: 100% 0; opacity: 1; }
+}
+@keyframes lpDotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.7); }
+}
+
+/* ─── Shimmer gradient title ─── */
+.lp-title {
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 6vw, 4.4rem);
+  font-weight: 800;
+  line-height: 1.05;
+  margin: 0;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #a8edea 0%, #038387 24%, #37a987 52%, #038387 76%, #a8edea 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: lpShimmer 6s ease-in-out infinite;
+}
+:root[data-theme='light'] .lp-title {
+  background: linear-gradient(135deg, #027578 0%, #038387 25%, #37a987 55%, #005b70 80%, #027578 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+@keyframes lpShimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50%     { background-position: 100% 50%; }
+}
+
+/* ─── Hero stats ─── */
+.lp-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-top: 36px;
+  flex-wrap: wrap;
+}
+.lp-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 32px;
+}
+.lp-stat + .lp-stat { border-left: 1px solid color-mix(in srgb, var(--brand-1) 18%, transparent); }
+.lp-stat-value {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  background: linear-gradient(135deg, #a8edea 0%, #038387 40%, #37a987 100%);
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+:root[data-theme='light'] .lp-stat-value {
+  background: linear-gradient(135deg, #027578 0%, #038387 40%, #37a987 100%);
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.lp-stat-label {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+/* ─── Hero divider glow ─── */
+.lp-hero-divider {
+  width: 220px;
+  height: 1px;
+  margin: 48px auto 0;
+  background: linear-gradient(90deg, transparent, rgba(3,131,135,0.55), rgba(55,169,135,0.4), transparent);
+}
+
+/* ─── Glass card with accent bar ─── */
+.lp-glass-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px !important;
+  border: 1px solid rgba(255,255,255,0.06) !important;
+  background: rgba(255,255,255,0.04) !important;
+  -webkit-backdrop-filter: blur(16px);
+          backdrop-filter: blur(16px);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+:root[data-theme='light'] .lp-glass-card {
+  background: rgba(255,255,255,0.75) !important;
+  border-color: rgba(3,131,135,0.1) !important;
+}
+.lp-glass-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; bottom: 0; width: 3px;
+  background: linear-gradient(180deg, #038387, #37a987);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.lp-glass-card:hover::before { opacity: 1; }
+.lp-glass-card:hover {
+  transform: translateY(-3px) !important;
+  border-color: rgba(3, 131, 135, 0.42) !important;
+  background: rgba(255,255,255,0.07) !important;
+  box-shadow: 0 12px 40px rgba(3, 131, 135, 0.12), 0 4px 12px rgba(0,0,0,0.08) !important;
+}
+:root[data-theme='light'] .lp-glass-card:hover {
+  background: rgba(255,255,255,0.95) !important;
+  box-shadow: 0 12px 40px rgba(3, 131, 135, 0.14), 0 4px 12px rgba(0,0,0,0.06) !important;
+}
+
+/* ─── Monospace count pill ─── */
+.lp-count-pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 100px;
+  color: var(--brand-1);
+  background: linear-gradient(135deg, rgba(3,131,135,0.14), rgba(55,169,135,0.08));
+  border: 1px solid rgba(3,131,135,0.18);
+}
+
+/* ─── Display font utility classes ─── */
+.lp-font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
+.lp-font-mono    { font-family: var(--font-mono); }
+
+/* ─── Drop zone above orbs/grid ─── */
+.lp-above { position: relative; z-index: 1; }

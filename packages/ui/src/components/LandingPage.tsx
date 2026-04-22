@@ -8,14 +8,12 @@ import {
   Card,
   CardHeader,
   CardPreview,
-  Title1,
   Title3,
   Subtitle2,
   Body1,
   Body1Strong,
   Caption1,
   Caption1Strong,
-  Badge,
   Spinner,
   Divider,
   MessageBar,
@@ -421,21 +419,41 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
+      {/* Animated floating orbs */}
+      <div className="lp-orb lp-orb-1" aria-hidden="true" />
+      <div className="lp-orb lp-orb-2" aria-hidden="true" />
+      <div className="lp-orb lp-orb-3" aria-hidden="true" />
+
       {/* Hero */}
-      <div className={styles.hero}>
-        <div className={styles.heroLogo} aria-hidden="true">
+      <div className={mergeClasses(styles.hero, 'lp-above')} style={{ position: 'relative' }}>
+        <div className="lp-dot-grid" aria-hidden="true" style={{ inset: '-80px -40px -40px -40px' }} />
+        <div className={styles.heroLogo} aria-hidden="true" style={{ position: 'relative', zIndex: 1 }}>
           <SparkleFilled fontSize={36} />
         </div>
-        <Badge
-          className={styles.heroBadge}
-          appearance="tint"
-          color="brand"
-          size="medium"
-        >
+        <span className="lp-badge" style={{ position: 'relative', zIndex: 1 }}>
+          <span className="lp-badge-dot" aria-hidden="true" />
           {t.landingBadge}
-        </Badge>
-        <Title1 as="h1" className={styles.heroTitle}>{t.landingTitle}</Title1>
-        <Body1 className={styles.heroSub}>{t.landingSub}</Body1>
+        </span>
+        <h1 className="lp-title" style={{ position: 'relative', zIndex: 1 }}>{t.landingTitle}</h1>
+        <Body1 className={styles.heroSub} style={{ position: 'relative', zIndex: 1 }}>{t.landingSub}</Body1>
+
+        {/* Stats */}
+        <div className="lp-stats" style={{ position: 'relative', zIndex: 1 }}>
+          <div className="lp-stat">
+            <span className="lp-stat-value">{configs.length}</span>
+            <span className="lp-stat-label">{t.landingStatLoaded}</span>
+          </div>
+          <div className="lp-stat">
+            <span className="lp-stat-value">{recentFiles.length}</span>
+            <span className="lp-stat-label">{t.landingStatRecent}</span>
+          </div>
+          <div className="lp-stat">
+            <span className="lp-stat-value">3</span>
+            <span className="lp-stat-label">{t.landingStatTypes}</span>
+          </div>
+        </div>
+
+        <div className="lp-hero-divider" aria-hidden="true" />
       </div>
 
       {/* Drop Zone */}
@@ -631,11 +649,11 @@ function ComponentCard({
     : styles.cardDelay2;
 
   return (
-    <Card className={mergeClasses(styles.card, delayClass)} appearance="filled-alternative">
+    <Card className={mergeClasses(styles.card, delayClass, 'lp-glass-card')} appearance="filled-alternative">
       <CardHeader
         image={<div className={mergeClasses(styles.cardIcon, accentClass)} aria-hidden="true">{icon}</div>}
-        header={<Body1Strong>{title}</Body1Strong>}
-        description={<Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{subtitle}</Caption1>}
+        header={<Body1Strong className="lp-font-display" style={{ fontSize: 16 }}>{title}</Body1Strong>}
+        description={<Caption1 className="lp-font-mono" style={{ color: tokens.colorNeutralForeground3, letterSpacing: '0.04em' }}>{subtitle}</Caption1>}
       />
       <Body1>{description}</Body1>
       <ul className={styles.cardFeatures}>

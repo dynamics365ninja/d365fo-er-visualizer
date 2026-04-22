@@ -144,6 +144,9 @@ export interface Translations {
   landingBadge: string;
   landingTitle: string;
   landingSub: string;
+  landingStatLoaded: string;
+  landingStatRecent: string;
+  landingStatTypes: string;
   // Landing page – drop zone
   landingDropPrimary: string;
   landingDropRelease: string;
@@ -371,6 +374,9 @@ const cs: Translations = {
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',
   landingTitle: 'D365FO ER Visualizer',
   landingSub: 'Přehledné pracovní místo pro konfigurace elektronického výkaznictví: modely, mapování i formáty na jednom místě. Snadno se proklikáš od formulí až ke zdrojovým tabulkám, dohledáš where-used vazby a přeskakuješ mezi souvisejícími soubory.',
+  landingStatLoaded: 'Načteno',
+  landingStatRecent: 'Historie',
+  landingStatTypes: 'Typy souborů',
   landingDropPrimary: 'Přetáhni ER XML soubory sem',
   landingDropRelease: 'Pusť soubory',
   landingDropSecondary: 'nebo klikni pro výběr · můžeš načíst více souborů najednou',
@@ -596,6 +602,9 @@ const en: Translations = {
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',
   landingTitle: 'D365FO ER Visualizer',
   landingSub: 'A clear workspace for Electronic Reporting configurations: data models, mappings and formats in one place. Easily trace formulas back to source tables, find where-used references, and jump between related files.',
+  landingStatLoaded: 'Loaded',
+  landingStatRecent: 'Recent',
+  landingStatTypes: 'File types',
   landingDropPrimary: 'Drop ER XML files here',
   landingDropRelease: 'Release files',
   landingDropSecondary: 'or click to browse · you can load multiple files at once',
