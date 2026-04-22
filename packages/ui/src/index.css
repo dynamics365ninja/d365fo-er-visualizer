@@ -5147,3 +5147,52 @@ body {
   background: color-mix(in srgb, var(--brand-1) 18%, transparent);
   color: var(--text-primary);
 }
+
+/* ─── Multi-language label value (PropertyInspector) ─────────────────── */
+.label-value {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.label-value__id {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, 'JetBrains Mono', monospace);
+  font-size: 11.5px;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.label-value__translations {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px;
+  border-left: 2px solid color-mix(in srgb, var(--brand-1) 55%, transparent);
+  background: color-mix(in srgb, var(--bg-tertiary) 40%, transparent);
+  border-radius: 0 6px 6px 0;
+}
+
+.label-value__translation {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1.35;
+}
+
+.label-value__lang {
+  flex-shrink: 0;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, 'JetBrains Mono', monospace);
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--brand-1) 80%, var(--text-secondary));
+  min-width: 38px;
+}
+
+.label-value__text {
+  color: var(--text-secondary);
+  font-size: 12px;
+  word-break: break-word;
+}
