@@ -672,6 +672,13 @@ body {
 .tree-chevron::before { content: '›'; }
 .tree-chevron.open { transform: rotate(90deg); }
 
+.tree-chevron-placeholder {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
 /* Property grid */
 .prop-grid {
   display: grid;

@@ -506,7 +506,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
         {hasChildren ? (
           <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
         ) : (
-          <span className="icon" style={{ fontSize: 10 }}>·</span>
+          <span className="tree-chevron-placeholder" aria-hidden="true" />
         )}
         <span className="icon">{node.icon}</span>
         <span className="tree-node-label">{node.name}</span>
