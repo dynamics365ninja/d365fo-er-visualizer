@@ -7,7 +7,6 @@ import {
   MenuPopover,
   MenuList,
   MenuItem,
-  Tooltip,
 } from '@fluentui/react-components';
 import {
   DismissRegular,
@@ -20,6 +19,8 @@ import {
   DataBarVerticalFilled,
   LinkFilled,
   DocumentFilled,
+  TextExpandRegular,
+  TextCollapseRegular,
 } from '@fluentui/react-icons';
 import { locale, t } from '../i18n';
 import { useAppStore, type TreeNode } from '../state/store';
@@ -312,61 +313,48 @@ export function ConfigExplorer() {
             onToggle={() => toggleKind('Format')}
             icon={<DocumentFilled />}
           />
-          <div className="explorer-chip-spacer" />
-          <Menu>
-            <MenuTrigger disableButtonEnhancement>
-              <Tooltip content={t.explorerSort} relationship="label" withArrow>
+          <div className="explorer-chip-actions">
+            <Menu>
+              <MenuTrigger disableButtonEnhancement>
                 <Button
                   appearance="subtle"
                   size="small"
                   icon={<ArrowSortRegular />}
                   aria-label={t.explorerSort}
+                  title={t.explorerSort}
                 />
-              </Tooltip>
-            </MenuTrigger>
-            <MenuPopover>
-              <MenuList>
-                <MenuItem
-                  onClick={() => setSortMode('loadOrder')}
-                  disabled={sortMode === 'loadOrder'}
-                >
-                  {t.explorerSortLoadOrder}
-                </MenuItem>
-                <MenuItem
-                  onClick={() => setSortMode('nameAsc')}
-                  disabled={sortMode === 'nameAsc'}
-                >
-                  {t.explorerSortNameAsc}
-                </MenuItem>
-                <MenuItem
-                  onClick={() => setSortMode('nameDesc')}
-                  disabled={sortMode === 'nameDesc'}
-                >
-                  {t.explorerSortNameDesc}
-                </MenuItem>
-              </MenuList>
-            </MenuPopover>
-          </Menu>
-          <Tooltip content={t.expand} relationship="label" withArrow>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  <MenuItem onClick={() => setSortMode('loadOrder')} disabled={sortMode === 'loadOrder'}>
+                    {t.explorerSortLoadOrder}
+                  </MenuItem>
+                  <MenuItem onClick={() => setSortMode('nameAsc')} disabled={sortMode === 'nameAsc'}>
+                    {t.explorerSortNameAsc}
+                  </MenuItem>
+                  <MenuItem onClick={() => setSortMode('nameDesc')} disabled={sortMode === 'nameDesc'}>
+                    {t.explorerSortNameDesc}
+                  </MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
             <Button
               appearance="subtle"
               size="small"
-              onClick={() => { setExpandMode('all'); setExpandVersion(v => v + 1); }}
+              icon={<TextExpandRegular />}
               aria-label={t.expand}
-            >
-              {t.expand}
-            </Button>
-          </Tooltip>
-          <Tooltip content={t.collapse} relationship="label" withArrow>
+              title={t.expand}
+              onClick={() => { setExpandMode('all'); setExpandVersion(v => v + 1); }}
+            />
             <Button
               appearance="subtle"
               size="small"
-              onClick={() => { setExpandMode('none'); setExpandVersion(v => v + 1); }}
+              icon={<TextCollapseRegular />}
               aria-label={t.collapse}
-            >
-              {t.collapse}
-            </Button>
-          </Tooltip>
+              title={t.collapse}
+              onClick={() => { setExpandMode('none'); setExpandVersion(v => v + 1); }}
+            />
+          </div>
         </div>
 
         {isFiltering && (
