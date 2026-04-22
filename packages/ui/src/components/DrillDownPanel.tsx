@@ -11,6 +11,15 @@
  */
 import React, { useMemo, useState } from 'react';
 import {
+  Dialog,
+  DialogSurface,
+  DialogTitle,
+  DialogBody,
+  DialogContent,
+  DialogActions,
+  Button,
+} from '@fluentui/react-components';
+import {
   CompassNorthwestRegular,
   TableRegular,
   TextCaseTitleRegular,
@@ -32,6 +41,8 @@ import {
   ChevronRightRegular,
   ChevronDownRegular,
   OpenRegular,
+  ArrowExpandRegular,
+  DismissRegular,
   CircleRegular,
 } from '@fluentui/react-icons';
 import { useAppStore, resolveDeepExpression } from '../state/store';
@@ -806,8 +817,9 @@ function DepChain({ deepResult, onPush, fromCi, stepNumber }: {
 /**
  * Inline drill-down panel used in binding rows. By default the panel is
  * collapsed and shows only a compact trigger. Single-click on the trigger
- * expands the drill-down inline; double-click opens it as its own tab
- * for a full-width, distraction-free analysis.
+ * expands the drill-down inline; double-click opens it as its own tab.
+ * A "pop out" button on the expanded panel opens the analysis inside a
+ * Fluent dialog for a larger, distraction-free view.
  */
 export function DrillDownPanel({ expression, configIndex, elementName, defaultExpanded = false }: {
   expression: string;
@@ -818,61 +830,91 @@ export function DrillDownPanel({ expression, configIndex, elementName, defaultEx
   const trimmedExpr = expression?.trim() ?? '';
   const openDrillDownTab = useAppStore(s => s.openDrillDownTab);
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   if (!trimmedExpr) return null;
 
   const openAsTab = () => openDrillDownTab(trimmedExpr, configIndex, elementName);
 
   return (
-    <div className={`dd-collapsible ${expanded ? 'is-open' : ''}`}>
-      <button
-        type="button"
-        className="dd-collapsible__trigger"
-        onClick={() => setExpanded(e => !e)}
-        onDoubleClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          openAsTab();
-        }}
-        aria-expanded={expanded}
-        title={t.drillClickToToggle}
-      >
-        <span className="dd-collapsible__chevron" aria-hidden>
-          {expanded ? <ChevronDownRegular fontSize={14} /> : <ChevronRightRegular fontSize={14} />}
-        </span>
-        <CompassNorthwestRegular fontSize={14} aria-hidden />
-        <span className="dd-collapsible__label">{t.drillDown}</span>
-        <span className="dd-collapsible__hint">{t.drillDblClickToOpenTab}</span>
-        <span
-          role="button"
-          tabIndex={0}
-          className="dd-collapsible__open-tab"
-          onClick={(e) => { e.stopPropagation(); openAsTab(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAsTab(); }
+    <>
+      <div className={`dd-collapsible ${expanded ? 'is-open' : ''}`}>
+        <button
+          type="button"
+          className="dd-collapsible__trigger"
+          onClick={() => setExpanded(e => !e)}
+          onDoubleClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openAsTab();
           }}
-          title={t.drillOpenInTab}
-          aria-label={t.drillOpenInTab}
+          aria-expanded={expanded}
+          title={t.drillClickToToggle}
         >
-          <OpenRegular fontSize={13} />
-        </span>
-      </button>
-      {expanded && (
-        <DrillDownBody
-          expression={trimmedExpr}
-          configIndex={configIndex}
-          elementName={elementName}
-        />
-      )}
-    </div>
+          <span className="dd-collapsible__chevron" aria-hidden>
+            {expanded ? <ChevronDownRegular fontSize={14} /> : <ChevronRightRegular fontSize={14} />}
+          </span>
+          <CompassNorthwestRegular fontSize={14} aria-hidden />
+          <span className="dd-collapsible__label">{t.drillDown}</span>
+          <span className="dd-collapsible__hint">{t.drillDblClickToOpenTab}</span>
+        </button>
+        {expanded && (
+          <DrillDownBody
+            expression={trimmedExpr}
+            configIndex={configIndex}
+            elementName={elementName}
+            onPopOut={() => setIsDialogOpen(true)}
+            onOpenTab={openAsTab}
+          />
+        )}
+      </div>
+      <Dialog open={isDialogOpen} onOpenChange={(_, d) => setIsDialogOpen(d.open)} modalType="non-modal">
+        <DialogSurface className="dd-dialog-surface">
+          <DialogBody>
+            <DialogTitle
+              action={
+                <Button
+                  appearance="subtle"
+                  size="small"
+                  icon={<DismissRegular />}
+                  aria-label={t.back}
+                  onClick={() => setIsDialogOpen(false)}
+                />
+              }
+            >
+              <span className="dd-dialog-title">
+                <CompassNorthwestRegular fontSize={16} />
+                {t.drillDown}
+                {elementName && <span className="dd-dialog-title__name">· {elementName}</span>}
+              </span>
+            </DialogTitle>
+            <DialogContent className="dd-dialog-content">
+              <DrillDownBody
+                expression={trimmedExpr}
+                configIndex={configIndex}
+                elementName={elementName}
+                variant="dialog"
+              />
+            </DialogContent>
+            <DialogActions>
+              <Button appearance="primary" onClick={() => setIsDialogOpen(false)}>
+                {t.back}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+    </>
   );
 }
 
-export function DrillDownBody({ expression, configIndex, elementName, variant = 'inline' }: {
+export function DrillDownBody({ expression, configIndex, elementName, variant = 'inline', onPopOut, onOpenTab }: {
   expression: string;
   configIndex: number;
   elementName?: string;
-  variant?: 'inline' | 'tab';
+  variant?: 'inline' | 'tab' | 'dialog';
+  onPopOut?: () => void;
+  onOpenTab?: () => void;
 }) {
   const configurations = useAppStore(s => s.configurations);
   const trimmedExpr = expression?.trim() ?? '';
@@ -913,7 +955,7 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
   const atRoot = stack.length === 1;
 
   return (
-    <div className={`dd-panel ${variant === 'tab' ? 'dd-panel--tab' : ''}`}>
+    <div className={`dd-panel ${variant === 'tab' ? 'dd-panel--tab' : ''} ${variant === 'dialog' ? 'dd-panel--dialog' : ''}`}>
       <header className="dd-hero">
         <div className="dd-hero__top">
           <span className="dd-hero__badge">
@@ -937,6 +979,24 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
                 onClick={() => setStack(s => s.slice(0, -1))}
                 title={t.back}
               ><ArrowLeftRegular fontSize={13} /> {t.back}</button>
+            )}
+            {onOpenTab && (
+              <button
+                type="button"
+                className="dd-hero__btn dd-hero__btn--ghost"
+                onClick={onOpenTab}
+                title={t.drillOpenInTab}
+                aria-label={t.drillOpenInTab}
+              ><OpenRegular fontSize={13} /> {t.drillOpenInTab}</button>
+            )}
+            {onPopOut && (
+              <button
+                type="button"
+                className="dd-hero__btn dd-hero__btn--ghost"
+                onClick={onPopOut}
+                title={t.drillPopOut}
+                aria-label={t.drillPopOut}
+              ><ArrowExpandRegular fontSize={13} /> {t.drillPopOut}</button>
             )}
           </div>
         </div>
