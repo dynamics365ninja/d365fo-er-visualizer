@@ -405,52 +405,48 @@ body {
 
 
 
-.tree-node-accent-model {
-  background: color-mix(in srgb, var(--surface-info-bg) 36%, transparent);
-  border-color: color-mix(in srgb, var(--surface-info-border) 68%, transparent);
-}
-
-.tree-node-accent-model:hover {
-  background: color-mix(in srgb, var(--surface-info-bg) 52%, var(--bg-hover));
-  border-color: color-mix(in srgb, var(--surface-info-border) 92%, transparent);
-}
-
+/* Accent classes: child rows inherit neutral look; kind-pill keeps semantic colour */
 .tree-node-accent-model .tree-node-kind-pill {
   color: var(--surface-info-fg);
-  background: color-mix(in srgb, var(--surface-info-bg) 80%, transparent);
-  border-color: color-mix(in srgb, var(--surface-info-border) 88%, transparent);
-}
-
-.tree-node-accent-mapping {
-  background: color-mix(in srgb, var(--surface-success-bg) 34%, transparent);
-  border-color: color-mix(in srgb, var(--surface-success-border) 68%, transparent);
-}
-
-.tree-node-accent-mapping:hover {
-  background: color-mix(in srgb, var(--surface-success-bg) 52%, var(--bg-hover));
-  border-color: color-mix(in srgb, var(--surface-success-border) 92%, transparent);
+  background: color-mix(in srgb, var(--surface-info-bg) 55%, transparent);
+  border-color: color-mix(in srgb, var(--surface-info-border) 60%, transparent);
 }
 
 .tree-node-accent-mapping .tree-node-kind-pill {
   color: var(--surface-success-fg);
-  background: color-mix(in srgb, var(--surface-success-bg) 80%, transparent);
-  border-color: color-mix(in srgb, var(--surface-success-border) 88%, transparent);
-}
-
-.tree-node-accent-format {
-  background: color-mix(in srgb, var(--surface-warning-bg) 38%, transparent);
-  border-color: color-mix(in srgb, var(--surface-warning-border) 70%, transparent);
-}
-
-.tree-node-accent-format:hover {
-  background: color-mix(in srgb, var(--surface-warning-bg) 56%, var(--bg-hover));
-  border-color: color-mix(in srgb, var(--surface-warning-border) 92%, transparent);
+  background: color-mix(in srgb, var(--surface-success-bg) 55%, transparent);
+  border-color: color-mix(in srgb, var(--surface-success-border) 60%, transparent);
 }
 
 .tree-node-accent-format .tree-node-kind-pill {
   color: var(--surface-warning-fg);
-  background: color-mix(in srgb, var(--surface-warning-bg) 82%, transparent);
-  border-color: color-mix(in srgb, var(--surface-warning-border) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-warning-bg) 60%, transparent);
+  border-color: color-mix(in srgb, var(--surface-warning-border) 60%, transparent);
+}
+
+/* Root configuration card — neutral surface with thin coloured left bar */
+.tree-node[data-depth="0"].tree-node-accent-model,
+.tree-node[data-depth="0"].tree-node-accent-mapping,
+.tree-node[data-depth="0"].tree-node-accent-format {
+  background: color-mix(in srgb, var(--bg-tertiary) 45%, transparent);
+  border-color: color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+
+.tree-node[data-depth="0"].tree-node-accent-model:hover,
+.tree-node[data-depth="0"].tree-node-accent-mapping:hover,
+.tree-node[data-depth="0"].tree-node-accent-format:hover {
+  background: color-mix(in srgb, var(--bg-tertiary) 75%, var(--bg-hover));
+  border-color: color-mix(in srgb, var(--border-color) 95%, transparent);
+}
+
+.tree-node[data-depth="0"].tree-node-accent-model {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--surface-info-fg) 72%, transparent);
+}
+.tree-node[data-depth="0"].tree-node-accent-mapping {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--surface-success-fg) 72%, transparent);
+}
+.tree-node[data-depth="0"].tree-node-accent-format {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--surface-warning-fg) 72%, transparent);
 }
 
 .tree-node.selected.tree-node-accent-model,
@@ -475,8 +471,8 @@ body {
 .explorer-kind-group {
   margin: 0 6px 6px;
   border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
-  background: color-mix(in srgb, var(--bg-secondary) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 65%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
   overflow: hidden;
 }
 
@@ -511,34 +507,26 @@ body {
   display: none;
 }
 
-.explorer-kind-group-model {
-  border-color: color-mix(in srgb, var(--surface-info-border) 74%, transparent);
-  background: color-mix(in srgb, var(--surface-info-bg) 20%, var(--bg-secondary));
-}
-
+/* Group containers: neutral surface, coloured dot indicator + text */
 .explorer-kind-group-model .explorer-kind-group-header {
   color: var(--surface-info-fg);
-  background: color-mix(in srgb, var(--surface-info-bg) 55%, transparent);
 }
-
-.explorer-kind-group-mapping {
-  border-color: color-mix(in srgb, var(--surface-success-border) 74%, transparent);
-  background: color-mix(in srgb, var(--surface-success-bg) 18%, var(--bg-secondary));
+.explorer-kind-group-model .explorer-kind-group-header-left::before {
+  background: color-mix(in srgb, var(--surface-info-fg) 85%, transparent);
 }
 
 .explorer-kind-group-mapping .explorer-kind-group-header {
   color: var(--surface-success-fg);
-  background: color-mix(in srgb, var(--surface-success-bg) 55%, transparent);
 }
-
-.explorer-kind-group-format {
-  border-color: color-mix(in srgb, var(--surface-warning-border) 74%, transparent);
-  background: color-mix(in srgb, var(--surface-warning-bg) 22%, var(--bg-secondary));
+.explorer-kind-group-mapping .explorer-kind-group-header-left::before {
+  background: color-mix(in srgb, var(--surface-success-fg) 85%, transparent);
 }
 
 .explorer-kind-group-format .explorer-kind-group-header {
   color: var(--surface-warning-fg);
-  background: color-mix(in srgb, var(--surface-warning-bg) 58%, transparent);
+}
+.explorer-kind-group-format .explorer-kind-group-header-left::before {
+  background: color-mix(in srgb, var(--surface-warning-fg) 85%, transparent);
 }
 .explorer-empty-state {
   padding: 22px 18px;
@@ -5095,6 +5083,16 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.explorer-kind-group-header-left::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--text-secondary);
+  flex-shrink: 0;
 }
 
 .explorer-kind-group-chevron {
