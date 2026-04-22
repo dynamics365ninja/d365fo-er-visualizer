@@ -38,8 +38,6 @@ import {
   BranchForkRegular,
   ArrowClockwiseRegular,
   ArrowLeftRegular,
-  ChevronRightRegular,
-  ChevronDownRegular,
   ArrowExpandRegular,
   DismissRegular,
   CircleRegular,
@@ -817,18 +815,18 @@ function DepChain({ deepResult, onPush, fromCi, stepNumber }: {
  * Inline drill-down panel used in binding rows. By default the panel is
  * collapsed and shows only a compact trigger. Single-click on the trigger
  * expands the drill-down inline; double-click opens it as its own tab.
- * A "pop out" button on the expanded panel opens the analysis inside a
- * Fluent dialog for a larger, distraction-free view.
+/**
+ * Inline drill-down trigger used in binding rows. Single-click opens the
+ * analysis in a Fluent Dialog popup; double-click opens it as its own tab.
+ * The panel itself is never rendered inline — the trigger is purely a launcher.
  */
-export function DrillDownPanel({ expression, configIndex, elementName, defaultExpanded = false }: {
+export function DrillDownPanel({ expression, configIndex, elementName }: {
   expression: string;
   configIndex: number;
   elementName?: string;
-  defaultExpanded?: boolean;
 }) {
   const trimmedExpr = expression?.trim() ?? '';
   const openDrillDownTab = useAppStore(s => s.openDrillDownTab);
-  const [expanded, setExpanded] = useState(defaultExpanded);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   if (!trimmedExpr) return null;
@@ -837,33 +835,22 @@ export function DrillDownPanel({ expression, configIndex, elementName, defaultEx
 
   return (
     <>
-      <div className={`dd-collapsible ${expanded ? 'is-open' : ''}`}>
+      <div className="dd-collapsible">
         <button
           type="button"
           className="dd-collapsible__trigger"
-          onClick={() => setExpanded(e => !e)}
+          onClick={() => setIsDialogOpen(true)}
           onDoubleClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
+            setIsDialogOpen(false);
             openAsTab();
           }}
-          aria-expanded={expanded}
           title={t.drillClickToToggle}
         >
-          <span className="dd-collapsible__chevron" aria-hidden>
-            {expanded ? <ChevronDownRegular fontSize={14} /> : <ChevronRightRegular fontSize={14} />}
-          </span>
           <CompassNorthwestRegular fontSize={14} aria-hidden />
           <span className="dd-collapsible__label">{t.drillCollapsibleLabel}</span>
         </button>
-        {expanded && (
-          <DrillDownBody
-            expression={trimmedExpr}
-            configIndex={configIndex}
-            elementName={elementName}
-            onPopOut={() => setIsDialogOpen(true)}
-          />
-        )}
       </div>
       <Dialog open={isDialogOpen} onOpenChange={(_, d) => setIsDialogOpen(d.open)} modalType="non-modal">
         <DialogSurface className="dd-dialog-surface">
