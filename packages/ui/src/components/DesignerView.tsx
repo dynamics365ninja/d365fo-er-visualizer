@@ -1110,6 +1110,48 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
           ))}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
+          {(view === 'structure' || view === 'bindings') && (
+            <div className="fmt-toolbar-iconbtns" role="group" aria-label={`${t.expand} / ${t.collapse}`}>
+              <button
+                type="button"
+                className="fmt-iconbtn"
+                onClick={() => {
+                  if (view === 'structure') {
+                    setStructureExpandMode('all');
+                    setStructureExpandVersion(version => version + 1);
+                  } else {
+                    expandAllBindingTypeGroups();
+                  }
+                }}
+                title={t.expand}
+                aria-label={t.expand}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 6 L8 2 L12 6" />
+                  <path d="M4 10 L8 14 L12 10" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="fmt-iconbtn"
+                onClick={() => {
+                  if (view === 'structure') {
+                    setStructureExpandMode('none');
+                    setStructureExpandVersion(version => version + 1);
+                  } else {
+                    collapseAllBindingTypeGroups();
+                  }
+                }}
+                title={t.collapse}
+                aria-label={t.collapse}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 3 L8 7 L12 3" />
+                  <path d="M4 13 L8 9 L12 13" />
+                </svg>
+              </button>
+            </div>
+          )}
           <div className="panel-filter-row">
             <input
               type="text"
@@ -1144,65 +1186,25 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
         {/* Left: tree / list */}
         <div className={`designer-list-pane density-${density}`}>
           {view === 'structure' && (
-            <>
-              <div className="explorer-toolbar">
-                <button
-                  onClick={() => {
-                    setStructureExpandMode('all');
-                    setStructureExpandVersion(version => version + 1);
-                  }}
-                  className="fmt-action-btn"
-                  title={t.expand}
-                >
-                  {t.expand}
-                </button>
-                <button
-                  onClick={() => {
-                    setStructureExpandMode('none');
-                    setStructureExpandVersion(version => version + 1);
-                  }}
-                  className="fmt-action-btn"
-                  title={t.collapse}
-                >
-                  {t.collapse}
-                </button>
-              </div>
-              <FormatElementTree
-                element={rootElement}
-                depth={0}
-                bindingMap={bindingMap}
-                transformationMap={transformationMap}
-                configIndex={configIndex}
-                filter={filter}
-                expandMode={structureExpandMode}
-                expandVersion={structureExpandVersion}
-                selectedId={selectedElementId}
-                onSelect={handleSelectFormatElement}
-                resolveDatasource={resolveDatasource}
-                registry={registry}
-                showTechnicalDetails={showTechnicalDetails}
-              />
-            </>
+            <FormatElementTree
+              element={rootElement}
+              depth={0}
+              bindingMap={bindingMap}
+              transformationMap={transformationMap}
+              configIndex={configIndex}
+              filter={filter}
+              expandMode={structureExpandMode}
+              expandVersion={structureExpandVersion}
+              selectedId={selectedElementId}
+              onSelect={handleSelectFormatElement}
+              resolveDatasource={resolveDatasource}
+              registry={registry}
+              showTechnicalDetails={showTechnicalDetails}
+            />
           )}
 
           {view === 'bindings' && (
             <>
-              <div className="explorer-toolbar">
-                <button
-                  onClick={expandAllBindingTypeGroups}
-                  className="fmt-action-btn"
-                  title={t.expand}
-                >
-                  {t.expand}
-                </button>
-                <button
-                  onClick={collapseAllBindingTypeGroups}
-                  className="fmt-action-btn"
-                  title={t.collapse}
-                >
-                  {t.collapse}
-                </button>
-              </div>
               {groupedBindingsByType.length === 0
                 ? <div style={{ color: 'var(--text-secondary)', fontSize: 12, padding: 16 }}>
                     {filter ? t.noResults : `${t.bindings}: 0`}
@@ -1798,98 +1800,78 @@ function FormatBindingDetail({ expression, configIndex, resolveDatasource }: {
 
 // ── Binding Row (for Bindings tab) ──
 
-// ── Grouped binding row: shows element name + data binding + optional property bindings ──
+// ── Grouped binding card: shows element header + all its bindings inline ──
 
-function FormatElementBindingGroup({ row, configIndex, onNavigate, onReveal, showTechnicalDetails }: {
+function FormatElementBindingGroup({ row, configIndex, onNavigate: _onNavigate, onReveal, showTechnicalDetails }: {
   row: any;
   configIndex: number;
   onNavigate: (elementId: string) => void;
   onReveal?: (elementId: string) => void;
   showTechnicalDetails: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const totalBindings = row.categories.reduce((count: number, category: any) => count + category.bindings.length, 0);
 
   return (
-    <div className="mapping-row-group">
-      {/* Main row: element header */}
-      <div
-        className="mapping-row mapping-row-clickable"
-        onClick={() => onNavigate(row.componentId)}
-        title={`Navigate to ${row.elementName}`}
-      >
-        {/* Left: type badge + element name */}
-        <div className="mapping-row-path" style={{ minWidth: 180, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-          {showTechnicalDetails && (
-            <span
-              className="badge"
-              style={{
-                color: getFormatTypeColor(row.elementType),
-                border: '1px solid currentColor',
-                background: getFormatTypeBadgeSurface(row.elementType),
-                fontSize: 9,
-                padding: '1px 5px',
-                borderRadius: 3,
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                flexShrink: 0,
-              }}
-            >
-              {row.elementType}
-            </span>
-          )}
-          <span style={{ fontWeight: 600, color: 'var(--syn-resolved)' }}>{row.elementName}</span>
-        </div>
-
-        <div className="mapping-row-arrow">↕</div>
-
-        <div className="mapping-row-expr" style={{ flex: 1, overflow: 'hidden', color: 'var(--text-secondary)' }}>
-          {totalBindings} grouped binding{totalBindings === 1 ? '' : 's'}
-        </div>
-
+    <div className="fmt-bind-card">
+      {/* Header: element type, name, count, reveal action */}
+      <div className="fmt-bind-card-head">
+        {showTechnicalDetails && (
+          <span
+            className="fmt-bind-type-badge"
+            style={{
+              color: getFormatTypeColor(row.elementType),
+              background: getFormatTypeBadgeSurface(row.elementType),
+              borderColor: `${getFormatTypeColor(row.elementType)}55`,
+            }}
+          >
+            {row.elementType}
+          </span>
+        )}
+        <span className="fmt-bind-card-name" title={row.elementName}>{row.elementName}</span>
+        <span className="fmt-bind-card-count" title={`${totalBindings} binding${totalBindings === 1 ? '' : 's'}`}>
+          {totalBindings}
+        </span>
         {onReveal && (
           <button
-            className="fmt-action-btn fmt-action-btn-compact binding-row-action"
+            className="fmt-bind-card-reveal"
             onClick={e => { e.stopPropagation(); onReveal(row.componentId); }}
             title={t.openInExplorerAction}
+            aria-label={t.openInExplorerAction}
           >
-            {t.openInExplorerAction}
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 3 H3 V13 H13 V10" />
+              <path d="M9 3 H13 V7" />
+              <path d="M13 3 L7 9" />
+            </svg>
           </button>
         )}
-
-        <span
-          title={expanded ? 'Collapse grouped bindings' : 'Expand grouped bindings'}
-          onClick={e => { e.stopPropagation(); setExpanded(value => !value); }}
-          style={{ marginLeft: 6, flexShrink: 0, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none', padding: '0 4px' }}
-        >
-          <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
-        </span>
       </div>
 
-      {/* Grouped category bindings */}
-      {expanded && (
-        <div style={{ paddingLeft: 16, borderLeft: '2px solid var(--border-color)', marginLeft: 8, marginBottom: 2 }}>
-          {row.categories.map((category: any) => (
-            <div key={category.key}>
-              <div className="fmt-binding-category-title">{category.label} ({category.bindings.length})</div>
-              {category.bindings.map((binding: any, i: number) => (
-                <div key={`${category.key}-${i}`} className="mapping-row" style={{ paddingTop: 2, paddingBottom: 2, minHeight: 'unset' }}>
-                  <div style={{ minWidth: 180, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                    <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'}`} style={{ fontSize: 9 }}>{binding.bindingDisplayLabel}</span>
-                    {showTechnicalDetails && binding.promotedFromChild && binding.rawElementType && (
-                      <span className="fmt-binding-origin">via {binding.rawElementType}</span>
-                    )}
-                  </div>
-                  <div className="mapping-row-arrow" style={{ color: 'var(--text-secondary)' }}>←</div>
-                  <div className="mapping-row-expr" style={{ flex: 1 }}>
-                    <ExpressionDetailLink expression={binding.expressionAsString} configIndex={configIndex} />
-                  </div>
-                </div>
-              ))}
+      {/* Bindings: one row per binding, flat, no extra nesting */}
+      <div className="fmt-bind-card-body">
+        {row.categories.map((category: any) => (
+          category.bindings.map((binding: any, i: number) => (
+            <div key={`${category.key}-${i}`} className="fmt-bind-row">
+              <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'} fmt-bind-row-label`}>
+                {binding.bindingDisplayLabel}
+              </span>
+              {showTechnicalDetails && binding.promotedFromChild && binding.rawElementType && (
+                <span className="fmt-binding-origin">via {binding.rawElementType}</span>
+              )}
+              <span className="fmt-bind-row-arrow" aria-hidden="true">←</span>
+              <span className="fmt-bind-row-expr">
+                <DrillDownTrigger
+                  expression={binding.expressionAsString}
+                  configIndex={configIndex}
+                  elementName={row.elementName}
+                >
+                  <ExpressionDetailLink expression={binding.expressionAsString} configIndex={configIndex} interactive={false} />
+                </DrillDownTrigger>
+              </span>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        ))}
+      </div>
     </div>
   );
 }
