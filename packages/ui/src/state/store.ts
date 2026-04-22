@@ -333,7 +333,7 @@ export interface AppState {
 export interface WhereUsedEntry {
   /** The matched entity name (table, enum, class) */
   entityName: string;
-  entityType: 'Table' | 'Enum' | 'Class' | 'CalculatedField' | 'GroupBy' | 'Join' | 'Container' | 'Object' | 'UserParameter' | 'Other';
+  entityType: 'Table' | 'Enum' | 'Class' | 'CalculatedField' | 'GroupBy' | 'Join' | 'Container' | 'Object' | 'UserParameter' | 'TextMatch' | 'Other';
   /** The datasource in a mapping or format that references the entity */
   datasource: {
     name: string;
@@ -348,12 +348,18 @@ export interface WhereUsedEntry {
     expr: string;
     configIndex: number;
     configName: string;
+    /** Optional pre-resolved tree node id for direct click-through navigation. */
+    treeNodeId?: string;
+    /** Optional short label shown in place of the binding kind chip (e.g. "calc", "validation"). */
+    kindLabel?: string;
   }>;
   /** Format elements (in Format configs) that use those model paths or the datasource directly */
   formatUsages: Array<{
     elementId: string;
     elementName: string;
     elementType: string;
+    /** Full breadcrumb path of ancestor element names ending with the element itself */
+    elementPath: string[];
     expression: string;
     configIndex: number;
     configName: string;
@@ -1213,12 +1219,13 @@ export const useAppStore = create<AppState>((set, get) => ({
             const fmtMap = fc2.formatMappingVersion.formatMapping;
             const fmtConfigName = fc.solutionVersion.solution.name;
 
-            const elementNames = new Map<string, { name: string; type: string }>();
-            function indexElements(el: any) {
-              elementNames.set(el.id, { name: el.name, type: el.elementType });
-              for (const child of el.children ?? []) indexElements(child);
+            const elementNames = new Map<string, { name: string; type: string; path: string[] }>();
+            function indexElements(el: any, parentPath: string[]) {
+              const here = [...parentPath, el.name];
+              elementNames.set(el.id, { name: el.name, type: el.elementType, path: here });
+              for (const child of el.children ?? []) indexElements(child, here);
             }
-            indexElements(fc2.formatVersion.format.rootElement);
+            indexElements(fc2.formatVersion.format.rootElement, []);
 
             for (const b of fmtMap.bindings) {
               const expr = b.expressionAsString ?? '';
@@ -1234,6 +1241,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                     elementId: b.componentId,
                     elementName: el?.name ?? b.componentId.slice(1, 9),
                     elementType: el?.type ?? 'Unknown',
+                    elementPath: el?.path ?? [],
                     expression: expr,
                     configIndex: fci,
                     configName: fmtConfigName,
@@ -1245,6 +1253,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                   elementId: b.componentId,
                   elementName: el?.name ?? b.componentId.slice(1, 9),
                   elementType: el?.type ?? 'Unknown',
+                  elementPath: el?.path ?? [],
                   expression: expr,
                   configIndex: fci,
                   configName: fmtConfigName,
@@ -1260,6 +1269,10 @@ export const useAppStore = create<AppState>((set, get) => ({
             seenFmt.add(k);
             return true;
           });
+
+          // Skip datasources that have no bindings or format usages — they would
+          // render as an empty "Find References" card and only confuse the user.
+          if (modelPaths.length === 0 && uniqueFormatUsages.length === 0) continue;
 
           scoredResults.push({
             score: match.score,
@@ -1287,12 +1300,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
         for (const { ds, match } of matchingDs) {
           // Build element name lookup
-          const elementNames = new Map<string, { name: string; type: string }>();
-          function indexElsFmt(el: any) {
-            elementNames.set(el.id, { name: el.name, type: el.elementType });
-            for (const child of el.children ?? []) indexElsFmt(child);
+          const elementNames = new Map<string, { name: string; type: string; path: string[] }>();
+          function indexElsFmt(el: any, parentPath: string[]) {
+            const here = [...parentPath, el.name];
+            elementNames.set(el.id, { name: el.name, type: el.elementType, path: here });
+            for (const child of el.children ?? []) indexElsFmt(child, here);
           }
-          indexElsFmt(fc.formatVersion.format.rootElement);
+          indexElsFmt(fc.formatVersion.format.rootElement, []);
 
           // Find format bindings that reference this datasource
           const formatUsages: WhereUsedEntry['formatUsages'] = [];
@@ -1304,6 +1318,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                 elementId: b.componentId,
                 elementName: el?.name ?? b.componentId.slice(1, 9),
                 elementType: el?.type ?? 'Unknown',
+                elementPath: el?.path ?? [],
                 expression: expr,
                 configIndex: ci,
                 configName: configName,
@@ -1333,15 +1348,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }
 
-    if (scoredResults.length === 0) return [];
+    // ── Text-reference fallback ──
+    // Scan every binding/format expression for the raw query as a case-insensitive
+    // identifier (word boundary). This catches table/field/variable names that are
+    // used only inside expressions (WHERE(...), IF(...), relations, etc.) and do not
+    // correspond to a structural datasource match.
+    const textRefEntry = collectExpressionTextMatches(state, entityName);
 
-    const highestScore = Math.max(...scoredResults.map(result => result.score));
+    if (scoredResults.length === 0 && !textRefEntry) return [];
+
+    const highestScore = scoredResults.length > 0
+      ? Math.max(...scoredResults.map(result => result.score))
+      : 0;
     const results = scoredResults
       .filter(result => result.score === highestScore)
       .map(result => result.entry);
 
     const seen = new Set<string>();
-    return results.filter(r => {
+    const structural = results.filter(r => {
       const modelPathKey = r.modelPaths.map(mp => `${mp.configIndex}:${normalizeModelPath(mp.path)}`).sort().join('|');
       const formatKey = r.formatUsages.map(u => `${u.configIndex}:${u.elementId}:${u.expression}`).sort().join('|');
       const k = `${r.datasource.configIndex}:${buildDatasourceLookupKey(r.datasource.name, r.datasource.parentPath)}:${r.entityType}:${r.entityName}:${modelPathKey}:${formatKey}`;
@@ -1353,6 +1377,36 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (byEntity !== 0) return byEntity;
       return left.datasource.name.localeCompare(right.datasource.name, undefined, { sensitivity: 'base' });
     });
+
+    if (textRefEntry) {
+      // Dedupe text matches that are already surfaced by a structural match for
+      // the same binding/element, to avoid showing the same reference twice.
+      const structuralBindingKeys = new Set<string>();
+      const structuralFormatKeys = new Set<string>();
+      for (const r of structural) {
+        for (const mp of r.modelPaths) {
+          structuralBindingKeys.add(`${mp.configIndex}:${normalizeModelPath(mp.path)}:${mp.expr}`);
+        }
+        for (const u of r.formatUsages) {
+          structuralFormatKeys.add(`${u.configIndex}:${u.elementId}:${u.expression}`);
+        }
+      }
+      const dedupedModelPaths = textRefEntry.modelPaths.filter(mp =>
+        !structuralBindingKeys.has(`${mp.configIndex}:${normalizeModelPath(mp.path)}:${mp.expr}`),
+      );
+      const dedupedFormatUsages = textRefEntry.formatUsages.filter(u =>
+        !structuralFormatKeys.has(`${u.configIndex}:${u.elementId}:${u.expression}`),
+      );
+      if (dedupedModelPaths.length > 0 || dedupedFormatUsages.length > 0) {
+        structural.push({
+          ...textRefEntry,
+          modelPaths: dedupedModelPaths,
+          formatUsages: dedupedFormatUsages,
+        });
+      }
+    }
+
+    return structural;
   },
 }));
 
@@ -1364,6 +1418,210 @@ if (typeof window !== 'undefined') {
     useAppStore.setState({ cachedPaths: new Set(paths) });
   });
 }
+
+// ─── Helper: scan every binding/format expression for a raw text occurrence of a query ───
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function collectExpressionTextMatches(state: AppState, query: string): WhereUsedEntry | null {
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+  // Word-boundary, case-insensitive match. Works for identifiers like table/field names.
+  const re = new RegExp(`\\b${escapeRegExp(trimmed)}\\b`, 'i');
+
+  const modelPaths: WhereUsedEntry['modelPaths'] = [];
+  const formatUsages: WhereUsedEntry['formatUsages'] = [];
+
+  for (let ci = 0; ci < state.configurations.length; ci++) {
+    const config = state.configurations[ci];
+    const configName = config.solutionVersion.solution.name;
+
+    if (config.content.kind === 'ModelMapping') {
+      const mm = (config.content as ERModelMappingContent).version.mapping;
+      for (const b of mm.bindings ?? []) {
+        const expr = b.expressionAsString ?? '';
+        if (expr && re.test(expr)) {
+          modelPaths.push({
+            path: b.path,
+            expr,
+            configIndex: ci,
+            configName,
+          });
+        }
+      }
+      // Datasource-level expressions (calc fields, user params, groupBy aggregations)
+      scanDatasourceExpressions(mm.datasources ?? [], re, ci, configName, state, modelPaths);
+      // Validations
+      scanValidations(mm.validations ?? [], re, ci, configName, modelPaths);
+    } else if (config.content.kind === 'Format') {
+      const fc = config.content as ERFormatContent;
+      const fmtMap = fc.formatMappingVersion.formatMapping;
+      const elementNames = new Map<string, { name: string; type: string; path: string[] }>();
+      function indexEls(el: any, parentPath: string[]) {
+        const here = [...parentPath, el.name];
+        elementNames.set(el.id, { name: el.name, type: el.elementType, path: here });
+        for (const child of el.children ?? []) indexEls(child, here);
+      }
+      indexEls(fc.formatVersion.format.rootElement, []);
+      for (const b of fmtMap.bindings ?? []) {
+        const expr = b.expressionAsString ?? '';
+        if (expr && re.test(expr)) {
+          const el = elementNames.get(b.componentId);
+          formatUsages.push({
+            elementId: b.componentId,
+            elementName: el?.name ?? b.componentId.slice(1, 9),
+            elementType: el?.type ?? 'Unknown',
+            elementPath: el?.path ?? [],
+            expression: expr,
+            configIndex: ci,
+            configName,
+          });
+        }
+      }
+      // Format-level datasource expressions
+      scanDatasourceExpressions(fmtMap.datasources ?? [], re, ci, configName, state, modelPaths);
+      // Embedded model mappings inside format configs
+      for (const version of fc.embeddedModelMappingVersions ?? []) {
+        for (const b of version.mapping?.bindings ?? []) {
+          const expr = b.expressionAsString ?? '';
+          if (expr && re.test(expr)) {
+            modelPaths.push({
+              path: b.path,
+              expr,
+              configIndex: ci,
+              configName,
+            });
+          }
+        }
+        scanDatasourceExpressions(version.mapping?.datasources ?? [], re, ci, configName, state, modelPaths);
+        scanValidations(version.mapping?.validations ?? [], re, ci, configName, modelPaths);
+      }
+    }
+  }
+
+  if (modelPaths.length === 0 && formatUsages.length === 0) return null;
+
+  return {
+    entityName: trimmed,
+    entityType: 'TextMatch',
+    datasource: {
+      name: `"${trimmed}" (výskyty ve výrazech)`,
+      configIndex: 0,
+      configName: '',
+      kind: 'ModelMapping',
+    },
+    modelPaths,
+    formatUsages,
+  };
+}
+
+/**
+ * Walk every datasource (recursively through children) and collect text matches
+ * for calculated fields, user-parameter expressions, and groupBy aggregations.
+ */
+function scanDatasourceExpressions(
+  datasources: any[],
+  re: RegExp,
+  configIndex: number,
+  configName: string,
+  state: AppState,
+  out: WhereUsedEntry['modelPaths'],
+): void {
+  const rootNode = state.treeNodes[configIndex];
+  const locate = (dsName: string, parentPath?: string): string | undefined => {
+    if (!rootNode) return undefined;
+    const key = buildDatasourceLookupKey(dsName, parentPath);
+    const node = findNodeByMatch(
+      rootNode,
+      n => n.type === 'datasource'
+        && buildDatasourceLookupKey(n.name, n.data?.parentPath) === key,
+    );
+    return node?.id;
+  };
+
+  function visit(ds: any) {
+    // Calculated field expression
+    const calcExpr = ds.calculatedField?.expressionAsString;
+    if (calcExpr && re.test(calcExpr)) {
+      out.push({
+        path: ds.name,
+        expr: calcExpr,
+        configIndex,
+        configName,
+        treeNodeId: locate(ds.name, ds.parentPath),
+        kindLabel: 'calc',
+      });
+    }
+    // User-parameter expression
+    const userExpr = ds.userParamInfo?.expressionAsString;
+    if (userExpr && re.test(userExpr)) {
+      out.push({
+        path: ds.name,
+        expr: userExpr,
+        configIndex,
+        configName,
+        treeNodeId: locate(ds.name, ds.parentPath),
+        kindLabel: 'param',
+      });
+    }
+    // GroupBy aggregation functions (expression-like) — rarely but possible
+    if (ds.groupByInfo) {
+      for (const agg of ds.groupByInfo.aggregations ?? []) {
+        const aggText = `${agg.function}(${agg.path})`;
+        if (agg.path && re.test(agg.path)) {
+          out.push({
+            path: `${ds.name}/${agg.name}`,
+            expr: aggText,
+            configIndex,
+            configName,
+            treeNodeId: locate(ds.name, ds.parentPath),
+            kindLabel: 'agg',
+          });
+        }
+      }
+    }
+    for (const child of ds.children ?? []) visit(child);
+  }
+
+  for (const ds of datasources) visit(ds);
+}
+
+/** Scan mapping-level validation expressions for text matches. */
+function scanValidations(
+  validations: any[],
+  re: RegExp,
+  configIndex: number,
+  configName: string,
+  out: WhereUsedEntry['modelPaths'],
+): void {
+  for (const v of validations) {
+    for (const rule of v.conditions ?? []) {
+      const cond = rule.conditionExpressionAsString ?? '';
+      const msg = rule.messageExpressionAsString ?? '';
+      if (cond && re.test(cond)) {
+        out.push({
+          path: v.path || rule.id || 'validation',
+          expr: cond,
+          configIndex,
+          configName,
+          kindLabel: 'validation',
+        });
+      }
+      if (msg && re.test(msg)) {
+        out.push({
+          path: v.path || rule.id || 'validation',
+          expr: msg,
+          configIndex,
+          configName,
+          kindLabel: 'message',
+        });
+      }
+    }
+  }
+}
+
 
 // ─── Helper: find datasource by name (recursive through children) ───
 

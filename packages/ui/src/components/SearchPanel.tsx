@@ -1,6 +1,13 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { SearchBox, Button, TabList, Tab } from '@fluentui/react-components';
-import { SearchRegular, MapRegular } from '@fluentui/react-icons';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { SearchBox, Button, TabList, Tab, Tooltip } from '@fluentui/react-components';
+import {
+  SearchRegular,
+  MapRegular,
+  DocumentRegular,
+  ArrowRightRegular,
+  TextExpandRegular,
+  TextCollapseRegular,
+} from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
 import type { TreeNode } from '../state/store';
 import type { WhereUsedEntry } from '../state/store';
@@ -30,6 +37,95 @@ function findTreeNodeByMatch(nodes: TreeNode[], predicate: (node: TreeNode) => b
   return null;
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+const GUID_REGEX = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+
+function resolveGuidsInText(text: string, lookup: (guid: string) => GUIDEntry | undefined): string {
+  if (!text) return text;
+  return text.replace(GUID_REGEX, guid => {
+    const entry = lookup(guid);
+    if (entry?.name) return `${entry.name} (${guid.slice(0, 8)}…)`;
+    return guid;
+  });
+}
+
+type NestedResult = { entry: SearchResultEntry; children: SearchResultEntry[] };
+
+/**
+ * Nest "Binding for X: ..." and "Format binding expression: ..." sub-hits under
+ * their parent binding entry when the parent is also present in the result set.
+ * This avoids showing the same binding twice (once as parent, once per reference
+ * inside its expression).
+ */
+function nestBindingResults(items: SearchResultEntry[]): NestedResult[] {
+  // Index parents by a composite key matching what child sourceContexts carry
+  const parentByKey = new Map<string, SearchResultEntry>();
+  for (const r of items) {
+    if (r.sourceContext?.startsWith('Binding: ')) {
+      // "Binding: <path> = <expr>" — key on path
+      const after = r.sourceContext.slice('Binding: '.length);
+      const path = after.split(' = ')[0]?.trim();
+      if (path) parentByKey.set(`bind|${r.sourceComponent}|${path}`, r);
+    } else if (r.sourceContext?.startsWith('Format binding to component: ')) {
+      const expr = r.sourceContext.slice('Format binding to component: '.length).trim();
+      parentByKey.set(`fmt|${r.sourceComponent}|${expr}`, r);
+    }
+  }
+
+  const nested: NestedResult[] = [];
+  const seen = new Set<SearchResultEntry>();
+  const childrenMap = new Map<SearchResultEntry, SearchResultEntry[]>();
+
+  // Pass 1: assign each child to its parent if found
+  for (const r of items) {
+    const ctx = r.sourceContext ?? '';
+    let parent: SearchResultEntry | undefined;
+    if (ctx.startsWith('Binding for ')) {
+      const path = ctx.slice('Binding for '.length).split(':')[0]?.trim();
+      if (path) parent = parentByKey.get(`bind|${r.sourceComponent}|${path}`);
+    } else if (ctx.startsWith('Format binding expression:')) {
+      // Parent expression isn't in the child context directly, but child & parent share sourceComponent+original expression.
+      // Fallback: attach to any "Format binding to component" with same sourceComponent (1:1 common case).
+      for (const [key, p] of parentByKey.entries()) {
+        if (key.startsWith(`fmt|${r.sourceComponent}|`)) { parent = p; break; }
+      }
+    }
+    if (parent && parent !== r) {
+      const bucket = childrenMap.get(parent) ?? [];
+      bucket.push(r);
+      childrenMap.set(parent, bucket);
+      seen.add(r);
+    }
+  }
+
+  // Pass 2: build ordered top-level list, attaching children to their parents
+  for (const r of items) {
+    if (seen.has(r)) continue;
+    nested.push({ entry: r, children: childrenMap.get(r) ?? [] });
+  }
+  return nested;
+}
+
+function Highlight({ text, query }: { text: string | undefined | null; query: string }) {
+  const safe = text ?? '';
+  const q = query.trim();
+  if (!q) return <>{safe}</>;
+  const re = new RegExp(`(${escapeRegExp(q)})`, 'gi');
+  const parts = safe.split(re);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === q.toLowerCase()
+          ? <mark key={i} className="search-highlight">{part}</mark>
+          : <React.Fragment key={i}>{part}</React.Fragment>,
+      )}
+    </>
+  );
+}
+
 export function SearchPanel() {
   const searchQuery = useAppStore(s => s.searchQuery);
   const setSearchQuery = useAppStore(s => s.setSearchQuery);
@@ -45,6 +141,8 @@ export function SearchPanel() {
   const [mode, setMode] = useState<Mode>('search');
   const [whereUsedQuery, setWhereUsedQuery] = useState('');
   const [whereUsedResults, setWhereUsedResults] = useState<WhereUsedEntry[]>([]);
+  const [searchExpandSignal, setSearchExpandSignal] = useState<{ version: number; expanded: boolean }>({ version: 0, expanded: true });
+  const [whereUsedExpandSignal, setWhereUsedExpandSignal] = useState<{ version: number; expanded: boolean }>({ version: 0, expanded: true });
 
   const handleSearch = useCallback(() => {
     executeSearch();
@@ -100,29 +198,47 @@ export function SearchPanel() {
               onKeyDown={handleKeyDown}
               placeholder={t.searchPlaceholder}
               className="search-input"
-              style={{ flex: 1 }}
             />
             <Button appearance="primary" icon={<SearchRegular />} onClick={handleSearch} aria-label={t.search} />
           </div>
-          <div className="search-meta">
-            Index: {registry.guidCount} GUIDs, {registry.crossRefCount} cross-refs
+          <div className="search-toolbar-row">
+            <div className="search-meta">
+              Index: {registry.guidCount} GUIDs, {registry.crossRefCount} cross-refs
+            </div>
+            {searchResults.length > 0 && (
+              <div className="search-toolbar-actions">
+                <Tooltip content={t.expand} relationship="label" withArrow>
+                  <Button
+                    appearance="subtle"
+                    size="small"
+                    icon={<TextExpandRegular />}
+                    aria-label={t.expand}
+                    onClick={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
+                  />
+                </Tooltip>
+                <Tooltip content={t.collapse} relationship="label" withArrow>
+                  <Button
+                    appearance="subtle"
+                    size="small"
+                    icon={<TextCollapseRegular />}
+                    aria-label={t.collapse}
+                    onClick={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
+                  />
+                </Tooltip>
+              </div>
+            )}
           </div>
           {searchResults.length > 0 && (
-            <div>
-              <div className="search-section-caption">
-              {t.searchResultCount(searchResults.length)}
-              </div>
-              {searchResults.slice(0, 100).map((result: SearchResultEntry, i: number) => (
-                <SearchResultCard
-                  key={`${result.sourceConfigPath}:${result.target}:${i}`}
-                  result={result}
-                  configurations={configurations}
-                  treeNodes={treeNodes}
-                  registry={registry}
-                  navigateToTreeNode={navigateToTreeNode}
-                />
-              ))}
-            </div>
+            <SearchResultsGrouped
+              results={searchResults.slice(0, 100) as SearchResultEntry[]}
+              totalCount={searchResults.length}
+              query={searchQuery}
+              expandSignal={searchExpandSignal}
+              configurations={configurations}
+              treeNodes={treeNodes}
+              registry={registry}
+              navigateToTreeNode={navigateToTreeNode}
+            />
           )}
           {searchResults.length === 0 && searchQuery && (
             <div className="search-empty">{t.noResults}</div>
@@ -144,7 +260,6 @@ export function SearchPanel() {
                 onKeyDown={e => { if (e.key === 'Enter') runWhereUsed(whereUsedQuery); }}
                 placeholder={t.whereUsedPlaceholder}
                 className="search-input"
-                style={{ flex: 1 }}
                 dismiss={{
                   onClick: () => { setWhereUsedQuery(''); setWhereUsedResults([]); },
                 }}
@@ -163,13 +278,37 @@ export function SearchPanel() {
             )}
             {whereUsedResults.length > 0 && (
               <div>
-                <div className="search-section-caption search-section-caption-spacious">
-                  {t.found(whereUsedResults.length)}
+                <div className="search-toolbar-row search-toolbar-row-inline">
+                  <div className="search-section-caption search-section-caption-spacious">
+                    {t.found(whereUsedResults.length)}
+                  </div>
+                  <div className="search-toolbar-actions">
+                    <Tooltip content={t.expand} relationship="label" withArrow>
+                      <Button
+                        appearance="subtle"
+                        size="small"
+                        icon={<TextExpandRegular />}
+                        aria-label={t.expand}
+                        onClick={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
+                      />
+                    </Tooltip>
+                    <Tooltip content={t.collapse} relationship="label" withArrow>
+                      <Button
+                        appearance="subtle"
+                        size="small"
+                        icon={<TextCollapseRegular />}
+                        aria-label={t.collapse}
+                        onClick={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
+                      />
+                    </Tooltip>
+                  </div>
                 </div>
                 {whereUsedResults.map((entry, i) => (
                   <WhereUsedCard
                     key={i}
                     entry={entry}
+                    query={whereUsedQuery}
+                    expandSignal={whereUsedExpandSignal}
                     navigateToTreeNode={navigateToTreeNode}
                     findDatasourceNode={findDatasourceNode}
                     treeNodes={treeNodes}
@@ -181,13 +320,24 @@ export function SearchPanel() {
               <div className="search-help">
                 <div className="search-help-title">{t.examples}</div>
                 <div className="search-example-list">
-                  {['TaxTrans', 'CustTable', 'VendTable', 'TaxCodeGroupLookup'].map(ex => (
+                  {([
+                    { label: 'TaxTrans', hint: 'tabulka' },
+                    { label: 'NoYesEnum', hint: 'enum' },
+                    { label: 'TaxCodeGroupLookup', hint: 'lookup' },
+                    { label: 'ReportingCurrency', hint: 'parametr' },
+                    { label: 'CalculatedTotal', hint: 'calc. field' },
+                    { label: 'ledgerAccount', hint: 'identifikátor' },
+                    { label: 'DATETIMEFORMAT', hint: 'funkce' },
+                    { label: 'ROUND', hint: 'funkce' },
+                  ] as Array<{ label: string; hint: string }>).map(ex => (
                     <span
-                      key={ex}
+                      key={ex.label}
                       className="search-example-link"
-                      onClick={() => { setWhereUsedQuery(ex); runWhereUsed(ex); }}
+                      title={ex.hint}
+                      onClick={() => { setWhereUsedQuery(ex.label); runWhereUsed(ex.label); }}
                     >
-                      {ex}
+                      {ex.label}
+                      <span className="search-example-hint">{ex.hint}</span>
                     </span>
                   ))}
                 </div>
@@ -200,55 +350,245 @@ export function SearchPanel() {
   );
 }
 
+function SearchResultsGrouped({
+  results,
+  totalCount,
+  query,
+  expandSignal,
+  configurations,
+  treeNodes,
+  registry,
+  navigateToTreeNode,
+}: {
+  results: SearchResultEntry[];
+  totalCount: number;
+  query: string;
+  expandSignal: { version: number; expanded: boolean };
+  configurations: Array<{ filePath: string }>;
+  treeNodes: TreeNode[];
+  registry: { lookup: (guid: string) => GUIDEntry | undefined };
+  navigateToTreeNode: (nodeId: string) => void;
+}) {
+  const groups = useMemo(() => {
+    const map = new Map<string, SearchResultEntry[]>();
+    for (const r of results) {
+      const key = r.sourceConfigPath || '—';
+      const bucket = map.get(key);
+      if (bucket) bucket.push(r);
+      else map.set(key, [r]);
+    }
+    return Array.from(map.entries());
+  }, [results]);
+
+  return (
+    <div className="search-results">
+      <div className="search-section-caption">
+        {t.searchResultCount(totalCount)}{results.length < totalCount ? ` · ${results.length}` : ''}
+      </div>
+      {groups.map(([configPath, items]) => (
+        <SearchResultGroup
+          key={configPath}
+          configPath={configPath}
+          items={items}
+          query={query}
+          expandSignal={expandSignal}
+          configurations={configurations}
+          treeNodes={treeNodes}
+          registry={registry}
+          navigateToTreeNode={navigateToTreeNode}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SearchResultGroup({
+  configPath,
+  items,
+  query,
+  expandSignal,
+  configurations,
+  treeNodes,
+  registry,
+  navigateToTreeNode,
+}: {
+  configPath: string;
+  items: SearchResultEntry[];
+  query: string;
+  expandSignal: { version: number; expanded: boolean };
+  configurations: Array<{ filePath: string }>;
+  treeNodes: TreeNode[];
+  registry: { lookup: (guid: string) => GUIDEntry | undefined };
+  navigateToTreeNode: (nodeId: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const fileName = configPath.split(/[\\/]/).pop() ?? configPath;
+  const nested = useMemo(() => nestBindingResults(items), [items]);
+
+  useEffect(() => {
+    if (expandSignal.version > 0) setExpanded(expandSignal.expanded);
+  }, [expandSignal.version, expandSignal.expanded]);
+
+  return (
+    <div className="search-result-group">
+      <button
+        type="button"
+        className="search-result-group-header"
+        onClick={() => setExpanded(e => !e)}
+        aria-expanded={expanded}
+      >
+        <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
+        <DocumentRegular className="search-result-group-icon" />
+        <span className="search-result-group-name" title={configPath}>{fileName}</span>
+        <span className="search-result-group-count">{items.length}</span>
+      </button>
+      {expanded && (
+        <div className="search-result-group-body">
+          {nested.map((node, i) => (
+            <SearchResultCard
+              key={`${node.entry.sourceConfigPath}:${node.entry.target}:${i}`}
+              result={node.entry}
+              bindingChildren={node.children}
+              query={query}
+              configurations={configurations}
+              treeNodes={treeNodes}
+              registry={registry}
+              navigateToTreeNode={navigateToTreeNode}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SearchResultCard({
   result,
+  bindingChildren = [],
+  query,
   configurations,
   treeNodes,
   registry,
   navigateToTreeNode,
 }: {
   result: SearchResultEntry;
+  bindingChildren?: SearchResultEntry[];
+  query: string;
   configurations: Array<{ filePath: string }>;
   treeNodes: TreeNode[];
   registry: { lookup: (guid: string) => GUIDEntry | undefined };
   navigateToTreeNode: (nodeId: string) => void;
 }) {
   const targetNode = findNodeForSearchResult(result, configurations, treeNodes, registry);
-  const content = (
-    <>
+  const isGuidTarget = result.targetType === 'GUID' || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result.target ?? '');
+  const resolvedEntry = isGuidTarget ? registry.lookup(result.target) : undefined;
+  const displayName = resolvedEntry?.name ?? result.target;
+  const showGuidSuffix = Boolean(resolvedEntry?.name && resolvedEntry.name !== result.target);
+  const kindBadge = resolvedEntry?.kind ?? result.targetType;
+
+  return (
+    <div className="search-result-card">
       <div className="search-result-header">
-        <span className={`badge badge-${result.targetType?.toLowerCase()}`}>{result.targetType}</span>
-        <span className="search-result-target">{result.target}</span>
-      </div>
-      <div className="search-result-secondary">{result.sourceContext}</div>
-      <div className="search-result-footer">
-        <div className="search-result-secondary">in: {result.sourceComponent} ({result.sourceConfigPath})</div>
+        <span className={`badge badge-${(kindBadge ?? '').toLowerCase()}`} title={result.targetType}>{kindBadge}</span>
+        <span className="search-result-target" title={result.target}>
+          <Highlight text={displayName} query={query} />
+          {showGuidSuffix && (
+            <span className="search-result-guid" title={result.target}>{result.target}</span>
+          )}
+        </span>
         {targetNode && (
           <button
             type="button"
             className="search-result-open-btn"
             onClick={() => navigateToTreeNode(targetNode.id)}
             title={t.openInExplorerAction}
+            aria-label={t.openInExplorerAction}
           >
-            ↗ {t.explorerActionShort}
+            <ArrowRightRegular />
+            <span>{t.explorerActionShort}</span>
           </button>
         )}
       </div>
-    </>
+      <div className="search-result-context" title={result.sourceContext}>
+        <Highlight text={resolveGuidsInText(result.sourceContext, g => registry.lookup(g))} query={query} />
+      </div>
+      <div className="search-result-source" title={result.sourceComponent}>
+        <span className="search-result-source-label">in</span>
+        <span className="search-result-source-component">
+          <Highlight text={resolveGuidsInText(result.sourceComponent, g => registry.lookup(g))} query={query} />
+        </span>
+      </div>
+      {bindingChildren.length > 0 && (() => {
+        // Deduplicate: the indexer creates one child per regex match in the expression,
+        // so identical (target, targetType) pairs would repeat the same context text.
+        const seen = new Map<string, { child: SearchResultEntry; count: number }>();
+        for (const c of bindingChildren) {
+          const key = `${c.targetType}|${c.target}`;
+          const hit = seen.get(key);
+          if (hit) hit.count += 1;
+          else seen.set(key, { child: c, count: 1 });
+        }
+        const unique = Array.from(seen.values());
+        return (
+          <div className="search-result-children" aria-label="Nested binding references">
+            <div className="search-result-children-title">
+              {unique.length} {unique.length === 1 ? 'odkaz' : unique.length < 5 ? 'odkazy' : 'odkazů'} ve výrazu
+            </div>
+            <div className="search-result-child-chips">
+              {unique.map(({ child, count }, i) => (
+                <span
+                  key={i}
+                  className="search-result-child-chip"
+                  title={`${child.targetType}: ${child.target}${count > 1 ? ` (${count}×)` : ''}`}
+                >
+                  <span className={`badge badge-${(child.targetType ?? '').toLowerCase()} badge-tiny`}>{child.targetType}</span>
+                  <span className="search-result-child-target">
+                    <Highlight text={child.target} query={query} />
+                  </span>
+                  {count > 1 && <span className="search-result-child-count">×{count}</span>}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+    </div>
   );
-
-  return <div className="search-result-card">{content}</div>;
 }
 
-// ─── Where-Used Card ───
+// ─── Where-Used Card (IDE-style "Find References" panel) ───
 
-function WhereUsedCard({ entry, navigateToTreeNode, findDatasourceNode, treeNodes }: {
+type Reference = {
+  kind: 'binding' | 'formatElement';
+  configIndex: number;
+  configName: string;
+  /** Human-readable location path (e.g. breadcrumb for a format element, or datasource.path for a binding). */
+  location: string[];
+  /** Short kind label shown inline as a chip ("binding", "Sequence", "Group"…). */
+  kindLabel: string;
+  /** The line/expression preview text. */
+  preview: string;
+  /** The short location name (last breadcrumb or binding path) for column alignment. */
+  shortLocation: string;
+  /** Navigation action. */
+  onOpen: () => void;
+  /** Optional: format element type color for the kind chip. */
+  kindColor?: string;
+};
+
+function WhereUsedCard({ entry, query, expandSignal, navigateToTreeNode, findDatasourceNode, treeNodes }: {
   entry: WhereUsedEntry;
+  query: string;
+  expandSignal: { version: number; expanded: boolean };
   navigateToTreeNode: (nodeId: string) => void;
   findDatasourceNode: (name: string, ci: number, parentPath?: string) => string | null;
   treeNodes: TreeNode[];
 }) {
   const [expanded, setExpanded] = useState(true);
+
+  useEffect(() => {
+    if (expandSignal.version > 0) setExpanded(expandSignal.expanded);
+  }, [expandSignal.version, expandSignal.expanded]);
 
   const entityBadgeColor = getWhereUsedBadgeClass(entry.entityType);
 
@@ -271,92 +611,217 @@ function WhereUsedCard({ entry, navigateToTreeNode, findDatasourceNode, treeNode
     if (node) navigateToTreeNode(node.id);
   };
 
+  const navigateToBinding = (configIndex: number, path: string, treeNodeId?: string) => {
+    if (treeNodeId) {
+      navigateToTreeNode(treeNodeId);
+      return;
+    }
+    const configRoot = treeNodes[configIndex];
+    if (!configRoot) return;
+    const node = findTreeNodeByMatch(
+      configRoot.children ?? [],
+      candidate => candidate.type === 'binding' && candidate.data?.path === path,
+    );
+    if (node) navigateToTreeNode(node.id);
+  };
+
+  // Flatten modelPaths + formatUsages into a single list of IDE-style references
+  const references: Reference[] = useMemo(() => {
+    const dsName = entry.datasource.name;
+    const mp: Reference[] = entry.modelPaths.map(m => ({
+      kind: 'binding',
+      configIndex: m.configIndex,
+      configName: m.configName,
+      location: entry.entityType === 'TextMatch'
+        ? m.path.split(/[./]/).filter(Boolean)
+        : [dsName, ...m.path.split('.').filter(Boolean)],
+      kindLabel: m.kindLabel ?? 'binding',
+      preview: m.expr,
+      shortLocation: m.path,
+      onOpen: () => navigateToBinding(m.configIndex, m.path, m.treeNodeId),
+    }));
+    const fu: Reference[] = entry.formatUsages.map(f => {
+      const loc = f.elementPath && f.elementPath.length > 0 ? f.elementPath : [f.elementName];
+      return {
+        kind: 'formatElement' as const,
+        configIndex: f.configIndex,
+        configName: f.configName,
+        location: loc,
+        kindLabel: f.elementType,
+        preview: f.expression,
+        shortLocation: f.elementName,
+        onOpen: () => navigateToFormatElement(f.configIndex, f.elementId),
+        kindColor: getFormatTypeThemeColor(f.elementType),
+      };
+    });
+    return [...mp, ...fu];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry, treeNodes]);
+
+  const fileGroups = useMemo(() => {
+    const map = new Map<string, { configName: string; refs: Reference[] }>();
+    for (const r of references) {
+      const key = `${r.configIndex}|${r.configName}`;
+      const bucket = map.get(key);
+      if (bucket) bucket.refs.push(r);
+      else map.set(key, { configName: r.configName, refs: [r] });
+    }
+    return Array.from(map.entries());
+  }, [references]);
+
+  const summary = references.length === 1
+    ? '1 výskyt'
+    : `${references.length} výskyt${references.length < 5 ? 'y' : 'ů'} v ${fileGroups.length} ${fileGroups.length === 1 ? 'souboru' : fileGroups.length < 5 ? 'souborech' : 'souborech'}`;
+
+  const isTextMatch = entry.entityType === 'TextMatch';
+
   return (
     <div className="wu-card">
-      {/* Header */}
+      {/* Header: entity → datasource + summary */}
       <div className="wu-card-header" onClick={() => setExpanded(e => !e)}>
         <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
-        <span className={`badge ${entityBadgeColor}`}>{entry.entityType}</span>
-        <span className="wu-entity-name">{entry.entityName}</span>
-        <span className="wu-arrow">→</span>
-        <span className="wu-ds-name" onClick={e => { e.stopPropagation(); navigateToDs(); }} title="Přejít na datasource">
-          🗃️ {entry.datasource.name}
+        <span className={`badge ${entityBadgeColor}`}>
+          {isTextMatch ? 'text' : entry.entityType}
         </span>
+        <span className="wu-entity-name">
+          {isTextMatch ? <>&quot;<Highlight text={entry.entityName} query={query} />&quot;</> : <Highlight text={entry.entityName} query={query} />}
+        </span>
+        {!isTextMatch && (
+          <>
+            <span className="wu-arrow">→</span>
+            <span
+              className="wu-ds-name"
+              onClick={e => { e.stopPropagation(); navigateToDs(); }}
+              title="Přejít na datasource"
+            >
+              🗃️ <Highlight text={entry.datasource.name} query={query} />
+            </span>
+          </>
+        )}
+        {isTextMatch && (
+          <span className="wu-ds-name wu-ds-name-plain" title="Textové výskyty ve výrazech">
+            ve výrazech
+          </span>
+        )}
         <div className="wu-meta-end">
-          <span className="wu-config-name">{entry.datasource.configName}</span>
-          <button
-            className="fmt-action-btn fmt-action-btn-compact wu-reveal-btn"
-            onClick={e => { e.stopPropagation(); navigateToDs(); }}
-            title={t.openInExplorerAction}
-          >
-            {t.openInExplorerAction}
-          </button>
+          <span className="wu-ref-summary" title={summary}>{summary}</span>
+          {!isTextMatch && (
+            <button
+              className="fmt-action-btn fmt-action-btn-compact wu-reveal-btn"
+              onClick={e => { e.stopPropagation(); navigateToDs(); }}
+              title={t.openInExplorerAction}
+            >
+              {t.openInExplorerAction}
+            </button>
+          )}
         </div>
       </div>
 
       {expanded && (
         <div className="wu-card-body">
-          {/* Model paths */}
-          {entry.modelPaths.length > 0 && (
-            <div className="wu-section">
-              <div className="wu-section-title">📋 Model paths ({entry.modelPaths.length})</div>
-              {entry.modelPaths.slice(0, 10).map((mp, i) => (
-                <div key={i} className="wu-model-path">
-                  <span className="wu-path-text">{mp.path}</span>
-                  <span className="wu-path-sep">←</span>
-                  <span className="wu-path-expr">
-                    <ClickablePath expression={mp.expr} configIndex={mp.configIndex} mode="binding-expr" />
-                  </span>
-                </div>
-              ))}
-              {entry.modelPaths.length > 10 && (
-                <div className="wu-more">
-                  +{entry.modelPaths.length - 10} dalších…
-                </div>
-              )}
+          {references.length === 0 && (
+            <div className="wu-empty">
+              <strong>Mrtvý datasource:</strong> žádný binding ani formátový element na tento datasource neodkazuje.
             </div>
           )}
-
-          {/* Format usages */}
-          {entry.formatUsages.length > 0 && (
-            <div className="wu-section">
-              <div className="wu-section-title">📄 Formátové elementy ({entry.formatUsages.length})</div>
-              {entry.formatUsages.slice(0, 20).map((fu, i) => (
-                <div key={i} className="wu-fmt-usage">
-                  <span className="wu-fmt-type" style={{ color: getFormatTypeThemeColor(fu.elementType) }}>
-                    {fu.elementType}
-                  </span>
-                  <span className="wu-fmt-name">{fu.elementName}</span>
-                  <span className="wu-path-sep">←</span>
-                  <span className="wu-path-expr wu-path-expr-grow">
-                    <ClickablePath expression={fu.expression} configIndex={fu.configIndex} mode="binding-expr" />
-                  </span>
-                  <div className="wu-meta-end">
-                    <span className="wu-config-name">{fu.configName}</span>
-                    <button
-                      className="fmt-action-btn fmt-action-btn-compact wu-reveal-btn"
-                      onClick={() => navigateToFormatElement(fu.configIndex, fu.elementId)}
-                      title={t.openInExplorerAction}
-                    >
-                      {t.openInExplorerAction}
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {entry.formatUsages.length > 20 && (
-                <div className="wu-more">
-                  +{entry.formatUsages.length - 20} dalších…
-                </div>
-              )}
-            </div>
-          )}
-
-          {entry.modelPaths.length === 0 && entry.formatUsages.length === 0 && (
-            <div className="wu-empty">Datasource nalezen, ale nebyla nalezena žádná vazba na formát.</div>
-          )}
+          {fileGroups.map(([key, { configName, refs }]) => (
+            <FileReferenceGroup
+              key={key}
+              configName={configName}
+              references={refs}
+              query={query}
+              expandSignal={expandSignal}
+            />
+          ))}
         </div>
       )}
     </div>
+  );
+}
+
+function FileReferenceGroup({
+  configName,
+  references,
+  query,
+  expandSignal,
+}: {
+  configName: string;
+  references: Reference[];
+  query: string;
+  expandSignal: { version: number; expanded: boolean };
+}) {
+  const [expanded, setExpanded] = useState(true);
+
+  useEffect(() => {
+    if (expandSignal.version > 0) setExpanded(expandSignal.expanded);
+  }, [expandSignal.version, expandSignal.expanded]);
+
+  return (
+    <div className="wu-file-group">
+      <button
+        type="button"
+        className="wu-file-group-header"
+        onClick={() => setExpanded(e => !e)}
+        aria-expanded={expanded}
+      >
+        <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
+        <DocumentRegular className="wu-file-group-icon" />
+        <span className="wu-file-group-name" title={configName}>{configName}</span>
+        <span className="wu-file-group-count">{references.length}</span>
+      </button>
+      {expanded && (
+        <div className="wu-file-group-body">
+          {references.map((ref, i) => (
+            <ReferenceRow key={i} reference={ref} query={query} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReferenceRow({ reference, query }: { reference: Reference; query: string }) {
+  const { location, kindLabel, preview, kindColor, onOpen } = reference;
+  const breadcrumb = location.slice(0, -1);
+  const leaf = location[location.length - 1] ?? '';
+
+  return (
+    <button
+      type="button"
+      className="wu-ref-row wu-ref-row-multiline"
+      onClick={onOpen}
+      title={`${location.join(' / ')}\n${preview}`}
+    >
+      <div className="wu-ref-line wu-ref-line-location">
+        <span
+          className="wu-ref-kind"
+          style={kindColor ? { color: kindColor, borderColor: kindColor } : undefined}
+        >
+          {kindLabel}
+        </span>
+        <span className="wu-ref-location">
+          {breadcrumb.length > 0 && (
+            <span className="wu-ref-breadcrumb">
+              {breadcrumb.map((seg, idx) => (
+                <React.Fragment key={idx}>
+                  {idx > 0 && <span className="wu-ref-bc-sep">/</span>}
+                  <span className="wu-ref-bc-seg">{seg}</span>
+                </React.Fragment>
+              ))}
+              <span className="wu-ref-bc-sep">/</span>
+            </span>
+          )}
+          <span className="wu-ref-leaf" title={leaf}>
+            <Highlight text={leaf} query={query} />
+          </span>
+        </span>
+      </div>
+      <div className="wu-ref-line wu-ref-line-preview">
+        <span className="wu-ref-preview" title={preview}>
+          <Highlight text={preview} query={query} />
+        </span>
+      </div>
+    </button>
   );
 }
 
@@ -559,6 +1024,8 @@ function getWhereUsedBadgeClass(entityType: WhereUsedEntry['entityType']): strin
     case 'Container':
     case 'Object':
       return 'badge-success';
+    case 'TextMatch':
+      return 'badge-info';
     default:
       return 'badge-xml';
   }
