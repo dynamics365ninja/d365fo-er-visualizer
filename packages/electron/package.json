@@ -10,6 +10,8 @@
     "start": "electron ."
   },
   "dependencies": {
+    "@azure/msal-node": "^3.2.0",
+    "@er-visualizer/fno-client": "workspace:*",
     "electron": "^33.0.0"
   },
   "devDependencies": {

@@ -23,6 +23,10 @@ import {
   Tag,
   TagGroup,
   type TagGroupProps,
+  TabList,
+  Tab,
+  type SelectTabEvent,
+  type SelectTabData,
 } from '@fluentui/react-components';
 import {
   ArrowUploadRegular,
@@ -38,8 +42,9 @@ import {
   SparkleFilled,
 } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
-import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 import { t } from '../i18n';
+import { FnoConnectPanel } from './FnoConnectPanel';
+import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 
 // ────────────────────────── styles ──────────────────────────
 
@@ -318,10 +323,24 @@ const useStyles = makeStyles({
       transform: 'translateY(-2px)',
       boxShadow: tokens.shadow8,
     },
+    ':hover .lp-session-open': {
+      opacity: 1,
+      pointerEvents: 'auto',
+    },
+    ':focus-within .lp-session-open': {
+      opacity: 1,
+      pointerEvents: 'auto',
+    },
     ':focus-visible': {
       ...shorthands.outline('2px', 'solid', tokens.colorStrokeFocus2),
       outlineOffset: '2px',
     },
+  },
+  sessionOpenBtn: {
+    opacity: 0,
+    pointerEvents: 'none',
+    transitionProperty: 'opacity',
+    transitionDuration: '160ms',
   },
   sessionHeader: {
     display: 'flex',
@@ -418,6 +437,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [sourceTab, setSourceTab] = useState<'local' | 'remote'>('local');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFiles = useCallback(async (files: FileList | null) => {
@@ -505,6 +525,19 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
         <div className="lp-hero-divider" aria-hidden="true" />
       </div>
 
+      {/* Source selector */}
+      <TabList
+        selectedValue={sourceTab}
+        onTabSelect={(_: SelectTabEvent, d: SelectTabData) => setSourceTab(d.value as 'local' | 'remote')}
+        size="large"
+      >
+        <Tab value="local">{t.fnoTabLocal}</Tab>
+        <Tab value="remote">{t.fnoTabRemote}</Tab>
+      </TabList>
+
+      {sourceTab === 'remote' && <FnoConnectPanel />}
+
+      {sourceTab === 'local' && <>
       {/* Drop Zone */}
       <div
         className={mergeClasses(styles.dropzone, isDragging && styles.dropzoneDragging)}
@@ -614,6 +647,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
           fileHint={t.landingCardFormatHint}
         />
       </div>
+      </>}
 
       {/* Recent sessions */}
       {recentSessions.length > 0 && (
@@ -663,6 +697,17 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
                     <Body1Strong style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {title}
                     </Body1Strong>
+                    {canLoad && (
+                      <Button
+                        appearance="subtle"
+                        size="small"
+                        icon={<OpenRegular />}
+                        className={mergeClasses(styles.sessionOpenBtn, 'lp-session-open')}
+                        aria-label={t.recentSessionReloadHint}
+                        title={t.recentSessionReloadHint}
+                        onClick={e => { e.stopPropagation(); handleLoad(); }}
+                      />
+                    )}
                     <Button
                       appearance="transparent"
                       size="small"

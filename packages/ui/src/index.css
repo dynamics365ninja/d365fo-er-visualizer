@@ -4915,6 +4915,15 @@ button.dd-dep-item { cursor: pointer; }
 }
 .er-token-ds:hover::after { opacity: 1; }
 
+/* Non-interactive variant — used in "Analyzuji výraz" when the token is
+   the whole current frame expression and a click would self-push. */
+.er-token-ds--self {
+  cursor: default;
+  text-decoration: none;
+  pointer-events: none;
+}
+.er-token-ds--self::after { content: none; }
+
 /* Comparison / arithmetic operators (=, <>, +, -, …) */
 .er-token-op   { color: var(--text-secondary); }
 

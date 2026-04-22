@@ -251,6 +251,36 @@ export interface Translations {
   warnings: string;
   noWarnings: string;
   breadcrumbHome: string;
+
+  // F&O connector
+  fnoTabLocal: string;
+  fnoTabRemote: string;
+  fnoHeading: string;
+  fnoSubheading: string;
+  fnoProfileName: string;
+  fnoEnvUrl: string;
+  fnoTenantId: string;
+  fnoClientId: string;
+  fnoSaveProfile: string;
+  fnoConnect: string;
+  fnoDisconnect: string;
+  fnoConnecting: string;
+  fnoConnected: (user: string) => string;
+  fnoProfiles: string;
+  fnoNoProfiles: string;
+  fnoRemoveProfile: string;
+  fnoSolutions: string;
+  fnoConfigurations: string;
+  fnoLoading: string;
+  fnoLoadSelected: string;
+  fnoSelectAll: string;
+  fnoSelectNone: string;
+  fnoFilterByType: string;
+  fnoAllTypes: string;
+  fnoSignInFailed: (msg: string) => string;
+  fnoLoadingFailed: (msg: string) => string;
+  fnoDownloadFailed: (name: string, msg: string) => string;
+  fnoLoadedCount: (n: number) => string;
 }
 
 // ─── Translation dictionaries ─────────────────────────────────────────────
@@ -503,6 +533,35 @@ const cs: Translations = {
   warnings: 'Upozornění',
   noWarnings: 'Žádná upozornění.',
   breadcrumbHome: 'Domů',
+
+  fnoTabLocal: 'Lokální soubory',
+  fnoTabRemote: 'D365 F&O server',
+  fnoHeading: 'Připojení k Dynamics 365 F&O',
+  fnoSubheading: 'Načti ER konfigurace přímo z prostředí (CHE, Sandbox, UDE).',
+  fnoProfileName: 'Název profilu',
+  fnoEnvUrl: 'URL prostředí',
+  fnoTenantId: 'Tenant ID (Entra)',
+  fnoClientId: 'Application (client) ID',
+  fnoSaveProfile: 'Uložit profil',
+  fnoConnect: 'Připojit',
+  fnoDisconnect: 'Odpojit',
+  fnoConnecting: 'Připojuji…',
+  fnoConnected: (user: string) => `Připojen jako ${user}`,
+  fnoProfiles: 'Uložené profily',
+  fnoNoProfiles: 'Zatím žádný profil. Vyplň údaje nahoře a stiskni „Uložit profil".',
+  fnoRemoveProfile: 'Odebrat profil',
+  fnoSolutions: 'ER řešení',
+  fnoConfigurations: 'Konfigurace',
+  fnoLoading: 'Načítám…',
+  fnoLoadSelected: 'Načíst vybrané',
+  fnoSelectAll: 'Vybrat vše',
+  fnoSelectNone: 'Zrušit výběr',
+  fnoFilterByType: 'Typ komponenty',
+  fnoAllTypes: 'Všechny',
+  fnoSignInFailed: (msg: string) => `Přihlášení selhalo: ${msg}`,
+  fnoLoadingFailed: (msg: string) => `Načítání selhalo: ${msg}`,
+  fnoDownloadFailed: (name: string, msg: string) => `Stažení „${name}" selhalo: ${msg}`,
+  fnoLoadedCount: (n: number) => `Načteno ${n} konfigurací z F&O.`,
 };
 
 const en: Translations = {
@@ -747,6 +806,35 @@ const en: Translations = {
   warnings: 'Warnings',
   noWarnings: 'No warnings.',
   breadcrumbHome: 'Home',
+
+  fnoTabLocal: 'Local files',
+  fnoTabRemote: 'D365 F&O server',
+  fnoHeading: 'Connect to Dynamics 365 F&O',
+  fnoSubheading: 'Load ER configurations directly from an environment (CHE, Sandbox, UDE).',
+  fnoProfileName: 'Profile name',
+  fnoEnvUrl: 'Environment URL',
+  fnoTenantId: 'Tenant ID (Entra)',
+  fnoClientId: 'Application (client) ID',
+  fnoSaveProfile: 'Save profile',
+  fnoConnect: 'Connect',
+  fnoDisconnect: 'Disconnect',
+  fnoConnecting: 'Connecting…',
+  fnoConnected: (user: string) => `Connected as ${user}`,
+  fnoProfiles: 'Saved profiles',
+  fnoNoProfiles: 'No profile yet. Fill in the fields above and press "Save profile".',
+  fnoRemoveProfile: 'Remove profile',
+  fnoSolutions: 'ER solutions',
+  fnoConfigurations: 'Configurations',
+  fnoLoading: 'Loading…',
+  fnoLoadSelected: 'Load selected',
+  fnoSelectAll: 'Select all',
+  fnoSelectNone: 'Clear selection',
+  fnoFilterByType: 'Component type',
+  fnoAllTypes: 'All',
+  fnoSignInFailed: (msg: string) => `Sign-in failed: ${msg}`,
+  fnoLoadingFailed: (msg: string) => `Loading failed: ${msg}`,
+  fnoDownloadFailed: (name: string, msg: string) => `Download of "${name}" failed: ${msg}`,
+  fnoLoadedCount: (n: number) => `Loaded ${n} configuration${n === 1 ? '' : 's'} from F&O.`,
 };
 
 export const t: Translations = locale === 'cs' ? cs : en;

@@ -319,9 +319,17 @@ interface ExpressionViewProps {
   expr: string;
   configIndex: number;
   onPush: (f: Frame) => void;
+  /**
+   * Optional expression string representing the current drill frame. Tokens
+   * whose click target would produce this exact expression are rendered
+   * non-interactively (no hover, no click) to prevent pointless self-pushes
+   * from the "Analyzuji výraz" hero — where the whole expression is a single
+   * DS token that otherwise keeps appending identical breadcrumbs.
+   */
+  currentFrameExpression?: string;
 }
 
-function ExpressionView({ expr, configIndex, onPush }: ExpressionViewProps) {
+function ExpressionView({ expr, configIndex, onPush, currentFrameExpression }: ExpressionViewProps) {
   const tokens = useMemo(() => tokenizeERExpr(expr), [expr]);
   return (
     <div className="er-expr">
@@ -333,6 +341,14 @@ function ExpressionView({ expr, configIndex, onPush }: ExpressionViewProps) {
             .map(s => /[()\s.]/.test(s) ? `'${s}'` : s)
             .join('.');
           const label = tok.raw.replace(/'/g, '');
+          const isSelf = currentFrameExpression !== undefined && expression === currentFrameExpression;
+          if (isSelf) {
+            return (
+              <span key={idx} className="er-token-ds er-token-ds--self" title={tok.raw}>
+                {tok.raw}
+              </span>
+            );
+          }
           return (
             <span key={idx} className="er-token-ds"
               title={`→ ${expression}`}
@@ -943,7 +959,20 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
 
   const currentFrame = stack[stack.length - 1];
 
-  const push = (frame: Frame) => setStack(s => [...s, frame]);
+  const push = (frame: Frame) => setStack(s => {
+    // Skip pushing a frame that is identical to the current top. This happens
+    // when the user clicks the "Analyzuji výraz" expression in the hero — the
+    // whole expression is itself a DS token, so a click would just keep
+    // appending the same breadcrumb.
+    const top = s[s.length - 1];
+    if (top
+      && top.expression === frame.expression
+      && top.configIndex === frame.configIndex
+      && top.label === frame.label) {
+      return s;
+    }
+    return [...s, frame];
+  });
   const jumpTo = (index: number) => setStack(s => s.slice(0, index + 1));
   const restart = () => setStack([initialFrame()]);
 
@@ -1029,6 +1058,7 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
             expr={currentFrame.expression}
             configIndex={currentFrame.configIndex}
             onPush={push}
+            currentFrameExpression={currentFrame.expression}
           />
         </div>
 

@@ -9,11 +9,13 @@
     "types": ["vite/client"],
     "noEmit": true,
     "paths": {
-      "@er-visualizer/core": ["../core/src/index.ts"]
+      "@er-visualizer/core": ["../core/src/index.ts"],
+      "@er-visualizer/fno-client": ["../fno-client/src/index.ts"]
     }
   },
   "include": ["src/**/*"],
   "references": [
-    { "path": "../core" }
+    { "path": "../core" },
+    { "path": "../fno-client" }
   ]
 }
