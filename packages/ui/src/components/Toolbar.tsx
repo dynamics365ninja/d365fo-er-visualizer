@@ -25,10 +25,12 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     gap: '4px',
-    padding: '4px 8px',
-    background: tokens.colorNeutralBackground2,
+    padding: '0 8px',
+    backgroundColor: tokens.colorNeutralBackground1,
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    minHeight: '36px',
+    height: '40px',
+    minHeight: '40px',
+    flexShrink: 0,
   },
   nav: {
     display: 'flex',
@@ -56,7 +58,7 @@ const useStyles = makeStyles({
   chip: {
     padding: '2px 6px',
     borderRadius: tokens.borderRadiusMedium,
-    background: tokens.colorNeutralBackground3,
+    backgroundColor: tokens.colorNeutralBackground3,
   },
   chipTech: {
     background: tokens.colorBrandBackground,

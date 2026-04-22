@@ -44,14 +44,14 @@ const useStyles = makeStyles({
     gap: '2px',
     width: '48px',
     padding: '6px 0',
-    background: tokens.colorNeutralBackground3,
+    backgroundColor: tokens.colorNeutralBackground3,
     borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
     flexShrink: 0,
   },
   sep: {
     width: '28px',
     height: '1px',
-    background: tokens.colorNeutralStroke2,
+    backgroundColor: tokens.colorNeutralStroke2,
     margin: '4px 0',
   },
   spacer: {
@@ -67,9 +67,18 @@ const useStyles = makeStyles({
     minWidth: '36px',
     height: '36px',
     borderRadius: tokens.borderRadiusMedium,
+    transitionProperty: 'transform, background-color',
+    transitionDuration: '160ms',
+    transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+    ':hover': {
+      transform: 'scale(1.08)',
+    },
+    ':active': {
+      transform: 'scale(0.96)',
+    },
   },
   btnActive: {
-    background: tokens.colorSubtleBackgroundSelected,
+    backgroundColor: tokens.colorSubtleBackgroundSelected,
     borderLeft: `2px solid ${tokens.colorBrandBackground}`,
   },
   badge: {

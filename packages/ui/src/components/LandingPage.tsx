@@ -53,7 +53,8 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     alignItems: 'center',
     gap: '32px',
-    backgroundColor: `linear-gradient(135deg, ${tokens.colorNeutralBackground1} 0%, ${tokens.colorNeutralBackground2} 100%)`,
+    backgroundColor: tokens.colorNeutralBackground1,
+    backgroundImage: `radial-gradient(ellipse at top, ${tokens.colorBrandBackground2} 0%, transparent 55%), linear-gradient(180deg, ${tokens.colorNeutralBackground1} 0%, ${tokens.colorNeutralBackground2} 100%)`,
   },
   hero: {
     width: '100%',
@@ -63,18 +64,34 @@ const useStyles = makeStyles({
     alignItems: 'center',
     gap: '12px',
     textAlign: 'center',
+    animationName: {
+      from: { opacity: 0, transform: 'translateY(-8px)' },
+      to: { opacity: 1, transform: 'translateY(0)' },
+    },
+    animationDuration: '420ms',
+    animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+    animationFillMode: 'both',
   },
   heroLogo: {
     width: '72px',
     height: '72px',
     borderRadius: '20px',
-    backgroundColor: `linear-gradient(135deg, ${tokens.colorBrandBackground} 0%, ${tokens.colorBrandBackgroundPressed} 100%)`,
+    backgroundColor: tokens.colorBrandBackground,
+    backgroundImage: `linear-gradient(135deg, ${tokens.colorBrandBackground} 0%, ${tokens.colorBrandBackgroundPressed} 100%)`,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: tokens.shadow16,
     color: tokens.colorNeutralForegroundOnBrand,
     marginBottom: '8px',
+    position: 'relative',
+    animationName: {
+      '0%, 100%': { boxShadow: tokens.shadow16 },
+      '50%': { boxShadow: `${tokens.shadow28}, 0 0 0 6px ${tokens.colorBrandBackground2}` },
+    },
+    animationDuration: '3.2s',
+    animationIterationCount: 'infinite',
+    animationTimingFunction: 'ease-in-out',
   },
   heroBadge: {
     marginBottom: '4px',
@@ -98,15 +115,25 @@ const useStyles = makeStyles({
     ...shorthands.border('2px', 'dashed', tokens.colorNeutralStroke1),
     backgroundColor: tokens.colorNeutralBackground1,
     cursor: 'pointer',
-    transitionProperty: 'all',
-    transitionDuration: '0.18s',
-    transitionTimingFunction: 'ease',
+    transitionProperty: 'transform, box-shadow, border-color, background-color',
+    transitionDuration: '220ms',
+    transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
     textAlign: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+    animationName: {
+      from: { opacity: 0, transform: 'translateY(12px)' },
+      to: { opacity: 1, transform: 'translateY(0)' },
+    },
+    animationDuration: '520ms',
+    animationDelay: '80ms',
+    animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+    animationFillMode: 'both',
     ':hover': {
       ...shorthands.borderColor(tokens.colorBrandStroke1),
       backgroundColor: tokens.colorNeutralBackground1Hover,
-      transform: 'translateY(-1px)',
-      boxShadow: tokens.shadow8,
+      transform: 'translateY(-2px)',
+      boxShadow: tokens.shadow16,
     },
     ':focus-visible': {
       ...shorthands.outline('2px', 'solid', tokens.colorStrokeFocus2),
@@ -118,17 +145,22 @@ const useStyles = makeStyles({
     ...shorthands.borderStyle('solid'),
     backgroundColor: tokens.colorBrandBackground2,
     transform: 'scale(1.01)',
+    boxShadow: tokens.shadow28,
   },
   dropzoneInner: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     gap: '12px',
+    position: 'relative',
+    zIndex: 1,
   },
   dropzoneIcon: {
     fontSize: '36px',
     color: tokens.colorBrandForeground1,
     display: 'inline-flex',
+    transitionProperty: 'transform',
+    transitionDuration: '220ms',
   },
   tags: {
     marginTop: '4px',
@@ -148,14 +180,24 @@ const useStyles = makeStyles({
     padding: '20px',
     gap: '12px',
     backgroundColor: tokens.colorNeutralBackground1,
-    transitionProperty: 'transform, box-shadow',
-    transitionDuration: '0.18s',
-    transitionTimingFunction: 'ease',
+    transitionProperty: 'transform, box-shadow, border-color',
+    transitionDuration: '260ms',
+    transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+    animationName: {
+      from: { opacity: 0, transform: 'translateY(16px) scale(0.98)' },
+      to: { opacity: 1, transform: 'translateY(0) scale(1)' },
+    },
+    animationDuration: '500ms',
+    animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+    animationFillMode: 'both',
     ':hover': {
-      transform: 'translateY(-2px)',
-      boxShadow: tokens.shadow16,
+      transform: 'translateY(-4px)',
+      boxShadow: tokens.shadow28,
     },
   },
+  cardDelay0: { animationDelay: '120ms' },
+  cardDelay1: { animationDelay: '200ms' },
+  cardDelay2: { animationDelay: '280ms' },
   cardIconInfo: {
     backgroundColor: tokens.colorPaletteBlueBackground2,
     color: tokens.colorPaletteBlueForeground2,
@@ -176,6 +218,9 @@ const useStyles = makeStyles({
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '22px',
+    transitionProperty: 'transform',
+    transitionDuration: '260ms',
+    transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
   },
   cardFeatures: {
     margin: 0,
@@ -212,6 +257,14 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
+    animationName: {
+      from: { opacity: 0, transform: 'translateY(8px)' },
+      to: { opacity: 1, transform: 'translateY(0)' },
+    },
+    animationDuration: '520ms',
+    animationDelay: '360ms',
+    animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+    animationFillMode: 'both',
   },
   sectionHeader: {
     display: 'flex',
@@ -232,8 +285,14 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground2,
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    transitionProperty: 'transform, background-color, border-color, box-shadow',
+    transitionDuration: '180ms',
+    transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
     ':hover': {
       backgroundColor: tokens.colorNeutralBackground2Hover,
+      ...shorthands.borderColor(tokens.colorBrandStroke2),
+      transform: 'translateX(2px)',
+      boxShadow: tokens.shadow4,
     },
   },
   recentName: {
@@ -249,23 +308,41 @@ const useStyles = makeStyles({
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
     gap: '16px',
+    animationName: {
+      from: { opacity: 0 },
+      to: { opacity: 1 },
+    },
+    animationDuration: '600ms',
+    animationDelay: '440ms',
+    animationTimingFunction: 'ease-out',
+    animationFillMode: 'both',
   },
   step: {
     display: 'flex',
     gap: '12px',
     alignItems: 'flex-start',
+    padding: '12px',
+    borderRadius: tokens.borderRadiusMedium,
+    transitionProperty: 'background-color, transform',
+    transitionDuration: '180ms',
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground2,
+      transform: 'translateY(-1px)',
+    },
   },
   stepNum: {
     width: '32px',
     height: '32px',
     borderRadius: tokens.borderRadiusCircular,
     backgroundColor: tokens.colorBrandBackground,
+    backgroundImage: `linear-gradient(135deg, ${tokens.colorBrandBackground} 0%, ${tokens.colorBrandBackgroundPressed} 100%)`,
     color: tokens.colorNeutralForegroundOnBrand,
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontWeight: tokens.fontWeightSemibold,
     flexShrink: 0,
+    boxShadow: tokens.shadow4,
   },
   footer: {
     marginTop: 'auto',
@@ -440,6 +517,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
       {/* Component Cards */}
       <div className={styles.cardGrid}>
         <ComponentCard
+          staggerIndex={0}
           accent="info"
           icon={<DataBarVerticalFilled fontSize={24} />}
           title={t.landingCardModelTitle}
@@ -449,6 +527,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
           fileHint={t.landingCardModelHint}
         />
         <ComponentCard
+          staggerIndex={1}
           accent="success"
           icon={<LinkFilled fontSize={24} />}
           title={t.landingCardMappingTitle}
@@ -458,6 +537,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
           fileHint={t.landingCardMappingHint}
         />
         <ComponentCard
+          staggerIndex={2}
           accent="purple"
           icon={<DocumentFilled fontSize={24} />}
           title={t.landingCardFormatTitle}
@@ -531,7 +611,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
 // ────────────────────────── cards ──────────────────────────
 
 function ComponentCard({
-  accent, icon, title, subtitle, description, features, fileHint,
+  accent, icon, title, subtitle, description, features, fileHint, staggerIndex = 0,
 }: {
   accent: LandingAccent;
   icon: React.ReactNode;
@@ -540,14 +620,18 @@ function ComponentCard({
   description: string;
   features: string[];
   fileHint: string;
+  staggerIndex?: number;
 }) {
   const styles = useStyles();
   const accentClass = accent === 'info' ? styles.cardIconInfo
     : accent === 'success' ? styles.cardIconSuccess
     : styles.cardIconPurple;
+  const delayClass = staggerIndex === 0 ? styles.cardDelay0
+    : staggerIndex === 1 ? styles.cardDelay1
+    : styles.cardDelay2;
 
   return (
-    <Card className={styles.card} appearance="filled-alternative">
+    <Card className={mergeClasses(styles.card, delayClass)} appearance="filled-alternative">
       <CardHeader
         image={<div className={mergeClasses(styles.cardIcon, accentClass)} aria-hidden="true">{icon}</div>}
         header={<Body1Strong>{title}</Body1Strong>}
