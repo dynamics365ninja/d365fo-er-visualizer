@@ -1743,6 +1743,11 @@ body {
   gap: 6px;
 }
 
+.fmt-binding-detail-row > .dd-collapsible {
+  flex-basis: 100%;
+  margin-top: 4px;
+}
+
 .fmt-binding-formula {
   font-family: 'Cascadia Code', 'Consolas', monospace;
 }
@@ -1958,6 +1963,10 @@ body {
 .fmt-detail-binding {
   padding: 6px 12px;
   border-bottom: 1px solid var(--border-color);
+}
+
+.fmt-detail-binding > .dd-collapsible {
+  margin-top: 6px;
 }
 
 .fmt-binding-origin {
