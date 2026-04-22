@@ -1,4 +1,17 @@
 ﻿import React, { useCallback, useRef } from 'react';
+import {
+  Button,
+  Tooltip,
+  Divider,
+  makeStyles,
+  tokens,
+  mergeClasses,
+} from '@fluentui/react-components';
+import {
+  ArrowLeftRegular,
+  ArrowRightRegular,
+  FolderOpenRegular,
+} from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
 import { t } from '../i18n';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
@@ -7,11 +20,59 @@ interface ToolbarProps {
   breadcrumb?: React.ReactNode;
 }
 
+const useStyles = makeStyles({
+  root: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '4px 8px',
+    background: tokens.colorNeutralBackground2,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    minHeight: '36px',
+  },
+  nav: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '2px',
+  },
+  sep: {
+    height: '20px',
+    margin: '0 4px',
+  },
+  breadcrumb: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
+    textOverflow: 'ellipsis',
+  },
+  right: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
+  },
+  chip: {
+    padding: '2px 6px',
+    borderRadius: tokens.borderRadiusMedium,
+    background: tokens.colorNeutralBackground3,
+  },
+  chipTech: {
+    background: tokens.colorBrandBackground,
+    color: tokens.colorNeutralForegroundOnBrand,
+  },
+  hiddenInput: {
+    display: 'none',
+  },
+});
+
 /**
- * Slim top toolbar - focused on file/history operations. View-toggles, theme,
- * and palette were moved to the left ActivityBar so this bar stays clean.
+ * Slim top toolbar — file/history operations + breadcrumb. View toggles,
+ * theme, and the command palette live on the left ActivityBar.
  */
 export function Toolbar({ breadcrumb }: ToolbarProps) {
+  const styles = useStyles();
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
   const canNavigateBack = useAppStore(s => s.canNavigateBack);
   const canNavigateForward = useAppStore(s => s.canNavigateForward);
@@ -44,13 +105,31 @@ export function Toolbar({ breadcrumb }: ToolbarProps) {
   }, [loadXmlFile, reportLoadErrors]);
 
   return (
-    <div className="toolbar toolbar--slim">
-      <div className="toolbar__nav">
-        <IconButton onClick={navigateBack} icon="←" label={t.back} disabled={!canNavigateBack} shortcut="Alt+←" />
-        <IconButton onClick={navigateForward} icon="→" label={t.forward} disabled={!canNavigateForward} shortcut="Alt+→" />
+    <div className={styles.root}>
+      <div className={styles.nav}>
+        <Tooltip content={`${t.back} (Alt+←)`} relationship="label" withArrow>
+          <Button
+            appearance="subtle"
+            size="small"
+            icon={<ArrowLeftRegular />}
+            disabled={!canNavigateBack}
+            onClick={navigateBack}
+            aria-label={t.back}
+          />
+        </Tooltip>
+        <Tooltip content={`${t.forward} (Alt+→)`} relationship="label" withArrow>
+          <Button
+            appearance="subtle"
+            size="small"
+            icon={<ArrowRightRegular />}
+            disabled={!canNavigateForward}
+            onClick={navigateForward}
+            aria-label={t.forward}
+          />
+        </Tooltip>
       </div>
 
-      <div className="toolbar__sep" aria-hidden="true" />
+      <Divider vertical className={styles.sep} />
 
       <input
         ref={fileInputRef}
@@ -58,43 +137,34 @@ export function Toolbar({ breadcrumb }: ToolbarProps) {
         multiple
         accept=".xml"
         onChange={handleFileSelect}
-        className="toolbar-file-input"
+        className={styles.hiddenInput}
         id="file-input"
       />
-      <button type="button" className="toolbar__primary" onClick={handleOpenFiles} title={t.loadXml}>
-        <span aria-hidden="true">📂</span>
-        <span>{t.loadXml}</span>
-      </button>
+      <Tooltip content={t.loadXml} relationship="label" withArrow>
+        <Button
+          appearance="primary"
+          size="small"
+          icon={<FolderOpenRegular />}
+          onClick={handleOpenFiles}
+        >
+          {t.loadXml}
+        </Button>
+      </Tooltip>
 
-      <div className="toolbar__sep" aria-hidden="true" />
+      <Divider vertical className={styles.sep} />
 
-      <div className="toolbar__breadcrumb">{breadcrumb}</div>
+      <div className={styles.breadcrumb}>{breadcrumb}</div>
 
-      <div className="toolbar__right">
+      <div className={styles.right}>
         {configs.length > 0 && (
-          <span className="toolbar__count" title={t.statusConfigs(configs.length)}>
-            {configs.length} <span className="toolbar__count-word">{t.statusConfigsWord}</span>
+          <span className={styles.chip} title={t.statusConfigs(configs.length)}>
+            {configs.length} {t.statusConfigsWord}
           </span>
         )}
-        <span className={`toolbar__mode${showTechnicalDetails ? ' toolbar__mode--tech' : ''}`}>
+        <span className={mergeClasses(styles.chip, showTechnicalDetails && styles.chipTech)}>
           {showTechnicalDetails ? t.technicalView : t.consultantView}
         </span>
       </div>
     </div>
-  );
-}
-
-function IconButton({ onClick, icon, label, disabled = false, shortcut }: { onClick: () => void; icon: string; label: string; disabled?: boolean; shortcut?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="toolbar__icon-btn"
-      disabled={disabled}
-      title={shortcut ? `${label} (${shortcut})` : label}
-      aria-label={label}
-    >
-      {icon}
-    </button>
   );
 }

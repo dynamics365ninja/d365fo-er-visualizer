@@ -1,4 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
+import { Button, Input } from '@fluentui/react-components';
+import { DismissRegular } from '@fluentui/react-icons';
 import { locale, t } from '../i18n';
 import { useAppStore, type TreeNode } from '../state/store';
 import { ERDirection } from '@er-visualizer/core';
@@ -188,37 +190,39 @@ export function ConfigExplorer() {
     >
       {isDragging && <div className="explorer-dropzone-overlay">{t.landingDropRelease}</div>}
       <div className="explorer-toolbar">
-        <button
-          className="fmt-action-btn"
+        <Button
+          appearance="subtle"
+          size="small"
           onClick={() => { setExpandMode('all'); setExpandVersion(version => version + 1); }}
           title={t.expand}
         >
           {t.expand}
-        </button>
-        <button
-          className="fmt-action-btn"
+        </Button>
+        <Button
+          appearance="subtle"
+          size="small"
           onClick={() => { setExpandMode('none'); setExpandVersion(version => version + 1); }}
           title={t.collapse}
         >
           {t.collapse}
-        </button>
+        </Button>
         <div className="panel-filter-row explorer-toolbar-filter">
-          <input
-            type="text"
+          <Input
+            size="small"
             value={filterQuery}
-            onChange={event => setFilterQuery(event.target.value)}
+            onChange={(_, d) => setFilterQuery(d.value)}
             placeholder={t.explorerFilterPlaceholder}
             className="fmt-filter-input explorer-filter-input"
+            contentAfter={filterQuery ? (
+              <Button
+                appearance="transparent"
+                size="small"
+                icon={<DismissRegular />}
+                aria-label={t.clearFilter}
+                onClick={() => setFilterQuery('')}
+              />
+            ) : undefined}
           />
-          {filterQuery && (
-            <button
-              className="fmt-action-btn"
-              onClick={() => setFilterQuery('')}
-              title={t.clearFilter}
-            >
-              ✕
-            </button>
-          )}
         </div>
       </div>
       {filteredTreeNodes.length === 0 ? (

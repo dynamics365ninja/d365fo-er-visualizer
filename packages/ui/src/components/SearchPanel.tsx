@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { SearchBox, Button, TabList, Tab } from '@fluentui/react-components';
+import { SearchRegular, MapRegular } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
 import type { TreeNode } from '../state/store';
 import type { WhereUsedEntry } from '../state/store';
@@ -79,48 +81,28 @@ export function SearchPanel() {
   return (
     <div className="search-panel">
       {/* Mode selector */}
-      <div className="search-mode-bar">
-        <button
-          onClick={() => setMode('search')}
-          className={`search-mode-btn${mode === 'search' ? ' active' : ''}`}
-        >
-          🔍 {t.search}
-        </button>
-        <button
-          onClick={() => setMode('where-used')}
-          className={`search-mode-btn${mode === 'where-used' ? ' active' : ''}`}
-        >
-          🗺️ {t.whereUsed}
-        </button>
-      </div>
+      <TabList
+        selectedValue={mode}
+        onTabSelect={(_, d) => setMode(d.value as Mode)}
+        size="small"
+      >
+        <Tab value="search" icon={<SearchRegular />}>{t.search}</Tab>
+        <Tab value="where-used" icon={<MapRegular />}>{t.whereUsed}</Tab>
+      </TabList>
 
       {/* Search mode */}
       {mode === 'search' && (
         <div className="search-pane">
           <div className="search-input-row">
-            <input
-              type="text"
+            <SearchBox
               value={searchQuery}
-              onChange={e => { setSearchQuery(e.target.value); }}
+              onChange={(_, d) => setSearchQuery(d.value)}
               onKeyDown={handleKeyDown}
               placeholder={t.searchPlaceholder}
               className="search-input"
+              style={{ flex: 1 }}
             />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="search-clear-btn"
-                title={t.clearSearch}
-              >
-                ✕
-              </button>
-            )}
-            <button
-              onClick={handleSearch}
-              className="search-primary-btn"
-            >
-              🔍
-            </button>
+            <Button appearance="primary" icon={<SearchRegular />} onClick={handleSearch} aria-label={t.search} />
           </div>
           <div className="search-meta">
             Index: {registry.guidCount} GUIDs, {registry.crossRefCount} cross-refs
@@ -156,29 +138,20 @@ export function SearchPanel() {
               {t.whereUsedLabel}
             </div>
             <div className="search-input-row">
-              <input
-                type="text"
+              <SearchBox
                 value={whereUsedQuery}
-                onChange={e => { setWhereUsedQuery(e.target.value); }}
+                onChange={(_, d) => setWhereUsedQuery(d.value)}
                 onKeyDown={e => { if (e.key === 'Enter') runWhereUsed(whereUsedQuery); }}
                 placeholder={t.whereUsedPlaceholder}
                 className="search-input"
+                style={{ flex: 1 }}
+                dismiss={{
+                  onClick: () => { setWhereUsedQuery(''); setWhereUsedResults([]); },
+                }}
               />
-              {whereUsedQuery && (
-                <button
-                  onClick={() => { setWhereUsedQuery(''); setWhereUsedResults([]); }}
-                  className="search-clear-btn"
-                  title={t.clearWhereUsedSearch}
-                >
-                  ✕
-                </button>
-              )}
-              <button
-                onClick={() => runWhereUsed(whereUsedQuery)}
-                className="search-primary-btn"
-              >
+              <Button appearance="primary" onClick={() => runWhereUsed(whereUsedQuery)}>
                 {t.find}
-              </button>
+              </Button>
             </div>
           </div>
 

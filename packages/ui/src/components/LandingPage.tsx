@@ -1,4 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
+import { Button } from '@fluentui/react-components';
+import { DismissRegular, OpenRegular } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 import { t } from '../i18n';
@@ -121,7 +123,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
           {errors.map((e, i) => (
             <div key={i} className="landing-error-item">{e}</div>
           ))}
-          <button className="landing-error-dismiss" onClick={() => setErrors([])}>{t.landingDismiss}</button>
+          <Button appearance="subtle" size="small" icon={<DismissRegular />} onClick={() => setErrors([])}>{t.landingDismiss}</Button>
         </div>
       )}
 
@@ -129,9 +131,9 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
       {configs.length > 0 && (
         <div className="landing-loaded-bar">
           <span>{t.landingLoaded(configs.length)}</span>
-          <button className="landing-loaded-open" onClick={onFilesLoaded}>
+          <Button appearance="primary" size="small" icon={<OpenRegular />} onClick={onFilesLoaded}>
             {t.landingOpen}
-          </button>
+          </Button>
         </div>
       )}
 
@@ -171,9 +173,9 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
         <div className="landing-recent">
           <div className="landing-section-title-row">
             <div className="landing-section-title">{t.recentFiles}</div>
-            <button type="button" className="landing-recent-clear" onClick={clearRecentFiles}>
+            <Button appearance="subtle" size="small" onClick={clearRecentFiles}>
               {t.clearRecent}
-            </button>
+            </Button>
           </div>
           <ul className="landing-recent-list">
             {recentFiles.map(rf => (
@@ -183,12 +185,13 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
                 </span>
                 <span className="landing-recent-name" title={rf.path}>{rf.name}</span>
                 <span className="landing-recent-path" title={rf.path}>{rf.path}</span>
-                <button
-                  type="button"
-                  className="landing-recent-remove"
+                <Button
+                  appearance="transparent"
+                  size="small"
+                  icon={<DismissRegular />}
                   aria-label={t.dismiss}
                   onClick={e => { e.stopPropagation(); removeRecentFile(rf.path); }}
-                >×</button>
+                />
               </li>
             ))}
           </ul>
