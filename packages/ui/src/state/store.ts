@@ -32,6 +32,12 @@ export interface RecentFile {
   name: string;
   kind?: 'DataModel' | 'ModelMapping' | 'Format';
   openedAt: number;
+  /**
+   * Cached XML content so the entry can be re-loaded on double-click without
+   * re-reading from disk. May be stripped for older entries if storage quota
+   * is hit. Undefined means the content is no longer cached.
+   */
+  content?: string;
 }
 
 export interface ConfigWarning {
@@ -60,6 +66,38 @@ function saveJSON(key: string, value: unknown): void {
   } catch {
     // Ignore storage failures (quota, private mode, etc.)
   }
+}
+
+/**
+ * Persist the recent-files list. If localStorage rejects the payload (most
+ * likely a quota error because cached XML is large), progressively strip
+ * cached `content` from the oldest entries and retry. Metadata is preserved
+ * as long as possible so the recent list itself stays intact.
+ */
+function saveRecentFiles(files: RecentFile[]): RecentFile[] {
+  if (typeof window === 'undefined') return files;
+  const attempt = (candidate: RecentFile[]): boolean => {
+    try {
+      window.localStorage.setItem(RECENT_FILES_STORAGE_KEY, JSON.stringify(candidate));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (attempt(files)) return files;
+
+  // Strip content from the oldest entries one by one until it fits.
+  const trimmed = files.map(f => ({ ...f }));
+  for (let i = trimmed.length - 1; i >= 0; i--) {
+    if (trimmed[i].content !== undefined) {
+      trimmed[i] = { ...trimmed[i], content: undefined };
+      if (attempt(trimmed)) return trimmed;
+    }
+  }
+  // Last resort: metadata-only for all entries.
+  const metadataOnly = files.map(({ content: _c, ...meta }) => meta as RecentFile);
+  attempt(metadataOnly);
+  return metadataOnly;
 }
 
 function readStoredTechnicalDetails(): boolean {
@@ -205,6 +243,8 @@ export interface AppState {
   addRecentFile: (file: Omit<RecentFile, 'openedAt'>) => void;
   removeRecentFile: (path: string) => void;
   clearRecentFiles: () => void;
+  /** Re-load a recent file from its cached XML content. Returns true on success. */
+  reloadRecentFile: (path: string) => boolean;
   /**
    * Resolve a datasource name from an expression string (e.g. "CompanyInfo" from binding expr).
    * Returns { configIndex, datasourceName, treeNodeId } or null.
@@ -447,11 +487,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Add recent entry
       const recentName = filePath.split(/[\\/]/).pop() ?? filePath;
       const recentKind = config.content.kind;
-      const nextRecent: RecentFile[] = [
-        { path: filePath, name: recentName, kind: recentKind, openedAt: Date.now() },
+      const candidateRecent: RecentFile[] = [
+        { path: filePath, name: recentName, kind: recentKind, openedAt: Date.now(), content: xml },
         ...state.recentFiles.filter(r => r.path !== filePath),
       ].slice(0, MAX_RECENT_FILES);
-      saveJSON(RECENT_FILES_STORAGE_KEY, nextRecent);
+      const nextRecent = saveRecentFiles(candidateRecent);
 
       set({
         configurations: newConfigs,
@@ -832,21 +872,40 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // ─── Recent files ───
   addRecentFile: (file) => {
-    const next: RecentFile[] = [
+    const candidate: RecentFile[] = [
       { ...file, openedAt: Date.now() },
       ...get().recentFiles.filter(r => r.path !== file.path),
     ].slice(0, MAX_RECENT_FILES);
-    saveJSON(RECENT_FILES_STORAGE_KEY, next);
+    const next = saveRecentFiles(candidate);
     set({ recentFiles: next });
   },
   removeRecentFile: (path: string) => {
-    const next = get().recentFiles.filter(r => r.path !== path);
-    saveJSON(RECENT_FILES_STORAGE_KEY, next);
+    const next = saveRecentFiles(get().recentFiles.filter(r => r.path !== path));
     set({ recentFiles: next });
   },
   clearRecentFiles: () => {
-    saveJSON(RECENT_FILES_STORAGE_KEY, []);
+    saveRecentFiles([]);
     set({ recentFiles: [] });
+  },
+  reloadRecentFile: (path: string) => {
+    const entry = get().recentFiles.find(r => r.path === path);
+    if (!entry) return false;
+    if (!entry.content) {
+      get().pushToast({
+        kind: 'warning',
+        message: `Obsah „${entry.name}“ už není v mezipaměti, otevřete soubor znovu ručně.`,
+      });
+      return false;
+    }
+    // Avoid reloading a config that's already loaded under the same path.
+    const alreadyLoaded = get().configurations.some(c => c.filePath === entry.path);
+    if (alreadyLoaded) return true;
+    try {
+      get().loadXmlFile(entry.content, entry.path);
+      return true;
+    } catch {
+      return false;
+    }
   },
 
   resolveDatasource: (expressionOrName: string, fromConfigIndex: number) => {

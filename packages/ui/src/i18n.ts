@@ -206,6 +206,7 @@ export interface Translations {
   recentFiles: string;
   noRecentFiles: string;
   clearRecent: string;
+  recentReloadHint: string;
   loadSample: string;
   validatorOk: string;
   validatorIssues: (n: number) => string;
@@ -456,6 +457,7 @@ const cs: Translations = {
 
   recentFiles: 'Nedávné soubory',
   noRecentFiles: 'Žádné nedávno otevřené soubory.',
+  recentReloadHint: 'Dvojklik pro znovunačtení souboru',
   clearRecent: 'Vymazat historii',
   loadSample: 'Načíst ukázkovou konfiguraci',
   validatorOk: 'Konfigurace vypadá v pořádku.',
@@ -696,6 +698,7 @@ const en: Translations = {
 
   recentFiles: 'Recent files',
   noRecentFiles: 'No recently opened files.',
+  recentReloadHint: 'Double-click to reload file',
   clearRecent: 'Clear history',
   loadSample: 'Load sample configuration',
   validatorOk: 'Configuration looks fine.',

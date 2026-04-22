@@ -366,6 +366,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const recentFiles = useAppStore(s => s.recentFiles);
   const removeRecentFile = useAppStore(s => s.removeRecentFile);
   const clearRecentFiles = useAppStore(s => s.clearRecentFiles);
+  const reloadRecentFile = useAppStore(s => s.reloadRecentFile);
   const [isDragging, setIsDragging] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -581,29 +582,50 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
             </Button>
           </div>
           <div className={styles.recentList}>
-            {recentFiles.map(rf => (
-              <div key={rf.path} className={styles.recentItem} title={rf.path}>
-                <span aria-hidden="true" style={{ display: 'inline-flex', color: tokens.colorBrandForeground1 }}>
-                  {rf.kind === 'DataModel' ? <DataBarVerticalFilled fontSize={18} />
-                    : rf.kind === 'ModelMapping' ? <LinkFilled fontSize={18} />
-                    : rf.kind === 'Format' ? <DocumentFilled fontSize={18} />
-                    : <DocumentFilled fontSize={18} />}
-                </span>
-                <div className={styles.recentName}>
-                  <Body1Strong>{rf.name}</Body1Strong>
-                  <div style={{ fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {rf.path}
+            {recentFiles.map(rf => {
+              const canReload = Boolean(rf.content);
+              const handleReload = () => {
+                if (!canReload) return;
+                if (reloadRecentFile(rf.path)) onFilesLoaded();
+              };
+              return (
+                <div
+                  key={rf.path}
+                  className={styles.recentItem}
+                  title={canReload ? t.recentReloadHint : rf.path}
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: canReload ? 'pointer' : 'default', opacity: canReload ? 1 : 0.75 }}
+                  onDoubleClick={handleReload}
+                  onKeyDown={e => {
+                    if (canReload && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      handleReload();
+                    }
+                  }}
+                >
+                  <span aria-hidden="true" style={{ display: 'inline-flex', color: tokens.colorBrandForeground1 }}>
+                    {rf.kind === 'DataModel' ? <DataBarVerticalFilled fontSize={18} />
+                      : rf.kind === 'ModelMapping' ? <LinkFilled fontSize={18} />
+                      : rf.kind === 'Format' ? <DocumentFilled fontSize={18} />
+                      : <DocumentFilled fontSize={18} />}
+                  </span>
+                  <div className={styles.recentName}>
+                    <Body1Strong>{rf.name}</Body1Strong>
+                    <div style={{ fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {rf.path}
+                    </div>
                   </div>
+                  <Button
+                    appearance="transparent"
+                    size="small"
+                    icon={<DismissRegular />}
+                    aria-label={t.dismiss}
+                    onClick={e => { e.stopPropagation(); removeRecentFile(rf.path); }}
+                  />
                 </div>
-                <Button
-                  appearance="transparent"
-                  size="small"
-                  icon={<DismissRegular />}
-                  aria-label={t.dismiss}
-                  onClick={e => { e.stopPropagation(); removeRecentFile(rf.path); }}
-                />
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
