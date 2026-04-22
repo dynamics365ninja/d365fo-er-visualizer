@@ -300,6 +300,49 @@ const useStyles = makeStyles({
     whiteSpace: 'nowrap',
     textOverflow: 'ellipsis',
   },
+  sessionCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    padding: '12px 14px',
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground2,
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    cursor: 'pointer',
+    transitionProperty: 'transform, background-color, border-color, box-shadow',
+    transitionDuration: '180ms',
+    transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground2Hover,
+      ...shorthands.borderColor(tokens.colorBrandStroke2),
+      transform: 'translateY(-2px)',
+      boxShadow: tokens.shadow8,
+    },
+    ':focus-visible': {
+      ...shorthands.outline('2px', 'solid', tokens.colorStrokeFocus2),
+      outlineOffset: '2px',
+    },
+  },
+  sessionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  sessionFiles: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
+  },
+  sessionFileRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
+    textOverflow: 'ellipsis',
+  },
   steps: {
     width: '100%',
     maxWidth: '1160px',
@@ -366,6 +409,12 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const recentFiles = useAppStore(s => s.recentFiles);
   const removeRecentFile = useAppStore(s => s.removeRecentFile);
   const clearRecentFiles = useAppStore(s => s.clearRecentFiles);
+  const reloadRecentFile = useAppStore(s => s.reloadRecentFile);
+  const recentSessions = useAppStore(s => s.recentSessions);
+  const removeRecentSession = useAppStore(s => s.removeRecentSession);
+  const clearRecentSessions = useAppStore(s => s.clearRecentSessions);
+  const loadRecentSession = useAppStore(s => s.loadRecentSession);
+  const cachedPaths = useAppStore(s => s.cachedPaths);
   const [isDragging, setIsDragging] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -566,6 +615,81 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
         />
       </div>
 
+      {/* Recent sessions */}
+      {recentSessions.length > 0 && (
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <Subtitle2>{t.recentSessions}</Subtitle2>
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<DeleteRegular />}
+              onClick={clearRecentSessions}
+            >
+              {t.clearRecent}
+            </Button>
+          </div>
+          <div className={styles.recentList}>
+            {recentSessions.map(session => {
+              const canLoad = session.files.some(f => cachedPaths.has(f.path));
+              const primaryName = session.files[0]?.name ?? '';
+              const title = session.files.length === 1
+                ? primaryName
+                : t.recentSessionTitle(session.files.length);
+              const handleLoad = () => {
+                if (!canLoad) return;
+                void loadRecentSession(session.id).then(ok => {
+                  if (ok) onFilesLoaded();
+                });
+              };
+              return (
+                <div
+                  key={session.id}
+                  className={styles.sessionCard}
+                  role="button"
+                  tabIndex={0}
+                  title={canLoad ? t.recentSessionReloadHint : undefined}
+                  style={{ opacity: canLoad ? 1 : 0.6 }}
+                  onDoubleClick={handleLoad}
+                  onKeyDown={e => {
+                    if (canLoad && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      handleLoad();
+                    }
+                  }}
+                >
+                  <div className={styles.sessionHeader}>
+                    <FolderOpenRegular fontSize={18} style={{ color: tokens.colorBrandForeground1 }} />
+                    <Body1Strong style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {title}
+                    </Body1Strong>
+                    <Button
+                      appearance="transparent"
+                      size="small"
+                      icon={<DismissRegular />}
+                      aria-label={t.dismiss}
+                      onClick={e => { e.stopPropagation(); removeRecentSession(session.id); }}
+                    />
+                  </div>
+                  <div className={styles.sessionFiles}>
+                    {session.files.map(f => (
+                      <div key={f.path} className={styles.sessionFileRow} title={f.path}>
+                        <span aria-hidden="true" style={{ display: 'inline-flex', color: tokens.colorNeutralForeground3 }}>
+                          {f.kind === 'DataModel' ? <DataBarVerticalFilled fontSize={14} />
+                            : f.kind === 'ModelMapping' ? <LinkFilled fontSize={14} />
+                            : <DocumentFilled fontSize={14} />}
+                        </span>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Recent files */}
       {recentFiles.length > 0 && (
         <div className={styles.section}>
@@ -581,29 +705,52 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
             </Button>
           </div>
           <div className={styles.recentList}>
-            {recentFiles.map(rf => (
-              <div key={rf.path} className={styles.recentItem} title={rf.path}>
-                <span aria-hidden="true" style={{ display: 'inline-flex', color: tokens.colorBrandForeground1 }}>
-                  {rf.kind === 'DataModel' ? <DataBarVerticalFilled fontSize={18} />
-                    : rf.kind === 'ModelMapping' ? <LinkFilled fontSize={18} />
-                    : rf.kind === 'Format' ? <DocumentFilled fontSize={18} />
-                    : <DocumentFilled fontSize={18} />}
-                </span>
-                <div className={styles.recentName}>
-                  <Body1Strong>{rf.name}</Body1Strong>
-                  <div style={{ fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {rf.path}
+            {recentFiles.map(rf => {
+              const canReload = cachedPaths.has(rf.path);
+              const handleReload = () => {
+                if (!canReload) return;
+                void reloadRecentFile(rf.path).then(ok => {
+                  if (ok) onFilesLoaded();
+                });
+              };
+              return (
+                <div
+                  key={rf.path}
+                  className={styles.recentItem}
+                  title={canReload ? t.recentReloadHint : rf.path}
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: canReload ? 'pointer' : 'default', opacity: canReload ? 1 : 0.75 }}
+                  onDoubleClick={handleReload}
+                  onKeyDown={e => {
+                    if (canReload && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      handleReload();
+                    }
+                  }}
+                >
+                  <span aria-hidden="true" style={{ display: 'inline-flex', color: tokens.colorBrandForeground1 }}>
+                    {rf.kind === 'DataModel' ? <DataBarVerticalFilled fontSize={18} />
+                      : rf.kind === 'ModelMapping' ? <LinkFilled fontSize={18} />
+                      : rf.kind === 'Format' ? <DocumentFilled fontSize={18} />
+                      : <DocumentFilled fontSize={18} />}
+                  </span>
+                  <div className={styles.recentName}>
+                    <Body1Strong>{rf.name}</Body1Strong>
+                    <div style={{ fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {rf.path}
+                    </div>
                   </div>
+                  <Button
+                    appearance="transparent"
+                    size="small"
+                    icon={<DismissRegular />}
+                    aria-label={t.dismiss}
+                    onClick={e => { e.stopPropagation(); removeRecentFile(rf.path); }}
+                  />
                 </div>
-                <Button
-                  appearance="transparent"
-                  size="small"
-                  icon={<DismissRegular />}
-                  aria-label={t.dismiss}
-                  onClick={e => { e.stopPropagation(); removeRecentFile(rf.path); }}
-                />
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

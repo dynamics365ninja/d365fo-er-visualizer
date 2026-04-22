@@ -206,6 +206,10 @@ export interface Translations {
   recentFiles: string;
   noRecentFiles: string;
   clearRecent: string;
+  recentReloadHint: string;
+  recentSessions: string;
+  recentSessionTitle: (count: number) => string;
+  recentSessionReloadHint: string;
   loadSample: string;
   validatorOk: string;
   validatorIssues: (n: number) => string;
@@ -456,6 +460,10 @@ const cs: Translations = {
 
   recentFiles: 'Nedávné soubory',
   noRecentFiles: 'Žádné nedávno otevřené soubory.',
+  recentReloadHint: 'Dvojklik pro znovunačtení souboru',
+  recentSessions: 'Nedávné relace',
+  recentSessionTitle: (count: number) => `Relace (${count} ${count === 1 ? 'soubor' : count >= 2 && count <= 4 ? 'soubory' : 'souborů'})`,
+  recentSessionReloadHint: 'Dvojklik pro načtení celé relace',
   clearRecent: 'Vymazat historii',
   loadSample: 'Načíst ukázkovou konfiguraci',
   validatorOk: 'Konfigurace vypadá v pořádku.',
@@ -696,6 +704,10 @@ const en: Translations = {
 
   recentFiles: 'Recent files',
   noRecentFiles: 'No recently opened files.',
+  recentReloadHint: 'Double-click to reload file',
+  recentSessions: 'Recent sessions',
+  recentSessionTitle: (count: number) => `Session (${count} ${count === 1 ? 'file' : 'files'})`,
+  recentSessionReloadHint: 'Double-click to load the whole session',
   clearRecent: 'Clear history',
   loadSample: 'Load sample configuration',
   validatorOk: 'Configuration looks fine.',

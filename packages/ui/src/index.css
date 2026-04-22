@@ -1750,6 +1750,13 @@ body {
 
 .fmt-binding-formula {
   font-family: 'Cascadia Code', 'Consolas', monospace;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+  display: block;
 }
 
 .badge-prop {
@@ -5301,6 +5308,12 @@ body {
   max-width: 100%;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.fmt-binding-formula > .dd-trigger-expr,
+.fmt-detail-binding > div > .dd-trigger-expr {
+  display: block;
+  width: 100%;
 }
 
 .drilldown-tab-host {
