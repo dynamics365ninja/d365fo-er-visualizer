@@ -323,10 +323,24 @@ const useStyles = makeStyles({
       transform: 'translateY(-2px)',
       boxShadow: tokens.shadow8,
     },
+    ':hover .lp-session-open': {
+      opacity: 1,
+      pointerEvents: 'auto',
+    },
+    ':focus-within .lp-session-open': {
+      opacity: 1,
+      pointerEvents: 'auto',
+    },
     ':focus-visible': {
       ...shorthands.outline('2px', 'solid', tokens.colorStrokeFocus2),
       outlineOffset: '2px',
     },
+  },
+  sessionOpenBtn: {
+    opacity: 0,
+    pointerEvents: 'none',
+    transitionProperty: 'opacity',
+    transitionDuration: '160ms',
   },
   sessionHeader: {
     display: 'flex',
@@ -683,6 +697,17 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
                     <Body1Strong style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {title}
                     </Body1Strong>
+                    {canLoad && (
+                      <Button
+                        appearance="subtle"
+                        size="small"
+                        icon={<OpenRegular />}
+                        className={mergeClasses(styles.sessionOpenBtn, 'lp-session-open')}
+                        aria-label={t.recentSessionReloadHint}
+                        title={t.recentSessionReloadHint}
+                        onClick={e => { e.stopPropagation(); handleLoad(); }}
+                      />
+                    )}
                     <Button
                       appearance="transparent"
                       size="small"
