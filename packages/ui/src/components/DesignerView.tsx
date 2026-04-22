@@ -12,7 +12,7 @@ import '@xyflow/react/dist/style.css';
 import { useAppStore, resolveDeepExpression } from '../state/store';
 import type { DeepResolutionResult } from '../state/store';
 import { ClickablePath } from './ClickablePath';
-import { DrillDownPanel } from './DrillDownPanel';
+import { DrillDownPanel, DrillDownBody } from './DrillDownPanel';
 import { PropertyInspector } from './PropertyInspector';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
@@ -49,6 +49,20 @@ export function DesignerView() {
 
   const config = configs[tab.configIndex];
   if (!config) return null;
+
+  // Drill-down tabs carry their own expression/element — render the drill-down body directly
+  if (tab.kind === 'drillDown') {
+    return (
+      <div className="drilldown-tab-host">
+        <DrillDownBody
+          expression={tab.expression}
+          configIndex={tab.configIndex}
+          elementName={tab.elementName}
+          variant="tab"
+        />
+      </div>
+    );
+  }
 
   const tabNode = findTreeNodeById(treeNodes, activeTabId);
 

@@ -5197,39 +5197,90 @@ body {
   word-break: break-word;
 }
 
-/* ─── Drill-down Dialog ─────────────────────────────────────────────── */
-.dd-dialog-surface {
-  max-width: min(960px, 96vw) !important;
-  width: min(960px, 96vw);
+/* ─── Drill-down collapsible trigger + tab host ──────────────────────── */
+.dd-collapsible {
+  margin-top: 6px;
+  border: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.18));
+  border-radius: 6px;
+  background: var(--bg-tertiary, rgba(128, 128, 128, 0.04));
+  overflow: hidden;
+  transition: border-color 120ms ease;
 }
 
-.dd-dialog-content {
-  padding: 0 !important;
-  max-height: 70vh;
-  overflow: auto;
+.dd-collapsible.is-open {
+  border-color: var(--brand-1, #038387);
 }
 
-.dd-dialog-title {
+.dd-collapsible__trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  user-select: none;
+}
+
+.dd-collapsible__trigger:hover {
+  background: rgba(3, 131, 135, 0.06);
+}
+
+.dd-collapsible.is-open .dd-collapsible__trigger {
+  border-bottom: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.18));
+}
+
+.dd-collapsible__chevron {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.dd-collapsible__label {
+  font-weight: 600;
   color: var(--text-primary);
 }
 
-.dd-dialog-title__name {
+.dd-collapsible__hint {
+  margin-left: auto;
+  font-size: 11px;
   color: var(--text-secondary);
-  font-weight: 500;
-  margin-left: 4px;
+  font-style: italic;
 }
 
-.dd-panel--dialog {
-  border: none;
-  background: transparent;
-  padding: 0;
+.dd-collapsible__open-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 5px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
 }
 
-.dd-panel--dialog .dd-hero {
-  border-radius: 0;
+.dd-collapsible__open-tab:hover {
+  background: var(--brand-1, #038387);
+  color: #fff;
+}
+
+.drilldown-tab-host {
+  height: 100%;
+  overflow: auto;
+  padding: 16px;
+  background: var(--bg-primary, transparent);
+}
+
+.dd-panel--tab {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.dd-panel--tab .dd-hero {
   position: sticky;
   top: 0;
   z-index: 1;
