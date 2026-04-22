@@ -183,10 +183,7 @@ body {
   font-family: var(--font-sans, 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif);
   font-size: 13px;
   color: var(--text-primary);
-  background:
-    radial-gradient(circle at top left, rgba(3, 131, 135, 0.14), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(55, 169, 135, 0.10), transparent 28%),
-    var(--bg-primary);
+  background: var(--bg-primary);
   overflow: hidden;
   height: 100vh;
 }
@@ -263,7 +260,7 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-secondary) 72%, transparent), transparent 24%);
+  background: var(--bg-primary);
 }
 
 .app-main {
@@ -272,7 +269,7 @@ body {
 }
 
 .app-main-shell {
-  padding: 10px 12px 8px;
+  padding: 0;
 }
 
 .app-sidebar {
@@ -284,19 +281,12 @@ body {
 
 .app-panel-shell,
 .app-center {
-  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
   overflow: hidden;
-  box-shadow:
-    0 14px 36px color-mix(in srgb, var(--shadow-color) 35%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
 }
 
-.app-panel-shell-left {
-  border-radius: 16px 0 0 16px;
-}
-
+.app-panel-shell-left,
 .app-panel-shell-right {
-  border-radius: 0 16px 16px 0;
+  border-radius: 0;
 }
 
 .app-sidebar-left {
@@ -312,6 +302,7 @@ body {
   display: flex;
   flex-direction: column;
   border-radius: 0;
+  background: var(--bg-primary);
 }
 
 .app-panel-content {
@@ -320,9 +311,7 @@ body {
 }
 
 .app-center-content {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--bg-secondary) 24%, transparent), transparent 80%),
-    var(--bg-primary);
+  background: var(--bg-primary);
 }
 
 /* Scrollbar styling */
@@ -331,42 +320,40 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
-/* Tree node styles */
+/* Tree node styles — flat VS Code Explorer rows */
 .tree-node {
   display: flex;
   align-items: center;
   gap: 5px;
-  margin: 1px 4px;
+  margin: 0;
   padding: 3px 8px;
   font-size: 12px;
   line-height: 1.3;
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
-  border-radius: 7px;
-  border: 1px solid transparent;
+  border-radius: 0;
+  border: none;
   position: relative;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  transition: background 0.12s ease;
 }
 .tree-node:hover {
-  background: color-mix(in srgb, var(--bg-hover) 72%, transparent);
-  border-color: color-mix(in srgb, var(--border-color) 85%, transparent);
+  background: var(--bg-hover);
 }
 .tree-node.selected {
-  background: color-mix(in srgb, var(--accent) 18%, var(--bg-active));
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--border-color));
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--bg-active);
+  color: var(--text-primary);
 }
 
 .tree-node.ancestor {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 18%, transparent);
+  background: transparent;
+  color: var(--text-primary);
 }
-.tree-node .icon { margin-right: 2px; flex-shrink: 0; width: 14px; text-align: center; font-size: 12px; }
+.tree-node .icon { margin-right: 2px; flex-shrink: 0; width: 14px; text-align: center; font-size: 12px; color: var(--text-secondary); }
 .tree-node-label {
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: 500;
+  font-weight: 400;
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -376,103 +363,94 @@ body {
   padding: 0 6px;
   height: 15px;
   line-height: 15px;
-  border-radius: 999px;
+  border-radius: 3px;
   font-size: 9.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--text-secondary);
-  background: color-mix(in srgb, var(--bg-tertiary) 72%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
+  background: transparent;
+  border: none;
 }
 
-/* Root configuration rows get a richer card treatment */
+/* Root configuration rows — subtle, no card */
 .tree-node[data-depth="0"] {
-  margin: 4px 6px;
-  padding: 6px 8px 6px 10px;
-  border-radius: 9px;
-  font-size: 12.5px;
-  font-weight: 500;
-  border-color: color-mix(in srgb, var(--border-color) 55%, transparent);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--border-color) 40%, transparent);
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 0;
+  font-size: 12px;
+  font-weight: 600;
+  border-color: transparent;
+  box-shadow: none;
 }
 .tree-node[data-depth="0"] .tree-chevron {
   opacity: 0.7;
 }
 .tree-node[data-depth="0"]:hover {
-  transform: translateX(1px);
+  transform: none;
 }
 
 
 
-/* Accent classes: child rows inherit neutral look; kind-pill keeps semantic colour */
+/* Accent classes: only the kind-pill label gets a subtle colour hint */
 .tree-node-accent-model .tree-node-kind-pill {
   color: var(--surface-info-fg);
-  background: color-mix(in srgb, var(--surface-info-bg) 55%, transparent);
-  border-color: color-mix(in srgb, var(--surface-info-border) 60%, transparent);
 }
 
 .tree-node-accent-mapping .tree-node-kind-pill {
   color: var(--surface-success-fg);
-  background: color-mix(in srgb, var(--surface-success-bg) 55%, transparent);
-  border-color: color-mix(in srgb, var(--surface-success-border) 60%, transparent);
 }
 
 .tree-node-accent-format .tree-node-kind-pill {
   color: var(--surface-warning-fg);
-  background: color-mix(in srgb, var(--surface-warning-bg) 60%, transparent);
-  border-color: color-mix(in srgb, var(--surface-warning-border) 60%, transparent);
 }
 
-/* Root configuration card — neutral surface with thin coloured left bar */
+/* Root rows: no tinted background — neutral like VS Code tree */
 .tree-node[data-depth="0"].tree-node-accent-model,
 .tree-node[data-depth="0"].tree-node-accent-mapping,
 .tree-node[data-depth="0"].tree-node-accent-format {
-  background: color-mix(in srgb, var(--bg-tertiary) 45%, transparent);
-  border-color: color-mix(in srgb, var(--border-color) 70%, transparent);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .tree-node[data-depth="0"].tree-node-accent-model:hover,
 .tree-node[data-depth="0"].tree-node-accent-mapping:hover,
 .tree-node[data-depth="0"].tree-node-accent-format:hover {
-  background: color-mix(in srgb, var(--bg-tertiary) 75%, var(--bg-hover));
-  border-color: color-mix(in srgb, var(--border-color) 95%, transparent);
+  background: var(--bg-hover);
+  border-color: transparent;
 }
 
-.tree-node[data-depth="0"].tree-node-accent-model {
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--surface-info-fg) 72%, transparent);
-}
-.tree-node[data-depth="0"].tree-node-accent-mapping {
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--surface-success-fg) 72%, transparent);
-}
+.tree-node[data-depth="0"].tree-node-accent-model,
+.tree-node[data-depth="0"].tree-node-accent-mapping,
 .tree-node[data-depth="0"].tree-node-accent-format {
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--surface-warning-fg) 72%, transparent);
+  box-shadow: none;
 }
 
 .tree-node.selected.tree-node-accent-model,
 .tree-node.selected.tree-node-accent-mapping,
 .tree-node.selected.tree-node-accent-format {
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow: none;
 }
 
 .tree-node.ancestor.tree-node-accent-model,
 .tree-node.ancestor.tree-node-accent-mapping,
 .tree-node.ancestor.tree-node-accent-format {
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 58%, transparent);
+  box-shadow: none;
 }
 
 .explorer-tree-shell {
   height: 100%;
-  padding: 4px 0 10px;
+  padding: 2px 0 10px;
   font-size: 12px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-tertiary) 32%, transparent), transparent 20%);
+  background: transparent;
 }
 
 .explorer-kind-group {
-  margin: 0 6px 6px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--border-color) 65%, transparent);
-  background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
+  margin: 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
   overflow: hidden;
 }
 
@@ -480,12 +458,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
+  padding: 6px 12px 2px;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+  border-bottom: none;
+  color: var(--text-secondary);
 }
 
 .explorer-kind-group-count {
@@ -493,8 +472,9 @@ body {
   height: 15px;
   line-height: 15px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--bg-tertiary) 80%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
   font-size: 9.5px;
   font-variant-numeric: tabular-nums;
 }
@@ -577,14 +557,14 @@ body {
   display: flex;
   align-items: center;
   padding: 0 14px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-tertiary) 80%, transparent), var(--bg-secondary));
+  background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   font-weight: 700;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--text-secondary);
-  min-height: 40px;
+  min-height: 36px;
   user-select: none;
 }
 
@@ -609,13 +589,12 @@ body {
   gap: 6px;
   align-items: center;
   padding: 6px 8px;
-  margin-bottom: 6px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 65%, transparent);
-  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
   position: sticky;
   top: 0;
   z-index: 2;
-  backdrop-filter: blur(8px);
 }
 
 .config-explorer-toolbar {
@@ -725,16 +704,16 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-secondary) 84%, transparent), var(--bg-primary));
+  background: var(--bg-primary);
 }
 
 .focused-node-tab-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 14px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-color);
-  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  background: var(--bg-secondary);
 }
 
 .focused-node-tab-icon {
@@ -985,23 +964,21 @@ body {
 
 .search-result-card {
   padding: 8px 10px;
-  background: var(--bg-tertiary);
-  margin-bottom: 4px;
-  border-radius: 6px;
+  background: transparent;
+  margin-bottom: 2px;
+  border-radius: 4px;
   font-size: 11px;
-  border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
-  border-left: 3px solid color-mix(in srgb, var(--accent) 55%, var(--border-color));
-  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
+  transition: background 0.12s ease, border-color 0.12s ease;
   min-width: 0;
   overflow: hidden;
 }
 
 .search-result-card:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--border-color));
+  border-color: var(--border-color);
   border-left-color: var(--accent);
-  background: color-mix(in srgb, var(--bg-hover) 74%, var(--bg-tertiary));
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--shadow-color) 16%, transparent);
+  background: var(--bg-hover);
 }
 
 .search-result-header {
@@ -1645,22 +1622,7 @@ body {
   background: var(--accent);
 }
 
-/* ─── Clickable Path Tooltips ─── */
-.path-tooltip {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  padding: 6px 10px;
-  font-size: 11px;
-  color: var(--text-primary);
-  font-family: 'Segoe UI', sans-serif;
-  max-width: 400px;
-  white-space: pre-wrap;
-  box-shadow: 0 4px 12px var(--shadow-color);
-  pointer-events: none;
-  line-height: 1.5;
-}
-
+/* ─── Clickable Path ─── */
 .clickable-path-segment:hover {
   color: var(--text-primary) !important;
   text-decoration-style: solid !important;
@@ -6203,4 +6165,15 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+/* ─── Dialog / popup backdrop blur ─── */
+/* Fluent UI v9 renders the modal overlay via DialogSurface::before.
+   Apply a subtle blur so the app behind a dialog (Command Palette,
+   Drill-down, etc.) feels visually receded. */
+[class*="fui-DialogSurface"]::before {
+  backdrop-filter: blur(6px) saturate(0.9);
+  -webkit-backdrop-filter: blur(6px) saturate(0.9);
+  background-color: color-mix(in srgb, var(--bg-primary) 35%, transparent) !important;
+  transition: backdrop-filter 160ms ease, background-color 160ms ease;
 }

@@ -876,7 +876,7 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
       >
         {children}
       </span>
-      <Dialog open={isDialogOpen} onOpenChange={(_, d) => setIsDialogOpen(d.open)} modalType="non-modal">
+      <Dialog open={isDialogOpen} onOpenChange={(_, d) => setIsDialogOpen(d.open)} modalType="modal">
         <DialogSurface className="dd-dialog-surface">
           <DialogBody>
             <DialogTitle
