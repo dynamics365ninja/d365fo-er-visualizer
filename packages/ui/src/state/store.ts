@@ -524,7 +524,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const config = parseERConfiguration(xml, filePath);
       const state = get();
-      const newConfigs = [...state.configurations, config];
+      // Deduplicate by filePath: if the same synthetic/real path is loaded
+      // again (e.g. user clicks "Load selected" twice on the same config,
+      // or reloads from F&O), replace the previous entry instead of adding
+      // a duplicate. Prevents React "two children with the same key"
+      // warnings and keeps the tree view tidy.
+      const existingIdx = state.configurations.findIndex(c => c.filePath === filePath);
+      const newConfigs = existingIdx >= 0
+        ? state.configurations.map((c, i) => (i === existingIdx ? config : c))
+        : [...state.configurations, config];
 
       const { registry, treeNodes, warnings } = buildDerivedState(newConfigs);
 
@@ -578,6 +586,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
     } catch (e) {
       console.error('Failed to parse ER configuration:', e);
+      // Dump the first 500 chars of the payload + its top-level element
+      // name so we can understand what shape the backend returned when
+      // the parser rejects it. Helpful for F&O custom-service downloads
+      // that may not wrap content in `<ERSolutionVersion>`.
+      const preview = typeof xml === 'string' ? xml.slice(0, 500) : String(xml);
+      const rootMatch = typeof xml === 'string'
+        ? /<\s*([A-Za-z_][\w:-]*)[\s>/]/.exec(xml.replace(/^\uFEFF/, '').replace(/^<\?xml[^?]*\?>\s*/, ''))
+        : null;
+      console.warn('[store] loadXmlFile parse failure', {
+        filePath,
+        xmlLength: typeof xml === 'string' ? xml.length : 0,
+        rootElement: rootMatch?.[1] ?? '<unknown>',
+        preview,
+      });
       // Surface as a toast instead of letting a window error propagate.
       const message = e instanceof Error ? e.message : String(e);
       const fileName = filePath.split(/[\\/]/).pop() ?? filePath;

@@ -26,6 +26,14 @@ export interface ErSolutionSummary {
   version?: string;
   /** Display name for the solution, if distinct from `solutionName`. */
   displayName?: string;
+  /**
+   * Component type of this tree node, when known. On F&O the same
+   * `ERSolutionTable` row represents both "solutions" and individual
+   * configurations — the `ComponentType` column distinguishes them.
+   * We surface this so UI code can filter (e.g. show only DataModel
+   * roots in the left panel).
+   */
+  componentType?: ErComponentType;
 }
 
 export type ErComponentType = 'DataModel' | 'ModelMapping' | 'Format' | 'Unknown';
@@ -47,6 +55,41 @@ export interface ErConfigSummary {
   countryRegion?: string;
   /** Whether the component has downstream XML content available. */
   hasContent: boolean;
+  /**
+   * Whether this node has children in the ER hierarchy. UI uses this
+   * to show drill-in affordance. Populated from `DerivedSolutions`.
+   */
+  hasChildren?: boolean;
+  /**
+   * GUID of the owning/parent DataModel. Populated when the component
+   * is discovered as a descendant of a DataModel node in the ER tree.
+   * Required by F&O's `GetModelMappingByID` (which expects
+   * `_dataModelGuid` alongside the mapping id) and useful for
+   * `GetDataModelByIDAndRevision` when the component itself is a
+   * derived DataModel.
+   */
+  parentDataModelGuid?: string;
+  /** Owning DataModel's revision GUID, when known (sibling of above). */
+  parentDataModelRevisionGuid?: string;
+  /**
+   * All known numeric revision numbers reported by F&O's
+   * `getFormatSolutionsSubHierarchy` in the component's `Versions[]`
+   * array. Used by `GetDataModelByIDAndRevision` (and siblings) which
+   * need a *specific* integer revision — picking just the max fails
+   * for configurations whose XML was authored on an earlier revision
+   * while later ones are empty pointers. The downloader tries them
+   * high → low.
+   */
+  versionNumbers?: number[];
+  /**
+   * Ordered list of DataModel configurationGuids that make up the
+   * ancestor chain for this component. The root of the ER tree comes
+   * first; the nearest parent DataModel comes last. Populated by the
+   * UI during drill navigation so `handleLoadSelected` can auto-queue
+   * every model the Format / Mapping was nested under — without that,
+   * derived-model references in the bindings resolve to nothing.
+   */
+  ancestorDataModelGuids?: string[];
 }
 
 /** Result of downloading a configuration XML. */
@@ -57,6 +100,22 @@ export interface ErConfigDownload {
   syntheticPath: string;
   /** The source config metadata for UI feedback. */
   source: ErConfigSummary;
+  /**
+   * GUIDs of any DataModel(s) referenced from inside the downloaded
+   * XML — e.g. `ERFormatMapping.Model` or `ERModelMapping.Model`
+   * attribute. When `getFormatSolutionsSubHierarchy` didn't expose a
+   * real DataModel GUID (returns zero placeholder for ModelMapping /
+   * derived DataModel rows), these are the only way we can follow-up
+   * with `GetDataModelByIDAndRevision` to fetch the model tree.
+   */
+  referencedDataModelGuids?: string[];
+  /**
+   * Highest revision number referenced from inside the downloaded XML
+   * (e.g. `ERFormatMapping.ModelVersion = "{guid},42"`). Pairs with
+   * `referencedDataModelGuids` so the caller can pass a specific
+   * revision to `GetDataModelByIDAndRevision`.
+   */
+  referencedDataModelRevisions?: Record<string, number>;
 }
 
 /** A successfully acquired token, valid for an envUrl. */
@@ -87,6 +146,17 @@ export interface FnoTransport {
    * Throws `FnoHttpError` on non-2xx.
    */
   getBinary(url: string, token: string, signal?: AbortSignal): Promise<ArrayBuffer>;
+  /**
+   * POST a JSON body and parse the JSON response. Used for F&O custom
+   * services (`/api/services/<group>/<service>/<operation>`). Throws
+   * `FnoHttpError` on non-2xx.
+   */
+  postJson<T = unknown>(
+    url: string,
+    token: string,
+    body: unknown,
+    signal?: AbortSignal,
+  ): Promise<T>;
 }
 
 /** Auth provider abstraction — token acquisition per host. */
@@ -117,6 +187,21 @@ export class FnoSourceUnsupportedError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'FnoSourceUnsupportedError';
+  }
+}
+
+/**
+ * Raised when F&O accepts the download request syntactically (HTTP 200)
+ * but returns an empty body. Typical for derived DataModel components
+ * that have no XML of their own — they inherit everything from the
+ * base model. Callers can treat this distinctly from a real failure
+ * (e.g. silently skip auto-included root models that turn out to be
+ * derived, or show an info message instead of an error).
+ */
+export class FnoEmptyContentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FnoEmptyContentError';
   }
 }
 

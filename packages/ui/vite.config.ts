@@ -9,6 +9,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@er-visualizer/core': path.resolve(__dirname, '../core/src/index.ts'),
+      '@er-visualizer/fno-client': path.resolve(__dirname, '../fno-client/src/index.ts'),
     },
   },
   build: {

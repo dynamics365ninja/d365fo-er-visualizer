@@ -26,6 +26,17 @@ const useStyles = makeStyles({
   item: {
     pointerEvents: 'auto',
     boxShadow: tokens.shadow16,
+    minWidth: 0,
+    maxWidth: '100%',
+    overflow: 'hidden',
+  },
+  body: {
+    minWidth: 0,
+    wordBreak: 'break-word',
+    overflowWrap: 'anywhere',
+    whiteSpace: 'pre-wrap',
+    maxHeight: '40vh',
+    overflowY: 'auto',
   },
 });
 
@@ -58,7 +69,7 @@ export function ToastHost() {
           className={styles.item}
           layout="multiline"
         >
-          <MessageBarBody>{toast.message}</MessageBarBody>
+          <MessageBarBody className={styles.body}>{toast.message}</MessageBarBody>
           <MessageBarActions
             containerAction={
               <Button

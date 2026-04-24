@@ -8,6 +8,12 @@ export interface ElectronFnoRequest {
   token: string;
   responseType: 'json' | 'binary';
   timeoutMs?: number;
+  /** HTTP method. Defaults to 'GET' on the main side. */
+  method?: 'GET' | 'POST';
+  /** Pre-serialized request body (e.g. JSON string). Ignored for GET. */
+  body?: string;
+  /** Content-Type header for the request body. */
+  contentType?: string;
 }
 
 export interface ElectronFnoResponse {

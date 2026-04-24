@@ -62,9 +62,13 @@ export const fnoSession = {
     return getAuthProvider().getAccount(conn);
   },
 
-  async listSolutions(conn: FnoConnection, signal?: AbortSignal): Promise<ErSolutionSummary[]> {
+  async listSolutions(
+    conn: FnoConnection,
+    signal?: AbortSignal,
+    options?: { extraRoots?: readonly string[] },
+  ): Promise<ErSolutionSummary[]> {
     const auth = await ensureToken(conn, signal);
-    return listSolutions(transport(), conn, auth.accessToken, signal);
+    return listSolutions(transport(), conn, auth.accessToken, signal, options);
   },
 
   async listComponents(
