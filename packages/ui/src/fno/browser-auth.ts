@@ -66,6 +66,29 @@ function accountToDomain(a: AccountInfo): AuthAccount {
   };
 }
 
+function buildSignInErrorMessage(err: unknown): string {
+  const raw =
+    err instanceof Error
+      ? err.message
+      : typeof err === 'string'
+        ? err
+        : '';
+  const origin = typeof window !== 'undefined' ? window.location.origin : '<unknown>';
+  const looksLikeCors =
+    /post_request_failed|Network request failed|CORS|Failed to fetch|NetworkError/i.test(raw);
+  if (looksLikeCors) {
+    return (
+      `Sign-in failed: the Microsoft identity endpoint blocked the token request (CORS).\n` +
+      `Register this exact redirect URI as a Single-page application (SPA) in the Azure App registration:\n` +
+      `    ${origin}\n` +
+      `Azure Portal → App registrations → Authentication → Add a platform → Single-page application.\n` +
+      `The URI must match exactly (no trailing slash) and must NOT also be listed under the "Web" platform.\n` +
+      `Note: each Vercel preview deployment has its own hostname and must be registered separately.`
+    );
+  }
+  return raw ? `Sign-in failed: ${raw}` : 'Sign-in failed';
+}
+
 export class BrowserAuthProvider implements AuthProvider {
   async acquireToken(conn: FnoConnection): Promise<AuthResult> {
     const app = await getOrCreate(conn);
@@ -85,7 +108,7 @@ export class BrowserAuthProvider implements AuthProvider {
       const popup = await app.acquireTokenPopup({ scopes, prompt: 'select_account' });
       return resultToAuth(popup, conn.envUrl);
     } catch (err) {
-      throw new FnoAuthError('Sign-in failed', err);
+      throw new FnoAuthError(buildSignInErrorMessage(err), err);
     }
   }
 
