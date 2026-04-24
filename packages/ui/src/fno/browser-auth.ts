@@ -74,6 +74,16 @@ function buildSignInErrorMessage(err: unknown): string {
         ? err
         : '';
   const origin = typeof window !== 'undefined' ? window.location.origin : '<unknown>';
+  const looksLikeCsp = /Content Security Policy|violates the document's Content Security/i.test(raw);
+  if (looksLikeCsp) {
+    return (
+      `Sign-in failed: the page's Content Security Policy blocked the request to Microsoft identity endpoints.\n` +
+      `Update the CSP (meta tag in index.html or response header) to allow:\n` +
+      `    connect-src https://login.microsoftonline.com https://*.dynamics.com\n` +
+      `    frame-src  https://login.microsoftonline.com\n` +
+      `    form-action https://login.microsoftonline.com`
+    );
+  }
   const looksLikeCors =
     /post_request_failed|Network request failed|CORS|Failed to fetch|NetworkError/i.test(raw);
   if (looksLikeCors) {
@@ -108,6 +118,8 @@ export class BrowserAuthProvider implements AuthProvider {
       const popup = await app.acquireTokenPopup({ scopes, prompt: 'select_account' });
       return resultToAuth(popup, conn.envUrl);
     } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[BrowserAuthProvider] acquireTokenPopup failed', err);
       throw new FnoAuthError(buildSignInErrorMessage(err), err);
     }
   }
