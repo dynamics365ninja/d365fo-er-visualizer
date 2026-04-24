@@ -40,6 +40,7 @@ import type {
   ErSolutionSummary,
   FnoConnection,
 } from '@er-visualizer/fno-client';
+import { FnoHttpError } from '@er-visualizer/fno-client';
 import { t } from '../i18n';
 import { useAppStore } from '../state/store';
 import { useFnoProfiles, newProfileId } from '../state/fno-profiles';
@@ -175,51 +176,83 @@ export const FnoConnectPanel: React.FC = () => {
     [profiles, activeProfileId],
   );
 
-  // When the active profile changes, reset dependent state.
+  // When the active profile changes, populate the editor with its values so
+  // the user can edit it in place, and reset dependent state.
   useEffect(() => {
+    const profile = profiles.find(p => p.id === activeProfileId) ?? null;
+    if (profile) {
+      setProfileName(profile.displayName);
+      setEnvUrl(profile.envUrl);
+      setTenantId(profile.tenantId);
+      setClientId(profile.clientId);
+    }
     setConnState({ kind: 'disconnected' });
     setSolutions([]);
     setActiveSolution(null);
     setComponents([]);
     setSelected(new Set());
+  // Intentionally depend only on the id — we don't want to reset the editor
+  // whenever the profiles array changes (e.g. after upsert).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProfileId]);
 
   const canSave = profileName.trim().length > 0 && envUrl.trim().length > 0 && tenantId.trim().length > 0 && clientId.trim().length > 0;
+  const isEditing = activeProfile !== null;
 
   const handleSaveProfile = useCallback(() => {
+    const base: FnoConnection = activeProfile
+      ? { ...activeProfile }
+      : { id: newProfileId(), createdAt: Date.now(), displayName: '', envUrl: '', tenantId: '', clientId: '' };
     const profile: FnoConnection = {
-      id: newProfileId(),
+      ...base,
       displayName: profileName.trim(),
       envUrl: envUrl.trim().replace(/\/+$/, ''),
       tenantId: tenantId.trim(),
       clientId: clientId.trim(),
-      createdAt: Date.now(),
     };
     upsert(profile);
     setActiveProfileId(profile.id);
+    pushToast({
+      kind: 'success',
+      message: activeProfile ? t.fnoProfileUpdated(profile.displayName) : t.fnoProfileSaved(profile.displayName),
+    });
+  }, [activeProfile, profileName, envUrl, tenantId, clientId, upsert, pushToast]);
+
+  const handleNewProfile = useCallback(() => {
+    setActiveProfileId(null);
     setProfileName('');
     setEnvUrl('');
     setTenantId('');
-  }, [profileName, envUrl, tenantId, clientId, upsert]);
+    setClientId(DEFAULT_CLIENT_ID);
+  }, []);
 
   const handleConnect = useCallback(async () => {
     if (!activeProfile) return;
     setConnState({ kind: 'connecting' });
+    // Phase 1 — sign in (MSAL).
+    let auth: Awaited<ReturnType<typeof fnoSession.signIn>>;
     try {
-      const auth = await fnoSession.signIn(activeProfile);
-      markUsed(activeProfile.id);
-      setConnState({ kind: 'connected', account: auth.account?.username ?? 'unknown' });
-      setLoadingSolutions(true);
-      try {
-        const list = await fnoSession.listSolutions(activeProfile);
-        setSolutions(list);
-      } finally {
-        setLoadingSolutions(false);
-      }
+      auth = await fnoSession.signIn(activeProfile);
     } catch (err) {
+      console.error('[fno-auth] sign-in failed', err);
       const message = explainAuthError(err);
       setConnState({ kind: 'error', message });
       pushToast({ kind: 'error', message: t.fnoSignInFailed(message) });
+      return;
+    }
+    markUsed(activeProfile.id);
+    setConnState({ kind: 'connected', account: auth.account?.username ?? 'unknown' });
+    // Phase 2 — list ER solutions via OData.
+    setLoadingSolutions(true);
+    try {
+      const list = await fnoSession.listSolutions(activeProfile);
+      setSolutions(list);
+    } catch (err) {
+      console.error('[fno-odata] listSolutions failed', err);
+      const detail = describeHttpError(err);
+      pushToast({ kind: 'error', message: t.fnoLoadingFailed(detail) });
+    } finally {
+      setLoadingSolutions(false);
     }
   }, [activeProfile, markUsed, pushToast]);
 
@@ -315,8 +348,13 @@ export const FnoConnectPanel: React.FC = () => {
       </div>
       <div>
         <Button appearance="primary" disabled={!canSave} onClick={handleSaveProfile}>
-          {t.fnoSaveProfile}
+          {isEditing ? t.fnoUpdateProfile : t.fnoSaveProfile}
         </Button>
+        {isEditing && (
+          <Button style={{ marginLeft: 8 }} onClick={handleNewProfile}>
+            {t.fnoNewProfile}
+          </Button>
+        )}
       </div>
 
       <Divider />
@@ -467,13 +505,39 @@ function componentKey(c: ErConfigSummary): string {
   return `${c.solutionName}::${c.configurationName}::${c.componentType}::${c.version ?? ''}`;
 }
 
-/**
- * Turn an MSAL / network error into a human-readable hint. The canonical
- * AADSTS codes that users hit first on F&O integration are called out by
- * name so the UI can guide them to Entra portal settings.
- */
+function describeHttpError(err: unknown): string {
+  if (err instanceof FnoHttpError) {
+    const bodyHint = (err.body ?? '').trim().split(/\r?\n/)[0]?.slice(0, 200);
+    const suffix = bodyHint ? ` — ${bodyHint}` : '';
+    if (err.status === 404) {
+      return `${err.status} ${err.message} (${err.url}). OData entita /data/ERSolutionEntity není na tomto prostředí dostupná. Ověř přesnou URL prostředí (bez /namespace) a že je ER Data management data entity povolena${suffix}`;
+    }
+    if (err.status === 401 || err.status === 403) {
+      return `${err.status} ${err.message}. Uživatel v F&O nemá oprávnění na ER OData. Přidej uživatele / roli "Electronic reporting developer" nebo "Electronic reporting functional consultant"${suffix}`;
+    }
+    return `${err.status} ${err.message} (${err.url})${suffix}`;
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
 function explainAuthError(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err);
+  // Unwrap FnoAuthError.cause so we see the *original* MSAL/IPC message.
+  const chain: string[] = [];
+  let current: unknown = err;
+  for (let i = 0; i < 5 && current; i += 1) {
+    if (current instanceof Error && current.message) chain.push(current.message);
+    const next = (current as { cause?: unknown })?.cause;
+    if (!next || next === current) break;
+    current = next;
+  }
+  // Electron wraps IPC rejections as:
+  //   "Error invoking remote method 'fno:auth:login': Error: <original>"
+  // Strip the wrapper so the user sees the real reason.
+  const cleaned = chain
+    .map(m => m.replace(/^Error invoking remote method '[^']*':\s*Error:\s*/i, ''))
+    .filter(Boolean);
+  const raw = cleaned.join(' — ') || (err instanceof Error ? err.message : String(err)) || 'Unknown error';
+
   const code = raw.match(/AADSTS(\d{4,6})/)?.[1];
   switch (code) {
     case '700016':
@@ -490,6 +554,12 @@ function explainAuthError(err: unknown): string {
     case '50076':
     case '50079':
       return `AADSTS${code}: Je vyžadováno MFA. Projdi výzvou v prohlížeči a zkus to znovu.`;
+    case '7000218':
+      return 'AADSTS7000218: App registration nemá povolené public client flows. V Entra → App registrations → Authentication zapni „Allow public client flows" = Yes.';
+    case '9002326':
+      return 'AADSTS9002326: Redirect URI je u App registration zařazené jako „Single-page application". Přesuň ho pod „Mobile and desktop applications" (http://localhost).';
+    case '50011':
+      return 'AADSTS50011: Redirect URI nesedí. V App registration → Authentication → Mobile and desktop applications přidej „http://localhost".';
     default:
       return code ? `AADSTS${code}: ${raw}` : raw;
   }

@@ -262,6 +262,8 @@ export interface Translations {
   fnoTenantId: string;
   fnoClientId: string;
   fnoSaveProfile: string;
+  fnoUpdateProfile: string;
+  fnoNewProfile: string;
   fnoConnect: string;
   fnoDisconnect: string;
   fnoConnecting: string;
@@ -278,6 +280,8 @@ export interface Translations {
   fnoFilterByType: string;
   fnoAllTypes: string;
   fnoSignInFailed: (msg: string) => string;
+  fnoProfileSaved: (name: string) => string;
+  fnoProfileUpdated: (name: string) => string;
   fnoLoadingFailed: (msg: string) => string;
   fnoDownloadFailed: (name: string, msg: string) => string;
   fnoLoadedCount: (n: number) => string;
@@ -543,6 +547,8 @@ const cs: Translations = {
   fnoTenantId: 'Tenant ID (Entra)',
   fnoClientId: 'Application (client) ID',
   fnoSaveProfile: 'Uložit profil',
+  fnoUpdateProfile: 'Uložit změny',
+  fnoNewProfile: 'Nový profil',
   fnoConnect: 'Připojit',
   fnoDisconnect: 'Odpojit',
   fnoConnecting: 'Připojuji…',
@@ -559,6 +565,8 @@ const cs: Translations = {
   fnoFilterByType: 'Typ komponenty',
   fnoAllTypes: 'Všechny',
   fnoSignInFailed: (msg: string) => `Přihlášení selhalo: ${msg}`,
+  fnoProfileSaved: (name: string) => `Profil „${name}" uložen.`,
+  fnoProfileUpdated: (name: string) => `Profil „${name}" aktualizován.`,
   fnoLoadingFailed: (msg: string) => `Načítání selhalo: ${msg}`,
   fnoDownloadFailed: (name: string, msg: string) => `Stažení „${name}" selhalo: ${msg}`,
   fnoLoadedCount: (n: number) => `Načteno ${n} konfigurací z F&O.`,
@@ -816,6 +824,8 @@ const en: Translations = {
   fnoTenantId: 'Tenant ID (Entra)',
   fnoClientId: 'Application (client) ID',
   fnoSaveProfile: 'Save profile',
+  fnoUpdateProfile: 'Save changes',
+  fnoNewProfile: 'New profile',
   fnoConnect: 'Connect',
   fnoDisconnect: 'Disconnect',
   fnoConnecting: 'Connecting…',
@@ -832,6 +842,8 @@ const en: Translations = {
   fnoFilterByType: 'Component type',
   fnoAllTypes: 'All',
   fnoSignInFailed: (msg: string) => `Sign-in failed: ${msg}`,
+  fnoProfileSaved: (name: string) => `Profile "${name}" saved.`,
+  fnoProfileUpdated: (name: string) => `Profile "${name}" updated.`,
   fnoLoadingFailed: (msg: string) => `Loading failed: ${msg}`,
   fnoDownloadFailed: (name: string, msg: string) => `Download of "${name}" failed: ${msg}`,
   fnoLoadedCount: (n: number) => `Loaded ${n} configuration${n === 1 ? '' : 's'} from F&O.`,

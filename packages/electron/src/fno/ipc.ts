@@ -232,15 +232,42 @@ async function login(conn: FnoConnection): Promise<FnoAuthResult> {
       state,
       prompt: 'select_account',
     });
-    await shell.openExternal(authUrl);
-    const { code } = await listener.waitForCode(state);
-    const tokenResult = await msal.acquireTokenByCode({
-      code,
-      scopes: [scope],
+    console.info('[fno-auth] login starting', {
+      tenantId: conn.tenantId,
+      clientId: conn.clientId,
+      scope,
       redirectUri: listener.redirectUri,
     });
-    if (!tokenResult) throw new Error('MSAL returned no token');
-    return toAuthResult(tokenResult, conn.envUrl);
+    await shell.openExternal(authUrl);
+    const { code } = await listener.waitForCode(state);
+    try {
+      const tokenResult = await msal.acquireTokenByCode({
+        code,
+        scopes: [scope],
+        redirectUri: listener.redirectUri,
+      });
+      if (!tokenResult) throw new Error('MSAL returned no token');
+      return toAuthResult(tokenResult, conn.envUrl);
+    } catch (err) {
+      // MSAL errors carry useful fields (errorCode, errorMessage, correlationId).
+      // Surface them to the renderer so the UI can show a real reason.
+      const e = err as {
+        errorCode?: string;
+        errorMessage?: string;
+        subError?: string;
+        correlationId?: string;
+        message?: string;
+      };
+      console.error('[fno-auth] acquireTokenByCode failed', {
+        errorCode: e?.errorCode,
+        subError: e?.subError,
+        correlationId: e?.correlationId,
+        message: e?.errorMessage ?? e?.message,
+      });
+      const reason = e?.errorMessage || e?.message || 'Unknown error';
+      const code2 = e?.errorCode ? ` [${e.errorCode}]` : '';
+      throw new Error(`Token exchange failed${code2}: ${reason}`);
+    }
   } finally {
     listener.close();
   }
