@@ -39,6 +39,18 @@ interface FnoRequestPayload {
   token: string;
   responseType: 'json' | 'binary';
   timeoutMs?: number;
+  /** HTTP method. Defaults to 'GET'. */
+  method?: 'GET' | 'POST';
+  /**
+   * Request body as a pre-serialized string. Pair with a matching
+   * `contentType` header. Ignored for GET.
+   */
+  body?: string;
+  /**
+   * Content-Type header for the request body. Defaults to
+   * `application/json; charset=utf-8` when a body is present.
+   */
+  contentType?: string;
 }
 
 interface FnoResponsePayload {
@@ -328,13 +340,18 @@ function toAuthResult(r: { accessToken: string; expiresOn: Date | null; account:
 
 async function fnoRequest(payload: FnoRequestPayload): Promise<FnoResponsePayload> {
   return new Promise((resolve, reject) => {
+    const method = payload.method ?? 'GET';
+    const hasBody = method !== 'GET' && typeof payload.body === 'string';
     const request = net.request({
-      method: 'GET',
+      method,
       url: payload.url,
       redirect: 'follow',
     });
     request.setHeader('Authorization', `Bearer ${payload.token}`);
     request.setHeader('Accept', payload.responseType === 'json' ? 'application/json' : 'application/octet-stream, */*');
+    if (hasBody) {
+      request.setHeader('Content-Type', payload.contentType ?? 'application/json; charset=utf-8');
+    }
     const timeout = setTimeout(() => {
       request.abort();
       reject(new Error(`Request timed out after ${payload.timeoutMs ?? 60000}ms: ${payload.url}`));
@@ -380,6 +397,9 @@ async function fnoRequest(payload: FnoRequestPayload): Promise<FnoResponsePayloa
       clearTimeout(timeout);
       reject(err);
     });
+    if (hasBody) {
+      request.write(payload.body as string, 'utf-8');
+    }
     request.end();
   });
 }

@@ -142,13 +142,248 @@ function sanitizeAndDecode(obj: any): any {
 
 // ─── Public API ───
 
+/**
+ * Names of ER content roots that F&O's custom-service XML endpoints
+ * (`GetEffectiveFormatMappingByID`, `GetModelMappingByID`,
+ * `GetDataModelByIDAndRevision`) may return **without** the enclosing
+ * `<ERSolutionVersion>` envelope. When we detect one of these at the
+ * top level we synthesize a minimal envelope so the existing parser
+ * pipeline can proceed.
+ *
+ * Two tiers:
+ *  - **Version-level** roots live directly under `Contents.` in the
+ *    envelope (e.g. `ERFormatVersion`).
+ *  - **Inner** roots live deeper (e.g. `ERTextFormat` lives under
+ *    `ERFormatVersion > Format`). F&O `GetEffectiveFormatMappingByID`
+ *    confirmed on EU sandbox returns a bare `ERTextFormat` root.
+ */
+const BARE_VERSION_ROOTS = new Set([
+  'ERFormatMappingVersion',
+  'ERFormatVersion',
+  'ERModelMappingVersion',
+  'ERDataModelVersion',
+]);
+
+/** Empty `ERFormatMappingVersion` used when only the format side was returned. */
+function emptyFormatMappingVersion(): Record<string, unknown> {
+  return {
+    '@_DateTime': '',
+    '@_Description': '',
+    '@_Number': '0',
+    '@_ID.': '00000000-0000-0000-0000-000000000000,0',
+    Mapping: {
+      ERFormatMapping: {
+        '@_ID.': '',
+        '@_Name': '',
+        '@_Format': '',
+        '@_FormatVersion': '',
+        Binding: { ERFormatBinding: {} },
+        Datasource: {},
+      },
+    },
+  };
+}
+
+/**
+ * Wrap a bare content node in a synthetic `ERSolutionVersion` envelope
+ * so `parseSolutionVersion` + `detectComponentKind` can run unchanged.
+ * Attribute names mirror F&O's exported XML.
+ *
+ * Returns null when nothing recognizable is at the top level.
+ */
+function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> | null {
+  const contents: Record<string, unknown> = Object.create(null);
+
+  // Tier 1 — Version-level roots: insert as-is.
+  for (const [key, value] of Object.entries(doc)) {
+    if (BARE_VERSION_ROOTS.has(key)) contents[key] = value;
+  }
+
+  // Tier 2 — Inner content roots. Each needs to be rewrapped in the
+  // corresponding `*Version` node at the correct depth. `ERTextFormat`
+  // additionally requires a stub `ERFormatMappingVersion` so the
+  // "Format requires both halves" check in `detectComponentKind`
+  // still passes — but only if the response doesn't also include a
+  // real `ERFormatMapping` (F&O's `GetEffectiveFormatMappingByID`
+  // returns both halves as separate fragments inside the same bundle;
+  // stubbing first would shadow the real one and drop every binding).
+  if (!contents['ERFormatVersion'] && doc['ERTextFormat']) {
+    contents['ERFormatVersion'] = {
+      '@_DateTime': '',
+      '@_Description': '',
+      '@_Number': '0',
+      '@_ID.': '00000000-0000-0000-0000-000000000000,0',
+      Format: { ERTextFormat: doc['ERTextFormat'] },
+    };
+  }
+  if (!contents['ERFormatMappingVersion'] && doc['ERFormatMapping']) {
+    contents['ERFormatMappingVersion'] = {
+      '@_DateTime': '',
+      '@_Description': '',
+      '@_Number': '0',
+      '@_ID.': '00000000-0000-0000-0000-000000000000,0',
+      Mapping: { ERFormatMapping: doc['ERFormatMapping'] },
+    };
+  }
+  // Only stub an empty mapping half when the response carried a
+  // format grammar but no mapping fragment at all.
+  if (contents['ERFormatVersion'] && !contents['ERFormatMappingVersion']) {
+    contents['ERFormatMappingVersion'] = emptyFormatMappingVersion();
+  }
+  if (!contents['ERDataModelVersion'] && doc['ERModelDefinition']) {
+    contents['ERDataModelVersion'] = {
+      '@_DateTime': '',
+      '@_Description': '',
+      '@_Number': '0',
+      '@_ID.': '00000000-0000-0000-0000-000000000000,0',
+      Model: { ERDataModel: doc['ERModelDefinition'] },
+    };
+  }
+  // F&O `GetDataModelByIDAndRevision` on ac365lab-factory (2026-04)
+  // returns the data model under a bare `ERDataModel` root (rather
+  // than `ERModelDefinition`). Treat them as equivalent.
+  if (!contents['ERDataModelVersion'] && doc['ERDataModel']) {
+    contents['ERDataModelVersion'] = {
+      '@_DateTime': '',
+      '@_Description': '',
+      '@_Number': '0',
+      '@_ID.': '00000000-0000-0000-0000-000000000000,0',
+      Model: { ERDataModel: doc['ERDataModel'] },
+    };
+  }
+  if (!contents['ERModelMappingVersion'] && doc['ERModelMapping']) {
+    contents['ERModelMappingVersion'] = {
+      '@_DateTime': '',
+      '@_Description': '',
+      '@_Number': '0',
+      '@_ID.': '00000000-0000-0000-0000-000000000000,0',
+      Mapping: { ERModelMapping: doc['ERModelMapping'] },
+    };
+  }
+
+  if (Object.keys(contents).length === 0) return null;
+
+  // Aggregate every ERClassList fragment in the bundle into a single
+  // merged ERLabel array. F&O's `GetEffectiveFormatMappingByID` returns
+  // the label dictionary as *separate* ERClassList documents (one per
+  // language pack), and without them `resolveLabel` has no translations
+  // to map `@GER_LABEL:Foo` references to human-readable text, so all
+  // names in the visualizer come out empty.
+  const aggregatedLabels: unknown[] = [];
+  const classLists = (doc as Record<string, unknown>)['ERClassList'];
+  for (const cl of Array.isArray(classLists) ? classLists : classLists ? [classLists] : []) {
+    if (!cl || typeof cl !== 'object') continue;
+    // Each ERClassList has either `Contents.` or `Contents` holding the
+    // ERLabel array.
+    const clContents =
+      (cl as Record<string, unknown>)['Contents.'] ??
+      (cl as Record<string, unknown>)['Contents'];
+    if (!clContents || typeof clContents !== 'object') continue;
+    const labels = (clContents as Record<string, unknown>)['ERLabel'];
+    if (!labels) continue;
+    for (const lbl of Array.isArray(labels) ? labels : [labels]) {
+      aggregatedLabels.push(lbl);
+    }
+  }
+
+  // Surface the component's *own* Name / Description onto the
+  // synthetic `ERSolution` so the UI tab title and designer header
+  // don't come out blank. F&O's custom services return only the
+  // inner content (ERTextFormat / ERFormatMapping / ERModelDefinition
+  // / ERModelMapping) without the enclosing solution envelope, so we
+  // pick the name from whichever fragment is present — preferring
+  // the entity-level roots over the version wrappers (which carry
+  // only DateTime/Description).
+  const nameHintSources: (string | undefined)[] = [
+    (doc['ERTextFormat'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
+    (doc['ERFormatMapping'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
+    (doc['ERModelDefinition'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
+    (doc['ERDataModel'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
+    (doc['ERModelMapping'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
+    // Fallback: a hint placed on the bundle wrapper by the transport.
+    (doc['@_Name'] as string | undefined),
+  ];
+  const solutionName = nameHintSources.find(s => typeof s === 'string' && s.length > 0) ?? '';
+  const descHintSources: (string | undefined)[] = [
+    (doc['ERTextFormat'] as Record<string, unknown> | undefined)?.['@_Description'] as string | undefined,
+    (doc['ERFormatMapping'] as Record<string, unknown> | undefined)?.['@_Description'] as string | undefined,
+    (doc['ERModelDefinition'] as Record<string, unknown> | undefined)?.['@_Description'] as string | undefined,
+    (doc['ERDataModel'] as Record<string, unknown> | undefined)?.['@_Description'] as string | undefined,
+    (doc['ERModelMapping'] as Record<string, unknown> | undefined)?.['@_Description'] as string | undefined,
+    (doc['@_Description'] as string | undefined),
+  ];
+  const solutionDesc = descHintSources.find(s => typeof s === 'string' && s.length > 0) ?? '';
+
+  // Minimal `ERSolutionVersion` envelope. Fields default to empty;
+  // `parseSolutionVersion` tolerates missing attrs / ERSolution via its
+  // `?? ''` / `?? '0'` fallbacks (except `Missing ERSolution element`,
+  // so we inject a bare `ERSolution` too).
+  return {
+    ERSolutionVersion: {
+      '@_DateTime': '',
+      '@_Description': solutionDesc,
+      '@_Number': '0',
+      '@_PublicVersionNumber': '',
+      '@_VersionStatus': '0',
+      Solution: {
+        ERSolution: {
+          '@_ID.': '',
+          '@_Name': solutionName,
+          '@_Description': solutionDesc,
+          Contents: { 'Ref.': [] },
+          Labels: {
+            ERClassList: {
+              Contents: { ERLabel: aggregatedLabels },
+            },
+          },
+          Vendor: { ERVendor: { '@_Name': '', '@_Url': '' } },
+        },
+      },
+      Contents: contents,
+      Prerequisites: undefined,
+    },
+  };
+}
+
 export function parseERConfiguration(xml: string, filePath: string): ERConfiguration {
   const parser = createParser();
   const rawDoc = parser.parse(xml);
   const doc = sanitizeAndDecode(rawDoc);
-  const root = doc['ERSolutionVersion'];
+  let root = (doc as Record<string, unknown>)['ERSolutionVersion'];
   if (!root) {
-    throw new Error('Invalid ER configuration XML: missing ERSolutionVersion root element');
+    // F&O custom-service downloads (GetEffectiveFormatMappingByID etc.)
+    // can return a bare content node without the ERSolutionVersion
+    // envelope. The `fno-client` transport wraps multi-fragment
+    // responses in a synthetic `<ErFnoBundle>` wrapper, so unwrap that
+    // first, then fall back to plain bare-content detection.
+    const bundleNode = (doc as Record<string, unknown>)['ErFnoBundle'];
+    const sourceDoc = (bundleNode && typeof bundleNode === 'object'
+      ? (bundleNode as Record<string, unknown>)
+      : (doc as Record<string, unknown>));
+    const wrapped = wrapBareContent(sourceDoc);
+    if (wrapped) {
+      root = wrapped.ERSolutionVersion;
+    }
+  }
+  if (!root) {
+    // Surface the raw XML preview so the operator can see what shape
+    // the backend actually returned (F&O custom services can return
+    // odd envelopes). The warn is cheap and only fires on the error
+    // path, so it's safe to ship.
+    const topLevelKeys = Object.keys(doc as Record<string, unknown>);
+    const preview = xml.slice(0, 600);
+    // eslint-disable-next-line no-console
+    console.warn('[er-parser] missing ERSolutionVersion root', {
+      filePath,
+      topLevelKeys,
+      xmlLength: xml.length,
+      preview,
+    });
+    throw new Error(
+      `Invalid ER configuration XML: missing ERSolutionVersion root element. ` +
+        `Got top-level elements [${topLevelKeys.join(', ') || '<none>'}] in a ${xml.length}-char payload. ` +
+        `See DevTools Console "[er-parser]" for a 600-char preview.`,
+    );
   }
 
   const solutionVersion = parseSolutionVersion(root);

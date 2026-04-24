@@ -32,6 +32,26 @@ class ElectronFnoTransport implements FnoTransport {
     }
     return base64ToArrayBuffer(res.binaryBase64 ?? '');
   }
+
+  async postJson<T = unknown>(url: string, token: string, body: unknown, signal?: AbortSignal): Promise<T> {
+    const api = getElectronApi();
+    if (!api?.fnoRequest) throw new Error('Electron IPC not available');
+    signal?.throwIfAborted?.();
+    const res = await api.fnoRequest({
+      url,
+      token,
+      method: 'POST',
+      responseType: 'json',
+      timeoutMs: 20_000,
+      body: JSON.stringify(body ?? {}),
+      contentType: 'application/json; charset=utf-8',
+    });
+    signal?.throwIfAborted?.();
+    if (res.status < 200 || res.status >= 300) {
+      throw new FnoHttpError(`${res.status} ${res.statusText}`, res.status, url, res.bodyText);
+    }
+    return res.json as T;
+  }
 }
 
 class BrowserFnoTransport implements FnoTransport {
@@ -67,6 +87,25 @@ class BrowserFnoTransport implements FnoTransport {
       throw new FnoHttpError(`${res.status} ${res.statusText}`, res.status, url, text);
     }
     return await res.arrayBuffer();
+  }
+
+  async postJson<T = unknown>(url: string, token: string, body: unknown, signal?: AbortSignal): Promise<T> {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+      body: JSON.stringify(body ?? {}),
+      signal,
+      credentials: 'omit',
+    });
+    if (!res.ok) {
+      const text = await safeText(res);
+      throw new FnoHttpError(`${res.status} ${res.statusText}`, res.status, url, text);
+    }
+    return (await res.json()) as T;
   }
 }
 

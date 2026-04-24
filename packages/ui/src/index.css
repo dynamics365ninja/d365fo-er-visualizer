@@ -4929,7 +4929,7 @@ button.dd-dep-item { cursor: pointer; }
 .toast {
   pointer-events: auto;
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
   gap: 10px;
   padding: 10px 12px;
@@ -4940,6 +4940,9 @@ button.dd-dep-item { cursor: pointer; }
   animation: toast-in 160ms ease-out;
   font-size: 13px;
   color: var(--text-primary);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -4961,7 +4964,16 @@ button.dd-dep-item { cursor: pointer; }
 .toast--error { border-left: 3px solid #ef4444; }
 .toast--error .toast__icon { background: #ef4444; }
 .toast__body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.toast__message { margin: 0; line-height: 1.4; word-break: break-word; }
+.toast__message {
+  margin: 0;
+  line-height: 1.4;
+  /* Long URLs without spaces must wrap so the toast doesn't blow the layout. */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  max-height: 40vh;
+  overflow-y: auto;
+}
 .toast__action {
   align-self: flex-start;
   background: none;

@@ -66,6 +66,93 @@ function parseFirstBindingExpression(expressionXml: string): ERExpression {
 }
 
 describe('parseERConfiguration', () => {
+  it('propagates F&O ErFnoBundle Name hint and ERTextFormat @_Name onto solution envelope', () => {
+    // The UI renders tab labels / designer headers from
+    // `solutionVersion.solution.name`. When F&O returns only the bare
+    // content (no envelope), we synthesise one — and without a name
+    // the tab comes out blank. The parser must surface either the
+    // ErFnoBundle's `Name=` hint (injected by fno-client) or the
+    // bare content root's own `Name` attribute.
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<ErFnoBundle Name="Invoice format">
+  <ERTextFormat ID.="{FORMAT}" Name="Invoice format">
+    <Root>
+      <ERTextFormatFileComponent ID.="{ROOT}" Name="Root" />
+    </Root>
+  </ERTextFormat>
+  <ERFormatMapping ID.="{FORMAT-MAP}" Format="{FORMAT}" FormatVersion="{FORMAT},1" Name="Invoice format" />
+</ErFnoBundle>`;
+    const config = parseERConfiguration(xml, 'fno-bundle-name.xml');
+    expect(config.solutionVersion.solution.name).toBe('Invoice format');
+  });
+
+  it('preserves real ERFormatMapping bindings when bundled alongside bare ERTextFormat (F&O GetEffectiveFormatMappingByID shape)', () => {
+    // Regression: F&O's GetEffectiveFormatMappingByID returns the
+    // format grammar and the format mapping as two separate XML
+    // fragments inside the same response, which fno-client bundles
+    // into `<ErFnoBundle>`. An earlier `wrapBareContent` inserted an
+    // empty-stub ERFormatMappingVersion upon seeing ERTextFormat
+    // *before* checking for the real ERFormatMapping fragment,
+    // shadowing the real one and dropping every binding.
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<ErFnoBundle>
+  <ERTextFormat ID.="{FORMAT}" Name="Invoice format">
+    <Root>
+      <ERTextFormatFileComponent ID.="{ROOT}" Name="Root" />
+    </Root>
+  </ERTextFormat>
+  <ERFormatMapping ID.="{FORMAT-MAP}" Format="{FORMAT}" FormatVersion="{FORMAT},1" Name="Invoice format mapping">
+    <Binding>
+      <ERFormatBinding>
+        <Contents.>
+          <ERFormatComponentBinding Component="{ROOT}" ExpressionAsString="invoiceId">
+            <Expression>
+              <ERPathExpression Path="model.invoiceId" />
+            </Expression>
+          </ERFormatComponentBinding>
+        </Contents.>
+      </ERFormatBinding>
+    </Binding>
+  </ERFormatMapping>
+</ErFnoBundle>`;
+
+    const config = parseERConfiguration(xml, 'fno-bundle-format.xml');
+    if (config.content.kind !== 'Format') {
+      throw new Error('Expected format content');
+    }
+    const bindings = config.content.formatMappingVersion.formatMapping.bindings;
+    expect(bindings.length).toBeGreaterThan(0);
+    expect(bindings[0]?.componentId).toBe('{ROOT}');
+    expect(bindings[0]?.expressionAsString).toBe('invoiceId');
+  });
+
+  it('parses bare ERDataModel root (F&O GetDataModelByIDAndRevision shape)', () => {
+    // F&O's GetDataModelByIDAndRevision returns the DataModel content
+    // under a bare `<ERDataModel>` root (no surrounding
+    // `<ERSolutionVersion>` / `<ERDataModelVersion>` envelope, and not
+    // wrapped in `<ERModelDefinition>` either). `wrapBareContent` must
+    // map it onto `Model.ERDataModel` so `parseDataModelVersion`
+    // finds it.
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<ErFnoBundle Name="TaxDeclarationModel">
+  <ERDataModel ID.="{MODEL}" Name="TaxDeclarationModel">
+    <Contents.>
+      <ERDataContainerDescriptor ID.="{CONT}" Name="Reports" IsRoot="1">
+        <Contents.>
+          <ERDataContainerDescriptorItem Name="Amount" Type="6" />
+        </Contents.>
+      </ERDataContainerDescriptor>
+    </Contents.>
+  </ERDataModel>
+</ErFnoBundle>`;
+    const config = parseERConfiguration(xml, 'bare-datamodel.xml');
+    expect(config.content.kind).toBe('DataModel');
+    if (config.content.kind !== 'DataModel') return;
+    expect(config.content.version.model.name).toBe('TaxDeclarationModel');
+    expect(config.content.version.model.containers.length).toBe(1);
+    expect(config.content.version.model.containers[0]?.name).toBe('Reports');
+  });
+
   it('rejects incomplete format XML before parsing content', () => {
     const xml = buildSolutionEnvelope(`
       <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
