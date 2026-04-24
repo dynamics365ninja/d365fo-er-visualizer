@@ -9,7 +9,8 @@ import { BrowserAuthProvider } from './browser-auth';
 
 function isElectronRuntime(): boolean {
   if (typeof navigator !== 'undefined' && /Electron/i.test(navigator.userAgent)) return true;
-  if (typeof process !== 'undefined' && (process as { versions?: { electron?: string } }).versions?.electron) return true;
+  const proc = (globalThis as { process?: { versions?: { electron?: string } } }).process;
+  if (proc?.versions?.electron) return true;
   return false;
 }
 
