@@ -35,7 +35,8 @@ function corsHeaders(origin: string | null): Record<string, string> {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers':
       'Authorization, Content-Type, Accept, X-Fno-Target-Url, X-Fno-Method',
-    'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
+    'Access-Control-Expose-Headers':
+      'Content-Type, Content-Length, X-Fno-Proxy-Upstream-Status, X-Fno-Proxy-Upstream-Location',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   };
@@ -84,6 +85,12 @@ export default async function handler(req: Request): Promise<Response> {
   const forwardedHeaders: Record<string, string> = {
     Authorization: authorization,
     Accept: req.headers.get('accept') ?? 'application/json',
+    // F&O filters some endpoints by User-Agent. Vercel Edge fetch sends a
+    // generic UA (or none), which can cause /api/services/* to respond
+    // with 404. Masquerade as a normal browser.
+    'User-Agent':
+      req.headers.get('user-agent') ??
+      'Mozilla/5.0 (compatible; d365fo-er-visualizer-proxy)',
   };
   if (method === 'POST') {
     forwardedHeaders['Content-Type'] =
@@ -96,7 +103,10 @@ export default async function handler(req: Request): Promise<Response> {
       method,
       headers: forwardedHeaders,
       body: method === 'POST' ? await req.arrayBuffer() : undefined,
-      redirect: 'follow',
+      // Do NOT follow redirects: cross-origin redirects strip the
+      // Authorization header and we end up on the login page. Surface
+      // the redirect to the caller so they can see what's happening.
+      redirect: 'manual',
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'upstream fetch failed';
@@ -108,6 +118,22 @@ export default async function handler(req: Request): Promise<Response> {
   if (contentType) responseHeaders.set('Content-Type', contentType);
   const contentLength = upstream.headers.get('content-length');
   if (contentLength) responseHeaders.set('Content-Length', contentLength);
+
+  // Diagnostic headers — visible in browser DevTools Network panel.
+  responseHeaders.set('X-Fno-Proxy-Upstream-Status', String(upstream.status));
+  const location = upstream.headers.get('location');
+  if (location) responseHeaders.set('X-Fno-Proxy-Upstream-Location', location);
+
+  // Surface redirect responses as a descriptive 502 instead of silently
+  // following them (where Authorization would be dropped).
+  if (upstream.status >= 300 && upstream.status < 400 && location) {
+    const body =
+      `Upstream F&O redirected (${upstream.status}) to ${location}.\n` +
+      `This usually means the access token was rejected and F&O issued a ` +
+      `login redirect. Check tenantId, clientId, and that the token audience ` +
+      `matches envUrl.`;
+    return new Response(body, { status: 502, headers: responseHeaders });
+  }
 
   return new Response(upstream.body, {
     status: upstream.status,
