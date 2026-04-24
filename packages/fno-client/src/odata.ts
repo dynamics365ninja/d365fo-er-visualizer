@@ -32,6 +32,7 @@ export async function listSolutions(
 ): Promise<ErSolutionSummary[]> {
   const baseUrl = `${normalizeEnvUrl(conn.envUrl)}/data/ERSolutionEntity`;
   const params = new URLSearchParams({
+    'cross-company': 'true',
     $select: 'SolutionName,Publisher,SolutionVersion,SolutionDisplayName',
   });
   const results = await fetchAllPages<RawErSolutionRow>(
@@ -56,6 +57,7 @@ export async function listComponents(
   const baseUrl = `${normalizeEnvUrl(conn.envUrl)}/data/ERSolutionComponentEntity`;
   const filter = `SolutionName eq '${escapeODataString(solutionName)}'`;
   const params = new URLSearchParams({
+    'cross-company': 'true',
     $filter: filter,
     $select: [
       'SolutionName',

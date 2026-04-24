@@ -13,7 +13,7 @@ class ElectronFnoTransport implements FnoTransport {
     const api = getElectronApi();
     if (!api?.fnoRequest) throw new Error('Electron IPC not available');
     signal?.throwIfAborted?.();
-    const res = await api.fnoRequest({ url, token, responseType: 'json' });
+    const res = await api.fnoRequest({ url, token, responseType: 'json', timeoutMs: 20_000 });
     signal?.throwIfAborted?.();
     if (res.status < 200 || res.status >= 300) {
       throw new FnoHttpError(`${res.status} ${res.statusText}`, res.status, url, res.bodyText);
@@ -25,7 +25,7 @@ class ElectronFnoTransport implements FnoTransport {
     const api = getElectronApi();
     if (!api?.fnoRequest) throw new Error('Electron IPC not available');
     signal?.throwIfAborted?.();
-    const res = await api.fnoRequest({ url, token, responseType: 'binary' });
+    const res = await api.fnoRequest({ url, token, responseType: 'binary', timeoutMs: 60_000 });
     signal?.throwIfAborted?.();
     if (res.status < 200 || res.status >= 300) {
       throw new FnoHttpError(`${res.status} ${res.statusText}`, res.status, url, res.bodyText);

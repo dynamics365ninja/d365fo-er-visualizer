@@ -29,7 +29,8 @@ export class ElectronAuthProvider implements AuthProvider {
       const interactive = await api.fnoAuth.login(conn);
       return toAuthResult(interactive);
     } catch (err) {
-      throw new FnoAuthError('Sign-in failed', err);
+      const msg = err instanceof Error && err.message ? err.message : 'Sign-in failed';
+      throw new FnoAuthError(msg, err);
     }
   }
 
