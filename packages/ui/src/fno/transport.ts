@@ -55,12 +55,25 @@ class ElectronFnoTransport implements FnoTransport {
 }
 
 class BrowserFnoTransport implements FnoTransport {
+  /**
+   * Browser fetch routed through the Vercel Edge proxy at /api/fno.
+   *
+   * F&O SaaS OData endpoints do not send CORS headers, so direct calls from
+   * a web origin are blocked. The proxy forwards the bearer token and target
+   * URL server-side and returns the response with permissive CORS headers.
+   *
+   * In Electron we never land here — ElectronFnoTransport is selected instead.
+   */
+  private readonly proxyUrl = '/api/fno';
+
   async getJson<T = unknown>(url: string, token: string, signal?: AbortSignal): Promise<T> {
-    const res = await fetch(url, {
+    const res = await fetch(this.proxyUrl, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',
+        'X-Fno-Target-Url': url,
+        'X-Fno-Method': 'GET',
       },
       signal,
       credentials: 'omit',
@@ -73,11 +86,13 @@ class BrowserFnoTransport implements FnoTransport {
   }
 
   async getBinary(url: string, token: string, signal?: AbortSignal): Promise<ArrayBuffer> {
-    const res = await fetch(url, {
+    const res = await fetch(this.proxyUrl, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/octet-stream, */*',
+        'X-Fno-Target-Url': url,
+        'X-Fno-Method': 'GET',
       },
       signal,
       credentials: 'omit',
@@ -90,12 +105,14 @@ class BrowserFnoTransport implements FnoTransport {
   }
 
   async postJson<T = unknown>(url: string, token: string, body: unknown, signal?: AbortSignal): Promise<T> {
-    const res = await fetch(url, {
+    const res = await fetch(this.proxyUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',
         'Content-Type': 'application/json; charset=utf-8',
+        'X-Fno-Target-Url': url,
+        'X-Fno-Method': 'POST',
       },
       body: JSON.stringify(body ?? {}),
       signal,
