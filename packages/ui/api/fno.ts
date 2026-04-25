@@ -16,12 +16,9 @@ export const config = {
 };
 
 const ALLOWED_HOST_PATTERNS = [
-  /^[a-z0-9-]+\.operations\.dynamics\.com$/i,
-  /^[a-z0-9-]+\.sandbox\.operations\.dynamics\.com$/i,
-  /^[a-z0-9-]+\.cloudax\.dynamics\.com$/i,
-  /^[a-z0-9-]+\.sandbox\.ax\.dynamics\.com$/i,
-  /^[a-z0-9-]+\.axcloud\.dynamics\.com$/i,
-  /^[a-z0-9-]+\.dynamics\.com$/i,
+  // Generic catch-all for *.dynamics.com (covers regional and sandbox suffixes
+  // such as .sandbox.operations.eu.dynamics.com, .cloudax.dynamics.com, etc).
+  /(^|\.)dynamics\.com$/i,
 ];
 
 function isAllowedTarget(url: URL): boolean {
