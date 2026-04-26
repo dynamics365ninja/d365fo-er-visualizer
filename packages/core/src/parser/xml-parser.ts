@@ -436,14 +436,25 @@ function detectComponentKind(root: any): string {
   const contents = getContents(root);
   if (!contents) throw new Error('Missing Contents. in ERSolutionVersion');
 
-  if (contents['ERDataModelVersion']) return 'DataModel';
+  // Check Format first: a Format export bundle can include a
+  // datasource ERModelMappingVersion alongside its Format halves —
+  // that's still a Format component, the embedded mapping is
+  // metadata for the format's import datasources.
   if (contents['ERFormatVersion'] && contents['ERFormatMappingVersion']) return 'Format';
   if (contents['ERFormatVersion'] || contents['ERFormatMappingVersion']) {
     throw new Error(
       'Incomplete ER format XML: both ERFormatVersion and ERFormatMappingVersion are required',
     );
   }
+  // ModelMapping wins over DataModel when both are present: F&O's
+  // `GetModelMappingByID` response bundles `parmModel` (the parent
+  // DataModel) and `parmModelMapping` together, but the DataModel was
+  // already fetched separately via `GetDataModelByIDAndRevision`. If
+  // we returned 'DataModel' here the bundle would be parsed as a
+  // duplicate model and the mapping payload would be dropped on the
+  // floor.
   if (contents['ERModelMappingVersion']) return 'ModelMapping';
+  if (contents['ERDataModelVersion']) return 'DataModel';
 
   throw new Error('Cannot detect ER component type from XML structure');
 }

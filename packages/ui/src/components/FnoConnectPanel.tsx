@@ -188,6 +188,7 @@ type ConnectionState =
  * someone else's clientId triggers AADSTS700016 ("app not found in tenant").
  */
 const DEFAULT_CLIENT_ID = '';
+const ZERO_GUID_LOWER = '00000000-0000-0000-0000-000000000000';
 
 export const FnoConnectPanel: React.FC = () => {
   const styles = useStyles();
@@ -507,12 +508,29 @@ export const FnoConnectPanel: React.FC = () => {
     return components.filter(c => c.componentType === componentTypeFilter);
   }, [components, componentTypeFilter]);
 
+  const isComponentDownloadable = useCallback((comp: ErConfigSummary): boolean => {
+    if (comp.revisionGuid || comp.configurationGuid) return true;
+    // ModelMapping rows from `getFormatSolutionsSubHierarchy` are
+    // missing their own GUID but can still be resolved via
+    // `getModelMappingByID(_dataModelGuid, _dataContainerDescriptorName)`
+    // when we know the parent DataModel GUID. See the matching
+    // fallback path in `buildDownloadAttempts` (fno-client/odata.ts).
+    if (
+      comp.componentType === 'ModelMapping' &&
+      (comp.parentDataModelGuid || comp.parentDataModelRevisionGuid)
+    ) {
+      return true;
+    }
+    return false;
+  }, []);
+
   const toggleSelect = useCallback((comp: ErConfigSummary) => {
-    // Branch nodes (no revisionGuid / configurationGuid) can't be
-    // downloaded — selecting them would surface a red error toast on
-    // the user's "Load" action. Silently ignore the toggle so the
-    // disabled checkbox stays in sync with the selection map.
-    if (!comp.revisionGuid && !comp.configurationGuid) return;
+    // Branch nodes (no own GUID and no parent-DataModel resolution
+    // path) can't be downloaded — selecting them would surface a red
+    // error toast on the user's "Load" action. Silently ignore the
+    // toggle so the disabled checkbox stays in sync with the
+    // selection map.
+    if (!isComponentDownloadable(comp)) return;
     const key = componentKey(comp);
     setSelected(prev => {
       const next = new Map(prev);
@@ -520,22 +538,22 @@ export const FnoConnectPanel: React.FC = () => {
       else next.set(key, comp);
       return next;
     });
-  }, []);
+  }, [isComponentDownloadable]);
 
   const selectAllVisible = useCallback(() => {
     // Merge into existing selection rather than replace it — preserves
     // items chosen at other drill levels. Skip non-downloadable branch
-    // nodes (no GUID) so "select all" doesn't queue items that fail
-    // immediately at download time.
+    // nodes so "select all" doesn't queue items that fail immediately
+    // at download time.
     setSelected(prev => {
       const next = new Map(prev);
       for (const c of filteredComponents) {
-        if (!c.revisionGuid && !c.configurationGuid) continue;
+        if (!isComponentDownloadable(c)) continue;
         next.set(componentKey(c), c);
       }
       return next;
     });
-  }, [filteredComponents]);
+  }, [filteredComponents, isComponentDownloadable]);
 
   const clearSelection = useCallback(() => setSelected(new Map()), []);
 
@@ -757,6 +775,20 @@ export const FnoConnectPanel: React.FC = () => {
     const alreadyLoadedKeys = new Set(finalToLoad.map(c => componentKey(c)));
     const mappingsToLoad = new Map<string, ErConfigSummary>();
     const visitedScanNames = new Set<string>();
+    /**
+     * ModelMapping branch rows the listing surfaced without a GUID
+     * (typical: F&O lists `<dmName> mapping` as a child of a DataModel
+     * but only exposes its own GUID/IDs in the in-product workspace).
+     * They're not usable until we resolve their parent DataModel's
+     * GUID — which often only becomes available after the synth-pass
+     * base-walk fetches the parent DM XML. We therefore stash them
+     * keyed by parent DM NAME and revisit during the synth pass.
+     */
+    const pendingMappingBranchesByDmName = new Map<string, {
+      parentDmName: string;
+      mappingName: string;
+      mappingSolutionName: string;
+    }[]>();
     // Recursive scan: a mapping can be under the root DM, a derived
     // DM, or any depth in between. We walk the listComponents tree
     // breadth-first across all known DM names + their derived DM
@@ -794,18 +826,26 @@ export const FnoConnectPanel: React.FC = () => {
         }
         if (child.componentType !== 'ModelMapping') continue;
         if (!child.revisionGuid && !child.configurationGuid) {
-          // F&O sometimes surfaces a ModelMapping *branch* row
-          // (`hasChildren=true`, no GUID) whose descendants are
-          // country-variant revisions — also without a GUID, because
-          // they live as inheritance overlays on the base mapping and
-          // F&O only exposes them through the in-product ER workspace
-          // (no public service ID). `ERConfigurationStorageService`
-          // only offers `Get*ByID` operations, so we have no way to
-          // download these. Their effective rules are already baked
-          // into the Format XML returned by GetEffectiveFormatMapping-
-          // ByID, so users don't need to load them separately.
+          // F&O surfaces this row but does not expose the mapping's
+          // own GUID (the listing service only attaches GUIDs to
+          // Format leaves). We still want to download it though —
+          // X++ `getModelMappingByID(_mappingGuid=zero, _dataModelGuid,
+          // _dataContainerDescriptorName)` resolves the default
+          // mapping for any DM whose GUID we eventually know.
+          //
+          // Stash the mapping under its parent DM name. The synth
+          // pass below will look up the DM GUID (parsed XML or
+          // base-walk) and queue the actual download with the right
+          // `descriptorNameCandidates` and `parentDataModelGuid`.
+          const list = pendingMappingBranchesByDmName.get(dmName) ?? [];
+          list.push({
+            parentDmName: dmName,
+            mappingName: child.configurationName,
+            mappingSolutionName: child.solutionName,
+          });
+          pendingMappingBranchesByDmName.set(dmName, list);
           console.info(
-            '[fno-ui] ignoring non-downloadable ModelMapping (F&O does not expose a service ID)',
+            '[fno-ui] pending ModelMapping branch (no GUID — will resolve via parent DM in synth pass)',
             { name: child.configurationName, parent: dmName, hasChildren: child.hasChildren },
           );
           continue;
@@ -853,6 +893,315 @@ export const FnoConnectPanel: React.FC = () => {
         scannedDmNames: Array.from(visitedScanNames),
       });
     }
+
+    // ── Synthesized ModelMapping fetches via the X++ AOT fallback ──
+    //
+    // Per X++ source (ERConfigurationStorageService.getModelMappingByID,
+    // confirmed against the D365FO VM), the second resolution branch
+    // selects the **default** ModelMapping for a given DataModel:
+    //
+    //   var dmTable = ERDataModelTable::findByGUID(_dataModelGuid);
+    //   var selector = ERModelMappingTableSelector::constructByModel(
+    //       dmTable,
+    //       ERDataContainerDescriptorTable::findByName(
+    //           dmTable.recID, _dataContainerDescriptorName).RecId);
+    //   mappingTable = selector.getModelMapping();
+    //
+    // `getFormatSolutionsSubHierarchy` cannot list ModelMappings
+    // (its WHERE clause filters strictly on ERSolutionTable.Base —
+    // ModelMappings live in a separate table), so the listing scan
+    // above will miss every standalone mapping. To compensate, for
+    // every DataModel we know the GUID of, we synthesize a
+    // ModelMapping summary and let `buildDownloadAttempts` invoke
+    // the (parent-DM, descriptor name) fallback path. Descriptor
+    // name guesses are: empty (default container), DataModel name.
+    const synthesizedMappingKeys = new Set<string>();
+    // Aggregate every DataModel GUID we know — three sources, in order
+    // of trust:
+    //   1. Selected / discovered summaries that already carry a GUID
+    //      (rare with `getFormatSolutionsSubHierarchy` but possible
+    //      for older F&O versions that surface FormatMappingGUID).
+    //   2. The freshly-parsed `ERDataModel.id` GUID of every DataModel
+    //      configuration that landed in the workspace store during
+    //      this Load action — this is the *primary* source on modern
+    //      F&O builds, because the listing API never returns DM GUIDs
+    //      but the parsed XML payload always does.
+    //   3. The cross-references we harvested from Format / mapping
+    //      XML (`pendingModelFollowUps`).
+    interface DmSynthCandidate {
+      guid: string;
+      name: string;
+      solutionName: string;
+      /** Container/descriptor names harvested from parsed model XML. */
+      descriptorNames: string[];
+    }
+    const dmGuidIndex = new Map<string, DmSynthCandidate>();
+    /** Lowercase, brace-stripped GUID for stable map keys. */
+    const normalizeGuid = (g: string | undefined): string =>
+      (g ?? '').replace(/^\{|\}$/g, '').toLowerCase();
+    const recordDm = (
+      guid: string | undefined,
+      name: string,
+      solutionName?: string,
+      descriptorNames?: string[],
+    ): void => {
+      if (!guid) return;
+      const lower = normalizeGuid(guid);
+      if (!lower || lower === ZERO_GUID_LOWER) return;
+      const existing = dmGuidIndex.get(lower);
+      if (existing) {
+        // Merge descriptor names if a later source has more.
+        if (descriptorNames && descriptorNames.length > 0) {
+          const merged = new Set(existing.descriptorNames);
+          for (const d of descriptorNames) merged.add(d);
+          existing.descriptorNames = Array.from(merged);
+        }
+        // Prefer a real human-readable name over a synthetic
+        // `DataModel <guid>` placeholder.
+        if (
+          existing.name.startsWith('DataModel ') &&
+          !name.startsWith('DataModel ')
+        ) {
+          existing.name = name;
+        }
+        return;
+      }
+      dmGuidIndex.set(lower, {
+        guid: lower, // store normalized form so downstream paths match
+        name,
+        solutionName: solutionName ?? '<referenced>',
+        descriptorNames: descriptorNames ?? [],
+      });
+    };
+    for (const c of finalToLoad) {
+      if (c.componentType === 'DataModel') {
+        recordDm(c.configurationGuid, c.configurationName, c.solutionName);
+        recordDm(c.revisionGuid, c.configurationName, c.solutionName);
+      }
+    }
+    for (const m of allDataModelsSeen.values()) {
+      recordDm(m.configurationGuid, m.configurationName, m.solutionName);
+      recordDm(m.revisionGuid, m.configurationName, m.solutionName);
+    }
+    // Pick up GUIDs and descriptor names from parsed DataModel XML
+    // now sitting in the store. Each `ERDataModel.containers[].name`
+    // is a valid `_dataContainerDescriptorName` we can pass to
+    // `getModelMappingByID` — without it, the fallback path returns
+    // empty for every model that authored its default mapping under a
+    // non-root container.
+    type ParsedDmContent = {
+      version?: {
+        model?: { id?: string; name?: string; containers?: { name?: string }[] };
+      };
+    };
+    const refreshedConfigs = useAppStore.getState().configurations;
+    const baseGuidsToFetch = new Map<string, { lowerSelf: string; baseGuid: string }>();
+    for (const cfg of refreshedConfigs) {
+      if (cfg.kind !== 'DataModel') continue;
+      const dm = (cfg.content as ParsedDmContent | undefined)?.version?.model;
+      const containerNames = (dm?.containers ?? [])
+        .map(c => (c?.name ?? '').trim())
+        .filter(s => s.length > 0);
+      const baseRaw = cfg.solutionVersion?.solution?.baseSolutionId;
+      console.info('[fno-ui] parsed DataModel inspection (synth pass)', {
+        configFile: cfg.filePath,
+        solutionName: cfg.solutionVersion?.solution?.name,
+        modelId: dm?.id,
+        modelName: dm?.name,
+        baseSolutionId: baseRaw,
+        containerCount: containerNames.length,
+      });
+      if (dm?.id) {
+        recordDm(
+          dm.id,
+          dm.name ?? cfg.solutionVersion?.solution?.name ?? '<unknown>',
+          cfg.solutionVersion?.solution?.name,
+          containerNames,
+        );
+      }
+      // Capture baseSolutionId so we can walk up the inheritance chain
+      // (the listing service can't enumerate ancestors). Strip the
+      // surrounding `{}` if F&O included them.
+      if (baseRaw) {
+        const baseGuid = normalizeGuid(baseRaw);
+        if (baseGuid && baseGuid !== ZERO_GUID_LOWER && dm?.id) {
+          baseGuidsToFetch.set(baseGuid, {
+            lowerSelf: normalizeGuid(dm.id),
+            baseGuid,
+          });
+        }
+      }
+    }
+    // Cross-references harvested earlier in this pass.
+    for (const { guid } of pendingModelFollowUps.values()) {
+      recordDm(guid, `DataModel ${guid}`);
+    }
+    // ── Walk up the base-solution chain ──
+    //
+    // F&O's `getFormatSolutionsSubHierarchy` only enumerates
+    // *descendants*, so the listing API cannot surface ancestor
+    // DataModel GUIDs. The parsed CZ DM XML, however, carries
+    // `Base="{baseGuid},rev"` — we use that to fetch the base model
+    // via `GetDataModelByIDAndRevision`, parse it, harvest its own
+    // base, and repeat until we hit a DM with no parent. Each newly
+    // fetched DM also surfaces fresh container names that we feed
+    // back into the descriptor-candidate pool.
+    const ancestorVisited = new Set<string>();
+    const ancestorQueue = Array.from(baseGuidsToFetch.values()).map(b => b.baseGuid);
+    while (ancestorQueue.length > 0) {
+      const baseGuid = ancestorQueue.shift()!;
+      if (ancestorVisited.has(baseGuid)) continue;
+      ancestorVisited.add(baseGuid);
+      if (dmGuidIndex.has(baseGuid)) continue; // already loaded
+      const synthDm: ErConfigSummary = {
+        solutionName: '<ancestor>',
+        configurationName: `DataModel ${baseGuid}`,
+        componentType: 'DataModel',
+        configurationGuid: baseGuid,
+        hasContent: true,
+        // Probe a wide range of revisions; F&O typically returns 200
+        // OK with body for the rev that actually carries XML and
+        // 200-empty for the rest. `buildDownloadAttempts` already
+        // handles this strategy for DataModel components.
+        versionNumbers: Array.from({ length: 21 }, (_, i) => i),
+      };
+      try {
+        const download = await fnoSession.downloadConfiguration(activeProfile, synthDm);
+        loadXmlFile(download.xml, download.syntheticPath);
+        ok += 1;
+        console.info('[fno-ui] ancestor DataModel fetched via base-walk', {
+          baseGuid,
+        });
+        // Re-read the store to pick up the newly parsed DM.
+        const newest = useAppStore.getState().configurations
+          .find(c => c.kind === 'DataModel'
+            && normalizeGuid((c.content as ParsedDmContent | undefined)?.version?.model?.id)
+              === baseGuid);
+        const dm = (newest?.content as ParsedDmContent | undefined)?.version?.model;
+        const containerNames = (dm?.containers ?? [])
+          .map(c => (c?.name ?? '').trim())
+          .filter(s => s.length > 0);
+        recordDm(
+          baseGuid,
+          dm?.name ?? newest?.solutionVersion?.solution?.name ?? `DataModel ${baseGuid}`,
+          newest?.solutionVersion?.solution?.name,
+          containerNames,
+        );
+        // Walk further up if this base has its own base.
+        const grandRaw = newest?.solutionVersion?.solution?.baseSolutionId;
+        if (grandRaw) {
+          const grandGuid = normalizeGuid(grandRaw);
+          if (grandGuid && grandGuid !== ZERO_GUID_LOWER && !ancestorVisited.has(grandGuid)) {
+            ancestorQueue.push(grandGuid);
+          }
+        }
+      } catch (err) {
+        if (err instanceof FnoEmptyContentError) {
+          // Pure-inheritance ancestor with no own XML — record the
+          // GUID anyway so the synth pass tries its mapping.
+          recordDm(baseGuid, `DataModel ${baseGuid}`);
+          console.info('[fno-ui] ancestor DataModel returned empty XML, recorded GUID only', baseGuid);
+          continue;
+        }
+        console.warn('[fno-ui] ancestor DataModel fetch failed (base-walk)', baseGuid, err);
+      }
+    }
+    console.info('[fno-ui] synthesized mapping pass: candidate DataModels', {
+      count: dmGuidIndex.size,
+      dms: Array.from(dmGuidIndex.values()).map(
+        d => `${d.name} (${d.guid}) [descriptors: ${d.descriptorNames.join(', ') || '<none>'}]`,
+      ),
+    });
+
+    // Build a name → DmSynthCandidate index so we can resolve the
+    // ModelMapping *branch* rows the listing scan stashed without a
+    // GUID. Each branch maps 1:1 to a default ModelMapping owned by
+    // the parent DataModel (X++ ERModelMappingTableSelector picks it
+    // by `(model.RecId, descriptorRecId)`); we just need to attach
+    // the freshly-resolved DM GUID + container names.
+    const dmByName = new Map<string, DmSynthCandidate>();
+    for (const dm of dmGuidIndex.values()) {
+      if (!dm.name.startsWith('DataModel ')) {
+        dmByName.set(dm.name, dm);
+      }
+    }
+    const synthQueue: { synth: ErConfigSummary; dmGuid: string; label: string }[] = [];
+    for (const dm of dmGuidIndex.values()) {
+      synthQueue.push({
+        synth: {
+          solutionName: dm.solutionName,
+          configurationName: `${dm.name} (default mapping)`,
+          componentType: 'ModelMapping',
+          parentDataModelGuid: dm.guid,
+          descriptorNameCandidates: dm.descriptorNames,
+          hasContent: true,
+        },
+        dmGuid: dm.guid,
+        label: `default mapping for ${dm.name}`,
+      });
+    }
+    let resolvedBranchCount = 0;
+    let unresolvedBranchCount = 0;
+    for (const branches of pendingMappingBranchesByDmName.values()) {
+      for (const branch of branches) {
+        const ownerDm = dmByName.get(branch.parentDmName);
+        if (!ownerDm) {
+          unresolvedBranchCount += 1;
+          console.info(
+            '[fno-ui] pending ModelMapping branch unresolved (no DM GUID for parent)',
+            branch,
+          );
+          continue;
+        }
+        resolvedBranchCount += 1;
+        synthQueue.push({
+          synth: {
+            solutionName: branch.mappingSolutionName,
+            configurationName: branch.mappingName,
+            componentType: 'ModelMapping',
+            parentDataModelGuid: ownerDm.guid,
+            descriptorNameCandidates: ownerDm.descriptorNames,
+            hasContent: true,
+          },
+          dmGuid: ownerDm.guid,
+          label: `${branch.mappingName} (under ${branch.parentDmName})`,
+        });
+      }
+    }
+    if (resolvedBranchCount > 0 || unresolvedBranchCount > 0) {
+      console.info('[fno-ui] pending ModelMapping branches', {
+        resolved: resolvedBranchCount,
+        unresolved: unresolvedBranchCount,
+      });
+    }
+
+    for (const item of synthQueue) {
+      const synthKey = `synth-mapping:${item.dmGuid}:${item.synth.configurationName}`;
+      if (synthesizedMappingKeys.has(synthKey)) continue;
+      synthesizedMappingKeys.add(synthKey);
+      try {
+        const download = await fnoSession.downloadConfiguration(activeProfile, item.synth);
+        loadXmlFile(download.xml, download.syntheticPath);
+        ok += 1;
+        console.info('[fno-ui] synthesized ModelMapping fetched', {
+          which: item.label,
+          dmGuid: item.dmGuid,
+        });
+      } catch (err) {
+        if (err instanceof FnoEmptyContentError) {
+          console.info(
+            '[fno-ui] synthesized ModelMapping returned empty XML, skipping',
+            item.label,
+          );
+          continue;
+        }
+        console.info(
+          '[fno-ui] synthesized ModelMapping fetch failed',
+          { which: item.label, dmGuid: item.dmGuid, err },
+        );
+      }
+    }
+
     for (const mapping of mappingsToLoad.values()) {
       try {
         const download = await fnoSession.downloadConfiguration(activeProfile, mapping);
@@ -1057,21 +1406,39 @@ export const FnoConnectPanel: React.FC = () => {
                 const key = componentKey(comp);
                 const hasGuid = Boolean(comp.revisionGuid || comp.configurationGuid);
                 const hasChildren = Boolean(comp.hasChildren);
+                // ModelMapping rows from `getFormatSolutionsSubHierarchy`
+                // typically come back without their own GUID — the
+                // listing service only surfaces FormatMappingGUID for
+                // Format leaves. The X++ AOT signature
+                //   getModelMappingByID(_mappingGuid, _dataModelGuid,
+                //                       _dataContainerDescriptorName)
+                // however accepts an alternative resolution path: when
+                // `_mappingGuid` is empty the service looks the mapping
+                // up by `(_dataModelGuid, _dataContainerDescriptorName)`.
+                // We therefore treat a ModelMapping as downloadable
+                // whenever we know its parent DataModel GUID, even
+                // without its own GUID. `buildDownloadAttempts` in
+                // fno-client emits the matching fallback request.
+                const canResolveMappingViaParent =
+                  comp.componentType === 'ModelMapping' &&
+                  Boolean(comp.parentDataModelGuid || comp.parentDataModelRevisionGuid);
+                const isDownloadable = hasGuid || canResolveMappingViaParent;
                 // Three classes of rows:
-                //   1) hasGuid → directly downloadable (selectable).
-                //   2) !hasGuid && hasChildren → branch (drill in to find leaves).
-                //   3) !hasGuid && !hasChildren → dead row: F&O surfaces it but
-                //      it has neither own GUID nor descendants. Most often a
-                //      pure-inheritance derived configuration whose content
-                //      lives in the base — already auto-included when the
-                //      base is loaded. Disable both drill and select.
-                const isDead = !hasGuid && !hasChildren;
-                // Country-variant ModelMapping is special: F&O does
-                // not expose a service ID for it (only the base model
-                // and the format-mapping have downloadable IDs), so
-                // it shows up here without a GUID. Its rules are
-                // already merged into Format XML downloads.
-                const isUnreachableMapping = !hasGuid && comp.componentType === 'ModelMapping';
+                //   1) isDownloadable → directly downloadable (selectable).
+                //   2) !isDownloadable && hasChildren → branch (drill in).
+                //   3) !isDownloadable && !hasChildren → dead row: F&O
+                //      surfaces it but it has neither own GUID nor
+                //      descendants. Most often a pure-inheritance
+                //      derived configuration whose content lives in
+                //      the base — already auto-included when the base
+                //      is loaded. Disable both drill and select.
+                const isDead = !isDownloadable && !hasChildren;
+                // Country-variant ModelMapping where we *also* lack
+                // the parent DataModel GUID is genuinely unreachable
+                // — F&O does not expose any service ID we could use.
+                // Its rules are already merged into Format XML downloads.
+                const isUnreachableMapping =
+                  !isDownloadable && comp.componentType === 'ModelMapping';
                 const disabledCheckboxTitle = isUnreachableMapping
                   ? 'F&O does not expose a service ID for this ModelMapping. Its rules are bundled into the Format XML, so loading the parent Format is enough.'
                   : isDead
@@ -1087,7 +1454,9 @@ export const FnoConnectPanel: React.FC = () => {
                 let captionSuffix = '';
                 if (isUnreachableMapping) {
                   captionSuffix = ' · (not downloadable — bundled into Format XML)';
-                } else if (!hasGuid) {
+                } else if (canResolveMappingViaParent && !hasGuid) {
+                  captionSuffix = ' · (resolved via parent DataModel)';
+                } else if (!isDownloadable) {
                   captionSuffix = hasChildren
                     ? ' · (no own content — click to drill in)'
                     : ' · (no own content, no children — derived from a base configuration)';
@@ -1100,15 +1469,15 @@ export const FnoConnectPanel: React.FC = () => {
                   >
                     <Checkbox
                       checked={selected.has(key)}
-                      disabled={!hasGuid}
-                      title={hasGuid ? undefined : disabledCheckboxTitle}
+                      disabled={!isDownloadable}
+                      title={isDownloadable ? undefined : disabledCheckboxTitle}
                       onChange={() => toggleSelect(comp)}
                     />
                     <div
                       style={{
                         flex: 1,
                         minWidth: 0,
-                        cursor: hasChildren ? 'pointer' : hasGuid ? 'default' : 'not-allowed',
+                        cursor: hasChildren ? 'pointer' : isDownloadable ? 'default' : 'not-allowed',
                       }}
                       onClick={hasChildren ? () => handleDrillInto(comp) : undefined}
                       onKeyDown={hasChildren ? e => { if (e.key === 'Enter') handleDrillInto(comp); } : undefined}
