@@ -2304,42 +2304,35 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
       })),
     }));
 
-    children.push({
-      id: `${prefix}-model`,
-      name: `Data Model: ${dm.model.name}`,
-      icon: '📐',
-      type: 'model',
-      configIndex: index,
-      data: dm.model,
-      children: [
-        {
-          id: `${prefix}-model-roots`,
-          name: 'Root Containers',
-          icon: '📂',
-          type: 'section',
-          children: containerNodes.filter(c => c.data.isRoot),
-        },
-        {
-          id: `${prefix}-model-enums`,
-          name: 'Enumerations',
-          icon: '📂',
-          type: 'section',
-          children: containerNodes.filter(c => c.data.isEnum),
-        },
-        {
-          id: `${prefix}-model-records`,
-          name: 'Records',
-          icon: '📂',
-          type: 'section',
-          children: containerNodes.filter(c => !c.data.isRoot && !c.data.isEnum),
-        },
-      ],
-    });
+    children.push(
+      {
+        id: `${prefix}-model-roots`,
+        name: 'Root Containers',
+        icon: '📂',
+        type: 'section',
+        children: containerNodes.filter(c => c.data.isRoot),
+      },
+      {
+        id: `${prefix}-model-enums`,
+        name: 'Enumerations',
+        icon: '📂',
+        type: 'section',
+        children: containerNodes.filter(c => c.data.isEnum),
+      },
+      {
+        id: `${prefix}-model-records`,
+        name: 'Records',
+        icon: '📂',
+        type: 'section',
+        children: containerNodes.filter(c => !c.data.isRoot && !c.data.isEnum),
+      },
+    );
   }
 
   if (config.content.kind === 'ModelMapping') {
     const mm = (config.content as ERModelMappingContent).version;
-    children.push(buildMappingTree(mm.mapping, `${prefix}-mapping`, index));
+    const inner = buildMappingTree(mm.mapping, `${prefix}-mapping`, index);
+    children.push(...(inner.children ?? []));
   }
 
   if (config.content.kind === 'Format') {
@@ -2431,22 +2424,14 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
       buildMappingTree(version.mapping, `${prefix}-embedded-mapping-${embeddedIndex}`, index),
     );
 
-    children.push({
-      id: `${prefix}-format`,
-      name: `Format: ${fmt.format.name}`,
-      icon: '📄',
-      type: 'format',
-      configIndex: index,
-      data: fmt.format,
-      children: [
-        { id: `${prefix}-fmt-structure`, name: 'Output Structure', icon: '📂', type: 'section', children: [formatTree] },
-        ...(embeddedMappingNodes.length > 0 ? [{ id: `${prefix}-fmt-embedded-mappings`, name: `Model Mappings (${embeddedMappingNodes.length})`, icon: '📂', type: 'section' as const, children: embeddedMappingNodes }] : []),
-        { id: `${prefix}-fmt-enums`, name: `Enumerations (${enumNodes.length})`, icon: '📂', type: 'section', children: enumNodes },
-        { id: `${prefix}-fmt-trans`, name: `Transformations (${transNodes.length})`, icon: '📂', type: 'section', children: transNodes },
-        { id: `${prefix}-fmt-ds`, name: `Data Sources (${fmtDsNodes.length})`, icon: '📂', type: 'section', children: groupDatasourceNodes(fmtDsNodes, `${prefix}-fmt`) },
-        { id: `${prefix}-fmt-bindings`, name: `Bindings (${fmtBindNodes.length})`, icon: '📂', type: 'section', children: fmtBindNodes },
-      ],
-    });
+    children.push(
+      { id: `${prefix}-fmt-structure`, name: 'Output Structure', icon: '📂', type: 'section', children: [formatTree] },
+      ...(embeddedMappingNodes.length > 0 ? [{ id: `${prefix}-fmt-embedded-mappings`, name: `Model Mappings (${embeddedMappingNodes.length})`, icon: '📂', type: 'section' as const, children: embeddedMappingNodes }] : []),
+      { id: `${prefix}-fmt-enums`, name: `Enumerations (${enumNodes.length})`, icon: '📂', type: 'section', children: enumNodes },
+      { id: `${prefix}-fmt-trans`, name: `Transformations (${transNodes.length})`, icon: '📂', type: 'section', children: transNodes },
+      { id: `${prefix}-fmt-ds`, name: `Data Sources (${fmtDsNodes.length})`, icon: '📂', type: 'section', children: groupDatasourceNodes(fmtDsNodes, `${prefix}-fmt`) },
+      { id: `${prefix}-fmt-bindings`, name: `Bindings (${fmtBindNodes.length})`, icon: '📂', type: 'section', children: fmtBindNodes },
+    );
   }
 
   return {

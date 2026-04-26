@@ -982,7 +982,7 @@ export async function downloadConfigXml(
     );
   }
 
-  const finalXml = injectNameHint(xml, component.configurationName);
+  const finalXml = injectNameHint(xml, component.configurationName, component.version);
   const { guids: referencedDataModelGuids, revisions: referencedDataModelRevisions } =
     extractReferencedDataModelGuids(finalXml);
   if (referencedDataModelGuids.length > 0) {
@@ -1159,7 +1159,7 @@ function extractXmlFromServiceResult(raw: unknown, operationName: string): strin
  * unchanged to avoid corrupting already-wrapped ERSolutionVersion
  * envelopes from disk.
  */
-function injectNameHint(xml: string, name: string): string {
+function injectNameHint(xml: string, name: string, version?: string): string {
   if (!name) return xml;
   const trimmed = xml.replace(/^\uFEFF/, '').replace(/^\s*<\?xml[^?]*\?>\s*/i, '');
   // Only rewrap F&O custom-service payloads. If the doc already has
@@ -1170,11 +1170,14 @@ function injectNameHint(xml: string, name: string): string {
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+  const versionAttr = version
+    ? ` Version="${version.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`
+    : '';
   if (/^<\s*ErFnoBundle[\s>]/i.test(trimmed)) {
     // Splice the attribute into the opening tag.
-    return trimmed.replace(/^<\s*ErFnoBundle(\s|>)/i, `<ErFnoBundle Name="${escaped}"$1`);
+    return trimmed.replace(/^<\s*ErFnoBundle(\s|>)/i, `<ErFnoBundle Name="${escaped}"${versionAttr}$1`);
   }
-  return `<ErFnoBundle Name="${escaped}">${trimmed}</ErFnoBundle>`;
+  return `<ErFnoBundle Name="${escaped}"${versionAttr}>${trimmed}</ErFnoBundle>`;
 }
 
 /**
