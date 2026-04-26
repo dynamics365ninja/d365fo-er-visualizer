@@ -674,16 +674,20 @@ export async function listComponents(
 /**
  * Build the ordered list of (operation, body) attempts to download XML
  * for a single component. The F&O ERConfigurationStorageService exposes
- * three typed getters:
- *   - `GetEffectiveFormatMappingByID(_formatMappingID)`
- *   - `GetModelMappingByID(_modelMappingID)`
- *   - `GetDataModelByIDAndRevision(_dataModelID, _revision)`
+ * three typed getters (signatures confirmed against the X++ AOT source
+ * in `ElectronicReporting/AxClass/ERConfigurationStorageService.xml`,
+ * D365FO 2026-04):
  *
- * The X++ parameter names are best-guesses based on the `_camelCase`
- * convention confirmed for `getFormatSolutionsSubHierarchy`. Since the
- * framework rejects unknown parameter names with 400 and a human-readable
- * body (`Parameter '_foo' is not found`), we try a short list of common
- * casings and fall through on such failures.
+ *   - `getEffectiveFormatMappingByID(guid _formatMappingGuid)`
+ *   - `getModelMappingByID(Guid _mappingGuid, guid _dataModelGuid,`
+ *     `Name _dataContainerDescriptorName)`
+ *   - `getDataModelByIDAndRevision(guid _dataModelGuid,`
+ *     `ERRevisionNumber _revisionNumber)`
+ *
+ * The custom-service JSON deserializer requires every method parameter
+ * to be present in the request body — missing keys yield HTTP 400
+ * `Parameter '_X' is not found.` Empty/zero values are accepted for
+ * parameters X++ ignores on the chosen code path.
  *
  * Exported for unit testing.
  */
@@ -704,28 +708,77 @@ export function buildDownloadAttempts(
         attempts.push({ operation: op, body: { _formatMappingGuid: id } });
       }
     } else if (op === 'GetModelMappingByID') {
-      // Confirmed on ac365lab-factory (2026-04) via 400 error bodies:
-      // the service expects `_dataModelGuid` *plus* `_mappingGuid` (a
-      // ModelMapping always belongs to a DataModel). We also try
-      // sending only `_dataModelGuid` (in case the op is overloaded
-      // and the mapping id comes implicitly from the DataModel), and
-      // a same-GUID variant in case `_dataModelGuid` is actually a
-      // misnamed `_mappingGuid` alias on this build.
+      // Confirmed against AOT source on D365FO VM (2026-04,
+      // ElectronicReporting / ERConfigurationStorageService):
+      //
+      //   internal ERModelMappingConfigurationContents getModelMappingByID(
+      //       Guid _mappingGuid,
+      //       guid _dataModelGuid,
+      //       Name _dataContainerDescriptorName)
+      //
+      // Logic: if `_mappingGuid` is non-empty, F&O calls
+      // `ERModelMappingTable::findByGUID(_mappingGuid)` and ignores
+      // the other two parameters. Otherwise it resolves the mapping
+      // via `(_dataModelGuid, _dataContainerDescriptorName)`.
+      //
+      // The custom-service JSON deserializer requires **all three**
+      // keys to be present in the request body, even when some are
+      // unused — missing keys produce HTTP 400 "Parameter '_X' is not
+      // found." We therefore always send the full triple and just
+      // zero-out the parts X++ will ignore.
+      for (const mid of [cfgId, revId].filter(Boolean)) {
+        attempts.push({
+          operation: op,
+          body: {
+            _mappingGuid: mid,
+            _dataModelGuid: ZERO_GUID,
+            _dataContainerDescriptorName: '',
+          },
+        });
+      }
+      // Fallback path: when the component-level GUIDs don't resolve
+      // a ERModelMappingTable row directly, try the (_dataModelGuid +
+      // _dataContainerDescriptorName) branch using the parent
+      // DataModel GUID harvested from the hierarchy. The descriptor
+      // name is not exposed by the listing service. Per X++ source
+      // (ERConfigurationStorageService.getModelMappingByID),
+      // `ERDataContainerDescriptorTable::findByName(dmRecId, '')`
+      // returns RecId=0, which `ERModelMappingTableSelector::
+      // constructByModel(dmTable, 0)` interprets as **the default
+      // container** — that selector then returns the model's default
+      // ModelMapping. So an empty descriptor is the strongest single
+      // probe to "give me whatever default mapping you have for this
+      // DataModel". We try it first, then fall back to plausible
+      // human-readable names (configuration / solution / DataModel
+      // name) for environments where the descriptor is named.
       const dmGuid = component.parentDataModelGuid ?? '';
       const dmRev = component.parentDataModelRevisionGuid ?? '';
-      for (const mid of [cfgId, revId].filter(Boolean)) {
-        if (dmGuid) {
-          attempts.push({ operation: op, body: { _dataModelGuid: dmGuid, _mappingGuid: mid } });
+      const descriptorCandidates = Array.from(
+        new Set(
+          [
+            '', // ← primary: default container / default mapping
+            // Caller-supplied real descriptor names (e.g. harvested
+            // from the parsed `ERDataModel.containers[].name`). Tried
+            // before the heuristic fall-backs because they actually
+            // match real `ERDataContainerDescriptorTable` rows.
+            ...(component.descriptorNameCandidates ?? []),
+            component.configurationName,
+            component.solutionName,
+          ]
+            .map(s => (s ?? '').trim()),
+        ),
+      );
+      for (const dm of [dmGuid, dmRev].filter(Boolean)) {
+        for (const descName of descriptorCandidates) {
+          attempts.push({
+            operation: op,
+            body: {
+              _mappingGuid: ZERO_GUID,
+              _dataModelGuid: dm,
+              _dataContainerDescriptorName: descName,
+            },
+          });
         }
-        if (dmRev) {
-          attempts.push({ operation: op, body: { _dataModelGuid: dmRev, _mappingGuid: mid } });
-        }
-        // Same-GUID heuristic (op may treat _dataModelGuid as the
-        // mapping id on some builds).
-        attempts.push({ operation: op, body: { _dataModelGuid: mid, _mappingGuid: mid } });
-        attempts.push({ operation: op, body: { _dataModelGuid: mid } });
-        // Legacy single-param variant.
-        attempts.push({ operation: op, body: { _mappingGuid: mid } });
       }
     } else if (op === 'GetDataModelByIDAndRevision') {
       // Confirmed on ac365lab-factory (2026-04) via 400 error bodies:
@@ -805,13 +858,29 @@ export async function downloadConfigXml(
   signal?: AbortSignal,
 ): Promise<ErConfigDownload> {
   if (!component.revisionGuid && !component.configurationGuid) {
-    throw new FnoSourceUnsupportedError(
-      `Component "${component.configurationName}" has no GUID (revisionGuid/configurationGuid). ` +
-        `This usually means it's a branch node in the ER tree rather than a downloadable ` +
-        `configuration revision — drill into it (click the row) to see its children. ` +
-        `If you're sure it is a leaf, open DevTools → Console → filter "[fno-client] listComponents" ` +
-        `and send the raw row keys so the mapper can be extended.`,
-    );
+    // Special case: a ModelMapping row from
+    // `getFormatSolutionsSubHierarchy` typically arrives without its
+    // own GUID (the listing service only surfaces FormatMappingGUID
+    // for Format leaves). The X++ AOT signature
+    //   getModelMappingByID(_mappingGuid, _dataModelGuid,
+    //                       _dataContainerDescriptorName)
+    // however accepts a `(parent DataModel GUID, descriptor name)`
+    // resolution path, which `buildDownloadAttempts` emits. Allow
+    // the call to proceed if we have at least one of those parent
+    // GUIDs — the attempt loop will surface a meaningful error if
+    // the descriptor-name guess doesn't match.
+    const canResolveMappingViaParent =
+      component.componentType === 'ModelMapping' &&
+      Boolean(component.parentDataModelGuid || component.parentDataModelRevisionGuid);
+    if (!canResolveMappingViaParent) {
+      throw new FnoSourceUnsupportedError(
+        `Component "${component.configurationName}" has no GUID (revisionGuid/configurationGuid). ` +
+          `This usually means it's a branch node in the ER tree rather than a downloadable ` +
+          `configuration revision — drill into it (click the row) to see its children. ` +
+          `If you're sure it is a leaf, open DevTools → Console → filter "[fno-client] listComponents" ` +
+          `and send the raw row keys so the mapper can be extended.`,
+      );
+    }
   }
 
   const attempts = buildDownloadAttempts(component);

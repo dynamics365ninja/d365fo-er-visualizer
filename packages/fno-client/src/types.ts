@@ -90,6 +90,19 @@ export interface ErConfigSummary {
    * derived-model references in the bindings resolve to nothing.
    */
   ancestorDataModelGuids?: string[];
+  /**
+   * Extra `_dataContainerDescriptorName` candidates to try when
+   * downloading a ModelMapping via the
+   * `getModelMappingByID(_mappingGuid=zero, _dataModelGuid, descName)`
+   * fallback path. F&O's listing service does not surface descriptor
+   * names, but they're available in the parsed DataModel XML
+   * (`ERDataModel.containers[].name`). Passing the right descriptor
+   * is what tells `ERModelMappingTableSelector::constructByModel` to
+   * pick the model's default ModelMapping for that container; the
+   * empty-string default ("root container") only works when the
+   * model author didn't move the mapping under a non-root container.
+   */
+  descriptorNameCandidates?: string[];
 }
 
 /** Result of downloading a configuration XML. */
