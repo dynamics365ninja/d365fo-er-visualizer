@@ -314,6 +314,19 @@ function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> 
   ];
   const solutionDesc = descHintSources.find(s => typeof s === 'string' && s.length > 0) ?? '';
 
+  // Pick up an optional version hint from the F&O bundle wrapper
+  // (`<ErFnoBundle Version="…">`) so the explorer's version pill and
+  // the status-bar chip can show the F&O configuration version even
+  // when the inner XML payload doesn't carry a real ERSolutionVersion
+  // envelope.
+  const versionHintSources: (string | undefined)[] = [
+    (doc['@_Version'] as string | undefined),
+    (doc['@_PublicVersionNumber'] as string | undefined),
+  ];
+  const publicVersionNumber = versionHintSources.find(
+    s => typeof s === 'string' && s.length > 0,
+  ) ?? '';
+
   // Minimal `ERSolutionVersion` envelope. Fields default to empty;
   // `parseSolutionVersion` tolerates missing attrs / ERSolution via its
   // `?? ''` / `?? '0'` fallbacks (except `Missing ERSolution element`,
@@ -323,7 +336,7 @@ function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> 
       '@_DateTime': '',
       '@_Description': solutionDesc,
       '@_Number': '0',
-      '@_PublicVersionNumber': '',
+      '@_PublicVersionNumber': publicVersionNumber,
       '@_VersionStatus': '0',
       Solution: {
         ERSolution: {

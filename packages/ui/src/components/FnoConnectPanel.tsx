@@ -508,6 +508,11 @@ export const FnoConnectPanel: React.FC = () => {
   }, [components, componentTypeFilter]);
 
   const toggleSelect = useCallback((comp: ErConfigSummary) => {
+    // Branch nodes (no revisionGuid / configurationGuid) can't be
+    // downloaded — selecting them would surface a red error toast on
+    // the user's "Load" action. Silently ignore the toggle so the
+    // disabled checkbox stays in sync with the selection map.
+    if (!comp.revisionGuid && !comp.configurationGuid) return;
     const key = componentKey(comp);
     setSelected(prev => {
       const next = new Map(prev);
@@ -519,10 +524,15 @@ export const FnoConnectPanel: React.FC = () => {
 
   const selectAllVisible = useCallback(() => {
     // Merge into existing selection rather than replace it — preserves
-    // items chosen at other drill levels.
+    // items chosen at other drill levels. Skip non-downloadable branch
+    // nodes (no GUID) so "select all" doesn't queue items that fail
+    // immediately at download time.
     setSelected(prev => {
       const next = new Map(prev);
-      for (const c of filteredComponents) next.set(componentKey(c), c);
+      for (const c of filteredComponents) {
+        if (!c.revisionGuid && !c.configurationGuid) continue;
+        next.set(componentKey(c), c);
+      }
       return next;
     });
   }, [filteredComponents]);
@@ -586,15 +596,16 @@ export const FnoConnectPanel: React.FC = () => {
         }
       }
     }
+    setIngesting(true);
+
     const finalToLoad = Array.from(augmented.values());
     // Order: root DataModels first (so downstream imports can resolve
-    // references), then the rest.
+    // references), then ModelMappings, then the rest (Formats).
     finalToLoad.sort((a, b) => {
-      const ar = a.componentType === 'DataModel' ? 0 : 1;
-      const br = b.componentType === 'DataModel' ? 0 : 1;
-      return ar - br;
+      const order = (k: ErComponentType) =>
+        k === 'DataModel' ? 0 : k === 'ModelMapping' ? 1 : 2;
+      return order(a.componentType) - order(b.componentType);
     });
-    setIngesting(true);
     // Key set of components the user picked explicitly — used to
     // differentiate "real failure on user-selected item" (error toast)
     // from "auto-injected root model had no own XML" (silent skip).
@@ -693,6 +704,169 @@ export const FnoConnectPanel: React.FC = () => {
         console.warn('[fno-ui] referenced DataModel download failed', guid, err);
       }
     }
+
+    // Third pass: now that every DataModel (explicit + ancestor +
+    // referenced) is on disk in the workspace, enumerate ModelMapping
+    // siblings for each one and download them.
+    //
+    // ER hierarchy refresher (per F&O ERSolutionTable):
+    //   - Root DataModel
+    //     ├─ Derived DataModel (recursive: any depth)
+    //     ├─ ModelMapping  (often under the root, but a derived
+    //     │                  ModelMapping that overrides bindings can
+    //     │                  live under any DataModel level — see the
+    //     │                  user's note)
+    //     └─ Format        (under any DataModel level; the format's
+    //                       mapping references the nearest
+    //                       ModelMapping in the chain)
+    // Special case: a ModelMapping can also be **embedded inside a
+    // DataModel/Format XML payload** (`<ERModelMappingVersion>`
+    // siblings of the format/model entity). Those don't need a
+    // separate download because the `core` parser already lifts them
+    // into `ERFormatContent.embeddedModelMappingVersions` /
+    // `ERDataModelContent` during `parseERConfiguration`.
+    //
+    // To cover the standalone-mapping case we walk the hierarchy
+    // recursively from every loaded DataModel solution name and from
+    // every ancestor name we collected during navigation, then
+    // download every ModelMapping leaf that has any usable GUID.
+    // Failures are logged but never block the user-picked downloads.
+    const dmNamesToScan = new Set<string>();
+    // Names from explicit / ancestor DataModel summaries.
+    for (const c of finalToLoad) {
+      if (c.componentType === 'DataModel' && c.configurationName) {
+        dmNamesToScan.add(c.configurationName);
+      }
+    }
+    // Names harvested from freshly-loaded model XML (covers the
+    // pendingModelFollowUps batch — those start as synthetic
+    // `DataModel <guid>` entries with no real name until parsed).
+    const loadedConfigs = useAppStore.getState().configurations;
+    for (const cfg of loadedConfigs) {
+      if (cfg.kind !== 'DataModel') continue;
+      const name = cfg.solutionVersion?.solution?.name;
+      if (name) dmNamesToScan.add(name);
+    }
+    // Also include every `solutionPath` step the user navigated, plus
+    // the active F&O explorer roots — captures derived DMs the user
+    // browsed past without explicitly selecting.
+    for (const step of solutionPath) {
+      if (step) dmNamesToScan.add(step);
+    }
+
+    const alreadyLoadedKeys = new Set(finalToLoad.map(c => componentKey(c)));
+    const mappingsToLoad = new Map<string, ErConfigSummary>();
+    const visitedScanNames = new Set<string>();
+    // Recursive scan: a mapping can be under the root DM, a derived
+    // DM, or any depth in between. We walk the listComponents tree
+    // breadth-first across all known DM names + their derived DM
+    // descendants and queue every ModelMapping leaf we find.
+    const queue: string[] = Array.from(dmNamesToScan);
+    while (queue.length > 0) {
+      const dmName = queue.shift()!;
+      if (visitedScanNames.has(dmName)) continue;
+      visitedScanNames.add(dmName);
+      let children: ErConfigSummary[];
+      try {
+        children = await fnoSession.listComponents(activeProfile, dmName);
+      } catch (err) {
+        console.warn('[fno-ui] listComponents failed during mapping scan for', dmName, err);
+        continue;
+      }
+      console.info('[fno-ui] mapping-scan listComponents', {
+        parent: dmName,
+        rowCount: children.length,
+        types: children.map(c => `${c.componentType}:${c.configurationName}(guid=${Boolean(c.configurationGuid || c.revisionGuid)})`),
+      });
+      // Resolve the owning DM for the *current* parent name so we can
+      // forward it to mapping leaves discovered below this branch.
+      const owningDm = Array.from(allDataModelsSeen.values()).find(
+        m => m.configurationName === dmName && (m.configurationGuid || m.revisionGuid),
+      );
+      for (const child of children) {
+        if (child.componentType === 'DataModel') {
+          // Walk into derived DataModels too — they can host their
+          // own ModelMapping descendants.
+          if (child.configurationName && !visitedScanNames.has(child.configurationName)) {
+            queue.push(child.configurationName);
+          }
+          continue;
+        }
+        if (child.componentType !== 'ModelMapping') continue;
+        if (!child.revisionGuid && !child.configurationGuid) {
+          // F&O sometimes surfaces a ModelMapping *branch* row
+          // (`hasChildren=true`, no GUID) whose descendants are
+          // country-variant revisions — also without a GUID, because
+          // they live as inheritance overlays on the base mapping and
+          // F&O only exposes them through the in-product ER workspace
+          // (no public service ID). `ERConfigurationStorageService`
+          // only offers `Get*ByID` operations, so we have no way to
+          // download these. Their effective rules are already baked
+          // into the Format XML returned by GetEffectiveFormatMapping-
+          // ByID, so users don't need to load them separately.
+          console.info(
+            '[fno-ui] ignoring non-downloadable ModelMapping (F&O does not expose a service ID)',
+            { name: child.configurationName, parent: dmName, hasChildren: child.hasChildren },
+          );
+          continue;
+        }
+        const key = componentKey(child);
+        if (alreadyLoadedKeys.has(key)) continue;
+        if (mappingsToLoad.has(key)) continue;
+        // GetModelMappingByID needs a `_dataModelGuid`. Resolve via
+        // the parent DM we just scanned (look it up in
+        // `allDataModelsSeen` or pull the freshly-loaded summary).
+        // NB: when we drilled into a ModelMapping branch, `dmName` is
+        // the mapping branch name, not a DM — fall back to the
+        // accumulated `allDataModelsSeen` and finally any DataModel
+        // currently loaded in the workspace store.
+        let parentDm = owningDm
+          ?? Array.from(allDataModelsSeen.values()).find(
+            m => m.configurationName === dmName && (m.configurationGuid || m.revisionGuid),
+          );
+        if (!parentDm) {
+          // Last-resort: if `dmName` is itself a mapping branch we
+          // drilled into, look up which DM the mapping-branch was
+          // listed under by scanning ancestors via parentDataModelGuid.
+          parentDm = Array.from(allDataModelsSeen.values()).find(
+            m => m.configurationGuid === child.parentDataModelGuid
+              || m.revisionGuid === child.parentDataModelRevisionGuid,
+          );
+        }
+        const annotated: ErConfigSummary = {
+          ...child,
+          parentDataModelGuid: child.parentDataModelGuid ?? parentDm?.configurationGuid,
+          parentDataModelRevisionGuid:
+            child.parentDataModelRevisionGuid ?? parentDm?.revisionGuid,
+        };
+        mappingsToLoad.set(key, annotated);
+      }
+    }
+
+    if (mappingsToLoad.size > 0) {
+      console.info(
+        '[fno-ui] auto-loading ModelMapping siblings',
+        Array.from(mappingsToLoad.values()).map(m => m.configurationName),
+      );
+    } else {
+      console.info('[fno-ui] mapping scan finished — no ModelMappings found', {
+        scannedDmNames: Array.from(visitedScanNames),
+      });
+    }
+    for (const mapping of mappingsToLoad.values()) {
+      try {
+        const download = await fnoSession.downloadConfiguration(activeProfile, mapping);
+        loadXmlFile(download.xml, download.syntheticPath);
+        ok += 1;
+      } catch (err) {
+        if (err instanceof FnoEmptyContentError) {
+          console.info('[fno-ui] sibling ModelMapping has no own XML, skipping', mapping.configurationName);
+          continue;
+        }
+        console.warn('[fno-ui] sibling ModelMapping download failed', mapping.configurationName, err);
+      }
+    }
+
     setIngesting(false);
     if (ok > 0) {
       // Clear the queue when the entire batch resolved (success or
@@ -700,7 +874,7 @@ export const FnoConnectPanel: React.FC = () => {
       if (ok + skippedEmpty === finalToLoad.length) setSelected(new Map());
       pushToast({ kind: 'success', message: t.fnoLoadedCount(ok) });
     }
-  }, [activeProfile, selected, allDataModelsSeen, loadXmlFile, pushToast]);
+  }, [activeProfile, selected, allDataModelsSeen, solutionPath, loadXmlFile, pushToast]);
 
   return (
     <div className={styles.root}>
@@ -882,23 +1056,65 @@ export const FnoConnectPanel: React.FC = () => {
               {filteredComponents.map(comp => {
                 const key = componentKey(comp);
                 const hasGuid = Boolean(comp.revisionGuid || comp.configurationGuid);
+                const hasChildren = Boolean(comp.hasChildren);
+                // Three classes of rows:
+                //   1) hasGuid → directly downloadable (selectable).
+                //   2) !hasGuid && hasChildren → branch (drill in to find leaves).
+                //   3) !hasGuid && !hasChildren → dead row: F&O surfaces it but
+                //      it has neither own GUID nor descendants. Most often a
+                //      pure-inheritance derived configuration whose content
+                //      lives in the base — already auto-included when the
+                //      base is loaded. Disable both drill and select.
+                const isDead = !hasGuid && !hasChildren;
+                // Country-variant ModelMapping is special: F&O does
+                // not expose a service ID for it (only the base model
+                // and the format-mapping have downloadable IDs), so
+                // it shows up here without a GUID. Its rules are
+                // already merged into Format XML downloads.
+                const isUnreachableMapping = !hasGuid && comp.componentType === 'ModelMapping';
+                const disabledCheckboxTitle = isUnreachableMapping
+                  ? 'F&O does not expose a service ID for this ModelMapping. Its rules are bundled into the Format XML, so loading the parent Format is enough.'
+                  : isDead
+                    ? 'No downloadable content — pure-inheritance derived configuration. Loading the base solution already brings its definition.'
+                    : 'Branch node — drill in (click row) to find downloadable children';
+                const drillTitle = hasChildren
+                  ? isUnreachableMapping
+                    ? 'Click to drill in (informational only — children are not downloadable either).'
+                    : 'Click to drill into children'
+                  : isDead
+                    ? 'No children and no own GUID — nothing to open.'
+                    : undefined;
+                let captionSuffix = '';
+                if (isUnreachableMapping) {
+                  captionSuffix = ' · (not downloadable — bundled into Format XML)';
+                } else if (!hasGuid) {
+                  captionSuffix = hasChildren
+                    ? ' · (no own content — click to drill in)'
+                    : ' · (no own content, no children — derived from a base configuration)';
+                }
                 return (
                   <div
                     key={key}
                     className={styles.listItem}
-                    style={{ gap: 8 }}
+                    style={{ gap: 8, opacity: isDead || isUnreachableMapping ? 0.55 : 1 }}
                   >
                     <Checkbox
                       checked={selected.has(key)}
+                      disabled={!hasGuid}
+                      title={hasGuid ? undefined : disabledCheckboxTitle}
                       onChange={() => toggleSelect(comp)}
                     />
                     <div
-                      style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
-                      onClick={() => handleDrillInto(comp)}
-                      onKeyDown={e => { if (e.key === 'Enter') handleDrillInto(comp); }}
-                      role="button"
-                      tabIndex={0}
-                      title="Click to drill into children"
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        cursor: hasChildren ? 'pointer' : hasGuid ? 'default' : 'not-allowed',
+                      }}
+                      onClick={hasChildren ? () => handleDrillInto(comp) : undefined}
+                      onKeyDown={hasChildren ? e => { if (e.key === 'Enter') handleDrillInto(comp); } : undefined}
+                      role={hasChildren ? 'button' : undefined}
+                      tabIndex={hasChildren ? 0 : undefined}
+                      title={drillTitle}
                     >
                       <Body1Strong>{comp.configurationName}</Body1Strong>
                       <div>
@@ -906,7 +1122,7 @@ export const FnoConnectPanel: React.FC = () => {
                           {comp.componentType}
                           {comp.version ? ` · v${comp.version}` : ''}
                           {comp.countryRegion ? ` · ${comp.countryRegion}` : ''}
-                          {!hasGuid ? ' · (no content — probably a branch; click to drill in)' : ''}
+                          {captionSuffix}
                         </Caption1>
                       </div>
                     </div>

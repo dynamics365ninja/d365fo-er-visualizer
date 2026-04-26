@@ -844,11 +844,13 @@ function findNodeForSearchResult(
   }
 
   if (result.sourceContext === 'Model mapping references data model') {
-    return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'mapping');
+    return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'mapping')
+      ?? (rootNode.data?.kind === 'ModelMapping' ? rootNode : null);
   }
 
   if (result.sourceContext === 'Format mapping references format definition') {
-    return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'format');
+    return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'format')
+      ?? (rootNode.data?.kind === 'Format' ? rootNode : null);
   }
 
   if (result.sourceContext === 'Base model reference') {
@@ -954,12 +956,15 @@ function resolveGuidTargetNode(
     case 'Solution':
       return rootNode;
     case 'ModelVersion':
-      return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'model');
+      return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'model')
+        ?? (rootNode.data?.kind === 'DataModel' ? rootNode : null);
     case 'MappingVersion':
-      return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'mapping');
+      return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'mapping')
+        ?? (rootNode.data?.kind === 'ModelMapping' ? rootNode : null);
     case 'FormatVersion':
     case 'FormatMappingVersion':
-      return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'format');
+      return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'format')
+        ?? (rootNode.data?.kind === 'Format' ? rootNode : null);
     case 'Container':
       return findTreeNodeByMatch(rootNode.children ?? [], node =>
         node.type === 'container' && node.data?.id === guid,

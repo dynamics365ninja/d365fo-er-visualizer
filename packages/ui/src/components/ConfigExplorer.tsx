@@ -510,7 +510,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
         )}
         <span className="icon">{node.icon}</span>
         <span className="tree-node-label">{node.name}</span>
-        {version != null && depth === 0 && (
+        {version != null && version !== '' && depth === 0 && (
           <span className="tree-node-version-pill" title={`v${version}`}>v{version}</span>
         )}
         {kindLabel && <span className="tree-node-kind-pill">{kindLabel}</span>}

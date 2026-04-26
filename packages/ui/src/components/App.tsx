@@ -668,15 +668,17 @@ function StatusBar({ onOpenLanding, warningsOpen, setWarningsOpen }: {
 
       {configs.map((c, i) => {
         const dir = getConfigDirectionLabel(c);
+        const version = c.solutionVersion.publicVersionNumber;
+        const versionSuffix = version ? ` v${version}` : '';
         return (
           <span
             key={i}
             className={styles.chip}
-            title={`${c.solutionVersion.solution.name} v${c.solutionVersion.publicVersionNumber}${dir ? ` • ${dir}` : ''}`}
+            title={`${c.solutionVersion.solution.name}${versionSuffix}${dir ? ` • ${dir}` : ''}`}
           >
             <span aria-hidden="true" style={{ display: 'inline-flex' }}>{getConfigIcon(c)}</span>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {c.solutionVersion.solution.name.slice(0, 22)} v{c.solutionVersion.publicVersionNumber}
+              {c.solutionVersion.solution.name.slice(0, 22)}{versionSuffix}
               {dir ? ` • ${dir}` : ''}
             </span>
             <button

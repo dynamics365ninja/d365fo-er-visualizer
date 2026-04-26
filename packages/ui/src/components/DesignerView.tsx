@@ -113,6 +113,24 @@ function FocusedNodeTab({ node }: { node: any }) {
     return <FormatDesigner config={config} configIndex={node.configIndex} focusNode={focusNode} />;
   }
 
+  // After collapsing the redundant inner wrapper, the configuration
+  // root itself (`type: 'file'`) is the entry point for the designer.
+  // Dispatch on `config.kind` so clicking the configuration row in
+  // the explorer opens the same view as before.
+  if (node.type === 'file' && config.kind === 'DataModel') {
+    return <ModelDesigner config={config} focusNode={focusNode} />;
+  }
+  if (node.type === 'file' && config.kind === 'ModelMapping' && node.configIndex != null) {
+    const mappingContent = config.content as { version?: { mapping?: unknown } };
+    const mapping = mappingContent.version?.mapping;
+    if (mapping) {
+      return <MappingDesigner mapping={mapping} configIndex={node.configIndex} focusNode={focusNode} />;
+    }
+  }
+  if (node.type === 'file' && config.kind === 'Format') {
+    return <FormatDesigner config={config} configIndex={node.configIndex} focusNode={focusNode} />;
+  }
+
   if (node.type === 'formatElement' && config.kind === 'Format') {
     return <FormatElementFocusTab node={node} configIndex={node.configIndex} />;
   }
