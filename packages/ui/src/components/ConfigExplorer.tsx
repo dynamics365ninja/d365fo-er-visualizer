@@ -26,6 +26,7 @@ import { locale, t } from '../i18n';
 import { useAppStore, type TreeNode } from '../state/store';
 import { ERDirection } from '@er-visualizer/core';
 import { loadBrowserFiles } from '../utils/file-loading';
+import { ArrowSyncRegular } from '@fluentui/react-icons';
 
 type ConfigKind = 'DataModel' | 'ModelMapping' | 'Format';
 type SortMode = 'loadOrder' | 'nameAsc' | 'nameDesc';
@@ -139,6 +140,7 @@ export function ConfigExplorer() {
   const explorerExpandCommand = useAppStore(s => s.explorerExpandCommand);
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
   const pushToast = useAppStore(s => s.pushToast);
+  const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
   const [expandMode, setExpandMode] = useState<'default' | 'all' | 'none'>('default');
   const [expandVersion, setExpandVersion] = useState(0);
   const [filterQuery, setFilterQuery] = useState('');
@@ -256,6 +258,26 @@ export function ConfigExplorer() {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
+        {fnoIngestStatus && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 12px',
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--text-primary)',
+            background: 'var(--surface-info-bg, rgba(0,120,212,0.08))',
+            borderRadius: 6,
+            animation: 'statusbar-pulse 1.6s ease-in-out infinite',
+            width: '100%',
+            maxWidth: 320,
+            marginBottom: 12,
+          }}>
+            <ArrowSyncRegular fontSize={16} style={{ animation: 'spin 1.2s linear infinite', flexShrink: 0 }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fnoIngestStatus}</span>
+          </div>
+        )}
         <p style={{ marginBottom: 8 }}>{t.noConfigurationsLoaded}</p>
         <p style={{ fontSize: 11 }}>{t.loadXmlHint}</p>
         {isDragging && <div className="explorer-dropzone-overlay">{t.landingDropRelease}</div>}
@@ -271,6 +293,25 @@ export function ConfigExplorer() {
       onDrop={handleDrop}
     >
       {isDragging && <div className="explorer-dropzone-overlay">{t.landingDropRelease}</div>}
+
+      {fnoIngestStatus && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '6px 12px',
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'var(--text-primary)',
+          background: 'var(--surface-info-bg, rgba(0,120,212,0.08))',
+          borderBottom: '1px solid var(--border-subtle)',
+          animation: 'statusbar-pulse 1.6s ease-in-out infinite',
+        }}>
+          <ArrowSyncRegular fontSize={14} style={{ animation: 'spin 1.2s linear infinite', flexShrink: 0 }} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fnoIngestStatus}</span>
+        </div>
+      )}
+
       <div className="explorer-toolbar config-explorer-toolbar">
         <div className="panel-filter-row explorer-toolbar-filter">
           <Input

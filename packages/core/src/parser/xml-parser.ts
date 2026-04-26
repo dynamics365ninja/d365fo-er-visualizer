@@ -293,29 +293,34 @@ function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> 
   // / ERModelMapping) without the enclosing solution envelope, so we
   // pick the name from whichever fragment is present.
   //
-  // The transport-injected `@_Name` hint on the `<ErFnoBundle>` wrapper
-  // takes **highest** priority because the inner XML element names can
-  // be misleading: e.g. `GetModelMappingByID` returns an
-  // `ERModelMapping` whose `@_Name` is the **DataModel** name, not the
-  // mapping configuration name. The bundle wrapper carries the correct
-  // `component.configurationName` from the listing service.
+  // Order matters! When `GetModelMappingByID` returns **both**
+  // `ERDataModel` and `ERModelMapping` in a single response,
+  // `ERDataModel.@_Name` is the *DataModel* name (e.g.
+  // "Tax declaration model") whereas `ERModelMapping.@_Name` is the
+  // *mapping* name (e.g. "Tax declaration model mapping"). The user
+  // expects to see the mapping name, so `ERModelMapping` must come
+  // before `ERDataModel`.
+  //
+  // The transport-injected `@_Name` hint is last-resort only because
+  // it can be a synthetic placeholder (e.g. "DataModel {guid}" for
+  // GUID-resolved DataModels, or "X (default mapping)" for synth
+  // mapping probes).
   const nameHintSources: (string | undefined)[] = [
-    // Primary: transport-injected hint from the ErFnoBundle wrapper.
-    (doc['@_Name'] as string | undefined),
-    // Fallback: inner XML element names.
     (doc['ERTextFormat'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
     (doc['ERFormatMapping'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
     (doc['ERModelDefinition'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
-    (doc['ERDataModel'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
     (doc['ERModelMapping'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
+    (doc['ERDataModel'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
+    // Last-resort: transport-injected hint from the ErFnoBundle wrapper.
+    (doc['@_Name'] as string | undefined),
   ];
   const solutionName = nameHintSources.find(s => typeof s === 'string' && s.length > 0) ?? '';
   const descHintSources: (string | undefined)[] = [
     (doc['ERTextFormat'] as Record<string, unknown> | undefined)?.['@_Description'] as string | undefined,
     (doc['ERFormatMapping'] as Record<string, unknown> | undefined)?.['@_Description'] as string | undefined,
     (doc['ERModelDefinition'] as Record<string, unknown> | undefined)?.['@_Description'] as string | undefined,
-    (doc['ERDataModel'] as Record<string, unknown> | undefined)?.['@_Description'] as string | undefined,
     (doc['ERModelMapping'] as Record<string, unknown> | undefined)?.['@_Description'] as string | undefined,
+    (doc['ERDataModel'] as Record<string, unknown> | undefined)?.['@_Description'] as string | undefined,
     (doc['@_Description'] as string | undefined),
   ];
   const solutionDesc = descHintSources.find(s => typeof s === 'string' && s.length > 0) ?? '';

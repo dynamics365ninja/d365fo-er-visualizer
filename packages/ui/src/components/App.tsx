@@ -28,6 +28,7 @@ import {
   ChevronRightRegular,
   ExpandUpRightRegular,
   ArrowMinimizeRegular,
+  ArrowSyncRegular,
   DismissRegular,
   DocumentRegular,
   DocumentArrowDownRegular,
@@ -657,6 +658,7 @@ function StatusBar({ onOpenLanding, warningsOpen, setWarningsOpen }: {
   const warnings = useAppStore(s => s.warnings);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const removeConfiguration = useAppStore(s => s.removeConfiguration);
+  const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
 
   return (
     <div className={styles.root} role="status">
@@ -664,7 +666,20 @@ function StatusBar({ onOpenLanding, warningsOpen, setWarningsOpen }: {
         <HomeRegular fontSize={14} />
         <span>{t.home}</span>
       </button>
-      <span className={styles.info}>{t.statusConfigs(configs.length)}</span>
+
+      {fnoIngestStatus ? (
+        <span className={styles.chip} style={{
+          fontStyle: 'italic',
+          background: 'rgba(255,255,255,0.25)',
+          animation: 'statusbar-pulse 1.6s ease-in-out infinite',
+          fontWeight: 600,
+        }} title={fnoIngestStatus}>
+          <ArrowSyncRegular fontSize={12} style={{ animation: 'spin 1.2s linear infinite' }} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 320 }}>{fnoIngestStatus}</span>
+        </span>
+      ) : (
+        <span className={styles.info}>{t.statusConfigs(configs.length)}</span>
+      )}
 
       {configs.map((c, i) => {
         const dir = getConfigDirectionLabel(c);

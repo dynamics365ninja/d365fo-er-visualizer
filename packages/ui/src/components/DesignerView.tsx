@@ -18,7 +18,7 @@ import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { buildFormatBindingPresentation, groupFormatBindingsByCategory } from '../utils/format-binding-display';
 import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/theme-colors';
-import { ERDirection, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent } from '@er-visualizer/core';
+import { ERDirection, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent, type ERFormatElement } from '@er-visualizer/core';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -910,7 +910,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
 
   const [filter, setFilter] = useState('');
-  const [view, setView] = useState<'structure' | 'bindings' | 'datasources'>('structure');
+  const [view, setView] = useState<'structure' | 'bindings' | 'datasources' | 'preview'>('structure');
   const [density, setDensity] = useState<DensityMode>('comfortable');
   const [structureExpandMode, setStructureExpandMode] = useState<'all' | 'none'>('all');
   const [structureExpandVersion, setStructureExpandVersion] = useState(0);
@@ -1088,7 +1088,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const bindingsLabel = showTechnicalDetails ? t.bindings : t.lightBindings;
   const dataSourcesLabel = showTechnicalDetails ? t.dataSources : t.lightDataSources;
   const groupCountLabel = locale === 'cs' ? (showTechnicalDetails ? 'typů' : 'skupin') : (showTechnicalDetails ? 'types' : 'groups');
-  const currentViewLabel = view === 'structure' ? t.structure : view === 'bindings' ? bindingsLabel : dataSourcesLabel;
+  const currentViewLabel = view === 'structure' ? t.structure : view === 'bindings' ? bindingsLabel : view === 'preview' ? 'Preview' : dataSourcesLabel;
   const currentFocusLabel = selectedElement?.name ?? focusNode?.name ?? fmt.name;
 
   return (
@@ -1115,7 +1115,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
       {/* ── Toolbar ── */}
       <div className="fmt-toolbar">
         <div style={{ display: 'flex', gap: 4 }}>
-          {(['structure', 'bindings', 'datasources'] as const).map(v => (
+          {(['structure', 'bindings', 'datasources', 'preview'] as const).map(v => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -1123,6 +1123,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
             >
               {v === 'structure' ? `${t.structure} (${stats.totalElements})` :
                v === 'bindings' ? `${bindingsLabel} (${groupedBindingsByType.length} ${groupCountLabel})` :
+               v === 'preview' ? `${fc.direction === ERDirection.Import ? '📥' : '📤'} Preview` :
                `${dataSourcesLabel} (${stats.datasources})`}
             </button>
           ))}
@@ -1245,10 +1246,199 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
           {view === 'datasources' && (
             <GroupedDatasourceList datasources={filteredDatasources} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} />
           )}
+
+          {view === 'preview' && (
+            <FormatPreview rootElement={rootElement} direction={fc.direction} bindingMap={bindingMap} />
+          )}
         </div>
       </div>
     </div>
   );
+}
+
+// ── Format file preview ──
+
+type BindingMap = Map<string, import('../utils/format-binding-display').NormalizedFormatBinding[]>;
+
+/**
+ * Try to extract a fixed (constant) value from a binding expression string.
+ * Returns the constant if the expression is a pure double-quoted string literal
+ * (e.g. `"HD: "`), a number, or a boolean.
+ * Returns '' for dynamic expressions — data paths like
+ * `'Control statement'.'$A5'.aggregated.'$TaxBaseStd'` use single-quoted
+ * identifiers joined by `'.'` and must be rejected.
+ */
+function extractConstantFromExpression(expr: string): string {
+  const trimmed = expr.trim();
+  if (!trimmed) return '';
+  // Only double-quoted strings are ER string constants.
+  // Single quotes are used for identifier quoting in paths.
+  const strMatch = trimmed.match(/^"([^"]*)"$/);
+  if (strMatch) return strMatch[1];
+  // Numeric literal
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return trimmed;
+  // Boolean
+  if (trimmed === 'true' || trimmed === 'false') return trimmed;
+  // Everything else is dynamic — no constant
+  return '';
+}
+
+/** Format an element's preview value: constant from binding expression or {elementName} placeholder.
+ *  el.value is always an expression path in ER format XML, never a display constant — skip it. */
+function previewValue(el: ERFormatElement, bindingMap: BindingMap): string {
+  const bindings = bindingMap.get(el.id);
+  if (bindings) {
+    const dataBinding = bindings.find(b => b.bindingCategory === 'data');
+    if (dataBinding?.expressionAsString) {
+      const constant = extractConstantFromExpression(dataBinding.expressionAsString);
+      if (constant) return constant;
+    }
+  }
+  return `{${el.name}}`;
+}
+
+function FormatPreview({ rootElement, direction, bindingMap }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap }) {
+  const preview = useMemo(() => generateFormatPreview(rootElement, bindingMap), [rootElement, bindingMap]);
+  return (
+    <div style={{ padding: 16, overflow: 'auto', height: '100%' }}>
+      <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+        {direction === ERDirection.Import ? '📥 Input' : '📤 Output'} file structure preview — constant values are resolved from binding expressions.
+        Dynamic values (data source paths, functions) are shown as {'{placeholder}'}.
+      </div>
+      <pre style={{
+        fontFamily: 'var(--font-mono, "Cascadia Code", Consolas, monospace)',
+        fontSize: 12,
+        lineHeight: 1.6,
+        margin: 0,
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-all',
+        color: 'var(--text-primary)',
+        background: 'var(--bg-secondary)',
+        padding: 16,
+        borderRadius: 6,
+        border: '1px solid var(--border-subtle)',
+      }}>
+        {preview}
+      </pre>
+    </div>
+  );
+}
+
+/** Build a file preview from the ER Format element tree using binding expressions. */
+function generateFormatPreview(root: ERFormatElement, bm: BindingMap): string {
+  const info = detectFormatType(root);
+  if (info.label === 'XML') return generateXmlPreview(root, 0, bm);
+  if (info.label === 'Text / CSV' || info.label === 'Text') return generateTextPreview(root, bm);
+  if (info.label === 'Excel') return generateExcelPreview(root, bm);
+  // Fallback: generic tree-like view
+  return generateGenericPreview(root, 0, bm);
+}
+
+function generateXmlPreview(el: ERFormatElement, depth: number, bm: BindingMap): string {
+  const indent = '  '.repeat(depth);
+  const name = el.name || el.elementType;
+
+  if (el.elementType === 'File') {
+    const header = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    return header + el.children.map(c => generateXmlPreview(c, 0, bm)).join('\n');
+  }
+
+  if (el.elementType === 'XMLAttribute') {
+    return ''; // Attributes are rendered inline on the parent element
+  }
+
+  if (el.elementType === 'XMLSequence') {
+    const inner = el.children.map(c => generateXmlPreview(c, depth, bm)).join('');
+    return `${indent}<!-- sequence: ${name} (repeating) -->\n${inner}`;
+  }
+
+  if (el.elementType === 'XMLElement') {
+    const attrs = el.children
+      .filter(c => c.elementType === 'XMLAttribute')
+      .map(a => ` ${a.name}="${previewValue(a, bm)}"`)
+      .join('');
+    const nonAttrChildren = el.children.filter(c => c.elementType !== 'XMLAttribute');
+
+    if (nonAttrChildren.length === 0) {
+      const val = previewValue(el, bm);
+      if (attrs) return `${indent}<${name}${attrs}>${val}</${name}>\n`;
+      return `${indent}<${name}>${val}</${name}>\n`;
+    }
+
+    const inner = nonAttrChildren.map(c => generateXmlPreview(c, depth + 1, bm)).join('');
+    return `${indent}<${name}${attrs}>\n${inner}${indent}</${name}>\n`;
+  }
+
+  // String/Numeric/DateTime etc. inside XML — render as text content
+  if (['String', 'Numeric', 'DateTime', 'Base64'].includes(el.elementType)) {
+    return `${indent}${previewValue(el, bm)}\n`;
+  }
+
+  // Default
+  const inner = el.children.map(c => generateXmlPreview(c, depth + 1, bm)).join('');
+  return inner || `${indent}<!-- ${el.elementType}: ${name} -->\n`;
+}
+
+function generateTextPreview(root: ERFormatElement, bm: BindingMap): string {
+  const lines: string[] = [];
+
+  const walk = (el: ERFormatElement) => {
+    if (el.elementType === 'TextLine' || el.elementType === 'String') {
+      const children = el.children ?? [];
+      if (children.length > 0) {
+        const fields = children.map(c => previewValue(c, bm));
+        lines.push(fields.join(';'));
+      } else {
+        lines.push(previewValue(el, bm));
+      }
+    } else if (el.elementType === 'TextSequence') {
+      lines.push(`--- ${el.name} (repeating) ---`);
+      for (const child of el.children) walk(child);
+      lines.push(`--- end ${el.name} ---`);
+    } else if (el.elementType === 'File' || el.elementType === 'XMLSequence') {
+      for (const child of el.children) walk(child);
+    } else if (el.children.length > 0) {
+      for (const child of el.children) walk(child);
+    } else {
+      lines.push(previewValue(el, bm));
+    }
+  };
+
+  walk(root);
+  return lines.join('\n');
+}
+
+function generateExcelPreview(root: ERFormatElement, bm: BindingMap): string {
+  const lines: string[] = [];
+  const walk = (el: ERFormatElement, depth: number) => {
+    const indent = '  '.repeat(depth);
+    if (el.elementType === 'ExcelFile') {
+      lines.push(`📊 Excel Workbook`);
+      for (const child of el.children) walk(child, depth + 1);
+    } else if (el.elementType === 'ExcelSheet') {
+      lines.push(`${indent}📃 Sheet: "${el.name}"`);
+      for (const child of el.children) walk(child, depth + 1);
+    } else if (el.elementType === 'ExcelRange') {
+      lines.push(`${indent}📐 Range: ${el.name}`);
+      for (const child of el.children) walk(child, depth + 1);
+    } else if (el.elementType === 'ExcelCell') {
+      lines.push(`${indent}📎 Cell: ${el.name} = ${previewValue(el, bm)}`);
+    } else {
+      lines.push(`${indent}${el.elementType}: ${el.name}`);
+      for (const child of el.children) walk(child, depth + 1);
+    }
+  };
+  walk(root, 0);
+  return lines.join('\n');
+}
+
+function generateGenericPreview(el: ERFormatElement, depth: number, bm: BindingMap): string {
+  const indent = '  '.repeat(depth);
+  const label = `${el.elementType}: ${el.name}`;
+  const pv = previewValue(el, bm);
+  const val = pv !== `{${el.name}}` ? ` = ${pv}` : '';
+  const line = `${indent}${label}${val}\n`;
+  return line + el.children.map(c => generateGenericPreview(c, depth + 1, bm)).join('');
 }
 
 // ── Format type detection ──

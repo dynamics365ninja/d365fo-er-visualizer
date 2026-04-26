@@ -3090,6 +3090,11 @@ body {
   to { transform: rotate(360deg); }
 }
 
+@keyframes statusbar-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 /* Errors */
 .landing-errors {
   width: 100%;
