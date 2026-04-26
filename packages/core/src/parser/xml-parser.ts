@@ -291,17 +291,23 @@ function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> 
   // don't come out blank. F&O's custom services return only the
   // inner content (ERTextFormat / ERFormatMapping / ERModelDefinition
   // / ERModelMapping) without the enclosing solution envelope, so we
-  // pick the name from whichever fragment is present — preferring
-  // the entity-level roots over the version wrappers (which carry
-  // only DateTime/Description).
+  // pick the name from whichever fragment is present.
+  //
+  // The transport-injected `@_Name` hint on the `<ErFnoBundle>` wrapper
+  // takes **highest** priority because the inner XML element names can
+  // be misleading: e.g. `GetModelMappingByID` returns an
+  // `ERModelMapping` whose `@_Name` is the **DataModel** name, not the
+  // mapping configuration name. The bundle wrapper carries the correct
+  // `component.configurationName` from the listing service.
   const nameHintSources: (string | undefined)[] = [
+    // Primary: transport-injected hint from the ErFnoBundle wrapper.
+    (doc['@_Name'] as string | undefined),
+    // Fallback: inner XML element names.
     (doc['ERTextFormat'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
     (doc['ERFormatMapping'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
     (doc['ERModelDefinition'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
     (doc['ERDataModel'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
     (doc['ERModelMapping'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
-    // Fallback: a hint placed on the bundle wrapper by the transport.
-    (doc['@_Name'] as string | undefined),
   ];
   const solutionName = nameHintSources.find(s => typeof s === 'string' && s.length > 0) ?? '';
   const descHintSources: (string | undefined)[] = [
