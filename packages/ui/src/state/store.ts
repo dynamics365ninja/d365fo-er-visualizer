@@ -238,6 +238,9 @@ export interface AppState {
   cachedPaths: Set<string>;
   warnings: ConfigWarning[];
 
+  /** Global F&O download progress label, empty when idle. */
+  fnoIngestStatus: string;
+
   // Actions
   loadXmlFile: (xml: string, filePath: string) => void;
   removeConfiguration: (index: number) => void;
@@ -248,6 +251,7 @@ export interface AppState {
   setActiveTab: (id: string) => void;
   rebuildDerivedState: () => void;
   setShowTechnicalDetails: (show: boolean) => void;
+  setFnoIngestStatus: (status: string) => void;
   setThemeMode: (mode: ThemeMode) => void;
   setSearchQuery: (query: string) => void;
   executeSearch: () => void;
@@ -507,6 +511,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   searchQuery: '',
   searchResults: [],
   showTechnicalDetails: readStoredTechnicalDetails(),
+  fnoIngestStatus: '',
   themeMode: readStoredThemeMode(),
   navigationHistory: [],
   navigationForward: [],
@@ -758,6 +763,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistTechnicalDetails(show);
     set({ showTechnicalDetails: show });
   },
+
+  setFnoIngestStatus: (status: string) => set({ fnoIngestStatus: status }),
 
   setThemeMode: (mode: ThemeMode) => {
     persistThemeMode(mode);

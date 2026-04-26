@@ -252,6 +252,12 @@ export const FnoConnectPanel: React.FC = () => {
   const [dataModelChain, setDataModelChain] = useState<ErConfigSummary[]>([]);
 
   const [ingesting, setIngesting] = useState(false);
+  const setFnoIngestStatus = useAppStore(s => s.setFnoIngestStatus);
+  /** Human-readable progress label shown while ingesting. */
+  const setIngestStatus = useCallback((status: string) => {
+    setFnoIngestStatus(status);
+  }, [setFnoIngestStatus]);
+  const ingestStatus = useAppStore(s => s.fnoIngestStatus);
 
   const activeProfile = useMemo(
     () => profiles.find(p => p.id === activeProfileId) ?? null,
@@ -331,6 +337,7 @@ export const FnoConnectPanel: React.FC = () => {
     setLoadingSolutions(true);
     try {
       const list = await fnoSession.listSolutions(activeProfile);
+      list.sort((a, b) => (a.solutionName ?? '').localeCompare(b.solutionName ?? '', undefined, { sensitivity: 'base', numeric: true }));
       // Dev diagnostic: always log so we can inspect shape in DevTools.
       console.info(
         '[fno-odata] listSolutions returned',
@@ -367,6 +374,7 @@ export const FnoConnectPanel: React.FC = () => {
     setLoadingSolutions(true);
     try {
       const list = await fnoSession.listSolutions(activeProfile, undefined, { extraRoots: [root] });
+      list.sort((a, b) => (a.solutionName ?? '').localeCompare(b.solutionName ?? '', undefined, { sensitivity: 'base', numeric: true }));
       console.info('[fno-odata] listSolutions(extraRoot) returned', list.length, 'solutions', list);
       setSolutions(list);
       if (list.length === 0) {
@@ -407,6 +415,7 @@ export const FnoConnectPanel: React.FC = () => {
     setComponents([]);
     try {
       const list = await fnoSession.listComponents(activeProfile, solutionName);
+      list.sort((a, b) => (a.configurationName ?? '').localeCompare(b.configurationName ?? '', undefined, { sensitivity: 'base', numeric: true }));
       console.info('[fno-ui] components for', solutionName, list);
       // The first DataModel we see at level 1 is the *root* DataModel
       // for this subtree. Remember it so deeper ModelMapping / Format
@@ -455,6 +464,7 @@ export const FnoConnectPanel: React.FC = () => {
     setComponents([]);
     try {
       const list = await fnoSession.listComponents(activeProfile, name);
+      list.sort((a, b) => (a.configurationName ?? '').localeCompare(b.configurationName ?? '', undefined, { sensitivity: 'base', numeric: true }));
       console.info('[fno-ui] components for', name, list);
       setAllDataModelsSeen(prev => rememberDataModels(prev, list));
       setComponents(annotateWithParentDataModel(list, nextChain));
@@ -615,6 +625,7 @@ export const FnoConnectPanel: React.FC = () => {
       }
     }
     setIngesting(true);
+    setIngestStatus('Preparing…');
 
     const finalToLoad = Array.from(augmented.values());
     // Order: root DataModels first (so downstream imports can resolve
@@ -644,7 +655,9 @@ export const FnoConnectPanel: React.FC = () => {
         alreadyLoadedGuids.add(c.configurationGuid.toLowerCase());
       }
     }
-    for (const component of finalToLoad) {
+    for (let i = 0; i < finalToLoad.length; i++) {
+      const component = finalToLoad[i];
+      setIngestStatus(`Downloading ${component.configurationName} (${i + 1}/${finalToLoad.length})…`);
       try {
         const download = await fnoSession.downloadConfiguration(activeProfile, component);
         loadXmlFile(download.xml, download.syntheticPath);
@@ -691,6 +704,7 @@ export const FnoConnectPanel: React.FC = () => {
     // silently skip — the base model already carries the definition
     // via the normal auto-inject path.
     if (pendingModelFollowUps.size > 0) {
+      setIngestStatus('Resolving referenced DataModels…');
       console.info('[fno-ui] following up on referenced DataModels', Array.from(pendingModelFollowUps.values()));
     }
     for (const { guid, rev } of pendingModelFollowUps.values()) {
@@ -726,6 +740,7 @@ export const FnoConnectPanel: React.FC = () => {
     // Third pass: now that every DataModel (explicit + ancestor +
     // referenced) is on disk in the workspace, enumerate ModelMapping
     // siblings for each one and download them.
+    setIngestStatus('Scanning for Model Mappings…');
     //
     // ER hierarchy refresher (per F&O ERSolutionTable):
     //   - Root DataModel
@@ -788,6 +803,7 @@ export const FnoConnectPanel: React.FC = () => {
       parentDmName: string;
       mappingName: string;
       mappingSolutionName: string;
+      mappingVersion: string | undefined;
     }[]>();
     // Recursive scan: a mapping can be under the root DM, a derived
     // DM, or any depth in between. We walk the listComponents tree
@@ -842,6 +858,7 @@ export const FnoConnectPanel: React.FC = () => {
             parentDmName: dmName,
             mappingName: child.configurationName,
             mappingSolutionName: child.solutionName,
+            mappingVersion: child.version,
           });
           pendingMappingBranchesByDmName.set(dmName, list);
           console.info(
@@ -895,6 +912,7 @@ export const FnoConnectPanel: React.FC = () => {
     }
 
     // ── Synthesized ModelMapping fetches via the X++ AOT fallback ──
+    setIngestStatus('Downloading Model Mappings…');
     //
     // Per X++ source (ERConfigurationStorageService.getModelMappingByID,
     // confirmed against the D365FO VM), the second resolution branch
@@ -1126,39 +1144,47 @@ export const FnoConnectPanel: React.FC = () => {
       }
     }
     const synthQueue: { synth: ErConfigSummary; dmGuid: string; label: string }[] = [];
-    for (const dm of dmGuidIndex.values()) {
-      synthQueue.push({
-        synth: {
-          solutionName: dm.solutionName,
-          configurationName: `${dm.name} (default mapping)`,
-          componentType: 'ModelMapping',
-          parentDataModelGuid: dm.guid,
-          descriptorNameCandidates: dm.descriptorNames,
-          hasContent: true,
-        },
-        dmGuid: dm.guid,
-        label: `default mapping for ${dm.name}`,
-      });
-    }
+
+    // ── Resolve pending mapping branches first ──
+    // These carry correct configurationName + version from the listing
+    // service. When resolved, they also suppress the default probe for
+    // that DM GUID (which would download the same XML without metadata).
+    const dmGuidsWithResolvedBranch = new Set<string>();
     let resolvedBranchCount = 0;
     let unresolvedBranchCount = 0;
     for (const branches of pendingMappingBranchesByDmName.values()) {
       for (const branch of branches) {
-        const ownerDm = dmByName.get(branch.parentDmName);
+        let ownerDm = dmByName.get(branch.parentDmName);
+        if (!ownerDm) {
+          // Fallback: the branch was listed under a base DM that we
+          // don't have in `dmByName` (typical: base-walk returned
+          // empty XML). Use any available DM — F&O resolves
+          // inheritance automatically, so GetModelMappingByID with a
+          // derived DM GUID returns the effective mapping that covers
+          // the base too.
+          for (const candidate of dmGuidIndex.values()) {
+            if (!candidate.name.startsWith('DataModel ')) {
+              ownerDm = candidate;
+              break;
+            }
+          }
+        }
         if (!ownerDm) {
           unresolvedBranchCount += 1;
           console.info(
-            '[fno-ui] pending ModelMapping branch unresolved (no DM GUID for parent)',
+            '[fno-ui] pending ModelMapping branch unresolved (no DM GUID at all)',
             branch,
           );
           continue;
         }
         resolvedBranchCount += 1;
+        dmGuidsWithResolvedBranch.add(ownerDm.guid);
         synthQueue.push({
           synth: {
             solutionName: branch.mappingSolutionName,
             configurationName: branch.mappingName,
             componentType: 'ModelMapping',
+            version: branch.mappingVersion,
             parentDataModelGuid: ownerDm.guid,
             descriptorNameCandidates: ownerDm.descriptorNames,
             hasContent: true,
@@ -1175,8 +1201,25 @@ export const FnoConnectPanel: React.FC = () => {
       });
     }
 
+    // ── Default mapping probes for DMs without a resolved branch ──
+    for (const dm of dmGuidIndex.values()) {
+      if (dmGuidsWithResolvedBranch.has(dm.guid)) continue;
+      synthQueue.push({
+        synth: {
+          solutionName: dm.solutionName,
+          configurationName: `${dm.name} (default mapping)`,
+          componentType: 'ModelMapping',
+          parentDataModelGuid: dm.guid,
+          descriptorNameCandidates: dm.descriptorNames,
+          hasContent: true,
+        },
+        dmGuid: dm.guid,
+        label: `default mapping for ${dm.name}`,
+      });
+    }
+
     for (const item of synthQueue) {
-      const synthKey = `synth-mapping:${item.dmGuid}:${item.synth.configurationName}`;
+      const synthKey = `synth-mapping:${item.dmGuid}`;
       if (synthesizedMappingKeys.has(synthKey)) continue;
       synthesizedMappingKeys.add(synthKey);
       try {
@@ -1217,6 +1260,7 @@ export const FnoConnectPanel: React.FC = () => {
     }
 
     setIngesting(false);
+    setIngestStatus('');
     if (ok > 0) {
       // Clear the queue when the entire batch resolved (success or
       // benign empty). Partial *real* failures stay selected for retry.
@@ -1510,17 +1554,21 @@ export const FnoConnectPanel: React.FC = () => {
 
       {connState.kind === 'connected' && (
         <div className={styles.footer}>
-          <Caption1
-            title={
-              selected.size > 0
-                ? Array.from(selected.values())
-                    .map(c => `${c.solutionName} / ${c.configurationName} (${c.componentType})`)
-                    .join('\n')
-                : undefined
-            }
-          >
-            {selected.size > 0 ? `${selected.size} vybráno (napříč úrovněmi)` : ''}
-          </Caption1>
+          {ingesting && ingestStatus ? (
+            <Caption1 style={{ fontStyle: 'italic' }}>{ingestStatus}</Caption1>
+          ) : (
+            <Caption1
+              title={
+                selected.size > 0
+                  ? Array.from(selected.values())
+                      .map(c => `${c.solutionName} / ${c.configurationName} (${c.componentType})`)
+                      .join('\n')
+                  : undefined
+              }
+            >
+              {selected.size > 0 ? `${selected.size} vybráno (napříč úrovněmi)` : ''}
+            </Caption1>
+          )}
           <Button
             appearance="primary"
             icon={ingesting ? <ArrowSyncRegular /> : <CloudArrowDownRegular />}
