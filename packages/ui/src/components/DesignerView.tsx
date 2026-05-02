@@ -1297,7 +1297,353 @@ function previewValue(el: ERFormatElement, bindingMap: BindingMap): string {
   return `{${el.name}}`;
 }
 
+// ── Visual Excel Spreadsheet Preview ──
+
+interface ExcelSheetData {
+  name: string;
+  header: ExcelSectionData | null;
+  footer: ExcelSectionData | null;
+  ranges: ExcelRangeData[];
+  cells: ExcelCellData[];
+}
+
+interface ExcelSectionData {
+  name: string;
+  type: 'header' | 'footer';
+  cells: ExcelCellData[];
+}
+
+interface ExcelRangeData {
+  name: string;
+  excelRange: string;
+  replicationDirection: string;
+  cells: ExcelCellData[];
+  children: ExcelRangeData[];
+}
+
+interface ExcelCellData {
+  name: string;
+  excelRange: string;
+  value: string;
+}
+
+function collectExcelSheets(root: ERFormatElement, bm: BindingMap): ExcelSheetData[] {
+  const sheets: ExcelSheetData[] = [];
+
+  const collectCells = (el: ERFormatElement): ExcelCellData[] => {
+    if (el.elementType === 'ExcelCell') {
+      return [{
+        name: el.name,
+        excelRange: el.attributes?.['ExcelRange'] ?? el.name,
+        value: previewValue(el, bm),
+      }];
+    }
+    return el.children.flatMap(c => collectCells(c));
+  };
+
+  const collectRanges = (el: ERFormatElement): ExcelRangeData[] => {
+    if (el.elementType === 'ExcelRange') {
+      return [{
+        name: el.name,
+        excelRange: el.attributes?.['ExcelRange'] ?? el.name,
+        replicationDirection: el.attributes?.['ReplicationDirection'] === '1' ? 'vertical' : el.attributes?.['ReplicationDirection'] === '2' ? 'horizontal' : '',
+        cells: el.children.filter(c => c.elementType === 'ExcelCell').map(c => ({
+          name: c.name,
+          excelRange: c.attributes?.['ExcelRange'] ?? c.name,
+          value: previewValue(c, bm),
+        })),
+        children: el.children.filter(c => c.elementType === 'ExcelRange').flatMap(c => collectRanges(c)),
+      }];
+    }
+    return el.children.flatMap(c => collectRanges(c));
+  };
+
+  const walkSheet = (el: ERFormatElement) => {
+    if (el.elementType === 'ExcelSheet') {
+      const header = el.children.find(c => c.elementType === 'ExcelHeader');
+      const footer = el.children.find(c => c.elementType === 'ExcelFooter');
+      const bodyChildren = el.children.filter(c => c.elementType !== 'ExcelHeader' && c.elementType !== 'ExcelFooter');
+      sheets.push({
+        name: el.name,
+        header: header ? { name: header.name, type: 'header', cells: collectCells(header) } : null,
+        footer: footer ? { name: footer.name, type: 'footer', cells: collectCells(footer) } : null,
+        ranges: bodyChildren.flatMap(c => collectRanges(c)),
+        cells: bodyChildren.filter(c => c.elementType === 'ExcelCell').map(c => ({
+          name: c.name,
+          excelRange: c.attributes?.['ExcelRange'] ?? c.name,
+          value: previewValue(c, bm),
+        })),
+      });
+    } else {
+      for (const child of el.children) walkSheet(child);
+    }
+  };
+  walkSheet(root);
+
+  // Many Excel formats have no ExcelSheet wrapper — cells/ranges sit directly under ExcelFile.
+  // Treat the root as an implicit single sheet in that case.
+  if (sheets.length === 0 && (root.elementType === 'ExcelFile' || root.elementType === 'ExcelSheet')) {
+    const header = root.children.find(c => c.elementType === 'ExcelHeader');
+    const footer = root.children.find(c => c.elementType === 'ExcelFooter');
+    const bodyChildren = root.children.filter(c => c.elementType !== 'ExcelHeader' && c.elementType !== 'ExcelFooter');
+    sheets.push({
+      name: root.name || 'Sheet1',
+      header: header ? { name: header.name, type: 'header', cells: collectCells(header) } : null,
+      footer: footer ? { name: footer.name, type: 'footer', cells: collectCells(footer) } : null,
+      ranges: bodyChildren.flatMap(c => collectRanges(c)),
+      cells: bodyChildren.filter(c => c.elementType === 'ExcelCell').map(c => ({
+        name: c.name,
+        excelRange: c.attributes?.['ExcelRange'] ?? c.name,
+        value: previewValue(c, bm),
+      })),
+    });
+  }
+
+  return sheets;
+}
+
+const excelColors = {
+  sheetTab: '#217346',
+  sheetTabText: '#fff',
+  headerBg: 'var(--bg-secondary)',
+  headerText: 'var(--text-secondary)',
+  cellBorder: 'var(--border-subtle)',
+  rangeBg: 'rgba(33, 115, 70, 0.06)',
+  rangeBorder: '#217346',
+  headerSectionBg: 'rgba(33, 115, 70, 0.10)',
+  footerSectionBg: 'rgba(128, 128, 128, 0.08)',
+  cellBg: 'var(--bg-primary)',
+  dynamicValueColor: 'var(--format-type-string, #c586c0)',
+  constantValueColor: 'var(--text-primary)',
+};
+
+function ExcelVisualPreview({ rootElement, direction, bindingMap }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap }) {
+  const sheets = useMemo(() => collectExcelSheets(rootElement, bindingMap), [rootElement, bindingMap]);
+  const [activeSheet, setActiveSheet] = useState(0);
+
+  if (sheets.length === 0) {
+    return <div style={{ padding: 16, color: 'var(--text-secondary)', fontSize: 12 }}>No Excel sheets found in format structure.</div>;
+  }
+
+  const sheet = sheets[Math.min(activeSheet, sheets.length - 1)];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Direction hint */}
+      <div style={{ padding: '8px 16px', fontSize: 12, color: 'var(--text-secondary)', borderBottom: `1px solid ${excelColors.cellBorder}` }}>
+        {direction === ERDirection.Import ? '📥 Input' : '📤 Output'} Excel workbook preview — cells show named ranges from the template.
+        <span style={{ color: excelColors.dynamicValueColor, marginLeft: 8 }}>{'{dynamic}'}</span> = data-bound,
+        <span style={{ marginLeft: 4, fontWeight: 600 }}>constant</span> = resolved from expression.
+      </div>
+
+      {/* Spreadsheet area */}
+      <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+        {/* Column header bar (A, B, C...) */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          border: `1px solid ${excelColors.cellBorder}`,
+          borderRadius: 6,
+          overflow: 'hidden',
+          background: excelColors.cellBg,
+        }}>
+          {/* Header section */}
+          {sheet.header && sheet.header.cells.length > 0 && (
+            <ExcelSectionBlock section={sheet.header} />
+          )}
+
+          {/* Loose cells at sheet level */}
+          {sheet.cells.length > 0 && (
+            <div style={{ borderBottom: `1px solid ${excelColors.cellBorder}` }}>
+              <ExcelCellGrid cells={sheet.cells} label={null} />
+            </div>
+          )}
+
+          {/* Ranges */}
+          {sheet.ranges.map((range, i) => (
+            <ExcelRangeBlock key={i} range={range} depth={0} />
+          ))}
+
+          {/* Footer section */}
+          {sheet.footer && sheet.footer.cells.length > 0 && (
+            <ExcelSectionBlock section={sheet.footer} />
+          )}
+
+          {/* Empty state */}
+          {sheet.cells.length === 0 && sheet.ranges.length === 0 && !sheet.header && !sheet.footer && (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>Empty sheet</div>
+          )}
+        </div>
+      </div>
+
+      {/* Sheet tabs at bottom */}
+      {sheets.length > 0 && (
+        <div style={{
+          display: 'flex',
+          gap: 0,
+          borderTop: `2px solid ${excelColors.sheetTab}`,
+          background: 'var(--bg-secondary)',
+          padding: '0 8px',
+          overflow: 'auto',
+          flexShrink: 0,
+        }}>
+          {sheets.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => setActiveSheet(i)}
+              style={{
+                padding: '6px 16px',
+                fontSize: 12,
+                fontWeight: i === activeSheet ? 700 : 400,
+                cursor: 'pointer',
+                border: 'none',
+                borderTop: i === activeSheet ? `2px solid ${excelColors.sheetTab}` : '2px solid transparent',
+                background: i === activeSheet ? excelColors.cellBg : 'transparent',
+                color: i === activeSheet ? excelColors.sheetTab : 'var(--text-secondary)',
+                marginTop: -2,
+                transition: 'all 0.15s',
+              }}
+            >
+              📃 {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExcelSectionBlock({ section }: { section: ExcelSectionData }) {
+  const isHeader = section.type === 'header';
+  return (
+    <div style={{
+      background: isHeader ? excelColors.headerSectionBg : excelColors.footerSectionBg,
+      borderBottom: `1px solid ${excelColors.cellBorder}`,
+    }}>
+      <div style={{
+        padding: '4px 12px',
+        fontSize: 11,
+        fontWeight: 600,
+        color: 'var(--text-secondary)',
+        textTransform: 'uppercase',
+        letterSpacing: '0.05em',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+      }}>
+        {isHeader ? '🔼' : '🔽'} {section.type}
+      </div>
+      <ExcelCellGrid cells={section.cells} label={null} />
+    </div>
+  );
+}
+
+function ExcelRangeBlock({ range, depth }: { range: ExcelRangeData; depth: number }) {
+  const repIcon = range.replicationDirection === 'vertical' ? '↕' : range.replicationDirection === 'horizontal' ? '↔' : '';
+  return (
+    <div style={{
+      borderBottom: `1px solid ${excelColors.cellBorder}`,
+      marginLeft: depth * 8,
+      borderLeft: depth > 0 ? `2px solid ${excelColors.rangeBorder}44` : undefined,
+    }}>
+      {/* Range header */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '4px 12px',
+        background: excelColors.rangeBg,
+        borderBottom: `1px solid ${excelColors.cellBorder}`,
+      }}>
+        <span style={{ fontSize: 13 }}>📐</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: excelColors.rangeBorder }}>{range.excelRange}</span>
+        {range.name !== range.excelRange && (
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>({range.name})</span>
+        )}
+        {repIcon && (
+          <span style={{
+            fontSize: 10,
+            padding: '1px 6px',
+            borderRadius: 3,
+            background: `${excelColors.rangeBorder}18`,
+            color: excelColors.rangeBorder,
+            fontWeight: 600,
+          }}>
+            {repIcon} repeating {range.replicationDirection}
+          </span>
+        )}
+      </div>
+
+      {/* Cells in this range */}
+      {range.cells.length > 0 && (
+        <ExcelCellGrid cells={range.cells} label={null} />
+      )}
+
+      {/* Nested ranges */}
+      {range.children.map((child, i) => (
+        <ExcelRangeBlock key={i} range={child} depth={depth + 1} />
+      ))}
+    </div>
+  );
+}
+
+function ExcelCellGrid({ cells, label }: { cells: ExcelCellData[]; label: string | null }) {
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+      gap: 0,
+    }}>
+      {cells.map((cell, i) => {
+        const isDynamic = cell.value.startsWith('{') && cell.value.endsWith('}');
+        return (
+          <div key={i} style={{
+            padding: '6px 12px',
+            borderRight: `1px solid ${excelColors.cellBorder}`,
+            borderBottom: `1px solid ${excelColors.cellBorder}`,
+            fontSize: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+            minWidth: 0,
+          }}>
+            <span style={{
+              fontSize: 10,
+              color: 'var(--text-secondary)',
+              fontFamily: 'var(--font-mono, monospace)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}>
+              {cell.excelRange}
+            </span>
+            <span style={{
+              fontFamily: 'var(--font-mono, monospace)',
+              fontSize: 11,
+              color: isDynamic ? excelColors.dynamicValueColor : excelColors.constantValueColor,
+              fontStyle: isDynamic ? 'italic' : undefined,
+              fontWeight: isDynamic ? 400 : 500,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }} title={cell.value}>
+              {cell.value}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function FormatPreview({ rootElement, direction, bindingMap }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap }) {
+  const info = detectFormatType(rootElement);
+
+  // Visual spreadsheet preview for Excel formats
+  if (info.label === 'Excel') {
+    return <ExcelVisualPreview rootElement={rootElement} direction={direction} bindingMap={bindingMap} />;
+  }
+
   const preview = useMemo(() => generateFormatPreview(rootElement, bindingMap), [rootElement, bindingMap]);
   return (
     <div style={{ padding: 16, overflow: 'auto', height: '100%' }}>
@@ -1418,8 +1764,9 @@ function generateExcelPreview(root: ERFormatElement, bm: BindingMap): string {
     } else if (el.elementType === 'ExcelSheet') {
       lines.push(`${indent}📃 Sheet: "${el.name}"`);
       for (const child of el.children) walk(child, depth + 1);
-    } else if (el.elementType === 'ExcelRange') {
-      lines.push(`${indent}📐 Range: ${el.name}`);
+    } else if (el.elementType === 'ExcelRange' || el.elementType === 'ExcelHeader' || el.elementType === 'ExcelFooter') {
+      const sectionLabel = el.elementType === 'ExcelHeader' ? '🔼 Header' : el.elementType === 'ExcelFooter' ? '🔽 Footer' : '📐 Range';
+      lines.push(`${indent}${sectionLabel}: ${el.name}`);
       for (const child of el.children) walk(child, depth + 1);
     } else if (el.elementType === 'ExcelCell') {
       lines.push(`${indent}📎 Cell: ${el.name} = ${previewValue(el, bm)}`);
@@ -1512,6 +1859,8 @@ const formatTypeIcons: Record<string, string> = {
   ExcelSheet: '📃',
   ExcelRange: '📐',
   ExcelCell: '📎',
+  ExcelHeader: '🔼',
+  ExcelFooter: '🔽',
   TextSequence: '📑',
   TextLine: '📝',
   WordFile: '📄',

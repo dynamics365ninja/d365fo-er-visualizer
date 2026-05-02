@@ -51,6 +51,8 @@ export type ERFormatElementType =
   | 'ExcelSheet'
   | 'ExcelRange'
   | 'ExcelCell'
+  | 'ExcelHeader'
+  | 'ExcelFooter'
   | 'TextSequence'
   | 'TextLine'
   | 'WordFile'

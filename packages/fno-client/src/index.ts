@@ -13,7 +13,6 @@ export {
   extractServiceNames,
   ER_SERVICES,
   ER_SERVICE_OPS,
-  ER_KNOWN_ROOT_SOLUTIONS,
-  escapeODataString,
+  escapeServiceString as escapeODataString,
   decodeXmlPayload,
-} from './odata';
+} from './er-services';

@@ -33,17 +33,18 @@ import {
   PlugDisconnectedRegular,
   CloudArrowDownRegular,
   ArrowSyncRegular,
+  SearchRegular,
 } from '@fluentui/react-icons';
 import type {
   ErComponentType,
   ErConfigSummary,
-  ErSolutionSummary,
   FnoConnection,
 } from '@er-visualizer/fno-client';
 import { FnoHttpError, FnoEmptyContentError } from '@er-visualizer/fno-client';
 import { t } from '../i18n';
 import { useAppStore } from '../state/store';
 import { useFnoProfiles, newProfileId } from '../state/fno-profiles';
+import { useFnoSession } from '../state/fno-session';
 import { fnoSession } from '../fno/session';
 
 const useStyles = makeStyles({
@@ -175,85 +176,39 @@ const useStyles = makeStyles({
   },
 });
 
-type ConnectionState =
-  | { kind: 'disconnected' }
-  | { kind: 'connecting' }
-  | { kind: 'connected'; account: string }
-  | { kind: 'error'; message: string };
-
-/**
- * The client ID must be a Microsoft Entra app registration in YOUR tenant
- * with delegated permission on the target F&O environment and
- * "Allow public client flows = Yes". We intentionally ship no default — using
- * someone else's clientId triggers AADSTS700016 ("app not found in tenant").
- */
 const DEFAULT_CLIENT_ID = '';
 const ZERO_GUID_LOWER = '00000000-0000-0000-0000-000000000000';
 
-export const FnoConnectPanel: React.FC = () => {
+interface FnoConnectPanelProps {
+  onFilesLoaded?: () => void;
+}
+
+export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded }) => {
   const styles = useStyles();
   const pushToast = useAppStore(s => s.pushToast);
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
   const { profiles, upsert, remove, markUsed } = useFnoProfiles();
 
-  // Editor state
+  // ── Zustand: connection & browsing state (survives unmount) ──
+  const {
+    activeProfileId, connState, setActiveProfileId, setConnState,
+    solutions, loadingSolutions, solutionFilter,
+    setSolutions, setLoadingSolutions, setSolutionFilter,
+    activeSolution, solutionPath, components, loadingComponents, componentTypeFilter,
+    setActiveSolution, setSolutionPath, setComponents, setLoadingComponents, setComponentTypeFilter,
+    selected, setSelected, toggleSelected,
+    rootDataModelByPath, allDataModelsSeen, dataModelChain,
+    setRootDataModelByPath, setAllDataModelsSeen, setDataModelChain,
+  } = useFnoSession();
+
+  // ── Local-only state (OK to lose on unmount) ──
   const [profileName, setProfileName] = useState('');
   const [envUrl, setEnvUrl] = useState('');
   const [tenantId, setTenantId] = useState('');
   const [clientId, setClientId] = useState(DEFAULT_CLIENT_ID);
-
-  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
-  const [connState, setConnState] = useState<ConnectionState>({ kind: 'disconnected' });
-
-  const [solutions, setSolutions] = useState<ErSolutionSummary[]>([]);
-  const [loadingSolutions, setLoadingSolutions] = useState(false);
-  const [activeSolution, setActiveSolution] = useState<string | null>(null);
-  /** Breadcrumb of solution names the user has drilled into (root → leaf). */
-  const [solutionPath, setSolutionPath] = useState<string[]>([]);
   const [customRoot, setCustomRoot] = useState('');
-
-  const [components, setComponents] = useState<ErConfigSummary[]>([]);
-  const [loadingComponents, setLoadingComponents] = useState(false);
-  const [componentTypeFilter, setComponentTypeFilter] = useState<ErComponentType | 'All'>('All');
-  /**
-   * Accumulated selection across all drill levels. Keyed by `componentKey`
-   * so components from different sub-solutions stay distinct. We keep the
-   * full `ErConfigSummary` as the value because the user can queue
-   * components that are no longer visible in the current list view —
-   * `handleLoadSelected` must still know how to download them.
-   */
-  const [selected, setSelected] = useState<Map<string, ErConfigSummary>>(new Map());
-  /**
-   * Remembered root DataModel for each breadcrumb root. F&O's
-   * `GetModelMappingByID` requires the owning DataModel's GUID, so we
-   * capture the first DataModel we see when the user drills into a
-   * root solution (level 1) and attach it as `parentDataModelGuid` to
-   * every descendant summary. Also used to auto-include the root
-   * DataModel when the user loads only derived formats/mappings.
-   */
-  const [rootDataModelByPath, setRootDataModelByPath] = useState<Map<string, ErConfigSummary>>(new Map());
-  /**
-   * Every DataModel encountered during browsing, keyed by
-   * `componentKey`. We build this up as the user drills around so we
-   * can later resolve `ancestorDataModelGuids` back to downloadable
-   * `ErConfigSummary` objects.
-   */
-  const [allDataModelsSeen, setAllDataModelsSeen] = useState<Map<string, ErConfigSummary>>(new Map());
-  /**
-   * Ordered stack of DataModels the user has drilled *into* on the
-   * current path, from root at index 0 to the nearest parent at the
-   * top. Aligns with `solutionPath`. Resets on `handlePickSolution`,
-   * push on `handleDrillInto(datamodel)`, pop on `handleBack`. We
-   * snapshot this chain onto every listed component so that selecting
-   * a Format at depth N auto-queues *all* DataModels at depths 0..N
-   * — every intermediate derived model is required to resolve
-   * inherited bindings, not just the top root.
-   */
-  const [dataModelChain, setDataModelChain] = useState<ErConfigSummary[]>([]);
-
   const [ingesting, setIngesting] = useState(false);
   const setFnoIngestStatus = useAppStore(s => s.setFnoIngestStatus);
-  /** Human-readable progress label shown while ingesting. */
   const setIngestStatus = useCallback((status: string) => {
     setFnoIngestStatus(status);
   }, [setFnoIngestStatus]);
@@ -264,8 +219,8 @@ export const FnoConnectPanel: React.FC = () => {
     [profiles, activeProfileId],
   );
 
-  // When the active profile changes, populate the editor with its values so
-  // the user can edit it in place, and reset dependent state.
+  // When the active profile changes, populate the editor with its values.
+  // The Zustand store already resets browsing state in `setActiveProfileId`.
   useEffect(() => {
     const profile = profiles.find(p => p.id === activeProfileId) ?? null;
     if (profile) {
@@ -274,16 +229,6 @@ export const FnoConnectPanel: React.FC = () => {
       setTenantId(profile.tenantId);
       setClientId(profile.clientId);
     }
-    setConnState({ kind: 'disconnected' });
-    setSolutions([]);
-    setActiveSolution(null);
-    setComponents([]);
-    setSelected(new Map());
-    setRootDataModelByPath(new Map());
-    setAllDataModelsSeen(new Map());
-    setDataModelChain([]);
-  // Intentionally depend only on the id — we don't want to reset the editor
-  // whenever the profiles array changes (e.g. after upsert).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProfileId]);
 
@@ -399,10 +344,10 @@ export const FnoConnectPanel: React.FC = () => {
     setComponents([]);
     setActiveSolution(null);
     setSelected(new Map());
-    setRootDataModelByPath(new Map());
-    setAllDataModelsSeen(new Map());
+    setRootDataModelByPath(() => new Map());
+    setAllDataModelsSeen(() => new Map());
     setDataModelChain([]);
-  }, [activeProfile]);
+  }, [activeProfile, setConnState, setSolutions, setComponents, setActiveSolution, setSelected, setRootDataModelByPath, setAllDataModelsSeen, setDataModelChain]);
 
   const handlePickSolution = useCallback(async (solutionName: string) => {
     if (!activeProfile) return;
@@ -449,7 +394,7 @@ export const FnoConnectPanel: React.FC = () => {
   const handleDrillInto = useCallback(async (comp: ErConfigSummary) => {
     if (!activeProfile) return;
     const name = comp.configurationName;
-    setSolutionPath(prev => [...prev, name]);
+    setSolutionPath([...solutionPath, name]);
     setActiveSolution(name);
     // If the user drilled into a DataModel, extend the ancestor chain
     // so downstream Formats / Mappings inherit *all* the models the
@@ -514,8 +459,11 @@ export const FnoConnectPanel: React.FC = () => {
   }, [activeProfile, solutionPath, dataModelChain, pushToast]);
 
   const filteredComponents = useMemo(() => {
-    if (componentTypeFilter === 'All') return components;
-    return components.filter(c => c.componentType === componentTypeFilter);
+    // DataModel nodes are shown only in the left navigation panel — exclude
+    // them from the right detail/download panel entirely.
+    const base = components.filter(c => c.componentType !== 'DataModel');
+    if (componentTypeFilter === 'All') return base;
+    return base.filter(c => c.componentType === componentTypeFilter);
   }, [components, componentTypeFilter]);
 
   const isComponentDownloadable = useCallback((comp: ErConfigSummary): boolean => {
@@ -524,7 +472,7 @@ export const FnoConnectPanel: React.FC = () => {
     // missing their own GUID but can still be resolved via
     // `getModelMappingByID(_dataModelGuid, _dataContainerDescriptorName)`
     // when we know the parent DataModel GUID. See the matching
-    // fallback path in `buildDownloadAttempts` (fno-client/odata.ts).
+    // fallback path in `buildDownloadAttempts` (fno-client/er-services.ts).
     if (
       comp.componentType === 'ModelMapping' &&
       (comp.parentDataModelGuid || comp.parentDataModelRevisionGuid)
@@ -535,37 +483,21 @@ export const FnoConnectPanel: React.FC = () => {
   }, []);
 
   const toggleSelect = useCallback((comp: ErConfigSummary) => {
-    // Branch nodes (no own GUID and no parent-DataModel resolution
-    // path) can't be downloaded — selecting them would surface a red
-    // error toast on the user's "Load" action. Silently ignore the
-    // toggle so the disabled checkbox stays in sync with the
-    // selection map.
     if (!isComponentDownloadable(comp)) return;
     const key = componentKey(comp);
-    setSelected(prev => {
-      const next = new Map(prev);
-      if (next.has(key)) next.delete(key);
-      else next.set(key, comp);
-      return next;
-    });
-  }, [isComponentDownloadable]);
+    toggleSelected(key, comp);
+  }, [isComponentDownloadable, toggleSelected]);
 
   const selectAllVisible = useCallback(() => {
-    // Merge into existing selection rather than replace it — preserves
-    // items chosen at other drill levels. Skip non-downloadable branch
-    // nodes so "select all" doesn't queue items that fail immediately
-    // at download time.
-    setSelected(prev => {
-      const next = new Map(prev);
-      for (const c of filteredComponents) {
-        if (!isComponentDownloadable(c)) continue;
-        next.set(componentKey(c), c);
-      }
-      return next;
-    });
-  }, [filteredComponents, isComponentDownloadable]);
+    const next = new Map(selected);
+    for (const c of filteredComponents) {
+      if (!isComponentDownloadable(c)) continue;
+      next.set(componentKey(c), c);
+    }
+    setSelected(next);
+  }, [filteredComponents, isComponentDownloadable, selected, setSelected]);
 
-  const clearSelection = useCallback(() => setSelected(new Map()), []);
+  const clearSelection = useCallback(() => setSelected(new Map()), [setSelected]);
 
   const handleLoadSelected = useCallback(async () => {
     if (!activeProfile) return;
@@ -624,6 +556,36 @@ export const FnoConnectPanel: React.FC = () => {
         }
       }
     }
+    // ── Name-based DataModel fallback ──
+    // For import formats (and any Format/ModelMapping whose parent
+    // DataModel has no GUID in the listing), the GUID-based paths above
+    // leave nothing in `augmented`. Use the component's `solutionName`
+    // as the root DataModel's configuration name and look it up in
+    // `allDataModelsSeen`. If found (even with a potentially wrong
+    // GUID from `findAnyGuid`), include it — a wrong GUID will silently
+    // return 200-empty and be skipped without a toast.
+    for (const c of toLoad) {
+      if (c.componentType === 'DataModel') continue;
+      if (!c.solutionName) continue;
+      // Already resolved via GUID path?
+      const alreadyHasDm = Array.from(augmented.values()).some(
+        a => a.componentType === 'DataModel' &&
+          (a.configurationName === c.solutionName || a.solutionName === c.solutionName),
+      );
+      if (alreadyHasDm) continue;
+      // Look up the root DataModel by its configuration name.
+      const rootByName = Array.from(allDataModelsSeen.values()).find(
+        m => m.configurationName === c.solutionName,
+      );
+      if (rootByName) {
+        console.info('[fno-ui] name-based DataModel fallback', {
+          formatName: c.configurationName,
+          solutionName: c.solutionName,
+          foundDmGuid: rootByName.configurationGuid ?? rootByName.revisionGuid,
+        });
+        augmented.set(componentKey(rootByName), rootByName);
+      }
+    }
     setIngesting(true);
     setIngestStatus('Preparing…');
 
@@ -649,6 +611,13 @@ export const FnoConnectPanel: React.FC = () => {
     // discover the real DataModel GUID we can pass to
     // `GetDataModelByIDAndRevision`.
     const pendingModelFollowUps = new Map<string, { guid: string; rev?: number }>();
+    // Late-discovered DataModel GUIDs from ModelMapping/Format XML downloaded
+    // in the synth pass (passes 3+). Import formats often lack
+    // ERFormatMappingVersion.Model in their own XML but the ModelMapping that
+    // is synthesised for the same DataModel DOES carry a correct Model= GUID.
+    // Harvesting it here lets us download the root DataModel even when passes
+    // 1 and 2 couldn't find its GUID.
+    const lateModelFollowUps = new Map<string, { guid: string; rev?: number }>();
     const alreadyLoadedGuids = new Set<string>();
     for (const c of finalToLoad) {
       if (c.componentType === 'DataModel' && c.configurationGuid) {
@@ -1218,6 +1187,23 @@ export const FnoConnectPanel: React.FC = () => {
       });
     }
 
+    // Helper: merge newly discovered DataModel GUIDs from a mapping
+    // download into `lateModelFollowUps` so the late pass can download them.
+    const collectLateRefs = (download: Awaited<ReturnType<typeof fnoSession.downloadConfiguration>>): void => {
+      const refs = download.referencedDataModelGuids ?? [];
+      const refRevs = download.referencedDataModelRevisions ?? {};
+      for (const guid of refs) {
+        const lower = guid.toLowerCase();
+        if (alreadyLoadedGuids.has(lower)) continue;
+        if (pendingModelFollowUps.has(lower)) continue; // already scheduled
+        const existing = lateModelFollowUps.get(lower);
+        const rev = refRevs[lower];
+        if (!existing || (typeof rev === 'number' && (existing.rev ?? -1) < rev)) {
+          lateModelFollowUps.set(lower, { guid, rev });
+        }
+      }
+    };
+
     for (const item of synthQueue) {
       const synthKey = `synth-mapping:${item.dmGuid}`;
       if (synthesizedMappingKeys.has(synthKey)) continue;
@@ -1226,6 +1212,7 @@ export const FnoConnectPanel: React.FC = () => {
         const download = await fnoSession.downloadConfiguration(activeProfile, item.synth);
         loadXmlFile(download.xml, download.syntheticPath);
         ok += 1;
+        collectLateRefs(download);
         console.info('[fno-ui] synthesized ModelMapping fetched', {
           which: item.label,
           dmGuid: item.dmGuid,
@@ -1250,12 +1237,50 @@ export const FnoConnectPanel: React.FC = () => {
         const download = await fnoSession.downloadConfiguration(activeProfile, mapping);
         loadXmlFile(download.xml, download.syntheticPath);
         ok += 1;
+        collectLateRefs(download);
       } catch (err) {
         if (err instanceof FnoEmptyContentError) {
           console.info('[fno-ui] sibling ModelMapping has no own XML, skipping', mapping.configurationName);
           continue;
         }
         console.warn('[fno-ui] sibling ModelMapping download failed', mapping.configurationName, err);
+      }
+    }
+
+    // ── Late DataModel pass ──
+    // DataModel GUIDs discovered from ModelMapping XML in the synth pass.
+    // Covers import formats whose own XML carries no ERFormatMappingVersion.Model
+    // reference: the ModelMapping downloaded above contains the correct
+    // Model= attribute, so we can now fetch the root DataModel.
+    if (lateModelFollowUps.size > 0) {
+      setIngestStatus('Resolving DataModels from mapping cross-references…');
+      console.info('[fno-ui] late DataModel follow-ups', Array.from(lateModelFollowUps.values()));
+    }
+    for (const { guid, rev } of lateModelFollowUps.values()) {
+      const versionNumbers = typeof rev === 'number'
+        ? [rev]
+        : Array.from({ length: 21 }, (_, i) => i);
+      const synthDm: ErConfigSummary = {
+        solutionName: '<late-referenced>',
+        configurationName: `DataModel ${guid}`,
+        componentType: 'DataModel',
+        configurationGuid: guid,
+        hasContent: true,
+        version: typeof rev === 'number' ? String(rev) : undefined,
+        versionNumbers,
+      };
+      try {
+        const download = await fnoSession.downloadConfiguration(activeProfile, synthDm);
+        loadXmlFile(download.xml, download.syntheticPath);
+        ok += 1;
+        alreadyLoadedGuids.add(guid.toLowerCase());
+        console.info('[fno-ui] late DataModel downloaded via mapping cross-reference', guid);
+      } catch (err) {
+        if (err instanceof FnoEmptyContentError) {
+          console.info('[fno-ui] late DataModel has no own XML, skipping', guid);
+          continue;
+        }
+        console.warn('[fno-ui] late DataModel download failed', guid, err);
       }
     }
 
@@ -1266,6 +1291,7 @@ export const FnoConnectPanel: React.FC = () => {
       // benign empty). Partial *real* failures stay selected for retry.
       if (ok + skippedEmpty === finalToLoad.length) setSelected(new Map());
       pushToast({ kind: 'success', message: t.fnoLoadedCount(ok) });
+      onFilesLoaded?.();
     }
   }, [activeProfile, selected, allDataModelsSeen, solutionPath, loadXmlFile, pushToast]);
 
@@ -1367,22 +1393,41 @@ export const FnoConnectPanel: React.FC = () => {
               <Body1Strong>{t.fnoSolutions}</Body1Strong>
               {loadingSolutions && <Spinner size="tiny" />}
             </div>
+            <div style={{ padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalM}` }}>
+              <Input
+                size="small"
+                placeholder="Filtrovat modely…"
+                value={solutionFilter}
+                onChange={(_, d) => setSolutionFilter(d.value)}
+                contentBefore={<SearchRegular />}
+                style={{ width: '100%' }}
+              />
+            </div>
             <div className={styles.listScroll}>
-              {solutions.map(sol => (
-                <div
-                  key={sol.solutionName}
-                  className={`${styles.listItem} ${activeSolution === sol.solutionName ? styles.listItemActive : ''}`}
-                  onClick={() => handlePickSolution(sol.solutionName)}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <div>
-                    <Body1Strong>{sol.displayName ?? sol.solutionName}</Body1Strong>
-                    <div><Caption1>{sol.publisher ?? ''} {sol.version ? `· v${sol.version}` : ''}</Caption1></div>
+              {solutions
+                .filter(sol => sol.componentType === 'DataModel' || sol.componentType === 'Unknown')
+                .filter(sol => {
+                  if (!solutionFilter) return true;
+                  const q = solutionFilter.toLowerCase();
+                  return (sol.solutionName ?? '').toLowerCase().includes(q)
+                    || (sol.displayName ?? '').toLowerCase().includes(q)
+                    || (sol.publisher ?? '').toLowerCase().includes(q);
+                })
+                .map(sol => (
+                  <div
+                    key={sol.solutionName}
+                    className={`${styles.listItem} ${activeSolution === sol.solutionName ? styles.listItemActive : ''}`}
+                    onClick={() => handlePickSolution(sol.solutionName)}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <div>
+                      <Body1Strong>{sol.solutionName}</Body1Strong>
+                      <div><Caption1>{sol.publisher ?? ''} {sol.version ? `· v${sol.version}` : ''}</Caption1></div>
+                    </div>
                   </div>
-                </div>
-              ))}
-              {!loadingSolutions && solutions.length === 0 && (
+                ))}
+              {!loadingSolutions && solutions.filter(s => s.componentType === 'DataModel' || s.componentType === 'Unknown').length === 0 && !solutionFilter && (
                 <div className={styles.emptyState}>
                   <Caption1>
                     No solutions found under the known roots. If you know a specific publisher
@@ -1437,7 +1482,6 @@ export const FnoConnectPanel: React.FC = () => {
                   onOptionSelect={(_, d) => setComponentTypeFilter(d.optionValue as ErComponentType | 'All')}
                 >
                   <Option value="All">{t.fnoAllTypes}</Option>
-                  <Option value="DataModel">DataModel</Option>
                   <Option value="ModelMapping">ModelMapping</Option>
                   <Option value="Format">Format</Option>
                 </Dropdown>
@@ -1661,7 +1705,7 @@ function describeHttpError(err: unknown): string {
         const [, group, service, op] = opMatch ?? [];
         return `404 Not Found (${err.url}). Custom service nebo operace na tomto prostředí neexistuje. ` +
           `Otevři v prohlížeči ${err.url.split('/api/services/')[0]}/api/services/${group ?? '<group>'}/${service ?? '<service>'} ` +
-          `a zkontroluj, že operace "${op ?? ''}" je v seznamu <Operations>. Pokud má jiný název, uprav ER_SERVICE_OPS v packages/fno-client/src/odata.ts${suffix}`;
+          `a zkontroluj, že operace "${op ?? ''}" je v seznamu <Operations>. Pokud má jiný název, uprav ER_SERVICE_OPS v packages/fno-client/src/er-services.ts${suffix}`;
       }
       return `${err.status} ${err.message} (${err.url}). Endpoint na prostředí neexistuje. Ověř přesnou URL prostředí (bez /namespace) a že jsou ER služby nainstalovány${suffix}`;
     }
