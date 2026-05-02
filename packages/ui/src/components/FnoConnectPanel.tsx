@@ -587,7 +587,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       }
     }
     setIngesting(true);
-    setIngestStatus('Preparing…');
+    setIngestStatus(t.fnoStatusPreparing);
 
     const finalToLoad = Array.from(augmented.values());
     // Order: root DataModels first (so downstream imports can resolve
@@ -624,115 +624,154 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         alreadyLoadedGuids.add(c.configurationGuid.toLowerCase());
       }
     }
-    for (let i = 0; i < finalToLoad.length; i++) {
-      const component = finalToLoad[i];
-      setIngestStatus(`Downloading ${component.configurationName} (${i + 1}/${finalToLoad.length})…`);
-      try {
-        const download = await fnoSession.downloadConfiguration(activeProfile, component);
-        loadXmlFile(download.xml, download.syntheticPath);
-        ok += 1;
-        // Harvest cross-references to DataModel GUIDs that the listing
-        // API didn't expose.
-        const refs = download.referencedDataModelGuids ?? [];
-        const refRevs = download.referencedDataModelRevisions ?? {};
-        for (const guid of refs) {
-          const lower = guid.toLowerCase();
-          if (alreadyLoadedGuids.has(lower)) continue;
-          const existing = pendingModelFollowUps.get(lower);
-          const rev = refRevs[lower];
-          if (!existing || (typeof rev === 'number' && (existing.rev ?? -1) < rev)) {
-            pendingModelFollowUps.set(lower, { guid, rev });
-          }
+
+    // Helper: process a single download result, harvest cross-references.
+    const harvestRefs = (download: Awaited<ReturnType<typeof fnoSession.downloadConfiguration>>) => {
+      const refs = download.referencedDataModelGuids ?? [];
+      const refRevs = download.referencedDataModelRevisions ?? {};
+      for (const guid of refs) {
+        const lower = guid.toLowerCase();
+        if (alreadyLoadedGuids.has(lower)) continue;
+        const existing = pendingModelFollowUps.get(lower);
+        const rev = refRevs[lower];
+        if (!existing || (typeof rev === 'number' && (existing.rev ?? -1) < rev)) {
+          pendingModelFollowUps.set(lower, { guid, rev });
         }
-      } catch (err) {
-        if (err instanceof FnoEmptyContentError) {
-          // Derived/pure-inheritance configurations have no own XML.
-          // Silent skip for auto-injected roots; info toast when the
-          // user asked for this item explicitly (so they understand
-          // why nothing was loaded).
-          skippedEmpty += 1;
-          const wasExplicit = explicitKeys.has(componentKey(component));
-          if (wasExplicit) {
-            pushToast({
-              kind: 'info',
-              message: `"${component.configurationName}" nemá vlastní XML (odvozená konfigurace) — přeskočeno.`,
-            });
-          } else {
-            console.info('[fno-ui] auto-included root has no own XML, skipping', component.configurationName);
-          }
-          continue;
-        }
-        const message = err instanceof Error ? err.message : String(err);
-        pushToast({ kind: 'error', message: t.fnoDownloadFailed(component.configurationName, message) });
       }
-    }
-    // Second pass: download any DataModel referenced from inside the
-    // just-loaded XML. We fabricate a minimal `ErConfigSummary` so the
-    // existing `downloadConfigXml` plumbing can target it. If the
-    // model is a pure-inheritance pointer (200-empty everywhere),
-    // silently skip — the base model already carries the definition
-    // via the normal auto-inject path.
-    if (pendingModelFollowUps.size > 0) {
-      setIngestStatus('Resolving referenced DataModels…');
-      console.info('[fno-ui] following up on referenced DataModels', Array.from(pendingModelFollowUps.values()));
-    }
-    for (const { guid, rev } of pendingModelFollowUps.values()) {
-      // If we harvested a specific revision from `ModelVersion="{guid},N"`,
-      // use exactly that; otherwise fall through to a broad probe (0..20)
-      // so the base `buildDownloadAttempts` DataModel path picks the
-      // first non-empty.
-      const versionNumbers = typeof rev === 'number'
-        ? [rev]
-        : Array.from({ length: 21 }, (_, i) => i); // 0..20
-      const synth: ErConfigSummary = {
-        solutionName: '<referenced>',
-        configurationName: `DataModel ${guid}`,
-        componentType: 'DataModel',
-        configurationGuid: guid,
-        hasContent: true,
-        version: typeof rev === 'number' ? String(rev) : undefined,
-        versionNumbers,
-      };
-      try {
-        const download = await fnoSession.downloadConfiguration(activeProfile, synth);
-        loadXmlFile(download.xml, download.syntheticPath);
-        ok += 1;
-      } catch (err) {
-        if (err instanceof FnoEmptyContentError) {
-          console.info('[fno-ui] referenced DataModel has no own XML, skipping', guid);
-          continue;
+    };
+
+    const handleDownloadError = (component: ErConfigSummary, err: unknown) => {
+      if (err instanceof FnoEmptyContentError) {
+        skippedEmpty += 1;
+        const wasExplicit = explicitKeys.has(componentKey(component));
+        if (wasExplicit) {
+          pushToast({
+            kind: 'info',
+            message: t.fnoSkippedDerived(component.configurationName),
+          });
+        } else {
+          console.info('[fno-ui] auto-included root has no own XML, skipping', component.configurationName);
         }
-        console.warn('[fno-ui] referenced DataModel download failed', guid, err);
+        return;
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      pushToast({ kind: 'error', message: t.fnoDownloadFailed(component.configurationName, message) });
+    };
+
+    // ── Phase 1: DataModels (must come first for cross-reference resolution) ──
+    const dataModels = finalToLoad.filter(c => c.componentType === 'DataModel');
+    const nonDataModels = finalToLoad.filter(c => c.componentType !== 'DataModel');
+
+    // Download DataModels in parallel batches of 4
+    const DM_BATCH_SIZE = 4;
+    for (let batch = 0; batch < dataModels.length; batch += DM_BATCH_SIZE) {
+      const slice = dataModels.slice(batch, batch + DM_BATCH_SIZE);
+      setIngestStatus(t.fnoStatusDownloadingDM(Math.min(batch + DM_BATCH_SIZE, dataModels.length)));
+      const results = await Promise.allSettled(
+        slice.map(async component => {
+          const download = await fnoSession.downloadConfiguration(activeProfile, component);
+          return { component, download };
+        }),
+      );
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
+          ok += 1;
+          harvestRefs(result.value.download);
+        } else {
+          const component = slice[results.indexOf(result)];
+          handleDownloadError(component, result.reason);
+        }
       }
     }
 
-    // Third pass: now that every DataModel (explicit + ancestor +
-    // referenced) is on disk in the workspace, enumerate ModelMapping
-    // siblings for each one and download them.
-    setIngestStatus('Scanning for Model Mappings…');
-    //
-    // ER hierarchy refresher (per F&O ERSolutionTable):
-    //   - Root DataModel
-    //     ├─ Derived DataModel (recursive: any depth)
-    //     ├─ ModelMapping  (often under the root, but a derived
-    //     │                  ModelMapping that overrides bindings can
-    //     │                  live under any DataModel level — see the
-    //     │                  user's note)
-    //     └─ Format        (under any DataModel level; the format's
-    //                       mapping references the nearest
-    //                       ModelMapping in the chain)
-    // Special case: a ModelMapping can also be **embedded inside a
-    // DataModel/Format XML payload** (`<ERModelMappingVersion>`
-    // siblings of the format/model entity). Those don't need a
-    // separate download because the `core` parser already lifts them
-    // into `ERFormatContent.embeddedModelMappingVersions` /
-    // `ERDataModelContent` during `parseERConfiguration`.
-    //
-    // To cover the standalone-mapping case we walk the hierarchy
-    // recursively from every loaded DataModel solution name and from
-    // every ancestor name we collected during navigation, then
-    // download every ModelMapping leaf that has any usable GUID.
-    // Failures are logged but never block the user-picked downloads.
+    // ── Phase 2: Downloads + Mapping listing scan run concurrently ──
+    // The mapping listing scan (listComponents calls) can run in parallel
+    // with Format/ModelMapping downloads since it only queries the F&O
+    // listing API. The actual synth-pass downloads need parsed DM data
+    // from the store, so they run after both tasks complete.
+
+    // --- Concurrent task A: download selected Formats + ModelMappings ---
+    const downloadSelectedTask = async () => {
+      if (nonDataModels.length === 0) return;
+      setIngestStatus(t.fnoStatusDownloadingFM(nonDataModels.length));
+      const PARALLEL_BATCH_SIZE = 4;
+      for (let batch = 0; batch < nonDataModels.length; batch += PARALLEL_BATCH_SIZE) {
+        const slice = nonDataModels.slice(batch, batch + PARALLEL_BATCH_SIZE);
+        const results = await Promise.allSettled(
+          slice.map(async component => {
+            const download = await fnoSession.downloadConfiguration(activeProfile, component);
+            return { component, download };
+          }),
+        );
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
+            ok += 1;
+            harvestRefs(result.value.download);
+          } else {
+            const component = slice[results.indexOf(result)];
+            handleDownloadError(component, result.reason);
+          }
+        }
+      }
+      // Follow-up: referenced DataModels from downloaded XML
+      if (pendingModelFollowUps.size > 0) {
+        setIngestStatus(t.fnoStatusResolvingDM);
+        console.info('[fno-ui] following up on referenced DataModels', Array.from(pendingModelFollowUps.values()));
+        const followUpEntries = Array.from(pendingModelFollowUps.values());
+        const followUpResults = await Promise.allSettled(
+          followUpEntries.map(async ({ guid, rev }) => {
+            const versionNumbers = typeof rev === 'number'
+              ? [rev]
+              : Array.from({ length: 21 }, (_, i) => i);
+            const synth: ErConfigSummary = {
+              solutionName: '<referenced>',
+              configurationName: `DataModel ${guid}`,
+              componentType: 'DataModel',
+              configurationGuid: guid,
+              hasContent: true,
+              version: typeof rev === 'number' ? String(rev) : undefined,
+              versionNumbers,
+            };
+            const download = await fnoSession.downloadConfiguration(activeProfile, synth);
+            return { guid, download };
+          }),
+        );
+        for (const result of followUpResults) {
+          if (result.status === 'fulfilled') {
+            loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
+            ok += 1;
+          } else {
+            const reason = result.reason;
+            if (reason instanceof FnoEmptyContentError) {
+              console.info('[fno-ui] referenced DataModel has no own XML, skipping');
+            } else {
+              console.warn('[fno-ui] referenced DataModel download failed', reason);
+            }
+          }
+        }
+      }
+    };
+
+    // --- Concurrent task B: mapping LISTING scan (no downloads yet) ---
+    // Only enumerates the hierarchy via listComponents. Actual mapping
+    // downloads happen later once parsed DM data is available.
+    const alreadyLoadedKeys = new Set(finalToLoad.map(c => componentKey(c)));
+    const mappingsToLoad = new Map<string, ErConfigSummary>();
+    const visitedScanNames = new Set<string>();
+    const pendingMappingBranchesByDmName = new Map<string, {
+      parentDmName: string;
+      mappingName: string;
+      mappingSolutionName: string;
+      mappingVersion: string | undefined;
+    }[]>();
+
+    const mappingListingScanTask = async () => {
+      // Enumerate ModelMapping siblings for loaded DataModels.
+      // Only the listing scan (listComponents) runs here — actual
+      // mapping downloads require parsed DM data from the store and
+      // happen sequentially after both concurrent tasks complete.
     const dmNamesToScan = new Set<string>();
     // Names from explicit / ancestor DataModel summaries.
     for (const c of finalToLoad) {
@@ -755,10 +794,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     for (const step of solutionPath) {
       if (step) dmNamesToScan.add(step);
     }
-
-    const alreadyLoadedKeys = new Set(finalToLoad.map(c => componentKey(c)));
-    const mappingsToLoad = new Map<string, ErConfigSummary>();
-    const visitedScanNames = new Set<string>();
     /**
      * ModelMapping branch rows the listing surfaced without a GUID
      * (typical: F&O lists `<dmName> mapping` as a child of a DataModel
@@ -879,9 +914,16 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         scannedDmNames: Array.from(visitedScanNames),
       });
     }
+    }; // end mappingListingScanTask
+
+    // ── Run listing scan concurrently with Format/ModelMapping downloads ──
+    setIngestStatus(t.fnoStatusScanMappings);
+    await Promise.all([downloadSelectedTask(), mappingListingScanTask()]);
+
+    // ── Synth pass: needs parsed DM data from store, runs sequentially ──
 
     // ── Synthesized ModelMapping fetches via the X++ AOT fallback ──
-    setIngestStatus('Downloading Model Mappings…');
+    setIngestStatus(t.fnoStatusDownloadingMM);
     //
     // Per X++ source (ERConfigurationStorageService.getModelMappingByID,
     // confirmed against the D365FO VM), the second resolution branch
@@ -1204,46 +1246,46 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       }
     };
 
+    // Download synthesized mappings and sibling mappings in parallel
+    const allMappingDownloads: { synth: ErConfigSummary; label: string; dmGuid?: string }[] = [];
+
     for (const item of synthQueue) {
       const synthKey = `synth-mapping:${item.dmGuid}`;
       if (synthesizedMappingKeys.has(synthKey)) continue;
       synthesizedMappingKeys.add(synthKey);
-      try {
-        const download = await fnoSession.downloadConfiguration(activeProfile, item.synth);
-        loadXmlFile(download.xml, download.syntheticPath);
-        ok += 1;
-        collectLateRefs(download);
-        console.info('[fno-ui] synthesized ModelMapping fetched', {
-          which: item.label,
-          dmGuid: item.dmGuid,
-        });
-      } catch (err) {
-        if (err instanceof FnoEmptyContentError) {
-          console.info(
-            '[fno-ui] synthesized ModelMapping returned empty XML, skipping',
-            item.label,
-          );
-          continue;
-        }
-        console.info(
-          '[fno-ui] synthesized ModelMapping fetch failed',
-          { which: item.label, dmGuid: item.dmGuid, err },
-        );
-      }
+      allMappingDownloads.push({ synth: item.synth, label: item.label, dmGuid: item.dmGuid });
     }
 
     for (const mapping of mappingsToLoad.values()) {
-      try {
-        const download = await fnoSession.downloadConfiguration(activeProfile, mapping);
-        loadXmlFile(download.xml, download.syntheticPath);
-        ok += 1;
-        collectLateRefs(download);
-      } catch (err) {
-        if (err instanceof FnoEmptyContentError) {
-          console.info('[fno-ui] sibling ModelMapping has no own XML, skipping', mapping.configurationName);
-          continue;
+      allMappingDownloads.push({ synth: mapping, label: mapping.configurationName });
+    }
+
+    if (allMappingDownloads.length > 0) {
+      setIngestStatus(t.fnoStatusDownloadingMMCount(allMappingDownloads.length));
+      const MAPPING_BATCH_SIZE = 4;
+      for (let batch = 0; batch < allMappingDownloads.length; batch += MAPPING_BATCH_SIZE) {
+        const slice = allMappingDownloads.slice(batch, batch + MAPPING_BATCH_SIZE);
+        const results = await Promise.allSettled(
+          slice.map(async item => {
+            const download = await fnoSession.downloadConfiguration(activeProfile, item.synth);
+            return { item, download };
+          }),
+        );
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
+            ok += 1;
+            collectLateRefs(result.value.download);
+            console.info('[fno-ui] mapping fetched', { which: result.value.item.label });
+          } else {
+            const reason = result.reason;
+            if (reason instanceof FnoEmptyContentError) {
+              console.info('[fno-ui] mapping returned empty XML, skipping');
+            } else {
+              console.info('[fno-ui] mapping fetch failed', reason);
+            }
+          }
         }
-        console.warn('[fno-ui] sibling ModelMapping download failed', mapping.configurationName, err);
       }
     }
 
@@ -1253,34 +1295,41 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     // reference: the ModelMapping downloaded above contains the correct
     // Model= attribute, so we can now fetch the root DataModel.
     if (lateModelFollowUps.size > 0) {
-      setIngestStatus('Resolving DataModels from mapping cross-references…');
+      setIngestStatus(t.fnoStatusLateDM);
       console.info('[fno-ui] late DataModel follow-ups', Array.from(lateModelFollowUps.values()));
-    }
-    for (const { guid, rev } of lateModelFollowUps.values()) {
-      const versionNumbers = typeof rev === 'number'
-        ? [rev]
-        : Array.from({ length: 21 }, (_, i) => i);
-      const synthDm: ErConfigSummary = {
-        solutionName: '<late-referenced>',
-        configurationName: `DataModel ${guid}`,
-        componentType: 'DataModel',
-        configurationGuid: guid,
-        hasContent: true,
-        version: typeof rev === 'number' ? String(rev) : undefined,
-        versionNumbers,
-      };
-      try {
-        const download = await fnoSession.downloadConfiguration(activeProfile, synthDm);
-        loadXmlFile(download.xml, download.syntheticPath);
-        ok += 1;
-        alreadyLoadedGuids.add(guid.toLowerCase());
-        console.info('[fno-ui] late DataModel downloaded via mapping cross-reference', guid);
-      } catch (err) {
-        if (err instanceof FnoEmptyContentError) {
-          console.info('[fno-ui] late DataModel has no own XML, skipping', guid);
-          continue;
+      const lateEntries = Array.from(lateModelFollowUps.values());
+      const lateResults = await Promise.allSettled(
+        lateEntries.map(async ({ guid, rev }) => {
+          const versionNumbers = typeof rev === 'number'
+            ? [rev]
+            : Array.from({ length: 21 }, (_, i) => i);
+          const synthDm: ErConfigSummary = {
+            solutionName: '<late-referenced>',
+            configurationName: `DataModel ${guid}`,
+            componentType: 'DataModel',
+            configurationGuid: guid,
+            hasContent: true,
+            version: typeof rev === 'number' ? String(rev) : undefined,
+            versionNumbers,
+          };
+          const download = await fnoSession.downloadConfiguration(activeProfile, synthDm);
+          return { guid, download };
+        }),
+      );
+      for (const result of lateResults) {
+        if (result.status === 'fulfilled') {
+          loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
+          ok += 1;
+          alreadyLoadedGuids.add(result.value.guid.toLowerCase());
+          console.info('[fno-ui] late DataModel downloaded via mapping cross-reference', result.value.guid);
+        } else {
+          const reason = result.reason;
+          if (reason instanceof FnoEmptyContentError) {
+            console.info('[fno-ui] late DataModel has no own XML, skipping');
+          } else {
+            console.warn('[fno-ui] late DataModel download failed', reason);
+          }
         }
-        console.warn('[fno-ui] late DataModel download failed', guid, err);
       }
     }
 
@@ -1396,7 +1445,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             <div style={{ padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalM}` }}>
               <Input
                 size="small"
-                placeholder="Filtrovat modely…"
+                placeholder={t.fnoFilterModels}
                 value={solutionFilter}
                 onChange={(_, d) => setSolutionFilter(d.value)}
                 contentBefore={<SearchRegular />}
@@ -1447,7 +1496,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                       disabled={!customRoot.trim() || loadingSolutions}
                       onClick={handleRetryWithRoot}
                     >
-                      Retry
+                      {t.fnoRetry}
                     </Button>
                   </div>
                 </div>
@@ -1459,7 +1508,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                 {solutionPath.length > 0 && (
                   <Button size="small" appearance="subtle" onClick={handleBack}>
-                    ← Back
+                    {t.fnoBack}
                   </Button>
                 )}
                 <Body1Strong
@@ -1588,7 +1637,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               })}
               {!loadingComponents && filteredComponents.length === 0 && solutionPath.length > 0 && (
                 <div className={styles.emptyState}>
-                  <Caption1>No children under "{solutionPath[solutionPath.length - 1]}".</Caption1>
+                  <Caption1>{t.fnoNoChildren(solutionPath[solutionPath.length - 1])}</Caption1>
                 </div>
               )}
             </div>
@@ -1610,7 +1659,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                   : undefined
               }
             >
-              {selected.size > 0 ? `${selected.size} vybráno (napříč úrovněmi)` : ''}
+              {selected.size > 0 ? t.fnoSelectedCount(selected.size) : ''}
             </Caption1>
           )}
           <Button

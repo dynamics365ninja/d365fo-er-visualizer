@@ -323,7 +323,6 @@ export function App() {
   const rebuildDerivedState = useAppStore(s => s.rebuildDerivedState);
   const requestExplorerExpand = useAppStore(s => s.requestExplorerExpand);
   const shouldAutoOpenFirstTabRef = useRef(false);
-  const previousConfigCountRef = useRef(0);
 
   useEffect(() => {
     document.documentElement.dataset.theme = themeMode;
@@ -334,25 +333,6 @@ export function App() {
       rebuildDerivedState();
     }
   }, [configs.length, treeNodes.length, rebuildDerivedState]);
-
-  useEffect(() => {
-    const previousCount = previousConfigCountRef.current;
-    const addedConfigs = configs.length > previousCount;
-
-    if (addedConfigs && showLanding) {
-      shouldAutoOpenFirstTabRef.current = !activeTabId;
-      setLandingPinned(false);
-      setShowLanding(false);
-    }
-
-    previousConfigCountRef.current = configs.length;
-  }, [configs.length, showLanding, activeTabId]);
-
-  useEffect(() => {
-    if (configs.length > 0 && showLanding && !landingPinned) {
-      setShowLanding(false);
-    }
-  }, [configs.length, showLanding, landingPinned]);
 
   useEffect(() => {
     if (!shouldAutoOpenFirstTabRef.current || showLanding || activeTabId || treeNodes.length === 0) return;
@@ -752,7 +732,7 @@ function StatusBar({ onOpenLanding, warningsOpen, setWarningsOpen }: {
               return (
                 <li key={i} className={mergeClasses(styles.popoverItem, severity)}>
                   <Caption1Strong>{cfgName}</Caption1Strong>
-                  <Caption1>{w.message}</Caption1>
+                  <Caption1 style={{ whiteSpace: 'pre-wrap' }}>{w.message}</Caption1>
                 </li>
               );
             })}

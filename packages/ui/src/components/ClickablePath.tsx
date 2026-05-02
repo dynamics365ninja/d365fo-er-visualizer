@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useAppStore, resolveDeepExpression } from '../state/store';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { PathTooltipCard, type PathTooltipData, type PathTooltipRow } from './PathTooltipCard';
+import { t } from '../i18n';
 
 interface ClickablePathProps {
   /** The expression or path string, e.g. "model.CompanyInfo.Name" or "CompanyInfo.'name()'" */
@@ -194,21 +195,21 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
         const rows: PathTooltipRow[] = [];
 
         if (ds.tableInfo) {
-          rows.push({ icon: 'table', label: 'Table', value: ds.tableInfo.tableName, mono: true });
+          rows.push({ icon: 'table', label: t.pathTable, value: ds.tableInfo.tableName, mono: true });
         } else if (ds.enumInfo) {
-          rows.push({ icon: 'enum', label: 'Enum', value: formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo), mono: true });
+          rows.push({ icon: 'enum', label: t.pathEnum, value: formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo), mono: true });
         } else if (ds.classInfo) {
-          rows.push({ icon: 'class', label: 'Class', value: ds.classInfo.className, mono: true });
+          rows.push({ icon: 'class', label: t.pathClass, value: ds.classInfo.className, mono: true });
         } else if (ds.calculatedField) {
-          rows.push({ icon: 'calc', label: 'Expr', value: ds.calculatedField.expressionAsString ?? '', mono: true });
+          rows.push({ icon: 'calc', label: t.expression, value: ds.calculatedField.expressionAsString ?? '', mono: true });
         } else if (ds.userParamInfo) {
-          rows.push({ label: 'Param', value: ds.userParamInfo.extendedDataTypeName ?? ds.name });
+          rows.push({ label: t.propEdt, value: ds.userParamInfo.extendedDataTypeName ?? ds.name });
         } else {
-          rows.push({ label: 'Type', value: String(ds.type), muted: true });
+          rows.push({ label: t.propType, value: String(ds.type), muted: true });
         }
 
         if (deepResult?.nestedDs && deepResult.rootDs && deepResult.nestedDs !== deepResult.rootDs) {
-          rows.push({ icon: 'branch', label: 'Nested in', value: deepResult.rootDs.name, mono: true });
+          rows.push({ icon: 'branch', label: t.pathCalcField, value: deepResult.rootDs.name, mono: true });
         }
         if (deepResult) {
           const tables = deepResult.involvedDatasources.filter(d => d.tableName);
@@ -218,7 +219,7 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
           if (classes.length > 1) rows.push({ icon: 'class', value: classes.map(c => c.className).join(', '), mono: true, muted: true });
           if (enums.length > 1) rows.push({ icon: 'enum', value: enums.map(e => formatEnumDisplayName(e.enumName!, e)).join(', '), mono: true, muted: true });
           if (deepResult.calculatedFieldChain.length > 0) {
-            rows.push({ icon: 'calc', value: `${deepResult.calculatedFieldChain.length} calc field(s) in chain`, muted: true });
+            rows.push({ icon: 'calc', value: `${deepResult.calculatedFieldChain.length} ${t.pathCalcField}`, muted: true });
           }
         }
 
@@ -233,7 +234,7 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
         return {
           kind: 'datasource',
           title: ds.name,
-          subtitle: 'Data source',
+          subtitle: t.pathDatasource,
           rows,
           canNavigate: !!treeNodeId,
         };
@@ -254,13 +255,13 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
       const mapResult = resolveModelPath(segment.fullPath);
       if (mapResult) {
         const rows: PathTooltipRow[] = [];
-        rows.push({ label: 'Expr', value: mapResult.binding.expressionAsString ?? '', mono: true });
+        rows.push({ label: t.expression, value: mapResult.binding.expressionAsString ?? '', mono: true });
         if (mapResult.datasource) {
           const ds = mapResult.datasource;
-          if (ds.tableInfo) rows.push({ icon: 'table', label: 'Table', value: ds.tableInfo.tableName, mono: true });
-          else if (ds.enumInfo) rows.push({ icon: 'enum', label: 'Enum', value: formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo), mono: true });
-          else if (ds.classInfo) rows.push({ icon: 'class', label: 'Class', value: ds.classInfo.className, mono: true });
-          else if (ds.calculatedField) rows.push({ icon: 'calc', label: 'Calc', value: ds.calculatedField.expressionAsString ?? '', mono: true });
+          if (ds.tableInfo) rows.push({ icon: 'table', label: t.pathTable, value: ds.tableInfo.tableName, mono: true });
+          else if (ds.enumInfo) rows.push({ icon: 'enum', label: t.pathEnum, value: formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo), mono: true });
+          else if (ds.classInfo) rows.push({ icon: 'class', label: t.pathClass, value: ds.classInfo.className, mono: true });
+          else if (ds.calculatedField) rows.push({ icon: 'calc', label: t.pathCalcField, value: ds.calculatedField.expressionAsString ?? '', mono: true });
           else rows.push({ label: 'DS', value: `${ds.name} (${ds.type})` });
         }
         const navId = mapResult.bindingTreeNodeId ?? mapResult.datasourceTreeNodeId;
@@ -270,7 +271,7 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
         return {
           kind: 'model-mapping',
           title: mapResult.modelPath,
-          subtitle: 'Model mapping',
+          subtitle: t.propModel,
           rows,
           canNavigate: !!navId,
         };
@@ -279,16 +280,16 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
       const bindResult = resolveBinding(segment.fullPath, configIndex);
       if (bindResult) {
         const rows: PathTooltipRow[] = [];
-        rows.push({ label: 'Expr', value: bindResult.binding.expressionAsString ?? '', mono: true });
+        rows.push({ label: t.expression, value: bindResult.binding.expressionAsString ?? '', mono: true });
         const dsName = bindResult.binding.expressionAsString?.split('.')[0]?.split('(')[0]?.replace(/['"]/g, '').trim();
         if (dsName) {
           const dsResult = resolveDatasource(dsName, bindResult.configIndex);
           if (dsResult?.datasource) {
             const ds = dsResult.datasource;
-            if (ds.tableInfo) rows.push({ icon: 'table', label: 'Table', value: ds.tableInfo.tableName, mono: true });
-            else if (ds.enumInfo) rows.push({ icon: 'enum', label: 'Enum', value: formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo), mono: true });
-            else if (ds.classInfo) rows.push({ icon: 'class', label: 'Class', value: ds.classInfo.className, mono: true });
-            else if (ds.calculatedField) rows.push({ icon: 'calc', label: 'Calc', value: ds.calculatedField.expressionAsString ?? '', mono: true });
+            if (ds.tableInfo) rows.push({ icon: 'table', label: t.pathTable, value: ds.tableInfo.tableName, mono: true });
+            else if (ds.enumInfo) rows.push({ icon: 'enum', label: t.pathEnum, value: formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo), mono: true });
+            else if (ds.classInfo) rows.push({ icon: 'class', label: t.pathClass, value: ds.classInfo.className, mono: true });
+            else if (ds.calculatedField) rows.push({ icon: 'calc', label: t.pathCalcField, value: ds.calculatedField.expressionAsString ?? '', mono: true });
           }
         }
         const r = { treeNodeId: bindResult.treeNodeId, type: 'binding' };
@@ -297,7 +298,7 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
         return {
           kind: 'binding',
           title: bindResult.binding.path,
-          subtitle: 'Binding',
+          subtitle: t.propBindings,
           rows,
           canNavigate: !!bindResult.treeNodeId,
         };

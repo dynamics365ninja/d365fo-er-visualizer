@@ -15,6 +15,7 @@
     "@fluentui/react-components": "^9.73.7",
     "@fluentui/react-icons": "^2.0.324",
     "@xyflow/react": "^12.8.2",
+    "jszip": "^3.10.1",
     "react": "^19.1.0",
     "react-arborist": "^3.4.0",
     "react-dom": "^19.1.0",

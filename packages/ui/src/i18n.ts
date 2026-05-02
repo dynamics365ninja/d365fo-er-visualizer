@@ -285,6 +285,126 @@ export interface Translations {
   fnoLoadingFailed: (msg: string) => string;
   fnoDownloadFailed: (name: string, msg: string) => string;
   fnoLoadedCount: (n: number) => string;
+
+  // Property inspector labels
+  propDescription: string;
+  propVersion: string;
+  propVendor: string;
+  propStatus: string;
+  propBase: string;
+  propBaseGuid: string;
+  propKind: string;
+  propLabelsCount: (n: number) => string;
+  propLabel: string;
+  propFields: string;
+  propIsRoot: string;
+  propIsEnum: string;
+  propTypeDescriptor: string;
+  propHost: string;
+  propParentPath: string;
+  propTable: string;
+  propCrossCompany: string;
+  propSelectedFields: string;
+  propEnumName: string;
+  propEnumType: string;
+  propImportFormatGuid: string;
+  propClassName: string;
+  propEdt: string;
+  propVisibilityExpr: string;
+  propModelPath: string;
+  propSyntaxVersion: string;
+  propCondition: string;
+  propMessage: string;
+  propRule: (n: number) => string;
+  propProperty: string;
+  propValueDefault: string;
+  propMappingVersion: string;
+  propModel: string;
+  propModelVersion: string;
+  propDatasources: string;
+  propBindings: string;
+  propValidations: string;
+  propModelGuid: string;
+  propModelVersionRaw: string;
+  propRootContainer: string;
+  propMappingRevision: string;
+  propValues: string;
+  propListToGroup: string;
+  propCompleted: string;
+  propNo: string;
+  propComponentGuid: string;
+
+  // Error boundary
+  errorLabel: string;
+  errorTitle: string;
+  errorDescription: string;
+  errorRetry: string;
+
+  // Excel preview
+  excelWorkbook: string;
+  excelInput: string;
+  excelOutput: string;
+  excelRangeCount: (n: number) => string;
+  excelCellCount: (n: number) => string;
+  excelNoSheets: string;
+  excelEmptySheet: string;
+  excelHeader: string;
+  excelFooter: string;
+  excelRepeatingVertical: string;
+  excelRepeatingHorizontal: string;
+  excelLegendDynamic: string;
+  excelLegendConstant: string;
+  excelTemplateView: string;
+  excelShowTemplate: string;
+  excelTemplateLoading: string;
+  excelTemplateError: string;
+  excelStructureView: string;
+  excelTemplateCells: (n: number) => string;
+  excelTemplateMerged: (n: number) => string;
+  previewLabel: string;
+  previewDescription: string;
+
+  // Format stats
+  statsRoots: (n: number) => string;
+  statsRecords: (n: number) => string;
+  statsEnums: (n: number) => string;
+  statsFields: (n: number) => string;
+  statsRelations: (n: number) => string;
+  modelHierarchyHint: string;
+  moreFields: (n: number) => string;
+
+  // Search panel
+  searchInLabel: string;
+  exampleHintTable: string;
+  exampleHintEnum: string;
+  exampleHintLookup: string;
+  exampleHintParam: string;
+  exampleHintIdentifier: string;
+  exampleHintFunction: string;
+  exampleHintCalcField: string;
+  searchRefCount: (n: number) => string;
+  whereUsedSummary: (occurrences: number, files: number) => string;
+  navigateToDatasource: string;
+  textOccurrences: string;
+  inExpressions: string;
+  deadDatasource: string;
+  deadDatasourceDesc: string;
+
+  // FnoConnectPanel status
+  fnoStatusPreparing: string;
+  fnoStatusDownloadingDM: (n: number) => string;
+  fnoStatusDownloadingFM: (n: number) => string;
+  fnoStatusResolvingDM: string;
+  fnoStatusScanMappings: string;
+  fnoStatusDownloadingMM: string;
+  fnoStatusDownloadingMMCount: (n: number) => string;
+  fnoStatusLateDM: string;
+  fnoSkippedDerived: (name: string) => string;
+  fnoSelectedCount: (n: number) => string;
+  fnoFilterModels: string;
+  fnoBack: string;
+  fnoRetry: string;
+  fnoNoChildren: (name: string) => string;
 }
 
 // ─── Translation dictionaries ─────────────────────────────────────────────
@@ -570,6 +690,126 @@ const cs: Translations = {
   fnoLoadingFailed: (msg: string) => `Načítání selhalo: ${msg}`,
   fnoDownloadFailed: (name: string, msg: string) => `Stažení „${name}" selhalo: ${msg}`,
   fnoLoadedCount: (n: number) => `Načteno ${n} konfigurací z F&O.`,
+
+  // Property inspector labels
+  propDescription: 'Popis',
+  propVersion: 'Verze',
+  propVendor: 'Dodavatel',
+  propStatus: 'Stav',
+  propBase: 'Základ',
+  propBaseGuid: 'GUID základu',
+  propKind: 'Druh',
+  propLabelsCount: (n: number) => `${n} záznamů`,
+  propLabel: 'Popisek',
+  propFields: 'Pole',
+  propIsRoot: 'Je kořen',
+  propIsEnum: 'Je výčet',
+  propTypeDescriptor: 'Type Descriptor',
+  propHost: 'Host',
+  propParentPath: 'Nadřazená cesta',
+  propTable: 'Tabulka',
+  propCrossCompany: 'Cross-Company',
+  propSelectedFields: 'Vybraná pole',
+  propEnumName: 'Název výčtu',
+  propEnumType: 'Typ výčtu',
+  propImportFormatGuid: 'GUID importního formátu',
+  propClassName: 'Název třídy',
+  propEdt: 'EDT',
+  propVisibilityExpr: 'Výraz viditelnosti',
+  propModelPath: 'Cesta v modelu',
+  propSyntaxVersion: 'Verze syntaxe',
+  propCondition: 'Podmínka',
+  propMessage: 'Zpráva',
+  propRule: (n: number) => `Pravidlo ${n}`,
+  propProperty: 'Vlastnost',
+  propValueDefault: 'Hodnota (výchozí)',
+  propMappingVersion: 'Verze mapování',
+  propModel: 'Model',
+  propModelVersion: 'Verze modelu',
+  propDatasources: 'Datové zdroje',
+  propBindings: 'Vazby',
+  propValidations: 'Validace',
+  propModelGuid: 'GUID modelu',
+  propModelVersionRaw: 'Verze modelu (raw)',
+  propRootContainer: 'Kořenový kontejner',
+  propMappingRevision: 'Revize mapování',
+  propValues: 'Hodnoty',
+  propListToGroup: 'Seskupení seznamu',
+  propCompleted: 'Dokončeno',
+  propNo: 'Ne',
+  propComponentGuid: 'GUID komponenty',
+
+  // Error boundary
+  errorLabel: 'Chyba',
+  errorTitle: 'Něco se pokazilo.',
+  errorDescription: 'Tato část aplikace narazila na neočekávanou chybu. Zbytek aplikace by měl fungovat dál.',
+  errorRetry: 'Zkusit znovu',
+
+  // Excel preview
+  excelWorkbook: 'Excel sešit',
+  excelInput: 'Vstupní',
+  excelOutput: 'Výstupní',
+  excelRangeCount: (n: number) => `${n} oblast${n === 1 ? '' : n < 5 ? 'i' : 'í'}`,
+  excelCellCount: (n: number) => `${n} buň${n === 1 ? 'ka' : n < 5 ? 'ky' : 'ek'}`,
+  excelNoSheets: 'Ve struktuře formátu nebyly nalezeny žádné listy Excelu.',
+  excelEmptySheet: 'Prázdný list',
+  excelHeader: 'Záhlaví',
+  excelFooter: 'Zápatí',
+  excelRepeatingVertical: 'opakující se svisle',
+  excelRepeatingHorizontal: 'opakující se vodorovně',
+  excelLegendDynamic: 'datově vázaný',
+  excelLegendConstant: 'odvozeno z výrazu',
+  excelTemplateView: 'Šablona',
+  excelShowTemplate: 'Zobrazit Excel šablonu',
+  excelTemplateLoading: 'Načítání Excel šablony…',
+  excelTemplateError: 'Chyba při čtení šablony',
+  excelStructureView: 'Struktura',
+  excelTemplateCells: (n: number) => `${n} buň${n === 1 ? 'ka' : n < 5 ? 'ky' : 'ek'}`,
+  excelTemplateMerged: (n: number) => `${n} sloučen${n === 1 ? 'á' : n < 5 ? 'é' : 'ých'}`,
+  previewLabel: 'Náhled',
+  previewDescription: 'Náhled struktury souboru — konstantní hodnoty jsou odvozeny z binding výrazů. Dynamické hodnoty (cesty datových zdrojů, funkce) jsou zobrazeny jako {zástupné}.',
+
+  // Format stats
+  statsRoots: (n: number) => `${n} kořenů`,
+  statsRecords: (n: number) => `${n} záznamů`,
+  statsEnums: (n: number) => `${n} výčtů`,
+  statsFields: (n: number) => `${n} polí`,
+  statsRelations: (n: number) => `${n} relací`,
+  modelHierarchyHint: 'Hierarchická mapa · klikni na kontejner pro zvýraznění',
+  moreFields: (n: number) => `+${n} dalších…`,
+
+  // Search panel
+  searchInLabel: 'v',
+  exampleHintTable: 'tabulka',
+  exampleHintEnum: 'enum',
+  exampleHintLookup: 'lookup',
+  exampleHintParam: 'parametr',
+  exampleHintIdentifier: 'identifikátor',
+  exampleHintFunction: 'funkce',
+  exampleHintCalcField: 'kalkulované pole',
+  searchRefCount: (n: number) => `${n} ${n === 1 ? 'odkaz' : n < 5 ? 'odkazy' : 'odkazů'} ve výrazu`,
+  whereUsedSummary: (occurrences: number, files: number) => `${occurrences} ${occurrences === 1 ? 'výskyt' : occurrences < 5 ? 'výskyty' : 'výskytů'} v ${files} ${files === 1 ? 'souboru' : 'souborech'}`,
+  navigateToDatasource: 'Přejít na datasource',
+  textOccurrences: 'Textové výskyty ve výrazech',
+  inExpressions: 've výrazech',
+  deadDatasource: 'Mrtvý datasource',
+  deadDatasourceDesc: 'žádný binding neodkazuje na tento zdroj',
+
+  // FnoConnectPanel status
+  fnoStatusPreparing: 'Připravuji…',
+  fnoStatusDownloadingDM: (n: number) => `Stahuji DataModely (${n})…`,
+  fnoStatusDownloadingFM: (n: number) => `Stahuji formáty a mapování (${n})…`,
+  fnoStatusResolvingDM: 'Řeším odkazované DataModely…',
+  fnoStatusScanMappings: 'Stahuji konfigurace a hledám mapování…',
+  fnoStatusDownloadingMM: 'Stahuji ModelMapping…',
+  fnoStatusDownloadingMMCount: (n: number) => `Stahuji Model Mappings (${n})…`,
+  fnoStatusLateDM: 'Řeším DataModely z křížových odkazů mapování…',
+  fnoSkippedDerived: (name: string) => `„${name}" nemá vlastní XML (odvozená konfigurace) — přeskočeno.`,
+  fnoSelectedCount: (n: number) => `${n} vybráno (napříč úrovněmi)`,
+  fnoFilterModels: 'Filtrovat modely…',
+  fnoBack: '← Zpět',
+  fnoRetry: 'Zkusit znovu',
+  fnoNoChildren: (name: string) => `Pod „${name}" nejsou žádné potomky.`,
 };
 
 const en: Translations = {
@@ -847,6 +1087,126 @@ const en: Translations = {
   fnoLoadingFailed: (msg: string) => `Loading failed: ${msg}`,
   fnoDownloadFailed: (name: string, msg: string) => `Download of "${name}" failed: ${msg}`,
   fnoLoadedCount: (n: number) => `Loaded ${n} configuration${n === 1 ? '' : 's'} from F&O.`,
+
+  // Property inspector labels
+  propDescription: 'Description',
+  propVersion: 'Version',
+  propVendor: 'Vendor',
+  propStatus: 'Status',
+  propBase: 'Base',
+  propBaseGuid: 'Base GUID',
+  propKind: 'Kind',
+  propLabelsCount: (n: number) => `${n} entries`,
+  propLabel: 'Label',
+  propFields: 'Fields',
+  propIsRoot: 'Is Root',
+  propIsEnum: 'Is Enum',
+  propTypeDescriptor: 'Type Descriptor',
+  propHost: 'Host',
+  propParentPath: 'Parent Path',
+  propTable: 'Table',
+  propCrossCompany: 'Cross-Company',
+  propSelectedFields: 'Selected Fields',
+  propEnumName: 'Enum Name',
+  propEnumType: 'Enum Type',
+  propImportFormatGuid: 'Import Format GUID',
+  propClassName: 'Class Name',
+  propEdt: 'EDT',
+  propVisibilityExpr: 'Visibility Expr',
+  propModelPath: 'Model Path',
+  propSyntaxVersion: 'Syntax Version',
+  propCondition: 'Condition',
+  propMessage: 'Message',
+  propRule: (n: number) => `Rule ${n}`,
+  propProperty: 'Property',
+  propValueDefault: 'Value (default)',
+  propMappingVersion: 'Mapping Version',
+  propModel: 'Model',
+  propModelVersion: 'Model Version',
+  propDatasources: 'Datasources',
+  propBindings: 'Bindings',
+  propValidations: 'Validations',
+  propModelGuid: 'Model GUID',
+  propModelVersionRaw: 'Model Version (raw)',
+  propRootContainer: 'Root Container',
+  propMappingRevision: 'Mapping Revision',
+  propValues: 'Values',
+  propListToGroup: 'List to Group',
+  propCompleted: 'Completed',
+  propNo: 'No',
+  propComponentGuid: 'Component GUID',
+
+  // Error boundary
+  errorLabel: 'Error',
+  errorTitle: 'Something went wrong.',
+  errorDescription: 'This part of the application encountered an unexpected error. The rest of the application should continue to work.',
+  errorRetry: 'Try again',
+
+  // Excel preview
+  excelWorkbook: 'Excel Workbook',
+  excelInput: 'Input',
+  excelOutput: 'Output',
+  excelRangeCount: (n: number) => `${n} range${n === 1 ? '' : 's'}`,
+  excelCellCount: (n: number) => `${n} cell${n === 1 ? '' : 's'}`,
+  excelNoSheets: 'No Excel sheets found in format structure.',
+  excelEmptySheet: 'Empty sheet',
+  excelHeader: 'Header',
+  excelFooter: 'Footer',
+  excelRepeatingVertical: 'repeating vertical',
+  excelRepeatingHorizontal: 'repeating horizontal',
+  excelLegendDynamic: 'data-bound',
+  excelLegendConstant: 'resolved from expression',
+  excelTemplateView: 'Template',
+  excelShowTemplate: 'Show Excel template',
+  excelTemplateLoading: 'Loading Excel template…',
+  excelTemplateError: 'Error reading template',
+  excelStructureView: 'Structure',
+  excelTemplateCells: (n: number) => `${n} cell${n === 1 ? '' : 's'}`,
+  excelTemplateMerged: (n: number) => `${n} merged`,
+  previewLabel: 'Preview',
+  previewDescription: 'File structure preview — constant values are resolved from binding expressions. Dynamic values (datasource paths, functions) are shown as {placeholders}.',
+
+  // Format stats
+  statsRoots: (n: number) => `${n} root${n === 1 ? '' : 's'}`,
+  statsRecords: (n: number) => `${n} record${n === 1 ? '' : 's'}`,
+  statsEnums: (n: number) => `${n} enum${n === 1 ? '' : 's'}`,
+  statsFields: (n: number) => `${n} field${n === 1 ? '' : 's'}`,
+  statsRelations: (n: number) => `${n} relation${n === 1 ? '' : 's'}`,
+  modelHierarchyHint: 'Hierarchy map · click a container to highlight',
+  moreFields: (n: number) => `+${n} more…`,
+
+  // Search panel
+  searchInLabel: 'in',
+  exampleHintTable: 'table',
+  exampleHintEnum: 'enum',
+  exampleHintLookup: 'lookup',
+  exampleHintParam: 'parameter',
+  exampleHintIdentifier: 'identifier',
+  exampleHintFunction: 'function',
+  exampleHintCalcField: 'calc. field',
+  searchRefCount: (n: number) => `${n} reference${n === 1 ? '' : 's'} in expression`,
+  whereUsedSummary: (occurrences: number, files: number) => `${occurrences} occurrence${occurrences === 1 ? '' : 's'} in ${files} file${files === 1 ? '' : 's'}`,
+  navigateToDatasource: 'Navigate to datasource',
+  textOccurrences: 'Text occurrences in expressions',
+  inExpressions: 'in expressions',
+  deadDatasource: 'Dead datasource',
+  deadDatasourceDesc: 'no binding references this source',
+
+  // FnoConnectPanel status
+  fnoStatusPreparing: 'Preparing…',
+  fnoStatusDownloadingDM: (n: number) => `Downloading DataModels (${n})…`,
+  fnoStatusDownloadingFM: (n: number) => `Downloading Formats & Mappings (${n})…`,
+  fnoStatusResolvingDM: 'Resolving referenced DataModels…',
+  fnoStatusScanMappings: 'Downloading configurations & scanning for mappings…',
+  fnoStatusDownloadingMM: 'Downloading Model Mappings…',
+  fnoStatusDownloadingMMCount: (n: number) => `Downloading Model Mappings (${n})…`,
+  fnoStatusLateDM: 'Resolving DataModels from mapping cross-references…',
+  fnoSkippedDerived: (name: string) => `"${name}" has no own XML (derived configuration) — skipped.`,
+  fnoSelectedCount: (n: number) => `${n} selected (across levels)`,
+  fnoFilterModels: 'Filter models…',
+  fnoBack: '← Back',
+  fnoRetry: 'Retry',
+  fnoNoChildren: (name: string) => `No children under "${name}".`,
 };
 
 export const t: Translations = locale === 'cs' ? cs : en;

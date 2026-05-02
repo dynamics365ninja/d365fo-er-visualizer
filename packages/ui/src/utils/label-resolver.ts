@@ -37,8 +37,13 @@ export function resolveLabel(
   const trimmed = String(labelRef).trim();
   if (!trimmed) return null;
 
-  // Strip common reference decorations: leading '@' and surrounding quotes.
-  const id = trimmed.replace(/^@/, '').replace(/^"(.*)"$/, '$1').trim();
+  // Strip common reference decorations: leading '@', surrounding quotes,
+  // and the GER_LABEL: prefix used by D365 ER format references.
+  const id = trimmed
+    .replace(/^@/, '')
+    .replace(/^"(.*)"$/, '$1')
+    .replace(/^GER_LABEL:/, '')
+    .trim();
   const raw = trimmed;
   if (!id) return { id: '', raw };
   if (!labels || labels.length === 0) return { id, raw };

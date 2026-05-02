@@ -45,6 +45,7 @@ import {
 import { useAppStore, resolveDeepExpression } from '../state/store';
 import { t } from '../i18n';
 import { formatEnumDisplayName, getEnumTypeLabel, getEnumSourceKind } from '../utils/enum-display';
+import { resolveLabel } from '../utils/label-resolver';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -181,7 +182,7 @@ function extractModelPath(expr: string): string {
 // navigates into that datasource / calculated field.
 
 interface ERToken {
-  kind: 'func' | 'ds' | 'op' | 'str' | 'num' | 'paren' | 'sep' | 'ws' | 'other';
+  kind: 'func' | 'ds' | 'op' | 'str' | 'num' | 'paren' | 'sep' | 'ws' | 'label' | 'other';
   raw: string;            // exact text in expression
   segments?: string[];    // for 'ds': unquoted path segments (['001_System','$TaxJuristictionUIP'])
 }
@@ -235,10 +236,19 @@ function tokenizeERExpr(expr: string): ERToken[] {
       tokens.push({ kind: 'num', raw: expr.slice(i, j) }); i = j; continue;
     }
 
-    // ── @ current-record reference (@.field or just @) ──────────────────────
+    // ── @ label reference (@"GER_LABEL:...") or current-record ref (@.field / @) ──
     if (ch === '@') {
-      let raw = '@';
       let j = i + 1;
+      if (j < n && expr[j] === '"') {
+        // Label reference: @"GER_LABEL:Foo" or @"SomeLabel"
+        j++; // skip opening "
+        let inner = '';
+        while (j < n && expr[j] !== '"') inner += expr[j++];
+        if (j < n) j++; // skip closing "
+        tokens.push({ kind: 'label', raw: `@"${inner}"` });
+        i = j; continue;
+      }
+      let raw = '@';
       if (j < n && expr[j] === '.') {
         raw += '.'; j++;
         while (j < n && /[A-Za-z0-9_$]/.test(expr[j])) raw += expr[j++];
@@ -331,9 +341,19 @@ interface ExpressionViewProps {
 
 function ExpressionView({ expr, configIndex, onPush, currentFrameExpression }: ExpressionViewProps) {
   const tokens = useMemo(() => tokenizeERExpr(expr), [expr]);
+  const labels = useAppStore(s => s.configurations[configIndex]?.solutionVersion?.solution?.labels);
   return (
     <div className="er-expr">
       {tokens.map((tok, idx) => {
+        if (tok.kind === 'label') {
+          const resolved = resolveLabel(tok.raw, labels);
+          const displayText = resolved?.localized ?? resolved?.enUs ?? resolved?.id;
+          return (
+            <span key={idx} className="er-token-str" title={tok.raw} style={(resolved?.localized || resolved?.enUs) ? { fontStyle: 'italic' } : undefined}>
+              {displayText ?? tok.raw}
+            </span>
+          );
+        }
         if (tok.kind === 'ds' && tok.segments && tok.segments.length > 0) {
           // Build a canonical expression form that parseDottedPath can handle:
           // quote segments that contain non-identifier characters (e.g. name())

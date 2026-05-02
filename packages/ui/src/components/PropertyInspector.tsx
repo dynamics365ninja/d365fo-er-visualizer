@@ -119,10 +119,10 @@ function FileProps({ data, showTechnicalDetails }: { data: any; showTechnicalDet
   if (!sol) return null;
 
   const items: [string, React.ReactNode, string?][] = [
-    ['Name', sol.name],
-    ['Description', sol.description ?? '–'],
-    ['Version', config.solutionVersion.publicVersionNumber],
-    ['Vendor', sol.vendor?.name ?? '–'],
+    [t.propName, sol.name],
+    [t.propDescription, sol.description ?? '–'],
+    [t.propVersion, config.solutionVersion.publicVersionNumber],
+    [t.propVendor, sol.vendor?.name ?? '–'],
   ];
 
   if (config.content?.kind === 'Format') {
@@ -132,11 +132,11 @@ function FileProps({ data, showTechnicalDetails }: { data: any; showTechnicalDet
   if (showTechnicalDetails) {
     items.splice(1, 0, ['GUID', sol.id, 'guid']);
     items.push(
-      ['Status', config.solutionVersion.versionStatus === 2 ? 'Completed' : String(config.solutionVersion.versionStatus)],
-      ['Base', sol.baseName ?? '–'],
-      ['Base GUID', sol.baseSolutionId ?? '–', 'guid'],
-      ['Kind', config.kind],
-      ['Labels', `${sol.labels?.length ?? 0} entries`],
+      [t.propStatus, config.solutionVersion.versionStatus === 2 ? t.propCompleted : String(config.solutionVersion.versionStatus)],
+      [t.propBase, sol.baseName ?? '–'],
+      [t.propBaseGuid, sol.baseSolutionId ?? '–', 'guid'],
+      [t.propKind, config.kind],
+      [t.propLabel + 's', t.propLabelsCount(sol.labels?.length ?? 0)],
     );
   }
 
@@ -145,15 +145,15 @@ function FileProps({ data, showTechnicalDetails }: { data: any; showTechnicalDet
 
 function ContainerProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
-    ['Name', data.name],
-    ['Label', <LabelValue labelRef={data.label} configIndex={configIndex} />],
-    ['Description', <LabelValue labelRef={data.description} configIndex={configIndex} />],
-    ['Fields', `${data.items?.length ?? 0}`],
+    [t.propName, data.name],
+    [t.propLabel, <LabelValue labelRef={data.label} configIndex={configIndex} />],
+    [t.propDescription, <LabelValue labelRef={data.description} configIndex={configIndex} />],
+    [t.propFields, `${data.items?.length ?? 0}`],
   ];
 
   if (showTechnicalDetails) {
     items.unshift(['ID', data.id, 'guid']);
-    items.splice(4, 0, ['Is Root', data.isRoot ? 'Yes' : 'No'], ['Is Enum', data.isEnum ? 'Yes' : 'No']);
+    items.splice(4, 0, [t.propIsRoot, data.isRoot ? t.propYes : t.propNo], [t.propIsEnum, data.isEnum ? t.propYes : t.propNo]);
   }
 
   return <PropGrid items={items} />;
@@ -161,16 +161,16 @@ function ContainerProps({ data, configIndex, showTechnicalDetails }: { data: any
 
 function FieldProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
-    ['Name', data.name],
-    ['Label', <LabelValue labelRef={data.label} configIndex={configIndex} />],
-    ['Description', <LabelValue labelRef={data.description} configIndex={configIndex} />],
+    [t.propName, data.name],
+    [t.propLabel, <LabelValue labelRef={data.label} configIndex={configIndex} />],
+    [t.propDescription, <LabelValue labelRef={data.description} configIndex={configIndex} />],
   ];
 
   if (showTechnicalDetails) {
     items.splice(1, 0,
-      ['Type', fieldTypeNames[data.type] ?? `Unknown (${data.type})`],
-      ['Type Descriptor', data.typeDescriptor ?? '–'],
-      ['Host', data.isTypeDescriptorHost ? 'Yes' : 'No'],
+      [t.propType, fieldTypeNames[data.type] ?? `Unknown (${data.type})`],
+      [t.propTypeDescriptor, data.typeDescriptor ?? '–'],
+      [t.propHost, data.isTypeDescriptorHost ? t.propYes : t.propNo],
     );
   }
 
@@ -179,45 +179,45 @@ function FieldProps({ data, configIndex, showTechnicalDetails }: { data: any; co
 
 function DatasourceProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
-    ['Name', data.name],
-    ['Label', <LabelValue labelRef={data.label} configIndex={configIndex} />],
+    [t.propName, data.name],
+    [t.propLabel, <LabelValue labelRef={data.label} configIndex={configIndex} />],
   ];
 
   if (showTechnicalDetails) {
-    items.splice(1, 0, ['Type', data.type], ['Parent Path', data.parentPath ?? '–']);
+    items.splice(1, 0, [t.propType, data.type], [t.propParentPath, data.parentPath ?? '–']);
   }
 
   if (data.tableInfo) {
     items.push(
-      ['Table', data.tableInfo.tableName],
+      [t.propTable, data.tableInfo.tableName],
     );
     if (showTechnicalDetails) {
       items.push(
-        ['Cross-Company', data.tableInfo.isCrossCompany ? 'Yes' : 'No'],
-        ['Selected Fields', data.tableInfo.selectedFields?.join(', ') || '–'],
+        [t.propCrossCompany, data.tableInfo.isCrossCompany ? t.propYes : t.propNo],
+        [t.propSelectedFields, data.tableInfo.selectedFields?.join(', ') || '–'],
       );
     }
   }
   if (data.enumInfo) {
-    items.push(['Enum Name', data.enumInfo.enumName]);
+    items.push([t.propEnumName, data.enumInfo.enumName]);
     if (showTechnicalDetails) {
-      items.push(['Enum Type', getEnumTypeLabel(data.enumInfo)]);
+      items.push([t.propEnumType, getEnumTypeLabel(data.enumInfo)]);
     }
     if (showTechnicalDetails && data.enumInfo.sourceKind === 'DataModel') {
-      items.push(['Model GUID', data.enumInfo.modelGuid ?? '–', 'guid']);
+      items.push([t.propModelGuid, data.enumInfo.modelGuid ?? '–', 'guid']);
     }
   }
   if (showTechnicalDetails && data.importFormatInfo) {
-    items.push(['Import Format GUID', data.importFormatInfo.formatGuid || '–', 'guid']);
+    items.push([t.propImportFormatGuid, data.importFormatInfo.formatGuid || '–', 'guid']);
   }
   if (data.classInfo) {
-    items.push(['Class Name', data.classInfo.className]);
+    items.push([t.propClassName, data.classInfo.className]);
   }
   if (data.userParamInfo) {
     if (showTechnicalDetails) {
       items.push(
-        ['EDT', data.userParamInfo.extendedDataTypeName ?? '–'],
-        ['Visibility Expr', data.userParamInfo.expressionAsString
+        [t.propEdt, data.userParamInfo.extendedDataTypeName ?? '–'],
+        [t.propVisibilityExpr, data.userParamInfo.expressionAsString
           ? <ClickablePath expression={data.userParamInfo.expressionAsString} configIndex={configIndex} />
           : '–'],
       );
@@ -225,11 +225,11 @@ function DatasourceProps({ data, configIndex, showTechnicalDetails }: { data: an
   }
   if (data.calculatedField) {
     if (showTechnicalDetails) {
-      items.push(['Expression', <ClickablePath expression={data.calculatedField.expressionAsString} configIndex={configIndex} />]);
+      items.push([t.expression, <ClickablePath expression={data.calculatedField.expressionAsString} configIndex={configIndex} />]);
     }
   }
   if (showTechnicalDetails && data.groupByInfo) {
-    items.push(['List to Group', data.groupByInfo.listToGroup || '–']);
+    items.push([t.propListToGroup, data.groupByInfo.listToGroup || '–']);
   }
 
   return <PropGrid items={items} />;
@@ -237,10 +237,10 @@ function DatasourceProps({ data, configIndex, showTechnicalDetails }: { data: an
 
 function BindingProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
-    ['Model Path', <ClickablePath expression={data.path} configIndex={configIndex} mode="model-path" />],
-    ['Expression', <ClickablePath expression={data.expressionAsString} configIndex={configIndex} mode="binding-expr" />],
+    [t.propModelPath, <ClickablePath expression={data.path} configIndex={configIndex} mode="model-path" />],
+    [t.expression, <ClickablePath expression={data.expressionAsString} configIndex={configIndex} mode="binding-expr" />],
   ];
-  if (showTechnicalDetails) items.push(['Syntax Version', data.syntaxVersion ?? '–']);
+  if (showTechnicalDetails) items.push([t.propSyntaxVersion, data.syntaxVersion ?? '–']);
   return <PropGrid items={items} />;
 }
 
@@ -250,11 +250,11 @@ function ValidationProps({ data, configIndex, showTechnicalDetails }: { data: an
       <PropGrid items={[['Path', <ClickablePath expression={data.path} configIndex={configIndex} mode="model-path" />]]} />
       {data.conditions?.map((c: any, i: number) => (
         <div key={i} className="property-card">
-          <div className="property-card-title">Rule {i + 1}</div>
+          <div className="property-card-title">{t.propRule(i + 1)}</div>
           <PropGrid items={[
             ...(showTechnicalDetails ? [['GUID', c.id, 'guid'] as [string, React.ReactNode, string?]] : []),
-            ['Condition', <ClickablePath expression={c.conditionExpressionAsString} configIndex={configIndex} />],
-            ['Message', <ClickablePath expression={c.messageExpressionAsString} configIndex={configIndex} />],
+            [t.propCondition, <ClickablePath expression={c.conditionExpressionAsString} configIndex={configIndex} />],
+            [t.propMessage, <ClickablePath expression={c.messageExpressionAsString} configIndex={configIndex} />],
           ]} />
         </div>
       ))}
@@ -264,30 +264,30 @@ function ValidationProps({ data, configIndex, showTechnicalDetails }: { data: an
 
 function FormatElementProps({ data, showTechnicalDetails }: { data: any; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
-    ['Name', data.name],
-    ['Children', `${data.children?.length ?? 0}`],
+    [t.propName, data.name],
+    [t.propChildren, `${data.children?.length ?? 0}`],
   ];
   if (showTechnicalDetails) {
     items.unshift(['GUID', data.id, 'guid']);
-    items.splice(2, 0, ['Element Type', data.elementType]);
+    items.splice(2, 0, [t.propType, data.elementType]);
   }
-  if (showTechnicalDetails && data.encoding) items.push(['Encoding', data.encoding]);
-  if (showTechnicalDetails && data.maximalLength) items.push(['Max Length', String(data.maximalLength)]);
-  if (data.value) items.push(['Value', data.value]);
-  if (data.transformation) items.push(['Transformation', data.transformation, 'guid']);
-  if (showTechnicalDetails && data.excludedFromDataSource) items.push(['Excluded from DS', 'Yes']);
+  if (showTechnicalDetails && data.encoding) items.push([t.propEncoding, data.encoding]);
+  if (showTechnicalDetails && data.maximalLength) items.push([t.propMaxLen, String(data.maximalLength)]);
+  if (data.value) items.push([t.propValue, data.value]);
+  if (data.transformation) items.push([t.propTransform, data.transformation, 'guid']);
+  if (showTechnicalDetails && data.excludedFromDataSource) items.push([t.propExcluded, t.propYes]);
 
   return <PropGrid items={items} />;
 }
 
 function FormatBindingProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
-    ['Expression', <ClickablePath expression={data.expressionAsString} configIndex={configIndex} mode="binding-expr" />],
-    ['Property', data.propertyName ?? 'Value (default)'],
+    [t.expression, <ClickablePath expression={data.expressionAsString} configIndex={configIndex} mode="binding-expr" />],
+    [t.propProperty, data.propertyName ?? t.propValueDefault],
   ];
   if (showTechnicalDetails) {
-    items.unshift(['Component GUID', data.componentId, 'guid']);
-    items.push(['Syntax Version', data.syntaxVersion ?? '–']);
+    items.unshift([t.propComponentGuid, data.componentId, 'guid']);
+    items.push([t.propSyntaxVersion, data.syntaxVersion ?? '–']);
   }
   return <PropGrid items={items} />;
 }
@@ -310,32 +310,59 @@ function MappingProps({ data, showTechnicalDetails, configIndex }: { data: any; 
     return undefined;
   }, [configurations, data.modelId]);
 
+  // Resolve the mapping's own version number from the parent configuration.
+  const mappingVersionNumber = React.useMemo(() => {
+    const cfg = configurations[configIndex];
+    if (!cfg) return undefined;
+    if (cfg.content.kind === 'ModelMapping') {
+      const ver = (cfg.content as any).version;
+      return ver?.number != null ? String(ver.number) : undefined;
+    }
+    // Embedded mapping inside a Format — try to match by mapping id
+    if (cfg.content.kind === 'Format') {
+      const fc = cfg.content as any;
+      for (const emv of fc.embeddedModelMappingVersions ?? []) {
+        if (emv.mapping?.id === data.id || emv.mapping?.name === data.name) {
+          return emv.number != null ? String(emv.number) : undefined;
+        }
+      }
+    }
+    return undefined;
+  }, [configurations, configIndex, data.id, data.name]);
+
   // Extract the numeric revision from modelVersion ("{GUID},N" → "N")
   const modelVersionNumber = data.modelVersion
     ? data.modelVersion.replace(/^.*,/, '')
     : undefined;
 
   const displayModelVersion = modelPublicVersion ?? modelVersionNumber ?? '–';
+  const displayMappingVersion = configurations[configIndex]?.solutionVersion?.publicVersionNumber
+    || mappingVersionNumber
+    || '–';
 
   const items: [string, React.ReactNode, string?][] = [
-    ['Name', data.name],
-    ['Model', data.modelName ?? '–'],
-    ['Model Version', displayModelVersion],
-    ['Datasources', `${data.datasources?.length ?? 0}`],
-    ['Bindings', `${data.bindings?.length ?? 0}`],
-    ['Validations', `${data.validations?.length ?? 0}`],
+    [t.propName, data.name],
+    [t.propMappingVersion, displayMappingVersion],
+    [t.propModel, data.modelName ?? '–'],
+    [t.propModelVersion, displayModelVersion],
+    [t.propDatasources, `${data.datasources?.length ?? 0}`],
+    [t.propBindings, `${data.bindings?.length ?? 0}`],
+    [t.propValidations, `${data.validations?.length ?? 0}`],
   ];
   if (showTechnicalDetails) {
     items.unshift(['GUID', data.id, 'guid']);
-    items.splice(4, 0, ['Model GUID', data.modelId ?? '–', 'guid'], ['Model Version (raw)', data.modelVersion ?? '–'], ['Root Container', data.dataContainerDescriptor ?? '–']);
+    items.splice(5, 0, [t.propModelGuid, data.modelId ?? '–', 'guid'], [t.propModelVersionRaw, data.modelVersion ?? '–'], [t.propRootContainer, data.dataContainerDescriptor ?? '–']);
+    if (mappingVersionNumber) {
+      items.splice(3, 0, [t.propMappingRevision, mappingVersionNumber]);
+    }
   }
   return <PropGrid items={items} />;
 }
 
 function EnumProps({ data, showTechnicalDetails }: { data: any; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
-    ['Name', data.name],
-    ['Values', `${data.values?.length ?? 0}`],
+    [t.propName, data.name],
+    [t.propValues, `${data.values?.length ?? 0}`],
   ];
   if (showTechnicalDetails) items.unshift(['GUID', data.id, 'guid']);
   return <PropGrid items={items} />;

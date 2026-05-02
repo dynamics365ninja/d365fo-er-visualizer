@@ -78,7 +78,7 @@ export const fnoSession = {
   ): Promise<ErConfigSummary[]> {
     const auth = await ensureToken(conn, opts?.signal);
     const all = await listComponents(transport(), conn, auth.accessToken, solutionName, opts?.signal);
-    return opts?.componentType ? all.filter(c => c.componentType === opts.componentType) : all;
+    return opts?.componentType ? all.filter((c: ErConfigSummary) => c.componentType === opts.componentType) : all;
   },
 
   async downloadConfiguration(
