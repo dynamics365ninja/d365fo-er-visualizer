@@ -201,7 +201,7 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
         } else if (ds.classInfo) {
           rows.push({ icon: 'class', label: t.pathClass, value: ds.classInfo.className, mono: true });
         } else if (ds.calculatedField) {
-          rows.push({ icon: 'calc', label: t.propExpression, value: ds.calculatedField.expressionAsString ?? '', mono: true });
+          rows.push({ icon: 'calc', label: t.expression, value: ds.calculatedField.expressionAsString ?? '', mono: true });
         } else if (ds.userParamInfo) {
           rows.push({ label: t.propEdt, value: ds.userParamInfo.extendedDataTypeName ?? ds.name });
         } else {
@@ -255,7 +255,7 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
       const mapResult = resolveModelPath(segment.fullPath);
       if (mapResult) {
         const rows: PathTooltipRow[] = [];
-        rows.push({ label: t.propExpression, value: mapResult.binding.expressionAsString ?? '', mono: true });
+        rows.push({ label: t.expression, value: mapResult.binding.expressionAsString ?? '', mono: true });
         if (mapResult.datasource) {
           const ds = mapResult.datasource;
           if (ds.tableInfo) rows.push({ icon: 'table', label: t.pathTable, value: ds.tableInfo.tableName, mono: true });
@@ -280,7 +280,7 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
       const bindResult = resolveBinding(segment.fullPath, configIndex);
       if (bindResult) {
         const rows: PathTooltipRow[] = [];
-        rows.push({ label: t.propExpression, value: bindResult.binding.expressionAsString ?? '', mono: true });
+        rows.push({ label: t.expression, value: bindResult.binding.expressionAsString ?? '', mono: true });
         const dsName = bindResult.binding.expressionAsString?.split('.')[0]?.split('(')[0]?.replace(/['"]/g, '').trim();
         if (dsName) {
           const dsResult = resolveDatasource(dsName, bindResult.configIndex);

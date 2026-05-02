@@ -225,7 +225,7 @@ function DatasourceProps({ data, configIndex, showTechnicalDetails }: { data: an
   }
   if (data.calculatedField) {
     if (showTechnicalDetails) {
-      items.push([t.propExpression, <ClickablePath expression={data.calculatedField.expressionAsString} configIndex={configIndex} />]);
+      items.push([t.expression, <ClickablePath expression={data.calculatedField.expressionAsString} configIndex={configIndex} />]);
     }
   }
   if (showTechnicalDetails && data.groupByInfo) {
@@ -238,7 +238,7 @@ function DatasourceProps({ data, configIndex, showTechnicalDetails }: { data: an
 function BindingProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
     [t.propModelPath, <ClickablePath expression={data.path} configIndex={configIndex} mode="model-path" />],
-    [t.propExpression, <ClickablePath expression={data.expressionAsString} configIndex={configIndex} mode="binding-expr" />],
+    [t.expression, <ClickablePath expression={data.expressionAsString} configIndex={configIndex} mode="binding-expr" />],
   ];
   if (showTechnicalDetails) items.push([t.propSyntaxVersion, data.syntaxVersion ?? '–']);
   return <PropGrid items={items} />;
@@ -282,7 +282,7 @@ function FormatElementProps({ data, showTechnicalDetails }: { data: any; showTec
 
 function FormatBindingProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
-    [t.propExpression, <ClickablePath expression={data.expressionAsString} configIndex={configIndex} mode="binding-expr" />],
+    [t.expression, <ClickablePath expression={data.expressionAsString} configIndex={configIndex} mode="binding-expr" />],
     [t.propProperty, data.propertyName ?? t.propValueDefault],
   ];
   if (showTechnicalDetails) {
