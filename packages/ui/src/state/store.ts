@@ -479,19 +479,52 @@ function collectConfigurationWarnings(configurations: ERConfiguration[]): Config
       };
       walkDs(fmtMap.datasources);
       // Count bindings whose expression root is unknown datasource.
+      // Skip known ER expression functions, boolean/null literals, and operators.
+      const erBuiltins = new Set([
+        // Logical
+        'and', 'or', 'not', 'if', 'case', 'true', 'false',
+        // String
+        'concatenate', 'format', 'replace', 'text', 'trim', 'upper', 'lower',
+        'left', 'right', 'mid', 'len', 'padleft', 'translate', 'char',
+        'numberformat', 'numeralstotext', 'getlabeltext', 'guidvalue',
+        'qrcode', 'base64stringtocontainer', 'stringjoin',
+        // Date/time
+        'dateformat', 'datetimeformat', 'now', 'today', 'nulldate',
+        'nulldatetime', 'sessiontoday', 'sessionnow', 'datevalue',
+        'datetimevalue', 'adddays', 'dayofyear',
+        // Math
+        'abs', 'round', 'rounddown', 'roundup', 'power', 'mod',
+        'int64value', 'intvalue', 'int64value', 'numbervalue', 'value',
+        // List/collection
+        'where', 'orderby', 'reverse', 'filter', 'first', 'firstornull',
+        'count', 'sum', 'sumif', 'allitems', 'allitemsquery', 'emptylist',
+        'list', 'listjoin', 'split', 'index', 'isempty', 'enumerate',
+        'enumerateinternal', 'distinct', 'listoffields',
+        // Conversion
+        'convertcurrency', 'getdefaultcurrency', 'cn_getcurrency',
+        // Other
+        'null', 'isvalidchariso7064', 'valuein', 'valueinlarge',
+        'contains', 'startswith', 'endswith',
+      ]);
       let brokenRefs = 0;
+      const brokenExpressions: string[] = [];
       for (const b of fmtMap.bindings) {
         const expr = (b.expressionAsString ?? '').trim();
         if (!expr) continue;
         const root = expr.split(/[.(\[]/)[0].replace(/['"]/g, '').trim();
         if (!root || root.startsWith('"') || /^\d/.test(root) || root === '@' || root.toLowerCase() === 'model') continue;
-        if (!dsNames.has(root)) brokenRefs++;
+        if (erBuiltins.has(root.toLowerCase())) continue;
+        if (!dsNames.has(root)) {
+          brokenRefs++;
+          if (brokenExpressions.length < 30) brokenExpressions.push(expr);
+        }
       }
       if (brokenRefs > 5) {
+        const detail = brokenExpressions.map(e => `  • ${e}`).join('\n');
         warnings.push({
           configIndex: ci,
           severity: 'warning',
-          message: `Formát "${config.solutionVersion.solution.name}" obsahuje ${brokenRefs} výrazů odkazujících na neznámý datový zdroj.`,
+          message: `Formát "${config.solutionVersion.solution.name}" obsahuje ${brokenRefs} výrazů odkazujících na neznámý datový zdroj.\n${detail}${brokenRefs > 30 ? `\n  … a ${brokenRefs - 30} dalších` : ''}`,
         });
       }
     }
@@ -2249,7 +2282,7 @@ function findDatasourceByNormalizedPath(datasource: any, path: string): any | nu
   return null;
 }
 
-function buildMappingTree(mapping: any, prefix: string, configIndex: number): TreeNode {
+function buildMappingTree(mapping: any, prefix: string, configIndex: number, versionNumber?: number): TreeNode {
   const dsNodes = mapping.datasources.map((ds: any, di: number) =>
     buildDatasourceTree(ds, `${prefix}-ds-${di}`, configIndex),
   );
@@ -2272,9 +2305,11 @@ function buildMappingTree(mapping: any, prefix: string, configIndex: number): Tr
     configIndex,
   }));
 
+  const versionSuffix = versionNumber != null && versionNumber > 0 ? `  (v${versionNumber})` : '';
+
   return {
     id: prefix,
-    name: `Mapping: ${mapping.name}`,
+    name: `Mapping: ${mapping.name}${versionSuffix}`,
     icon: '🔗',
     type: 'mapping',
     configIndex,
@@ -2338,9 +2373,18 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
 
   if (config.content.kind === 'ModelMapping') {
     const mm = (config.content as ERModelMappingContent).version;
-    const inner = buildMappingTree(mm.mapping, `${prefix}-mapping`, index);
+    const inner = buildMappingTree(mm.mapping, `${prefix}-mapping`, index, mm.number);
     children.push(...(inner.children ?? []));
   }
+
+  // Build display name with version for ModelMapping
+  const displayVersion = config.solutionVersion.publicVersionNumber
+    || (config.content.kind === 'ModelMapping'
+      ? String((config.content as ERModelMappingContent).version.number || '')
+      : '');
+  const displayName = displayVersion
+    ? `${sol.name}  (v${displayVersion})`
+    : sol.name;
 
   if (config.content.kind === 'Format') {
     const fc = config.content as ERFormatContent;
@@ -2428,7 +2472,7 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
       buildDatasourceTree(ds, `${prefix}-fmtds-${di}`, index),
     );
     const embeddedMappingNodes = fc.embeddedModelMappingVersions.map((version, embeddedIndex) =>
-      buildMappingTree(version.mapping, `${prefix}-embedded-mapping-${embeddedIndex}`, index),
+      buildMappingTree(version.mapping, `${prefix}-embedded-mapping-${embeddedIndex}`, index, version.number),
     );
 
     children.push(
@@ -2443,7 +2487,7 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
 
   return {
     id: prefix,
-    name: sol.name,
+    name: displayName,
     icon: getConfigurationIcon(config),
     type: 'file',
     configIndex: index,
@@ -2525,9 +2569,13 @@ function buildFormatElementTree(element: any, prefix: string, configIndex: numbe
     Unknown: '❓',
   };
 
+  const baseName = element.name || element.elementType;
+  const excelRange = element.elementType === 'ExcelCell' ? element.attributes?.['ExcelRange'] : undefined;
+  const displayName = excelRange ? `${baseName}  [${excelRange}]` : baseName;
+
   return {
     id: prefix,
-    name: element.name || element.elementType,
+    name: displayName,
     icon: typeIcons[element.elementType] ?? '❓',
     type: 'formatElement',
     data: element,

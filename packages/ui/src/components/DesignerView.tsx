@@ -18,7 +18,9 @@ import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { buildFormatBindingPresentation, groupFormatBindingsByCategory } from '../utils/format-binding-display';
 import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/theme-colors';
-import { ERDirection, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent, type ERFormatElement } from '@er-visualizer/core';
+import { ERDirection, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent, type ERFormatElement, type ERLabel } from '@er-visualizer/core';
+import { resolveLabel } from '../utils/label-resolver';
+import { parseXlsxBase64, colToLetter, type XlsxWorkbook, type XlsxSheet, type XlsxCell as XlsxCellType, type XlsxMerge } from '../utils/xlsx-parser';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -568,7 +570,7 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
                   fontSize: 9,
                   color: 'var(--text-secondary)',
                   fontWeight: 400,
-                }}>{container.items.length} fields</span>
+                }}>{t.statsFields(container.items.length)}</span>
               </div>
               {/* Fields */}
               <div style={{
@@ -604,7 +606,7 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
                 ))}
                 {container.items.length > 14 && (
                   <div style={{ padding: '2px 10px', color: 'var(--text-secondary)', fontSize: 10 }}>
-                    +{container.items.length - 14} more…
+                    {t.moreFields(container.items.length - 14)}
                   </div>
                 )}
               </div>
@@ -668,14 +670,14 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
       <div className="fmt-header">
         <span className="fmt-header-title">📐 {dm.name}</span>
         <div className="fmt-header-stats">
-          <span className="fmt-stat" style={{ color: 'var(--surface-info-fg)' }}>🏠 {stats.roots} roots</span>
-          <span className="fmt-stat" style={{ color: 'var(--surface-success-fg)' }}>📦 {stats.records} records</span>
-          <span className="fmt-stat" style={{ color: 'var(--surface-warning-fg)' }}>🔤 {stats.enums} enums</span>
-          <span className="fmt-stat">📝 {stats.fields} fields</span>
-          <span className="fmt-stat">🔗 {stats.edges} relations</span>
+          <span className="fmt-stat" style={{ color: 'var(--surface-info-fg)' }}>🏠 {t.statsRoots(stats.roots)}</span>
+          <span className="fmt-stat" style={{ color: 'var(--surface-success-fg)' }}>📦 {t.statsRecords(stats.records)}</span>
+          <span className="fmt-stat" style={{ color: 'var(--surface-warning-fg)' }}>🔤 {t.statsEnums(stats.enums)}</span>
+          <span className="fmt-stat">📝 {t.statsFields(stats.fields)}</span>
+          <span className="fmt-stat">🔗 {t.statsRelations(stats.edges)}</span>
         </div>
         <div style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-secondary)' }}>
-          Hierarchická mapa · klikni na kontejner pro zvýraznění
+          {t.modelHierarchyHint}
         </div>
       </div>
       <div style={{ flex: 1 }}>
@@ -1088,7 +1090,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const bindingsLabel = showTechnicalDetails ? t.bindings : t.lightBindings;
   const dataSourcesLabel = showTechnicalDetails ? t.dataSources : t.lightDataSources;
   const groupCountLabel = locale === 'cs' ? (showTechnicalDetails ? 'typů' : 'skupin') : (showTechnicalDetails ? 'types' : 'groups');
-  const currentViewLabel = view === 'structure' ? t.structure : view === 'bindings' ? bindingsLabel : view === 'preview' ? 'Preview' : dataSourcesLabel;
+  const currentViewLabel = view === 'structure' ? t.structure : view === 'bindings' ? bindingsLabel : view === 'preview' ? t.previewLabel : dataSourcesLabel;
   const currentFocusLabel = selectedElement?.name ?? focusNode?.name ?? fmt.name;
 
   return (
@@ -1107,7 +1109,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
           <span className="fmt-stat fmt-stat-structural" title={`${stats.structuralElements} ${t.structural}`}>⬡ {stats.structuralElements} {t.structural}</span>
           <span className="fmt-stat">↔️ {stats.bindings} {bindingsLabel.toLowerCase()} ({groupedBindings.length} {t.elements} / {groupedBindingsByType.length} {groupCountLabel})</span>
           <span className="fmt-stat">📊 {stats.datasources} {dataSourcesLabel.toLowerCase()}</span>
-          {stats.enums > 0 && <span className="fmt-stat">🔤 {stats.enums} enums</span>}
+          {stats.enums > 0 && <span className="fmt-stat">🔤 {t.statsEnums(stats.enums)}</span>}
           {stats.transformations > 0 && <span className="fmt-stat">🔄 {stats.transformations} {t.transforms}</span>}
         </div>
       </div>
@@ -1123,7 +1125,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
             >
               {v === 'structure' ? `${t.structure} (${stats.totalElements})` :
                v === 'bindings' ? `${bindingsLabel} (${groupedBindingsByType.length} ${groupCountLabel})` :
-               v === 'preview' ? `${fc.direction === ERDirection.Import ? '📥' : '📤'} Preview` :
+               v === 'preview' ? `${fc.direction === ERDirection.Import ? '📥' : '📤'} ${t.previewLabel}` :
                `${dataSourcesLabel} (${stats.datasources})`}
             </button>
           ))}
@@ -1248,7 +1250,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
           )}
 
           {view === 'preview' && (
-            <FormatPreview rootElement={rootElement} direction={fc.direction} bindingMap={bindingMap} />
+            <FormatPreview rootElement={rootElement} direction={fc.direction} bindingMap={bindingMap} configIndex={configIndex} />
           )}
         </div>
       </div>
@@ -1325,10 +1327,19 @@ interface ExcelCellData {
   name: string;
   excelRange: string;
   value: string;
+  /** Resolved label text (from ERLabel) if the cell has a Label attribute */
+  label?: string;
 }
 
-function collectExcelSheets(root: ERFormatElement, bm: BindingMap): ExcelSheetData[] {
+function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLabel[]): ExcelSheetData[] {
   const sheets: ExcelSheetData[] = [];
+
+  const resolveCellLabel = (el: ERFormatElement): string | undefined => {
+    const labelRef = el.attributes?.['Label'];
+    if (!labelRef) return undefined;
+    const resolved = resolveLabel(labelRef, labels);
+    return resolved?.enUs ?? resolved?.localized ?? undefined;
+  };
 
   const collectCells = (el: ERFormatElement): ExcelCellData[] => {
     if (el.elementType === 'ExcelCell') {
@@ -1336,6 +1347,7 @@ function collectExcelSheets(root: ERFormatElement, bm: BindingMap): ExcelSheetDa
         name: el.name,
         excelRange: el.attributes?.['ExcelRange'] ?? el.name,
         value: previewValue(el, bm),
+        label: resolveCellLabel(el),
       }];
     }
     return el.children.flatMap(c => collectCells(c));
@@ -1351,6 +1363,7 @@ function collectExcelSheets(root: ERFormatElement, bm: BindingMap): ExcelSheetDa
           name: c.name,
           excelRange: c.attributes?.['ExcelRange'] ?? c.name,
           value: previewValue(c, bm),
+          label: resolveCellLabel(c),
         })),
         children: el.children.filter(c => c.elementType === 'ExcelRange').flatMap(c => collectRanges(c)),
       }];
@@ -1372,6 +1385,7 @@ function collectExcelSheets(root: ERFormatElement, bm: BindingMap): ExcelSheetDa
           name: c.name,
           excelRange: c.attributes?.['ExcelRange'] ?? c.name,
           value: previewValue(c, bm),
+          label: resolveCellLabel(c),
         })),
       });
     } else {
@@ -1395,6 +1409,7 @@ function collectExcelSheets(root: ERFormatElement, bm: BindingMap): ExcelSheetDa
         name: c.name,
         excelRange: c.attributes?.['ExcelRange'] ?? c.name,
         value: previewValue(c, bm),
+        label: resolveCellLabel(c),
       })),
     });
   }
@@ -1417,67 +1432,272 @@ const excelColors = {
   constantValueColor: 'var(--text-primary)',
 };
 
-function ExcelVisualPreview({ rootElement, direction, bindingMap }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap }) {
-  const sheets = useMemo(() => collectExcelSheets(rootElement, bindingMap), [rootElement, bindingMap]);
-  const [activeSheet, setActiveSheet] = useState(0);
+// ── Build cell-address → binding map from format tree ──
+function buildCellBindingMap(root: ERFormatElement, bm: BindingMap, labels?: ERLabel[]): Map<string, { value: string; name: string; label?: string }> {
+  const map = new Map<string, { value: string; name: string; label?: string }>();
+  const walk = (el: ERFormatElement) => {
+    if (el.elementType === 'ExcelCell') {
+      const addr = el.attributes?.['ExcelRange'] ?? el.name;
+      const labelRef = el.attributes?.['Label'];
+      let label: string | undefined;
+      if (labelRef && labels) {
+        const resolved = resolveLabel(labelRef, labels);
+        label = resolved?.enUs ?? resolved?.localized ?? undefined;
+      }
+      map.set(addr.toUpperCase(), { value: previewValue(el, bm), name: el.name, label });
+    }
+    for (const child of el.children) walk(child);
+  };
+  walk(root);
+  return map;
+}
 
-  if (sheets.length === 0) {
-    return <div style={{ padding: 16, color: 'var(--text-secondary)', fontSize: 12 }}>No Excel sheets found in format structure.</div>;
+// ── Excel Template Grid (renders parsed .xlsx with binding overlays) ──
+function ExcelTemplateGrid({
+  workbook,
+  filename,
+  bindingMap,
+  rootElement,
+  labels,
+  onSwitchToStructure,
+}: {
+  workbook: XlsxWorkbook;
+  filename: string;
+  bindingMap: BindingMap;
+  rootElement: ERFormatElement;
+  labels?: ERLabel[];
+  onSwitchToStructure: () => void;
+}) {
+  const [activeSheet, setActiveSheet] = useState(0);
+  const cellBindings = useMemo(() => buildCellBindingMap(rootElement, bindingMap, labels), [rootElement, bindingMap, labels]);
+
+  const sheet = workbook.sheets[Math.min(activeSheet, workbook.sheets.length - 1)];
+  if (!sheet) return null;
+
+  // Build grid bounds
+  let maxCol = 0;
+  let maxRow = 0;
+  for (const row of sheet.rows) {
+    if (row.index > maxRow) maxRow = row.index;
+    for (const cell of row.cells) {
+      if (cell.col > maxCol) maxCol = cell.col;
+    }
+  }
+  for (const merge of sheet.merges) {
+    if (merge.endCol > maxCol) maxCol = merge.endCol;
+    if (merge.endRow > maxRow) maxRow = merge.endRow;
+  }
+  // Limit to reasonable viewport
+  maxCol = Math.min(maxCol, 30);
+  maxRow = Math.min(maxRow, 200);
+
+  // Build cell lookup: "A1" → cell
+  const cellMap = new Map<string, XlsxCellType>();
+  for (const row of sheet.rows) {
+    for (const cell of row.cells) {
+      cellMap.set(cell.ref, cell);
+    }
   }
 
-  const sheet = sheets[Math.min(activeSheet, sheets.length - 1)];
+  // Build merge lookup: "A1" → merge (for top-left cell)
+  const mergeMap = new Map<string, XlsxMerge>();
+  const mergedCells = new Set<string>(); // cells that are part of a merge but not the anchor
+  for (const m of sheet.merges) {
+    const anchorRef = colToLetter(m.startCol) + m.startRow;
+    mergeMap.set(anchorRef, m);
+    for (let r = m.startRow; r <= m.endRow; r++) {
+      for (let c = m.startCol; c <= m.endCol; c++) {
+        const ref = colToLetter(c) + r;
+        if (ref !== anchorRef) mergedCells.add(ref);
+      }
+    }
+  }
+
+  // Column widths in pixels (approx 8px per character width unit)
+  const colWidth = (col: number) => {
+    const w = sheet.colWidths.get(col);
+    return w ? Math.max(30, Math.round(w * 8)) : 64;
+  };
+
+  const totalCells = sheet.rows.reduce((s, r) => s + r.cells.length, 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Direction hint */}
-      <div style={{ padding: '8px 16px', fontSize: 12, color: 'var(--text-secondary)', borderBottom: `1px solid ${excelColors.cellBorder}` }}>
-        {direction === ERDirection.Import ? '📥 Input' : '📤 Output'} Excel workbook preview — cells show named ranges from the template.
-        <span style={{ color: excelColors.dynamicValueColor, marginLeft: 8 }}>{'{dynamic}'}</span> = data-bound,
-        <span style={{ marginLeft: 4, fontWeight: 600 }}>constant</span> = resolved from expression.
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-secondary)' }}>
+      {/* Toolbar */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '4px 8px',
+        background: excelColors.sheetTab,
+        color: excelColors.sheetTabText,
+        fontSize: 12,
+        fontWeight: 600,
+        flexShrink: 0,
+      }}>
+        <span style={{ fontSize: 14 }}>📄</span>
+        <span>{t.excelTemplateView}: {filename}</span>
+        <button
+          onClick={onSwitchToStructure}
+          style={{
+            marginLeft: 8,
+            padding: '2px 8px',
+            fontSize: 11,
+            cursor: 'pointer',
+            border: '1px solid rgba(255,255,255,0.4)',
+            borderRadius: 3,
+            background: 'rgba(255,255,255,0.15)',
+            color: excelColors.sheetTabText,
+          }}
+          title={t.excelStructureView}
+        >
+          📊 {t.excelStructureView}
+        </button>
+        <span style={{ marginLeft: 'auto', fontWeight: 400, fontSize: 11, opacity: 0.8 }}>
+          {t.excelTemplateCells(totalCells)}{sheet.merges.length > 0 ? `, ${t.excelTemplateMerged(sheet.merges.length)}` : ''}
+        </span>
       </div>
 
-      {/* Spreadsheet area */}
-      <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
-        {/* Column header bar (A, B, C...) */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          border: `1px solid ${excelColors.cellBorder}`,
-          borderRadius: 6,
-          overflow: 'hidden',
-          background: excelColors.cellBg,
+      {/* Grid */}
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        <table style={{
+          borderCollapse: 'collapse',
+          fontSize: 11,
+          fontFamily: 'Calibri, "Segoe UI", sans-serif',
+          tableLayout: 'fixed',
         }}>
-          {/* Header section */}
-          {sheet.header && sheet.header.cells.length > 0 && (
-            <ExcelSectionBlock section={sheet.header} />
-          )}
+          {/* Column headers */}
+          <thead>
+            <tr>
+              <th style={{
+                width: 32,
+                minWidth: 32,
+                background: excelColors.headerBg,
+                borderRight: `1px solid ${excelColors.cellBorder}`,
+                borderBottom: `1px solid ${excelColors.cellBorder}`,
+                position: 'sticky',
+                top: 0,
+                left: 0,
+                zIndex: 3,
+              }} />
+              {Array.from({ length: maxCol }, (_, i) => i + 1).map(col => (
+                <th key={col} style={{
+                  width: colWidth(col),
+                  minWidth: colWidth(col),
+                  padding: '2px 4px',
+                  background: excelColors.headerBg,
+                  color: excelColors.headerText,
+                  fontWeight: 500,
+                  fontSize: 10,
+                  textAlign: 'center',
+                  borderRight: `1px solid ${excelColors.cellBorder}`,
+                  borderBottom: `1px solid ${excelColors.cellBorder}`,
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 2,
+                }}>
+                  {colToLetter(col)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: maxRow }, (_, i) => i + 1).map(row => (
+              <tr key={row}>
+                {/* Row header */}
+                <td style={{
+                  padding: '1px 4px',
+                  background: excelColors.headerBg,
+                  color: excelColors.headerText,
+                  fontWeight: 500,
+                  fontSize: 10,
+                  textAlign: 'center',
+                  borderRight: `1px solid ${excelColors.cellBorder}`,
+                  borderBottom: `1px solid ${excelColors.cellBorder}`,
+                  position: 'sticky',
+                  left: 0,
+                  zIndex: 1,
+                }}>
+                  {row}
+                </td>
+                {Array.from({ length: maxCol }, (_, i) => i + 1).map(col => {
+                  const ref = colToLetter(col) + row;
+                  // Skip cells that are part of a merge (not the anchor)
+                  if (mergedCells.has(ref)) return null;
 
-          {/* Loose cells at sheet level */}
-          {sheet.cells.length > 0 && (
-            <div style={{ borderBottom: `1px solid ${excelColors.cellBorder}` }}>
-              <ExcelCellGrid cells={sheet.cells} label={null} />
-            </div>
-          )}
+                  const merge = mergeMap.get(ref);
+                  const colSpan = merge ? (merge.endCol - merge.startCol + 1) : 1;
+                  const rowSpan = merge ? (merge.endRow - merge.startRow + 1) : 1;
 
-          {/* Ranges */}
-          {sheet.ranges.map((range, i) => (
-            <ExcelRangeBlock key={i} range={range} depth={0} />
-          ))}
+                  const xlsxCell = cellMap.get(ref);
+                  const binding = cellBindings.get(ref.toUpperCase());
+                  const hasBinding = !!binding;
+                  const hasValue = xlsxCell && xlsxCell.value !== '';
 
-          {/* Footer section */}
-          {sheet.footer && sheet.footer.cells.length > 0 && (
-            <ExcelSectionBlock section={sheet.footer} />
-          )}
+                  // Determine display value
+                  let displayValue = '';
+                  let isBindingValue = false;
+                  if (hasBinding) {
+                    displayValue = binding.value;
+                    isBindingValue = displayValue.startsWith('{') && displayValue.endsWith('}');
+                  } else if (hasValue) {
+                    displayValue = xlsxCell.value;
+                  }
 
-          {/* Empty state */}
-          {sheet.cells.length === 0 && sheet.ranges.length === 0 && !sheet.header && !sheet.footer && (
-            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>Empty sheet</div>
-          )}
-        </div>
+                  return (
+                    <td
+                      key={col}
+                      colSpan={colSpan > 1 ? colSpan : undefined}
+                      rowSpan={rowSpan > 1 ? rowSpan : undefined}
+                      title={hasBinding ? `${binding.name}${binding.label ? ` — ${binding.label}` : ''}\n${binding.value}` : xlsxCell?.value || undefined}
+                      style={{
+                        padding: '1px 3px',
+                        borderRight: `1px solid ${excelColors.cellBorder}`,
+                        borderBottom: `1px solid ${excelColors.cellBorder}`,
+                        background: hasBinding
+                          ? 'rgba(33, 115, 70, 0.08)'
+                          : excelColors.cellBg,
+                        color: isBindingValue
+                          ? excelColors.dynamicValueColor
+                          : hasBinding
+                            ? excelColors.constantValueColor
+                            : 'var(--text-primary)',
+                        fontStyle: isBindingValue ? 'italic' : undefined,
+                        fontWeight: hasBinding ? 500 : undefined,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        maxWidth: merge ? undefined : colWidth(col),
+                        height: 20,
+                      }}
+                    >
+                      {displayValue}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      {/* Sheet tabs at bottom */}
-      {sheets.length > 0 && (
+      {/* Legend */}
+      <div style={{
+        padding: '4px 12px',
+        fontSize: 10,
+        color: 'var(--text-secondary)',
+        borderTop: `1px solid ${excelColors.cellBorder}`,
+        background: 'var(--bg-secondary)',
+        display: 'flex',
+        gap: 12,
+        flexShrink: 0,
+      }}>
+        <span><span style={{ background: 'rgba(33, 115, 70, 0.08)', padding: '0 4px', border: '1px solid rgba(33,115,70,0.2)', borderRadius: 2 }}>cell</span> = {t.excelLegendDynamic}</span>
+        <span style={{ color: 'var(--text-secondary)', fontSize: 10 }}>📄 {t.excelTemplateView} · 📊 {t.excelStructureView}</span>
+      </div>
+
+      {/* Sheet tabs */}
+      {workbook.sheets.length > 1 && (
         <div style={{
           display: 'flex',
           gap: 0,
@@ -1487,7 +1707,7 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap }: { rootElemen
           overflow: 'auto',
           flexShrink: 0,
         }}>
-          {sheets.map((s, i) => (
+          {workbook.sheets.map((s, i) => (
             <button
               key={i}
               onClick={() => setActiveSheet(i)}
@@ -1513,7 +1733,300 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap }: { rootElemen
   );
 }
 
-function ExcelSectionBlock({ section }: { section: ExcelSectionData }) {
+/** Collect all unique cell addresses from a sheet to derive column letters for the header. */
+function collectSheetColumns(sheet: ExcelSheetData): string[] {
+  const cols = new Set<string>();
+  const extractCol = (addr: string) => {
+    const m = addr.match(/^([A-Z]+)\d/);
+    if (m) cols.add(m[1]);
+  };
+  for (const c of sheet.cells) extractCol(c.excelRange);
+  const walkRange = (r: ExcelRangeData) => {
+    for (const c of r.cells) extractCol(c.excelRange);
+    for (const child of r.children) walkRange(child);
+  };
+  for (const r of sheet.ranges) walkRange(r);
+  if (sheet.header) for (const c of sheet.header.cells) extractCol(c.excelRange);
+  if (sheet.footer) for (const c of sheet.footer.cells) extractCol(c.excelRange);
+  // Sort alphabetically (A, B, C, ..., AA, AB, ...)
+  return Array.from(cols).sort((a, b) => a.length - b.length || a.localeCompare(b));
+}
+
+function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, template }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; template?: { filename: string; base64: string } }) {
+  const labels = useAppStore(s => s.configurations[configIndex]?.solutionVersion?.solution?.labels);
+  const sheets = useMemo(() => collectExcelSheets(rootElement, bindingMap, labels), [rootElement, bindingMap, labels]);
+  const [activeSheet, setActiveSheet] = useState(0);
+  const [selectedCell, setSelectedCell] = useState<ExcelCellData | null>(null);
+  // Default to template view when template is available
+  const [viewMode, setViewMode] = useState<'structure' | 'template'>(template ? 'template' : 'structure');
+  const [xlsxData, setXlsxData] = useState<XlsxWorkbook | null>(null);
+  const [xlsxError, setXlsxError] = useState<string | null>(null);
+  const [xlsxLoading, setXlsxLoading] = useState(false);
+
+  // Parse template eagerly when available (don't wait for view switch)
+  useEffect(() => {
+    if (!template?.base64 || xlsxData || xlsxLoading || xlsxError) return;
+    setXlsxLoading(true);
+    parseXlsxBase64(template.base64)
+      .then(wb => { setXlsxData(wb); setXlsxLoading(false); })
+      .catch(err => { setXlsxError(String(err)); setXlsxLoading(false); });
+  }, [template, xlsxData, xlsxLoading, xlsxError]);
+
+  if (sheets.length === 0) {
+    return <div style={{ padding: 16, color: 'var(--text-secondary)', fontSize: 12 }}>{t.excelNoSheets}</div>;
+  }
+
+  // If template mode is active and data is ready, render template view
+  if (viewMode === 'template') {
+    if (xlsxLoading) {
+      return <div style={{ padding: 24, color: 'var(--text-secondary)', fontSize: 12 }}>{t.excelTemplateLoading}</div>;
+    }
+    if (xlsxError) {
+      return <div style={{ padding: 24, color: 'var(--error)', fontSize: 12 }}>{t.excelTemplateError}: {xlsxError}</div>;
+    }
+    if (xlsxData) {
+      return (
+        <ExcelTemplateGrid
+          workbook={xlsxData}
+          filename={template?.filename ?? ''}
+          bindingMap={bindingMap}
+          rootElement={rootElement}
+          labels={labels}
+          onSwitchToStructure={() => setViewMode('structure')}
+        />
+      );
+    }
+  }
+
+  const sheet = sheets[Math.min(activeSheet, sheets.length - 1)];
+  const columns = collectSheetColumns(sheet);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-secondary)' }}>
+      {/* Ribbon-like toolbar */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '4px 8px',
+        background: excelColors.sheetTab,
+        color: excelColors.sheetTabText,
+        fontSize: 12,
+        fontWeight: 600,
+        flexShrink: 0,
+      }}>
+        <span style={{ fontSize: 14 }}>📊</span>
+        <span>{direction === ERDirection.Import ? t.excelInput : t.excelOutput} {t.excelWorkbook}</span>
+        {template && (
+          <div style={{ display: 'flex', marginLeft: 8, border: '1px solid rgba(255,255,255,0.4)', borderRadius: 3, overflow: 'hidden' }}>
+            <button
+              onClick={() => setViewMode('structure')}
+              style={{
+                padding: '2px 10px',
+                fontSize: 11,
+                cursor: 'pointer',
+                border: 'none',
+                background: viewMode === 'structure' ? 'rgba(255,255,255,0.3)' : 'transparent',
+                color: excelColors.sheetTabText,
+                fontWeight: viewMode === 'structure' ? 700 : 400,
+              }}
+            >
+              📊 {t.excelStructureView}
+            </button>
+            <button
+              onClick={() => setViewMode('template')}
+              style={{
+                padding: '2px 10px',
+                fontSize: 11,
+                cursor: 'pointer',
+                border: 'none',
+                borderLeft: '1px solid rgba(255,255,255,0.3)',
+                background: viewMode === 'template' ? 'rgba(255,255,255,0.3)' : 'transparent',
+                color: excelColors.sheetTabText,
+                fontWeight: viewMode === 'template' ? 700 : 400,
+              }}
+            >
+              📄 {t.excelTemplateView}
+            </button>
+          </div>
+        )}
+        <span style={{ marginLeft: 'auto', fontWeight: 400, fontSize: 11, opacity: 0.8 }}>
+          {sheet ? `${t.excelRangeCount(sheet.ranges.length)}, ${t.excelCellCount(sheet.cells.length + sheet.ranges.reduce((sum, r) => sum + r.cells.length, 0))}` : ''}
+        </span>
+      </div>
+
+      {/* Name Box + Formula Bar */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0,
+        borderBottom: `1px solid ${excelColors.cellBorder}`,
+        background: excelColors.cellBg,
+        flexShrink: 0,
+      }}>
+        <div style={{
+          width: 120,
+          padding: '4px 8px',
+          fontSize: 11,
+          fontWeight: 600,
+          borderRight: `1px solid ${excelColors.cellBorder}`,
+          fontFamily: 'var(--font-mono, monospace)',
+          color: 'var(--text-primary)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {selectedCell?.excelRange ?? ''}
+        </div>
+        <div style={{
+          padding: '4px 6px',
+          fontSize: 11,
+          color: 'var(--text-secondary)',
+          borderRight: `1px solid ${excelColors.cellBorder}`,
+          fontStyle: 'italic',
+        }}>
+          <i>fx</i>
+        </div>
+        <div style={{
+          flex: 1,
+          padding: '4px 8px',
+          fontSize: 11,
+          fontFamily: 'var(--font-mono, monospace)',
+          color: 'var(--text-primary)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {selectedCell ? (() => {
+            const parts: string[] = [];
+            if (selectedCell.name !== selectedCell.excelRange) parts.push(selectedCell.name);
+            if (selectedCell.label) parts.push(selectedCell.label);
+            parts.push(selectedCell.value);
+            return parts.join(': ');
+          })() : ''}
+        </div>
+      </div>
+
+      {/* Column headers */}
+      {columns.length > 0 && (
+        <div style={{
+          display: 'flex',
+          borderBottom: `1px solid ${excelColors.cellBorder}`,
+          background: excelColors.headerBg,
+          flexShrink: 0,
+          paddingLeft: 32,
+        }}>
+          {columns.map(col => (
+            <div key={col} style={{
+              minWidth: 80,
+              flex: 1,
+              maxWidth: 220,
+              padding: '2px 8px',
+              textAlign: 'center',
+              fontSize: 10,
+              fontWeight: 600,
+              color: excelColors.headerText,
+              borderRight: `1px solid ${excelColors.cellBorder}`,
+              userSelect: 'none',
+            }}>
+              {col}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Spreadsheet area */}
+      <div style={{ flex: 1, overflow: 'auto', padding: 0 }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          border: `1px solid ${excelColors.cellBorder}`,
+          overflow: 'hidden',
+          background: excelColors.cellBg,
+          minHeight: '100%',
+        }}>
+          {/* Header section */}
+          {sheet.header && sheet.header.cells.length > 0 && (
+            <ExcelSectionBlock section={sheet.header} onCellClick={setSelectedCell} />
+          )}
+
+          {/* Loose cells at sheet level */}
+          {sheet.cells.length > 0 && (
+            <div style={{ borderBottom: `1px solid ${excelColors.cellBorder}` }}>
+              <ExcelCellGrid cells={sheet.cells} label={null} onCellClick={setSelectedCell} selectedCell={selectedCell} />
+            </div>
+          )}
+
+          {/* Ranges */}
+          {sheet.ranges.map((range, i) => (
+            <ExcelRangeBlock key={i} range={range} depth={0} onCellClick={setSelectedCell} selectedCell={selectedCell} />
+          ))}
+
+          {/* Footer section */}
+          {sheet.footer && sheet.footer.cells.length > 0 && (
+            <ExcelSectionBlock section={sheet.footer} onCellClick={setSelectedCell} />
+          )}
+
+          {/* Empty state */}
+          {sheet.cells.length === 0 && sheet.ranges.length === 0 && !sheet.header && !sheet.footer && (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>{t.excelEmptySheet}</div>
+          )}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div style={{
+        padding: '4px 12px',
+        fontSize: 10,
+        color: 'var(--text-secondary)',
+        borderTop: `1px solid ${excelColors.cellBorder}`,
+        background: 'var(--bg-secondary)',
+        display: 'flex',
+        gap: 12,
+        flexShrink: 0,
+      }}>
+        <span><span style={{ color: excelColors.dynamicValueColor, fontStyle: 'italic' }}>{'{dynamic}'}</span> = {t.excelLegendDynamic}</span>
+        <span><span style={{ fontWeight: 600 }}>constant</span> = {t.excelLegendConstant}</span>
+      </div>
+
+      {/* Sheet tabs at bottom */}
+      {sheets.length > 0 && (
+        <div style={{
+          display: 'flex',
+          gap: 0,
+          borderTop: `2px solid ${excelColors.sheetTab}`,
+          background: 'var(--bg-secondary)',
+          padding: '0 8px',
+          overflow: 'auto',
+          flexShrink: 0,
+        }}>
+          {sheets.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => { setActiveSheet(i); setSelectedCell(null); }}
+              style={{
+                padding: '6px 16px',
+                fontSize: 12,
+                fontWeight: i === activeSheet ? 700 : 400,
+                cursor: 'pointer',
+                border: 'none',
+                borderTop: i === activeSheet ? `2px solid ${excelColors.sheetTab}` : '2px solid transparent',
+                background: i === activeSheet ? excelColors.cellBg : 'transparent',
+                color: i === activeSheet ? excelColors.sheetTab : 'var(--text-secondary)',
+                marginTop: -2,
+                transition: 'all 0.15s',
+              }}
+            >
+              📃 {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExcelSectionBlock({ section, onCellClick }: { section: ExcelSectionData; onCellClick?: (cell: ExcelCellData) => void }) {
   const isHeader = section.type === 'header';
   return (
     <div style={{
@@ -1531,14 +2044,14 @@ function ExcelSectionBlock({ section }: { section: ExcelSectionData }) {
         alignItems: 'center',
         gap: 4,
       }}>
-        {isHeader ? '🔼' : '🔽'} {section.type}
+        {isHeader ? '🔼' : '🔽'} {isHeader ? t.excelHeader : t.excelFooter}
       </div>
-      <ExcelCellGrid cells={section.cells} label={null} />
+      <ExcelCellGrid cells={section.cells} label={null} onCellClick={onCellClick} />
     </div>
   );
 }
 
-function ExcelRangeBlock({ range, depth }: { range: ExcelRangeData; depth: number }) {
+function ExcelRangeBlock({ range, depth, onCellClick, selectedCell }: { range: ExcelRangeData; depth: number; onCellClick?: (cell: ExcelCellData) => void; selectedCell?: ExcelCellData | null }) {
   const repIcon = range.replicationDirection === 'vertical' ? '↕' : range.replicationDirection === 'horizontal' ? '↔' : '';
   return (
     <div style={{
@@ -1569,35 +2082,37 @@ function ExcelRangeBlock({ range, depth }: { range: ExcelRangeData; depth: numbe
             color: excelColors.rangeBorder,
             fontWeight: 600,
           }}>
-            {repIcon} repeating {range.replicationDirection}
+            {repIcon} {range.replicationDirection === 'vertical' ? t.excelRepeatingVertical : t.excelRepeatingHorizontal}
           </span>
         )}
       </div>
 
       {/* Cells in this range */}
       {range.cells.length > 0 && (
-        <ExcelCellGrid cells={range.cells} label={null} />
+        <ExcelCellGrid cells={range.cells} label={null} onCellClick={onCellClick} selectedCell={selectedCell} />
       )}
 
       {/* Nested ranges */}
       {range.children.map((child, i) => (
-        <ExcelRangeBlock key={i} range={child} depth={depth + 1} />
+        <ExcelRangeBlock key={i} range={child} depth={depth + 1} onCellClick={onCellClick} selectedCell={selectedCell} />
       ))}
     </div>
   );
 }
 
-function ExcelCellGrid({ cells, label }: { cells: ExcelCellData[]; label: string | null }) {
+function ExcelCellGrid({ cells, label, onCellClick, selectedCell }: { cells: ExcelCellData[]; label: string | null; onCellClick?: (cell: ExcelCellData) => void; selectedCell?: ExcelCellData | null }) {
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
       gap: 0,
     }}>
       {cells.map((cell, i) => {
         const isDynamic = cell.value.startsWith('{') && cell.value.endsWith('}');
+        const hasDistinctAddress = cell.excelRange && cell.excelRange !== cell.name;
+        const isSelected = selectedCell?.excelRange === cell.excelRange && selectedCell?.name === cell.name;
         return (
-          <div key={i} style={{
+          <div key={i} onClick={() => onCellClick?.(cell)} style={{
             padding: '6px 12px',
             borderRight: `1px solid ${excelColors.cellBorder}`,
             borderBottom: `1px solid ${excelColors.cellBorder}`,
@@ -1606,17 +2121,51 @@ function ExcelCellGrid({ cells, label }: { cells: ExcelCellData[]; label: string
             flexDirection: 'column',
             gap: 2,
             minWidth: 0,
+            cursor: 'pointer',
+            outline: isSelected ? `2px solid ${excelColors.rangeBorder}` : undefined,
+            outlineOffset: -2,
+            background: isSelected ? `${excelColors.rangeBorder}0a` : undefined,
+            transition: 'outline 0.1s, background 0.1s',
           }}>
-            <span style={{
-              fontSize: 10,
-              color: 'var(--text-secondary)',
-              fontFamily: 'var(--font-mono, monospace)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              minWidth: 0,
             }}>
-              {cell.excelRange}
-            </span>
+              <span style={{
+                fontSize: 10,
+                color: excelColors.rangeBorder,
+                fontFamily: 'var(--font-mono, monospace)',
+                fontWeight: 600,
+                flexShrink: 0,
+              }}>
+                {cell.excelRange}
+              </span>
+              {hasDistinctAddress && (
+                <span style={{
+                  fontSize: 11,
+                  color: 'var(--text-secondary)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }} title={cell.name}>
+                  {cell.name}
+                </span>
+              )}
+            </div>
+            {cell.label && (
+              <span style={{
+                fontSize: 10,
+                color: 'var(--text-secondary)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                fontStyle: 'italic',
+              }} title={cell.label}>
+                {cell.label}
+              </span>
+            )}
             <span style={{
               fontFamily: 'var(--font-mono, monospace)',
               fontSize: 11,
@@ -1636,20 +2185,24 @@ function ExcelCellGrid({ cells, label }: { cells: ExcelCellData[]; label: string
   );
 }
 
-function FormatPreview({ rootElement, direction, bindingMap }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap }) {
+function FormatPreview({ rootElement, direction, bindingMap, configIndex }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number }) {
   const info = detectFormatType(rootElement);
+  const template = useAppStore(s => {
+    const cfg = s.configurations[configIndex];
+    if (!cfg || cfg.content.kind !== 'Format') return undefined;
+    return (cfg.content as ERFormatContent).formatVersion.format.template;
+  });
 
   // Visual spreadsheet preview for Excel formats
   if (info.label === 'Excel') {
-    return <ExcelVisualPreview rootElement={rootElement} direction={direction} bindingMap={bindingMap} />;
+    return <ExcelVisualPreview rootElement={rootElement} direction={direction} bindingMap={bindingMap} configIndex={configIndex} template={template} />;
   }
 
   const preview = useMemo(() => generateFormatPreview(rootElement, bindingMap), [rootElement, bindingMap]);
   return (
     <div style={{ padding: 16, overflow: 'auto', height: '100%' }}>
       <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
-        {direction === ERDirection.Import ? '📥 Input' : '📤 Output'} file structure preview — constant values are resolved from binding expressions.
-        Dynamic values (data source paths, functions) are shown as {'{placeholder}'}.
+        {direction === ERDirection.Import ? `📥 ${t.excelInput}` : `📤 ${t.excelOutput}`} — {t.previewDescription}
       </div>
       <pre style={{
         fontFamily: 'var(--font-mono, "Cascadia Code", Consolas, monospace)',
@@ -1759,13 +2312,13 @@ function generateExcelPreview(root: ERFormatElement, bm: BindingMap): string {
   const walk = (el: ERFormatElement, depth: number) => {
     const indent = '  '.repeat(depth);
     if (el.elementType === 'ExcelFile') {
-      lines.push(`📊 Excel Workbook`);
+      lines.push(`📊 ${t.excelWorkbook}`);
       for (const child of el.children) walk(child, depth + 1);
     } else if (el.elementType === 'ExcelSheet') {
       lines.push(`${indent}📃 Sheet: "${el.name}"`);
       for (const child of el.children) walk(child, depth + 1);
     } else if (el.elementType === 'ExcelRange' || el.elementType === 'ExcelHeader' || el.elementType === 'ExcelFooter') {
-      const sectionLabel = el.elementType === 'ExcelHeader' ? '🔼 Header' : el.elementType === 'ExcelFooter' ? '🔽 Footer' : '📐 Range';
+      const sectionLabel = el.elementType === 'ExcelHeader' ? `🔼 ${t.excelHeader}` : el.elementType === 'ExcelFooter' ? `🔽 ${t.excelFooter}` : '📐 Range';
       lines.push(`${indent}${sectionLabel}: ${el.name}`);
       for (const child of el.children) walk(child, depth + 1);
     } else if (el.elementType === 'ExcelCell') {
@@ -1888,6 +2441,7 @@ interface FormatElementTreeProps {
 function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, expandMode, expandVersion, selectedId, onSelect, resolveDatasource, registry, showTechnicalDetails }: FormatElementTreeProps) {
   const [expanded, setExpanded] = useState(expandMode === 'all');
   const [hoverBinding, setHoverBinding] = useState<any | null>(null);
+  const labels = useAppStore(s => s.configurations[configIndex]?.solutionVersion?.solution?.labels);
 
   useEffect(() => {
     setExpanded(expandMode === 'all');
@@ -1899,6 +2453,11 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
   const conditionalBindings = bindings.filter(b => b.bindingCategory !== 'data');
   const transformation = element.transformation ? transformationMap.get(element.transformation) : null;
   const hasChildren = element.children && element.children.length > 0;
+
+  // Resolve label for this element
+  const labelRef = element.attributes?.['Label'];
+  const resolvedLabel = useMemo(() => resolveLabel(labelRef, labels), [labelRef, labels]);
+  const labelText = resolvedLabel?.localized ?? resolvedLabel?.enUs ?? (resolvedLabel?.id ? resolvedLabel.id : undefined);
 
   const isExpanded = expanded;
 
@@ -1957,6 +2516,18 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
         {/* Element Name */}
         <span className="fmt-element-name">{element.name}</span>
 
+        {/* ExcelRange address */}
+        {element.elementType === 'ExcelCell' && element.attributes?.['ExcelRange'] && (
+          <span className="fmt-meta" style={{ fontFamily: 'var(--font-mono, monospace)' }}>[{element.attributes['ExcelRange']}]</span>
+        )}
+
+        {/* Resolved label */}
+        {labelText && (
+          <span className="fmt-meta" title={resolvedLabel?.raw ?? ''} style={{ fontStyle: 'italic' }}>
+            — {labelText}
+          </span>
+        )}
+
         {/* Constant Value */}
         {element.value && (
           <span className="fmt-const-value">= "{element.value}"</span>
@@ -1995,7 +2566,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
 
         {/* Unbound indicator — leaf element with no data binding */}
         {!mainBinding && hasChildren === false && (
-          <span className="fmt-unbound-marker">○ unbound</span>
+          <span className="fmt-unbound-marker">○ {t.unbound}</span>
         )}
       </div>
 

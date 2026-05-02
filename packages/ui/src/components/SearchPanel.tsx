@@ -321,14 +321,14 @@ export function SearchPanel() {
                 <div className="search-help-title">{t.examples}</div>
                 <div className="search-example-list">
                   {([
-                    { label: 'TaxTrans', hint: 'tabulka' },
-                    { label: 'NoYesEnum', hint: 'enum' },
-                    { label: 'TaxCodeGroupLookup', hint: 'lookup' },
-                    { label: 'ReportingCurrency', hint: 'parametr' },
-                    { label: 'CalculatedTotal', hint: 'calc. field' },
-                    { label: 'ledgerAccount', hint: 'identifikátor' },
-                    { label: 'DATETIMEFORMAT', hint: 'funkce' },
-                    { label: 'ROUND', hint: 'funkce' },
+                    { label: 'TaxTrans', hint: t.exampleHintTable },
+                    { label: 'NoYesEnum', hint: t.exampleHintEnum },
+                    { label: 'TaxCodeGroupLookup', hint: t.exampleHintLookup },
+                    { label: 'ReportingCurrency', hint: t.exampleHintParam },
+                    { label: 'CalculatedTotal', hint: t.exampleHintCalcField },
+                    { label: 'ledgerAccount', hint: t.exampleHintIdentifier },
+                    { label: 'DATETIMEFORMAT', hint: t.exampleHintFunction },
+                    { label: 'ROUND', hint: t.exampleHintFunction },
                   ] as Array<{ label: string; hint: string }>).map(ex => (
                     <span
                       key={ex.label}
@@ -513,7 +513,7 @@ function SearchResultCard({
         <Highlight text={resolveGuidsInText(result.sourceContext, g => registry.lookup(g))} query={query} />
       </div>
       <div className="search-result-source" title={result.sourceComponent}>
-        <span className="search-result-source-label">in</span>
+        <span className="search-result-source-label">{t.searchInLabel}</span>
         <span className="search-result-source-component">
           <Highlight text={resolveGuidsInText(result.sourceComponent, g => registry.lookup(g))} query={query} />
         </span>
@@ -532,7 +532,7 @@ function SearchResultCard({
         return (
           <div className="search-result-children" aria-label="Nested binding references">
             <div className="search-result-children-title">
-              {unique.length} {unique.length === 1 ? 'odkaz' : unique.length < 5 ? 'odkazy' : 'odkazů'} ve výrazu
+              {t.searchRefCount(unique.length)}
             </div>
             <div className="search-result-child-chips">
               {unique.map(({ child, count }, i) => (
@@ -669,9 +669,7 @@ function WhereUsedCard({ entry, query, expandSignal, navigateToTreeNode, findDat
     return Array.from(map.entries());
   }, [references]);
 
-  const summary = references.length === 1
-    ? '1 výskyt'
-    : `${references.length} výskyt${references.length < 5 ? 'y' : 'ů'} v ${fileGroups.length} ${fileGroups.length === 1 ? 'souboru' : fileGroups.length < 5 ? 'souborech' : 'souborech'}`;
+  const summary = t.whereUsedSummary(references.length, fileGroups.length);
 
   const isTextMatch = entry.entityType === 'TextMatch';
 
@@ -692,15 +690,15 @@ function WhereUsedCard({ entry, query, expandSignal, navigateToTreeNode, findDat
             <span
               className="wu-ds-name"
               onClick={e => { e.stopPropagation(); navigateToDs(); }}
-              title="Přejít na datasource"
+              title={t.navigateToDatasource}
             >
               🗃️ <Highlight text={entry.datasource.name} query={query} />
             </span>
           </>
         )}
         {isTextMatch && (
-          <span className="wu-ds-name wu-ds-name-plain" title="Textové výskyty ve výrazech">
-            ve výrazech
+          <span className="wu-ds-name wu-ds-name-plain" title={t.textOccurrences}>
+            {t.inExpressions}
           </span>
         )}
         <div className="wu-meta-end">
@@ -721,7 +719,7 @@ function WhereUsedCard({ entry, query, expandSignal, navigateToTreeNode, findDat
         <div className="wu-card-body">
           {references.length === 0 && (
             <div className="wu-empty">
-              <strong>Mrtvý datasource:</strong> žádný binding ani formátový element na tento datasource neodkazuje.
+              <strong>{t.deadDatasource}:</strong> {t.deadDatasourceDesc}
             </div>
           )}
           {fileGroups.map(([key, { configName, refs }]) => (

@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../i18n';
 
 interface Props {
   children: React.ReactNode;
@@ -39,14 +40,14 @@ export class ErrorBoundary extends React.Component<Props, State> {
     return (
       <div className="error-boundary">
         <div className="error-boundary__card" role="alert">
-          <div className="error-boundary__eyebrow">{this.props.label ?? 'Error'}</div>
-          <h2 className="error-boundary__title">Něco se pokazilo.</h2>
+          <div className="error-boundary__eyebrow">{this.props.label ?? t.errorLabel}</div>
+          <h2 className="error-boundary__title">{t.errorTitle}</h2>
           <p className="error-boundary__text">
-            Tato část aplikace narazila na neočekávanou chybu. Zbytek aplikace by měl fungovat dál.
+            {t.errorDescription}
           </p>
           <pre className="error-boundary__details">{error.stack ?? error.message}</pre>
           <button type="button" className="error-boundary__btn" onClick={this.reset}>
-            Zkusit znovu
+            {t.errorRetry}
           </button>
         </div>
       </div>

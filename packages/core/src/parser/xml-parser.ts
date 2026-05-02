@@ -286,6 +286,14 @@ function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> 
     }
   }
 
+  if (aggregatedLabels.length > 0) {
+    // eslint-disable-next-line no-console
+    console.info('[er-parser] aggregated ERLabel entries from ERClassList fragments:', aggregatedLabels.length);
+  } else {
+    // eslint-disable-next-line no-console
+    console.info('[er-parser] no ERClassList/ERLabel fragments found in response — label resolution will fall back to IDs');
+  }
+
   // Surface the component's *own* Name / Description onto the
   // synthetic `ERSolution` so the UI tab title and designer header
   // don't come out blank. F&O's custom services return only the
@@ -1262,13 +1270,46 @@ function parseFormat(node: any): ERFormat {
   // Parse root format element by picking the first recognized format component under Root.
   const rootElement = parseRootFormatElement(node['Root']);
 
+  // Extract embedded Excel template (base64-encoded .xlsx)
+  // Template can be at various levels: directly under Root, under the ExcelFileComponent,
+  // or inside its Contents. node.
+  const template = findExcelTemplate(node['Root']);
+
   return {
     id: getAttr(node, 'ID.') ?? '',
     name: getAttr(node, 'Name') ?? '',
     enumDefinitions,
     transformations,
     rootElement,
+    template,
   };
+}
+
+/** Recursively search for ERTextFormatExcelTemplate in a node tree (max depth 4). */
+function findExcelTemplate(node: any, depth = 0): { filename: string; base64: string } | undefined {
+  if (!node || typeof node !== 'object' || depth > 4) return undefined;
+  // Direct hit
+  const tplNode = node['ERTextFormatExcelTemplate'];
+  if (tplNode) {
+    const tpl = Array.isArray(tplNode) ? tplNode[0] : tplNode;
+    const filename = tpl?.['@_Filename'] ?? '';
+    const base64 = tpl?.['Contents.'] ?? '';
+    if (base64 && typeof base64 === 'string') {
+      return { filename, base64: base64.trim() };
+    }
+  }
+  // Search children
+  for (const [key, val] of Object.entries(node)) {
+    if (key.startsWith('@_') || key === '#text') continue;
+    const items = Array.isArray(val) ? val : [val];
+    for (const item of items) {
+      // Also check inside Contents. sub-nodes
+      const found = findExcelTemplate(item, depth + 1)
+        ?? findExcelTemplate(item?.['Contents.'], depth + 2);
+      if (found) return found;
+    }
+  }
+  return undefined;
 }
 
 function parseRootFormatElement(rootNode: any): ERFormatElement {

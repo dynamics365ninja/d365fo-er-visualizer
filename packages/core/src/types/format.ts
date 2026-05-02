@@ -16,6 +16,8 @@ export interface ERFormat {
   enumDefinitions: ERFormatEnumDefinition[];
   transformations: ERFormatTransformation[];
   rootElement: ERFormatElement;
+  /** Excel template embedded in the format (base64-encoded .xlsx) */
+  template?: { filename: string; base64: string };
 }
 
 export interface ERFormatEnumDefinition {
