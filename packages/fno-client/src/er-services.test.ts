@@ -8,10 +8,9 @@ import {
   listServiceOperations,
   ER_SERVICES,
   ER_SERVICE_OPS,
-  ER_KNOWN_ROOT_SOLUTIONS,
-  escapeODataString,
+  escapeServiceString,
   decodeXmlPayload,
-} from './odata';
+} from './er-services';
 import { FnoHttpError, FnoSourceUnsupportedError, FnoEmptyContentError } from './types';
 import type { FnoConnection, FnoTransport, ErConfigSummary } from './types';
 
@@ -53,7 +52,7 @@ function makeTransport(handlers: {
 
 describe('escapeODataString', () => {
   it('doubles single quotes', () => {
-    expect(escapeODataString("O'Reilly")).toBe("O''Reilly");
+    expect(escapeServiceString("O'Reilly")).toBe("O''Reilly");
   });
 });
 
@@ -279,11 +278,9 @@ describe('listSolutions', () => {
     const solutions = await listSolutions(transport, conn, 'tok');
     expect(solutions[0]).toMatchObject({ solutionName: 'Z model' });
     // First probe (empty parent) runs through all candidates until the
-    // third wins (3 posts); each subsequent known-root probe runs only
-    // the winning op (1 post per probe).
-    expect(posts.filter(p => p.url.endsWith(`/${op}`))).toHaveLength(
-      1 + ER_KNOWN_ROOT_SOLUTIONS.length,
-    );
+    // third wins (3 posts); BFS then probes 'Z model' as a potential
+    // parent — same fallback path, same winning op (1 more hit).
+    expect(posts.filter(p => p.url.endsWith(`/${op}`))).toHaveLength(2);
   });
 
   it('throws FnoHttpError listing all tried operations when every candidate 404s', async () => {
@@ -370,21 +367,30 @@ describe('listSolutions', () => {
     expect(solutions[0].solutionName).toBe('V model');
   });
 
-  it('aggregates DataModel rows from multiple known-root probes and drops typed Format/ModelMapping rows', async () => {
+  it('aggregates DataModel rows via BFS discovery and drops Format/ModelMapping rows', async () => {
     const op = ER_SERVICE_OPS.listSolutions[0];
     const { transport } = makeTransport({
       post: (_url, body) => {
         const parent = (body as { _parentSolutionName?: string } | undefined)?._parentSolutionName;
+        if (parent === '') {
+          // Empty-parent probe returns a root model whose children
+          // live under "Microsoft".
+          return {
+            [`${op}Result`]: [
+              { Name: 'Microsoft', Base: '', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' },
+            ],
+          };
+        }
         if (parent === 'Microsoft') {
           return {
             [`${op}Result`]: [
               // Format nodes (non-zero GUID) dropped.
-              { Name: 'MS.Format', FormatMappingGUID: '11111111-1111-1111-1111-111111111111' },
+              { Name: 'MS.Format', Base: 'Microsoft', FormatMappingGUID: '11111111-1111-1111-1111-111111111111' },
               // DataModel descendants kept (zero GUID + "model").
-              { Name: 'MS tax model', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' },
-              { Name: 'MS bank model', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' },
+              { Name: 'MS tax model', Base: 'Microsoft', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' },
+              { Name: 'MS bank model', Base: 'Microsoft', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' },
               // Mapping dropped.
-              { Name: 'MS tax model mapping', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' },
+              { Name: 'MS tax model mapping', Base: 'Microsoft', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' },
             ],
           };
         }
@@ -393,11 +399,11 @@ describe('listSolutions', () => {
     });
     const solutions = await listSolutions(transport, conn, 'tok');
     const names = solutions.map(s => s.solutionName).sort();
-    // The probe root "Microsoft" is also injected (as a DataModel) so
-    // users can drill through it. The two model descendants join it.
+    // "Microsoft" is discovered via BFS. Two model descendants join it.
     // "MS.Format" and "MS tax model mapping" are dropped.
     expect(names).toContain('MS bank model');
     expect(names).toContain('MS tax model');
+    expect(names).toContain('Microsoft');
     expect(names).not.toContain('MS.Format');
     expect(names).not.toContain('MS tax model mapping');
   });

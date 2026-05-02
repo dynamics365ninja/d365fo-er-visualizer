@@ -1339,6 +1339,13 @@ const formatElementTypeMap: Record<string, ERFormatElementType> = {
   ERTextFormatDate: 'DateTime',
   ERTextFormatDateTime: 'DateTime',
   ERTextFormatBase64Component: 'Base64',
+  // Excel format elements
+  ERTextFormatExcelFileComponent: 'ExcelFile',
+  ERTextFormatExcelSheet: 'ExcelSheet',
+  ERTextFormatExcelRange: 'ExcelRange',
+  ERTextFormatExcelCell: 'ExcelCell',
+  ERTextFormatExcelHeader: 'ExcelHeader',
+  ERTextFormatExcelFooter: 'ExcelFooter',
 };
 
 function extractAllAttributes(node: any): Record<string, string> {

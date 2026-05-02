@@ -12,6 +12,12 @@ export default defineConfig({
       '@er-visualizer/fno-client': path.resolve(__dirname, '../fno-client/src/index.ts'),
     },
   },
+  server: {
+    watch: {
+      // Watch sibling workspace packages so HMR fires when odata.ts etc. change.
+      ignored: (p: string) => p.includes('node_modules') && !p.includes('@er-visualizer'),
+    },
+  },
   build: {
     outDir: 'dist',
     target: 'es2022',

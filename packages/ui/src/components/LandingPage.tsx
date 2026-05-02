@@ -32,6 +32,7 @@ import {
   ArrowUploadRegular,
   ArrowDownloadRegular,
   CheckmarkCircleFilled,
+  CloudArrowDownFilled,
   DataBarVerticalFilled,
   DismissRegular,
   DocumentFilled,
@@ -424,6 +425,77 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase100,
     textAlign: 'center',
   },
+  ingestOverlay: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 9999,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '24px',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backdropFilter: 'blur(8px)',
+    animationName: {
+      from: { opacity: 0 },
+      to: { opacity: 1 },
+    },
+    animationDuration: '300ms',
+    animationTimingFunction: 'ease-out',
+    animationFillMode: 'both',
+  },
+  ingestCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '20px',
+    padding: '40px 48px',
+    borderRadius: tokens.borderRadiusXLarge,
+    backgroundColor: tokens.colorNeutralBackground1,
+    boxShadow: tokens.shadow64,
+    maxWidth: '420px',
+    textAlign: 'center',
+    animationName: {
+      from: { opacity: 0, transform: 'scale(0.92) translateY(12px)' },
+      to: { opacity: 1, transform: 'scale(1) translateY(0)' },
+    },
+    animationDuration: '400ms',
+    animationDelay: '100ms',
+    animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+    animationFillMode: 'both',
+  },
+  ingestIcon: {
+    width: '72px',
+    height: '72px',
+    borderRadius: '50%',
+    backgroundColor: tokens.colorBrandBackground,
+    backgroundImage: `linear-gradient(135deg, ${tokens.colorBrandBackground} 0%, ${tokens.colorBrandBackgroundPressed} 100%)`,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: tokens.shadow16,
+    animationName: {
+      '0%': { transform: 'rotate(0deg)' },
+      '100%': { transform: 'rotate(360deg)' },
+    },
+    animationDuration: '2.5s',
+    animationTimingFunction: 'linear',
+    animationIterationCount: 'infinite',
+  },
+  ingestPulse: {
+    width: '96px',
+    height: '96px',
+    borderRadius: '50%',
+    border: `2px solid ${tokens.colorBrandBackground}`,
+    position: 'absolute',
+    animationName: {
+      '0%': { transform: 'scale(0.8)', opacity: 0.6 },
+      '100%': { transform: 'scale(1.4)', opacity: 0 },
+    },
+    animationDuration: '1.8s',
+    animationTimingFunction: 'ease-out',
+    animationIterationCount: 'infinite',
+  },
 });
 
 interface LandingPageProps {
@@ -454,6 +526,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const [loading, setLoading] = useState(false);
   const [sourceTab, setSourceTab] = useState<'local' | 'remote'>('local');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
 
   const processFiles = useCallback(async (files: FileList | null) => {
     setLoading(true);
@@ -503,6 +576,25 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
+      {/* Full-page loading overlay during F&O download */}
+      {fnoIngestStatus && (
+        <div className={styles.ingestOverlay}>
+          <div className={styles.ingestCard}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className={styles.ingestPulse} />
+              <div className={styles.ingestIcon}>
+                <CloudArrowDownFilled fontSize={32} style={{ color: tokens.colorNeutralForegroundOnBrand }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <Subtitle2>{t.fnoLoading}</Subtitle2>
+              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{fnoIngestStatus}</Caption1>
+            </div>
+            <Spinner size="small" />
+          </div>
+        </div>
+      )}
+
       {/* Animated floating orbs */}
       <div className="lp-orb lp-orb-1" aria-hidden="true" />
       <div className="lp-orb lp-orb-2" aria-hidden="true" />
@@ -561,7 +653,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
         <Tab value="remote">{t.fnoTabRemote}</Tab>
       </TabList>
 
-      {sourceTab === 'remote' && <FnoConnectPanel />}
+      {sourceTab === 'remote' && <FnoConnectPanel onFilesLoaded={onFilesLoaded} />}
 
       {sourceTab === 'local' && <>
       {/* Drop Zone */}

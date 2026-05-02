@@ -88,7 +88,7 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
       {node.type === 'validation' && data && <ValidationProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
       {node.type === 'formatElement' && data && <FormatElementProps data={data} showTechnicalDetails={showTechnicalDetails} />}
       {node.type === 'formatBinding' && data && <FormatBindingProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
-      {node.type === 'mapping' && data && <MappingProps data={data} showTechnicalDetails={showTechnicalDetails} />}
+      {node.type === 'mapping' && data && <MappingProps data={data} showTechnicalDetails={showTechnicalDetails} configIndex={configIndex} />}
       {node.type === 'enum' && data && <EnumProps data={data} showTechnicalDetails={showTechnicalDetails} />}
       {node.type === 'transformation' && data && <TransformationProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
 
@@ -292,17 +292,42 @@ function FormatBindingProps({ data, configIndex, showTechnicalDetails }: { data:
   return <PropGrid items={items} />;
 }
 
-function MappingProps({ data, showTechnicalDetails }: { data: any; showTechnicalDetails: boolean }) {
+function MappingProps({ data, showTechnicalDetails, configIndex }: { data: any; showTechnicalDetails: boolean; configIndex: number }) {
+  const configurations = useAppStore(s => s.configurations);
+  // Resolve the model's public version from loaded configurations.
+  // `data.modelId` is the DataModel GUID; find a loaded DataModel config whose
+  // ERDataModelVersion ID starts with that GUID.
+  const modelPublicVersion = React.useMemo(() => {
+    if (!data.modelId) return undefined;
+    const needle = data.modelId.replace(/[{}]/g, '').toLowerCase();
+    for (const cfg of configurations) {
+      if (cfg.content.kind !== 'DataModel') continue;
+      const dmId = (cfg.content as any).version?.id ?? '';
+      if (dmId.replace(/[{}]/g, '').toLowerCase().startsWith(needle)) {
+        return cfg.solutionVersion.publicVersionNumber || undefined;
+      }
+    }
+    return undefined;
+  }, [configurations, data.modelId]);
+
+  // Extract the numeric revision from modelVersion ("{GUID},N" → "N")
+  const modelVersionNumber = data.modelVersion
+    ? data.modelVersion.replace(/^.*,/, '')
+    : undefined;
+
+  const displayModelVersion = modelPublicVersion ?? modelVersionNumber ?? '–';
+
   const items: [string, React.ReactNode, string?][] = [
     ['Name', data.name],
     ['Model', data.modelName ?? '–'],
+    ['Model Version', displayModelVersion],
     ['Datasources', `${data.datasources?.length ?? 0}`],
     ['Bindings', `${data.bindings?.length ?? 0}`],
     ['Validations', `${data.validations?.length ?? 0}`],
   ];
   if (showTechnicalDetails) {
     items.unshift(['GUID', data.id, 'guid']);
-    items.splice(3, 0, ['Model GUID', data.modelId ?? '–', 'guid'], ['Model Version', data.modelVersion ?? '–'], ['Root Container', data.dataContainerDescriptor ?? '–']);
+    items.splice(4, 0, ['Model GUID', data.modelId ?? '–', 'guid'], ['Model Version (raw)', data.modelVersion ?? '–'], ['Root Container', data.dataContainerDescriptor ?? '–']);
   }
   return <PropGrid items={items} />;
 }
