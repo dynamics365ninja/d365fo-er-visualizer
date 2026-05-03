@@ -13,8 +13,8 @@ import { buildFnoPath } from './path-key';
  * F&O ER client — enumerates and downloads Electronic Reporting
  * configurations via F&O **custom services** exposed under `/api/services`.
  *
- * ER does not expose public OData data entities; all communication goes
- * through the ER custom service groups. See
+ * ER uses custom service groups (not OData entities).
+ * All communication goes through the ER custom service groups. See
  * `https://<envUrl>/api/services` for the authoritative list; the groups we
  * consume are `ERConfigurationServices` and `ERMetadataProviderServices`.
  *
@@ -430,10 +430,15 @@ function truncate(s: string, max: number): string {
 /**
  * Enumerate all ER solutions available in the environment.
  *
- * Strategy: call `getFormatSolutionsSubHierarchy('')` to get root-level
- * solutions. Then BFS expand every discovered parent name to find the
- * full tree. No hardcoded list is needed — the environment self-reports
- * all solutions that exist in `ERSolutionTable`.
+ * Strategy: probe `getFormatSolutionsSubHierarchy(parentName)` for every
+ * known root DataModel name. The X++ implementation is fully recursive —
+ * `getFormatSolutionsSubHierarchyByRecId` recurses into DerivedSolutions,
+ * so a single probe on a root model returns its entire sub-tree.
+ *
+ * An empty `_parentSolutionName` always returns an empty list (the X++
+ * `WHERE Name == ''` matches no ERSolutionTable row), so we skip it.
+ *
+ * Callers can supply additional root names via `options.extraRoots`.
  */
 export async function listSolutions(
   transport: FnoTransport,
@@ -445,51 +450,91 @@ export async function listSolutions(
   const seen = new Map<string, ErSolutionSummary>();
   const probesTried: string[] = [];
   const probesWithHits: string[] = [];
-  let firstOperation = '';
-  // Bases discovered bottom-up: whenever any flat row has a non-empty
-  // Base field (pointing to its parent DataModel), we queue that parent
-  // for probing so we discover the full tree dynamically.
-  const discoveredBases = new Set<string>();
 
   // Helper: process a flat array of solution rows, add DataModel/Unknown
-  // nodes to `seen`, and collect Base references for parent discovery.
+  // nodes to `seen`, skip Format/ModelMapping rows (they are downloaded
+  // separately via listComponents).
+  const skippedFormats: string[] = [];
+  const skippedMappings: string[] = [];
   const processFlatRows = (flat: RawErSolutionRow[]) => {
     for (const r of flat) {
-      const base = typeof r.Base === 'string' ? r.Base.trim() : '';
-      if (base) discoveredBases.add(base);
       const mapped = mapSolutionRow(r);
-      if (
-        mapped.componentType === 'Format' ||
-        mapped.componentType === 'ModelMapping'
-      ) continue;
+      if (mapped.componentType === 'Format') {
+        skippedFormats.push(mapped.solutionName ?? '<unnamed>');
+        continue;
+      }
+      if (mapped.componentType === 'ModelMapping') {
+        skippedMappings.push(mapped.solutionName ?? '<unnamed>');
+        continue;
+      }
       if (mapped.solutionName && !seen.has(mapped.solutionName)) {
         seen.set(mapped.solutionName, mapped);
       }
     }
   };
 
-  // Seed probes: empty parent (returns root solutions on the
-  // environment) + any caller-supplied extra roots.
+  // Build the full list of root model names to probe.
   const extras = (options?.extraRoots ?? []).map(s => s.trim()).filter(s => s.length > 0);
-  const rootProbes: string[] = Array.from(
-    new Set<string>(['', ...extras]),
-  );
+  const seedModels = [
+    // Common Microsoft root DataModels (stable across F&O versions)
+    'Tax declaration model',
+    'Payment model',
+    'Invoice model',
+    'Audit file model',
+    'Bank statement model',
+    'General ledger model',
+    'Fixed asset model',
+    'Purchase order model',
+    'Sales order model',
+    'Customer model',
+    'Vendor model',
+    'Intrastat model',
+    // Additional root DataModels often present in F&O
+    'Electronic messages',
+    'EU Sales list',
+    'Asset leasing',
+    'Regulatory configuration',
+    'Standard Audit File (SAF-T)',
+    'Customs declaration model',
+    'Cost accounting',
+    'Fiscal documents',
+    'Data exchange',
+    'Financial dimensions',
+    'Inventory management model',
+    'Project model',
+    'Budget model',
+    'Ledger settlement model',
+    'Electronic invoicing model',
+    'Financial reporting model',
+    'Cash flow forecasting model',
+    'Credit management model',
+    'Retail model',
+    'Warehouse management model',
+    'Supply chain model',
+    'HR model',
+    'Payroll model',
+    'Transportation management model',
+    'Expense management model',
+    'Subscription billing model',
+    'Revenue recognition model',
+    'Withholding tax model',
+    'Document routing model',
+    'Advance holder model',
+    'Currency revaluation model',
+    'Rebate management model',
+    'Global inventory accounting model',
+    // MT940 / CAMT variants
+    'MT940 Model',
+    'Camt model',
+    ...extras,
+  ];
+  // Deduplicate (case-sensitive).
+  const allProbes = Array.from(new Set(seedModels));
 
-  // Pre-seed `seen` with caller-supplied extra roots only.
-  for (const root of extras) {
-    if (!seen.has(root)) {
-      seen.set(root, {
-        solutionName: root,
-        publisher: undefined,
-        version: undefined,
-        displayName: undefined,
-        componentType: 'DataModel',
-      });
-    }
-  }
-
-  // Pre-discover the confirmed operation name ONCE.
+  // Pre-discover the confirmed operation name ONCE so each probe doesn't
+  // have to try multiple candidates.
   let confirmedListOp = '';
+  let firstOperation = '';
   try {
     const available = await listServiceOperations(
       transport, conn, token, ER_SERVICES.configurationList, signal,
@@ -510,104 +555,57 @@ export async function listSolutions(
 
   // eslint-disable-next-line no-console
   console.info('[fno-client] listSolutions starting', {
-    rootCount: rootProbes.length,
+    probeCount: allProbes.length,
     confirmedOp: confirmedListOp || '(will discover per probe)',
   });
 
   // Track the last probe error so we can report it if every probe fails.
   let lastProbeError: FnoHttpError | null = null;
 
-  // Run all root probes IN PARALLEL. With 50+ known roots, sequential
-  // probing would take 1-2 minutes; parallel probing finishes in ~3-5s.
+  // Run all probes IN PARALLEL. The API is fully recursive so each probe
+  // returns the entire sub-tree — no BFS needed.
   await Promise.all(
-    rootProbes.map(async parent => {
-      const label = parent || '<empty>';
-      probesTried.push(label);
+    allProbes.map(async parent => {
+      probesTried.push(parent);
       try {
         let operation: string;
         let raw: unknown;
         if (confirmedListOp) {
-          // Fast path: no per-probe discovery needed.
           raw = await callErService<unknown>(
-            transport,
-            conn,
-            token,
-            ER_SERVICES.configurationList,
-            confirmedListOp,
-            { _parentSolutionName: parent },
-            signal,
+            transport, conn, token,
+            ER_SERVICES.configurationList, confirmedListOp,
+            { _parentSolutionName: parent }, signal,
           );
           operation = confirmedListOp;
         } else {
-          // Fallback: per-probe candidate fallback (slower but robust).
           const result = await callErServiceWithFallback<unknown>(
-            transport,
-            conn,
-            token,
-            ER_SERVICES.configurationList,
-            ER_SERVICE_OPS.listSolutions,
-            { _parentSolutionName: parent },
-            signal,
+            transport, conn, token,
+            ER_SERVICES.configurationList, ER_SERVICE_OPS.listSolutions,
+            { _parentSolutionName: parent }, signal,
           );
           operation = result.operation;
           raw = result.raw;
           if (!firstOperation) firstOperation = operation;
         }
         const rows = unwrapServiceArray<RawErSolutionRow>(raw, operation);
-        // eslint-disable-next-line no-console
-        console.info('[fno-client] listSolutions probe', {
-          parent: label,
-          operation,
-          rowCount: rows.length,
-        });
-        const flat = flattenErHierarchy(rows);
-        // Diagnostic summary of component types in this response.
-        const typeSummary: Record<string, number> = {};
-        for (const r of flat) {
-          const t = mapSolutionRow(r).componentType ?? 'Unknown';
-          typeSummary[t] = (typeSummary[t] ?? 0) + 1;
-        }
-        // eslint-disable-next-line no-console
-        console.info('[fno-client] listSolutions probe type summary', {
-          parent: label,
-          flatNodeCount: flat.length,
-          typeSummary,
-          sampleRowKeys: Object.keys((flat[0] ?? {}) as Record<string, unknown>),
-          sampleRow: flat[0],
-        });
         if (rows.length > 0) {
-          probesWithHits.push(label);
-          processFlatRows(flat);
-        }
-        // Add the probed root to `seen` whenever:
-        //  a) It returned children (it's definitely a real root), OR
-        //  b) It returned 0 children BUT we already know it exists because
-        //     another response contained a row with Base = this name.
-        //     This covers models whose only children are Formats / Mappings
-        //     that the F&O service filters out of the hierarchy response.
-        if (parent && !seen.has(parent) && (rows.length > 0 || discoveredBases.has(parent))) {
-          seen.set(parent, {
-            solutionName: parent,
-            publisher: undefined,
-            version: undefined,
-            displayName: undefined,
-            componentType: 'DataModel',
-          });
+          probesWithHits.push(parent);
+          processFlatRows(flattenErHierarchy(rows));
+          // Add the probed parent itself as a DataModel entry so it
+          // appears in the tree as a navigable root.
+          if (!seen.has(parent)) {
+            seen.set(parent, {
+              solutionName: parent,
+              publisher: undefined,
+              version: undefined,
+              displayName: undefined,
+              componentType: 'DataModel',
+            });
+          }
         }
       } catch (err) {
-        // A single probe failure must NOT abort the entire listing — other
-        // roots may still return valid data. Non-HTTP errors (network,
-        // code bugs) re-throw; HTTP auth errors (401/403) also re-throw
-        // since they indicate a systemic issue, not a per-probe problem.
-        // Other HTTP errors (404, 500) are logged and skipped.
         if (err instanceof FnoHttpError) {
-          if (err.status === 401 || err.status === 403) {
-            throw err;
-          }
-          // eslint-disable-next-line no-console
-          console.warn('[fno-client] listSolutions probe failed (non-fatal)', {
-            parent: label, status: err.status, message: err.message,
-          });
+          if (err.status === 401 || err.status === 403) throw err;
           lastProbeError = err;
         } else {
           throw err;
@@ -616,225 +614,12 @@ export async function listSolutions(
     }),
   );
 
-  // Track which parents have been used as probes to avoid duplicates.
-  const probedSet = new Set<string>(rootProbes);
-
-  // If every initial probe failed and we got zero results, propagate the
-  // last error so callers know the service is unreachable/misconfigured.
+  // If every probe failed, propagate the last error.
   if (seen.size === 0 && lastProbeError && probesWithHits.length === 0) {
     throw lastProbeError;
   }
 
-  // ── Service-based fallback discovery ──
-  // When the empty-parent probe returned zero results, try additional
-  // discovery strategies using only the ER custom services.
-  if (seen.size === 0 && discoveredBases.size === 0) {
-    // Strategy 1: call without the _parentSolutionName parameter entirely.
-    // Some F&O versions return all root solutions when the parameter is
-    // omitted (vs being set to '').
-    if (confirmedListOp || firstOperation) {
-      const op = confirmedListOp || firstOperation;
-      try {
-        const raw = await callErService<unknown>(
-          transport, conn, token,
-          ER_SERVICES.configurationList, op, {}, signal,
-        );
-        const rows = unwrapServiceArray<RawErSolutionRow>(raw, op);
-        if (rows.length > 0) {
-          // eslint-disable-next-line no-console
-          console.info('[fno-client] listSolutions: no-param fallback returned rows', { count: rows.length });
-          probesWithHits.push('<no-param>');
-          processFlatRows(flattenErHierarchy(rows));
-        }
-      } catch {
-        // Non-fatal — fall through to next strategy.
-      }
-    }
-
-    // Strategy 2: probe with common Microsoft-shipped ER root model names.
-    // These are used as BFS seeds — each name is queried as a parent and
-    // any children discovered bootstrap the full BFS tree. Names that
-    // don't exist on the environment simply return 0 rows (harmless).
-    // This is NOT a complete list — BFS expansion discovers everything
-    // beyond these seeds via the `Base` field references.
-    if (seen.size === 0) {
-      const seedModels = [
-        // Common Microsoft root DataModels (stable across F&O versions)
-        'Tax declaration model',
-        'Payment model',
-        'Invoice model',
-        'Audit file model',
-        'Bank statement model',
-        'General ledger model',
-        'Fixed asset model',
-        'Purchase order model',
-        'Sales order model',
-        'Customer model',
-        'Vendor model',
-        'Intrastat model',
-        // Publisher-level entries (may or may not be valid parents)
-        'Microsoft',
-        'Litware, Inc.',
-      ];
-      // eslint-disable-next-line no-console
-      console.info('[fno-client] listSolutions: empty probe returned nothing, trying seed model probes');
-      await Promise.all(
-        seedModels.map(async parent => {
-          if (probedSet.has(parent)) return;
-          probedSet.add(parent);
-          probesTried.push(parent);
-          try {
-            let raw: unknown;
-            if (confirmedListOp) {
-              raw = await callErService<unknown>(
-                transport, conn, token,
-                ER_SERVICES.configurationList, confirmedListOp,
-                { _parentSolutionName: parent }, signal,
-              );
-            } else {
-              const r = await callErServiceWithFallback<unknown>(
-                transport, conn, token,
-                ER_SERVICES.configurationList, ER_SERVICE_OPS.listSolutions,
-                { _parentSolutionName: parent }, signal,
-              );
-              raw = r.raw;
-              if (!firstOperation) firstOperation = r.operation;
-            }
-            const rows = unwrapServiceArray<RawErSolutionRow>(raw, confirmedListOp || firstOperation);
-            if (rows.length > 0) {
-              probesWithHits.push(parent);
-              processFlatRows(flattenErHierarchy(rows));
-            }
-            // Add the seed itself as a DataModel entry so it appears
-            // in the tree as a navigable root (even if it returned 0
-            // children — it may still be a valid leaf DataModel).
-            if (!seen.has(parent) && rows.length > 0) {
-              seen.set(parent, {
-                solutionName: parent,
-                publisher: undefined,
-                version: undefined,
-                displayName: undefined,
-                componentType: 'DataModel',
-              });
-            }
-          } catch {
-            // Non-fatal — skip silently.
-          }
-        }),
-      );
-    }
-  }
-
-  // BFS expansion: for every DataModel/Unknown node discovered above that
-  // was not yet used as a probe parent, call the service again with that
-  // node as the parent to discover its derivatives. Repeat until no new
-  // nodes are found or a safety cap is reached.
-  //
-  // The frontier is seeded from two sources:
-  //   1. Nodes found in `seen` that haven't been probed yet (forward BFS).
-  //   2. `discoveredBases` — parent names extracted from the `Base` field
-  //      of any row we saw (including Formats). If we saw a Format row
-  //      with `Base = "EU Sales list"`, we know "EU Sales list" is a real
-  //      parent DataModel even if it was never returned as a result row
-  //      itself (because its own Base = "" means `WHERE Base = "EU Sales
-  //      list"` returns its children, not itself). Probing with that name
-  //      as parent surfaces the children AND adds the parent to `seen`
-  //      via `if (parent && !seen.has(parent))`.
-  //
-  // Safety cap: 10 BFS rounds.
-  // Any name found as a `Base` value in a row (from any probe so far)
-  // is a confirmed-real parent in F&O — add it to `seen` immediately
-  // regardless of whether its name was in our initial probe list.
-  // This is crucial for models whose API probe returns 0 rows (because
-  // their only children are Formats that the service filters out), but
-  // whose existence is confirmed by a sibling/child row's Base field.
-  for (const base of discoveredBases) {
-    if (base.length > 0 && !seen.has(base)) {
-      seen.set(base, {
-        solutionName: base,
-        publisher: undefined,
-        version: undefined,
-        displayName: undefined,
-        componentType: 'DataModel',
-      });
-    }
-  }
-  // Frontier = everything in `seen` that hasn't been used as a probe parent
-  // yet (to verify it has children and discover its own sub-tree).
-  let frontier: string[] = Array.from(seen.keys())
-    .filter(n => n.length > 0 && !probedSet.has(n));
-  const BFS_MAX_ROUNDS = 10;
-  for (let round = 0; round < BFS_MAX_ROUNDS && frontier.length > 0; round++) {
-    const nextFrontier: string[] = [];
-    // Run frontier probes in parallel for speed; each resolves
-    // independently and writes to `seen` / `nextFrontier`.
-    await Promise.all(
-      frontier.map(async parent => {
-        if (probedSet.has(parent)) return;
-        probedSet.add(parent);
-        probesTried.push(parent);
-        try {
-          let rawBfs: unknown;
-          let opBfs: string;
-          if (confirmedListOp) {
-            rawBfs = await callErService<unknown>(
-              transport,
-              conn,
-              token,
-              ER_SERVICES.configurationList,
-              confirmedListOp,
-              { _parentSolutionName: parent },
-              signal,
-            );
-            opBfs = confirmedListOp;
-          } else {
-            const r = await callErServiceWithFallback<unknown>(
-              transport,
-              conn,
-              token,
-              ER_SERVICES.configurationList,
-              ER_SERVICE_OPS.listSolutions,
-              { _parentSolutionName: parent },
-              signal,
-            );
-            rawBfs = r.raw;
-            opBfs = r.operation;
-          }
-          const rowsBfs = unwrapServiceArray<RawErSolutionRow>(rawBfs, opBfs);
-          if (rowsBfs.length > 0) {
-            probesWithHits.push(parent);
-            const flatBfs = flattenErHierarchy(rowsBfs);
-            processFlatRows(flatBfs);
-            // Queue newly discovered names for next BFS round.
-            for (const r of flatBfs) {
-              const base = typeof r.Base === 'string' ? r.Base.trim() : '';
-              if (base && !probedSet.has(base) && !nextFrontier.includes(base)) {
-                nextFrontier.push(base);
-              }
-            }
-          }
-          // Always queue seen entries not yet probed — covers models
-          // confirmed via discoveredBases that returned 0 children above.
-          for (const name of seen.keys()) {
-            if (!probedSet.has(name) && name.length > 0 && !nextFrontier.includes(name)) {
-              nextFrontier.push(name);
-            }
-          }
-        } catch {
-          // Non-fatal — skip this probe silently.
-        }
-      }),
-    );
-    // De-duplicate the next frontier (parallel probes may have added
-    // the same name multiple times).
-    frontier = Array.from(new Set(nextFrontier)).filter(
-      n => n.length > 0 && !probedSet.has(n),
-    );
-  }
-
   const results = Array.from(seen.values());
-  // Sort alphabetically before returning so callers always get a
-  // deterministic, locale-aware order regardless of BFS insertion order.
   results.sort((a, b) =>
     (a.solutionName ?? '').localeCompare(b.solutionName ?? '', undefined, {
       sensitivity: 'base',
@@ -843,10 +628,7 @@ export async function listSolutions(
   );
 
   if (results.length === 0) {
-    // Nothing found under any known root. Enumerate all ER-related
-    // service groups + their services + operations so the user can see
-    // exactly what the environment exposes. We let the empty list
-    // propagate; the UI shows an info toast.
+    // Nothing found — enumerate available ER services for diagnostics.
     const groups = [
       'ERConfigurationServices',
       'ERMetadataProviderServices',
@@ -863,11 +645,7 @@ export async function listSolutions(
               services.map(async svc => {
                 try {
                   perServiceOps[svc] = await listServiceOperations(
-                    transport,
-                    conn,
-                    token,
-                    `${group}/${svc}`,
-                    signal,
+                    transport, conn, token, `${group}/${svc}`, signal,
                   );
                 } catch {
                   perServiceOps[svc] = [];
@@ -884,7 +662,7 @@ export async function listSolutions(
       );
       // eslint-disable-next-line no-console
       console.info('[fno-client] listSolutions empty — ER service catalog', {
-        probesTried,
+        probesTried: probesTried.length,
         groupOps,
       });
     } catch (err) {
@@ -893,10 +671,12 @@ export async function listSolutions(
     }
   } else {
     // eslint-disable-next-line no-console
-    console.info('[fno-client] listSolutions aggregated', {
+    console.info('[fno-client] listSolutions done', {
       total: results.length,
-      probesTried,
+      probeCount: probesTried.length,
       probesWithHits,
+      skippedFormats: skippedFormats.length,
+      skippedMappings: skippedMappings.length,
     });
   }
 
@@ -1609,7 +1389,7 @@ function extractReferencedDataModelGuids(xml: string): {
  * F&O custom services wrap the return value in either:
  * - `{ "<operationName>Result": <value> }` (most common), or
  * - a bare `<value>` (no wrapper), or
- * - `{ "value": [...] }` (OData-like for collections).
+ * - `{ "value": [...] }` (collection wrapper).
  *
  * This helper normalizes collection responses to a flat array.
  */

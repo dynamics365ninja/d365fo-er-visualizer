@@ -87,7 +87,7 @@ const useStyles = makeStyles({
     },
     animationDuration: '420ms',
     animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-    animationFillMode: 'both',
+    animationFillMode: 'forwards',
   },
   heroLogo: {
     width: '72px',
@@ -145,7 +145,7 @@ const useStyles = makeStyles({
     animationDuration: '520ms',
     animationDelay: '80ms',
     animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-    animationFillMode: 'both',
+    animationFillMode: 'forwards',
     ':hover': {
       ...shorthands.borderColor(tokens.colorBrandStroke1),
       backgroundColor: tokens.colorNeutralBackground1Hover,
@@ -206,7 +206,7 @@ const useStyles = makeStyles({
     },
     animationDuration: '500ms',
     animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-    animationFillMode: 'both',
+    animationFillMode: 'forwards',
     ':hover': {
       transform: 'translateY(-4px)',
       boxShadow: tokens.shadow28,
@@ -281,7 +281,7 @@ const useStyles = makeStyles({
     animationDuration: '520ms',
     animationDelay: '360ms',
     animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-    animationFillMode: 'both',
+    animationFillMode: 'forwards',
   },
   sectionHeader: {
     display: 'flex',
@@ -389,7 +389,7 @@ const useStyles = makeStyles({
     animationDuration: '600ms',
     animationDelay: '440ms',
     animationTimingFunction: 'ease-out',
-    animationFillMode: 'both',
+    animationFillMode: 'forwards',
   },
   step: {
     display: 'flex',

@@ -14,7 +14,7 @@ export default defineConfig({
   },
   server: {
     watch: {
-      // Watch sibling workspace packages so HMR fires when odata.ts etc. change.
+      // Watch sibling workspace packages so HMR fires when er-services.ts etc. change.
       ignored: (p: string) => p.includes('node_modules') && !p.includes('@er-visualizer'),
     },
   },
