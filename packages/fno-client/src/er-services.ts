@@ -454,9 +454,11 @@ export async function listSolutions(
   // Helper: process a flat array of solution rows, add DataModel/Unknown
   // nodes to `seen`, skip Format/ModelMapping rows (they are downloaded
   // separately via listComponents).
+  // `seedName` is the root DataModel whose probe produced these rows —
+  // stored as `rootSolutionName` so the UI can always fetch the full tree.
   const skippedFormats: string[] = [];
   const skippedMappings: string[] = [];
-  const processFlatRows = (flat: RawErSolutionRow[]) => {
+  const processFlatRows = (flat: RawErSolutionRow[], seedName: string) => {
     for (const r of flat) {
       const mapped = mapSolutionRow(r);
       if (mapped.componentType === 'Format') {
@@ -468,6 +470,10 @@ export async function listSolutions(
         continue;
       }
       if (mapped.solutionName && !seen.has(mapped.solutionName)) {
+        // Mark derived DataModels with the seed that discovered them.
+        if (mapped.solutionName !== seedName) {
+          mapped.rootSolutionName = seedName;
+        }
         seen.set(mapped.solutionName, mapped);
       }
     }
@@ -678,7 +684,7 @@ export async function listSolutions(
         const rows = unwrapServiceArray<RawErSolutionRow>(raw, operation);
         if (rows.length > 0) {
           probesWithHits.push(parent);
-          processFlatRows(flattenErHierarchy(rows));
+          processFlatRows(flattenErHierarchy(rows), parent);
           // Add the probed parent itself as a DataModel entry so it
           // appears in the tree as a navigable root.
           if (!seen.has(parent)) {
@@ -841,75 +847,11 @@ export async function listComponents(
   console.info('[fno-client] listComponents root fetch', { solutionName, confirmedOp, rowCount: rootRows.length });
 
   // Flatten the initial response (respects DerivedSolutions nesting from the API).
-  const initialFlat = flattenComponentsWithParent(rootRows, solutionName);
-
-  // BFS: for every derived DataModel in the initial result, call the service
-  // again with that model's name as parent to fetch its children (formats /
-  // mappings). The API may only populate DerivedSolutions 1-2 levels deep,
-  // so this ensures the full tree is discovered regardless of hierarchy depth.
-  const probedNames = new Set<string>([solutionName]);
-
-  // Build initial BFS queue from DataModel nodes found in the initial response.
-  let bfsQueue: ErConfigSummary[] = initialFlat.filter(
-    c => c.componentType === 'DataModel' &&
-         c.configurationName &&
-         !probedNames.has(c.configurationName),
-  );
-  for (const dm of bfsQueue) probedNames.add(dm.configurationName!);
-
-  const allExtra: ErConfigSummary[] = [];
-  const BFS_ROUNDS = 5;
-
-  for (let round = 0; round < BFS_ROUNDS && bfsQueue.length > 0; round++) {
-    // Run the entire current batch in parallel.
-    const batch = bfsQueue.splice(0, bfsQueue.length);
-    const batchRows = await Promise.all(batch.map(dm => fetchChildren(dm.configurationName!)));
-
-    bfsQueue = [];
-    for (let i = 0; i < batch.length; i++) {
-      const dm = batch[i];
-      const rows = batchRows[i];
-      if (rows.length === 0) continue;
-
-      // eslint-disable-next-line no-console
-      console.info('[fno-client] listComponents BFS expand', {
-        parent: dm.configurationName, round, rowCount: rows.length,
-      });
-
-      // Annotate children with this DataModel's GUID so downloads work.
-      const children = flattenComponentsWithParent(
-        rows, solutionName,
-        dm.configurationGuid,
-        dm.revisionGuid,
-      );
-
-      for (const c of children) {
-        allExtra.push(c);
-        // Queue any newly discovered DataModels for the next BFS round.
-        if (
-          c.componentType === 'DataModel' &&
-          c.configurationName &&
-          !probedNames.has(c.configurationName)
-        ) {
-          probedNames.add(c.configurationName);
-          bfsQueue.push(c);
-        }
-      }
-    }
-  }
-
-  if (allExtra.length === 0) return initialFlat;
-
-  // Merge initial + BFS results; deduplicate by (configurationName, revisionGuid|configurationGuid).
-  const dedupKey = (c: ErConfigSummary): string =>
-    `${c.configurationName ?? ''}|${c.revisionGuid ?? c.configurationGuid ?? ''}`;
-  const merged = new Map<string, ErConfigSummary>();
-  for (const c of initialFlat) merged.set(dedupKey(c), c);
-  for (const c of allExtra) {
-    const k = dedupKey(c);
-    if (!merged.has(k)) merged.set(k, c);
-  }
-  return Array.from(merged.values());
+  // The X++ implementation of getFormatSolutionsSubHierarchy is fully
+  // recursive (getFormatSolutionsSubHierarchyByRecId recurses into
+  // DerivedSolutions), so the initial response already contains the
+  // complete sub-tree — no additional BFS probing needed.
+  return flattenComponentsWithParent(rootRows, solutionName);
 }
 
 /**
@@ -929,6 +871,9 @@ function flattenComponentsWithParent(
   solutionName: string,
   nearestDmGuid?: string,
   nearestDmRev?: string,
+  parentConfigName?: string,
+  derivationDepth = 0,
+  nearestDmName?: string,
 ): ErConfigSummary[] {
   const out: ErConfigSummary[] = [];
   for (const r of rows) {
@@ -942,14 +887,31 @@ function flattenComponentsWithParent(
       c.componentType === 'DataModel' && c.revisionGuid
         ? c.revisionGuid
         : nearestDmRev;
-    // Stamp the nearest DataModel onto non-DataModel nodes (only when
-    // the field is not already set by mapComponentRow).
+    // Advance the DataModel name pointer.
+    const nextDmName =
+      c.componentType === 'DataModel' ? c.configurationName : nearestDmName;
+    // For every node: ownerDataModelName is the nearest DM ancestor.
+    // Depth-0 nodes that are not DataModels belong to the query root
+    // (solutionName). DataModel nodes at depth 0 also belong to root.
+    const ownerDmName = nearestDmName ?? solutionName;
+    // Stamp the nearest DataModel, ERSolutionTable parent, and
+    // derivation depth onto every node.
+    const dmGuidForNode = (c.referencedModelGuid ?? nextDmGuid) || undefined;
+    const dmRevForNode = c.referencedModelGuid ? undefined : nextDmRev;
+    const base = {
+      ...c,
+      parentConfigName: parentConfigName ?? solutionName,
+      derivationDepth,
+      ownerDataModelName: ownerDmName,
+    };
     const annotated: ErConfigSummary =
-      c.componentType !== 'DataModel' && nextDmGuid && !c.parentDataModelGuid
-        ? { ...c, parentDataModelGuid: nextDmGuid, parentDataModelRevisionGuid: nextDmRev }
-        : c;
+      c.componentType !== 'DataModel' && dmGuidForNode && !c.parentDataModelGuid
+        ? { ...base, parentDataModelGuid: dmGuidForNode, parentDataModelRevisionGuid: dmRevForNode }
+        : base;
     out.push(annotated);
-    // Recurse into derived solutions.
+    // Recurse into derived solutions — pass this node's name as the
+    // ERSolutionTable parent so children know their derivation origin.
+    // Derivation depth increments for each DerivedSolutions level.
     if (Array.isArray(r.DerivedSolutions) && r.DerivedSolutions.length > 0) {
       out.push(
         ...flattenComponentsWithParent(
@@ -957,6 +919,9 @@ function flattenComponentsWithParent(
           solutionName,
           nextDmGuid,
           nextDmRev,
+          c.configurationName,
+          derivationDepth + 1,
+          nextDmName,
         ),
       );
     }
@@ -1867,6 +1832,9 @@ interface RawErComponentRow {
   FormatId?: string;
   ModelID?: string;
   ModelId?: string;
+  /** ERSolution ID of the DataModel this config references (observed on Format rows). */
+  Base?: string;
+  base?: string;
   CountryRegion?: string;
   CountryRegionCodes?: string;
   [extra: string]: unknown;
@@ -1922,6 +1890,19 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
     ? r.FormatMappingGUID
     : undefined;
 
+  // Extract the GUID of the DataModel this component *references*.
+  // For Format / ModelMapping rows this is the model they implement;
+  // for DataModel rows it's their own ID. We capture it separately so
+  // it doesn't pollute the configurationGuid fallback chain.
+  // `Base` / `base` is the ERSolution ID of the DataModel this format
+  // references — the most reliable identifier. `ModelID` / `ModelId`
+  // is a fallback observed on some environments.
+  const rawModelRef = r.Base ?? r.base ?? r.ModelID ?? r.ModelId;
+  const referencedModelGuid =
+    typeof rawModelRef === 'string' && GUID_LIKE_RE.test(rawModelRef) && rawModelRef.toLowerCase() !== ZERO_GUID
+      ? rawModelRef
+      : undefined;
+
   const revisionGuid =
     r.ConfigurationRevisionGuid ??
     r.RevisionGuid ??
@@ -1936,8 +1917,6 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
     r.ConfigurationId ??
     r.FormatID ??
     r.FormatId ??
-    r.ModelID ??
-    r.ModelId ??
     r.Id ??
     r.ID ??
     findGuidByKeyHint(rec, 'format') ??
@@ -1969,6 +1948,12 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
     hasContent: Boolean(revisionGuid || configurationGuid),
     hasChildren,
     versionNumbers: versionNumbers && versionNumbers.length > 0 ? versionNumbers : undefined,
+    // For Format / ModelMapping: GUID of the DataModel this component
+    // references. Used by scopeComponentsToModel to show each format
+    // under the correct model (especially when a derived format like
+    // Asl MT940 sits under MT940 in DerivedSolutions but references
+    // Asl BS model). DataModel rows get their own GUID here — ignored.
+    referencedModelGuid: componentType !== 'DataModel' ? referencedModelGuid : undefined,
   };
 }
 

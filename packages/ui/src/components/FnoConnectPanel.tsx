@@ -7,7 +7,7 @@
  *   4) multi-select configurations and ingest them into the session
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Field,
@@ -38,6 +38,7 @@ import {
 import type {
   ErComponentType,
   ErConfigSummary,
+   ErSolutionSummary,
   FnoConnection,
 } from '@er-visualizer/fno-client';
 import { FnoHttpError, FnoEmptyContentError } from '@er-visualizer/fno-client';
@@ -208,6 +209,13 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   const [clientId, setClientId] = useState(DEFAULT_CLIENT_ID);
   const [customRoot, setCustomRoot] = useState('');
   const [ingesting, setIngesting] = useState(false);
+
+  // Cache: root DataModel name → full flat component list.
+  // When the user clicks a derived DataModel whose root was already
+  // fetched, we reuse the cached list instead of making a new API call
+  // (which would return only the derived model's direct children,
+  // missing sibling formats / mappings).
+  const rootComponentCacheRef = useRef(new Map<string, ErConfigSummary[]>());
   const setFnoIngestStatus = useAppStore(s => s.setFnoIngestStatus);
   const setIngestStatus = useCallback((status: string) => {
     setFnoIngestStatus(status);
@@ -347,21 +355,55 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     setRootDataModelByPath(() => new Map());
     setAllDataModelsSeen(() => new Map());
     setDataModelChain([]);
+    rootComponentCacheRef.current.clear();
   }, [activeProfile, setConnState, setSolutions, setComponents, setActiveSolution, setSelected, setRootDataModelByPath, setAllDataModelsSeen, setDataModelChain]);
 
   const handlePickSolution = useCallback(async (solutionName: string) => {
     if (!activeProfile) return;
     setActiveSolution(solutionName);
     setSolutionPath([solutionName]);
+
+    // Resolve the root DataModel so the API call returns the full tree.
+    // Country-specific derived models (e.g. "Asl Tax declaration model (SK)")
+    // have very few direct children in ERSolutionTable — their formats and
+    // mappings live as siblings under the root model. Fetching from the root
+    // ensures we always show the complete set of configurations.
+    const sol = solutions.find(s => s.solutionName === solutionName);
+    const rootName = sol?.rootSolutionName ?? solutionName;
+
     // Selection is intentionally preserved across navigation so the user
     // can queue items from multiple drill levels (e.g. a derived model at
     // level 2 + a mapping at level 1). Use the "Clear" button to reset.
     setLoadingComponents(true);
     setComponents([]);
     try {
-      const list = await fnoSession.listComponents(activeProfile, solutionName);
-      list.sort((a, b) => (a.configurationName ?? '').localeCompare(b.configurationName ?? '', undefined, { sensitivity: 'base', numeric: true }));
-      console.info('[fno-ui] components for', solutionName, list);
+      // Use cached root component list when available.
+      const cached = rootComponentCacheRef.current.get(rootName);
+      const fullTree = cached
+        ? cached
+        : await fnoSession.listComponents(activeProfile, rootName);
+      if (!cached) {
+        rootComponentCacheRef.current.set(rootName, fullTree);
+      }
+      fullTree.sort((a, b) => (a.configurationName ?? '').localeCompare(b.configurationName ?? '', undefined, { sensitivity: 'base', numeric: true }));
+      console.info('[fno-ui] components for', solutionName, '(root:', rootName, ')', fullTree);
+
+      // Accumulate every DataModel we've ever seen so handleLoadSelected
+      // can resolve ancestor GUIDs back to downloadable summaries.
+      setAllDataModelsSeen(prev => rememberDataModels(prev, fullTree));
+
+      // Promote nested DataModels found among the children to the
+      // left solution panel so the user can navigate to them directly.
+      const promoted = promoteDmToSolutions(solutions, fullTree, rootName);
+      if (promoted !== solutions) setSolutions(promoted);
+
+      // Scope the component list to the clicked DataModel. When the
+      // user clicks a derived model (e.g. "Asl Bank statement model")
+      // we must show only its direct children — not all formats from
+      // the root. The `ownerDataModelName` on each component identifies
+      // which DataModel it belongs to.
+      const list = scopeComponentsToModel(fullTree, solutionName);
+
       // The first DataModel we see at level 1 is the *root* DataModel
       // for this subtree. Remember it so deeper ModelMapping / Format
       // downloads can carry `parentDataModelGuid`, and seed the
@@ -376,9 +418,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       });
       const chain = rootModel ? [rootModel] : [];
       setDataModelChain(chain);
-      // Accumulate every DataModel we've ever seen so handleLoadSelected
-      // can resolve ancestor GUIDs back to downloadable summaries.
-      setAllDataModelsSeen(prev => rememberDataModels(prev, list));
       setComponents(annotateWithParentDataModel(list, chain));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -386,7 +425,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     } finally {
       setLoadingComponents(false);
     }
-  }, [activeProfile, pushToast]);
+  }, [activeProfile, solutions, pushToast]);
 
   /** Drill one level deeper: treat the clicked component as a sub-solution
    *  and list its children. Works because the ER tree in F&O is a single
@@ -413,13 +452,19 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       console.info('[fno-ui] components for', name, list);
       setAllDataModelsSeen(prev => rememberDataModels(prev, list));
       setComponents(annotateWithParentDataModel(list, nextChain));
+      // Determine root from the solution path entry (the DataModel the user originally clicked).
+      const pathRoot = solutionPath[0];
+      const pathRootSol = pathRoot ? solutions.find(s => s.solutionName === pathRoot) : undefined;
+      const drillRoot = pathRootSol?.rootSolutionName ?? pathRoot ?? name;
+      const promoted = promoteDmToSolutions(solutions, list, drillRoot);
+      if (promoted !== solutions) setSolutions(promoted);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       pushToast({ kind: 'error', message: t.fnoLoadingFailed(message) });
     } finally {
       setLoadingComponents(false);
     }
-  }, [activeProfile, pushToast, dataModelChain]);
+  }, [activeProfile, solutions, pushToast, dataModelChain, solutionPath]);
 
   /** Pop back one level in the solution breadcrumb. */
   const handleBack = useCallback(async () => {
@@ -447,8 +492,31 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     setLoadingComponents(true);
     setComponents([]);
     try {
-      const list = await fnoSession.listComponents(activeProfile, parent);
-      setAllDataModelsSeen(prev => rememberDataModels(prev, list));
+      // When navigating back to the DataModel level (path length 1),
+      // resolve the root model to fetch the full tree (same logic as
+      // handlePickSolution). For deeper levels use the actual parent.
+      const isBackToModel = nextPath.length === 1;
+      const parentSol = isBackToModel
+        ? solutions.find(s => s.solutionName === parent)
+        : undefined;
+      const apiName = parentSol?.rootSolutionName ?? parent;
+      const cached = isBackToModel
+        ? rootComponentCacheRef.current.get(apiName)
+        : undefined;
+      const fullTree = cached
+        ? cached
+        : await fnoSession.listComponents(activeProfile, apiName);
+      if (isBackToModel && !cached) {
+        rootComponentCacheRef.current.set(apiName, fullTree);
+      }
+      setAllDataModelsSeen(prev => rememberDataModels(prev, fullTree));
+      const backRoot = parentSol?.rootSolutionName ?? parent;
+      const promoted = promoteDmToSolutions(solutions, fullTree, backRoot);
+      if (promoted !== solutions) setSolutions(promoted);
+      // Scope to the model being navigated back to.
+      const list = isBackToModel
+        ? scopeComponentsToModel(fullTree, parent)
+        : fullTree;
       setComponents(annotateWithParentDataModel(list, nextChain));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -456,7 +524,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     } finally {
       setLoadingComponents(false);
     }
-  }, [activeProfile, solutionPath, dataModelChain, pushToast]);
+  }, [activeProfile, solutions, solutionPath, dataModelChain, pushToast]);
 
   const filteredComponents = useMemo(() => {
     // DataModel nodes are shown only in the left navigation panel — exclude
@@ -1684,6 +1752,90 @@ function componentKey(c: ErConfigSummary): string {
 }
 
 /**
+ * Scope a full tree of components (fetched from a root DataModel) to
+ * only the configurations that belong to the given `modelName`.
+ *
+ * The ER listing API does NOT expose which DataModel a Format/Mapping
+ * *references* — it only reports the ERSolutionTable derivation tree.
+ * So we rely on positional heuristics:
+ *
+ * 1. **Root model** (not in the response): show only depth-0 items
+ *    (base configs + child DataModels). Deeper items are derivations
+ *    that belong to derived DataModels.
+ *
+ * 2. **DM with child DataModels** (e.g. MT940 Model → Asl MT940 Model):
+ *    show directly-owned items at `childDepth` only + child DMs.
+ *    Deeper items belong to child DMs.
+ *
+ * 3. **Leaf DM** (no child DataModels): show directly-owned items +
+ *    parent-DM-owned items at `childDepth`. These are derivations of
+ *    the parent's base configs that the API can't attribute precisely.
+ */
+function scopeComponentsToModel(
+  fullTree: readonly ErConfigSummary[],
+  modelName: string,
+): ErConfigSummary[] {
+  const dm = fullTree.find(
+    c => c.componentType === 'DataModel' && c.configurationName === modelName,
+  );
+  const rootName = fullTree[0]?.solutionName ?? modelName;
+  const isRoot = !dm; // Not in tree → it's the query root.
+
+  if (isRoot) {
+    // Root model: only depth-0 items (base configs + child DataModels).
+    return fullTree.filter(c => (c.derivationDepth ?? 0) === 0) as ErConfigSummary[];
+  }
+
+  const dmDepth = dm.derivationDepth ?? 0;
+  const childDepth = dmDepth + 1;
+  // The DM that owns this DM in the tree (its parent model).
+  const parentDmName = dm.ownerDataModelName ?? rootName;
+
+  // Does this DM have child DataModels of its own?
+  const hasChildDm = fullTree.some(
+    c => c.componentType === 'DataModel'
+      && c.configurationName !== modelName
+      && c.ownerDataModelName === modelName,
+  );
+
+  // Does this DM have any directly-owned non-DataModel content?
+  // (i.e. items whose ownerDataModelName was set to this DM during
+  // the tree walk — meaning they sit under this DM in DerivedSolutions)
+  const hasDirectContent = fullTree.some(
+    c => c.ownerDataModelName === modelName && c.componentType !== 'DataModel',
+  );
+
+  return fullTree.filter(c => {
+    // The DM entry itself.
+    if (c.configurationName === modelName && c.componentType === 'DataModel') return true;
+
+    // Items directly owned by this model (tree-walk attribution).
+    if (c.ownerDataModelName === modelName) {
+      // DMs with child DMs: restrict non-DM items to childDepth
+      // (deeper items belong to child DMs, reachable via drill-in).
+      if (hasChildDm && c.componentType !== 'DataModel') {
+        return (c.derivationDepth ?? 0) === childDepth;
+      }
+      return true;
+    }
+
+    // Leaf DMs WITHOUT any direct content (e.g. "Asl Bank statement
+    // model" — its formats derive from the root's base formats so
+    // the tree-walk never attributes them to this DM). Fall back to
+    // parent-DM-owned items at childDepth. This is imprecise but the
+    // API doesn't expose the model-reference link.
+    if (!hasDirectContent
+        && c.componentType !== 'DataModel'
+        && c.ownerDataModelName === parentDmName
+        && (c.derivationDepth ?? 0) === childDepth) {
+      return true;
+    }
+
+    return false;
+  }) as ErConfigSummary[];
+}
+
+/**
  * Merge every DataModel summary from `list` into `prev`, keyed by
  * `componentKey`. Non-mutating — returns a new Map when anything was
  * added, the same Map otherwise (so React's `setState` can bail out).
@@ -1702,6 +1854,51 @@ function rememberDataModels(
     next.set(key, c);
   }
   return next ?? prev;
+}
+
+/**
+ * Extract DataModel components from a `listComponents` response and
+ * merge them into the solutions array shown in the left panel. This
+ * ensures nested DataModels discovered while browsing appear as
+ * top-level navigable entries alongside root DataModels.
+ *
+ * `rootSolutionName` is the root DataModel whose sub-tree these
+ * components belong to — propagated so `handlePickSolution` can
+ * always call `listComponents(root)` and get the full tree.
+ *
+ * Returns the same array reference when nothing changed.
+ */
+function promoteDmToSolutions(
+  prev: ErSolutionSummary[],
+  components: readonly ErConfigSummary[],
+  rootSolutionName: string,
+): ErSolutionSummary[] {
+  const existing = new Set(prev.map(s => s.solutionName));
+  const toAdd: ErSolutionSummary[] = [];
+  for (const c of components) {
+    if (c.componentType !== 'DataModel') continue;
+    const name = c.configurationName;
+    if (!name || existing.has(name)) continue;
+    existing.add(name);
+    toAdd.push({
+      solutionName: name,
+      publisher: undefined,
+      version: c.version,
+      displayName: undefined,
+      componentType: 'DataModel',
+      // Point back to the root so handlePickSolution fetches the full tree.
+      rootSolutionName: name === rootSolutionName ? undefined : rootSolutionName,
+    });
+  }
+  if (toAdd.length === 0) return prev;
+  const merged = [...prev, ...toAdd];
+  merged.sort((a, b) =>
+    (a.solutionName ?? '').localeCompare(b.solutionName ?? '', undefined, {
+      sensitivity: 'base',
+      numeric: true,
+    }),
+  );
+  return merged;
 }
 
 /**

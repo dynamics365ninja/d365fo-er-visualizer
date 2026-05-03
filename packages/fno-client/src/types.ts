@@ -34,6 +34,16 @@ export interface ErSolutionSummary {
    * roots in the left panel).
    */
   componentType?: ErComponentType;
+  /**
+   * For derived DataModels discovered inside a seed probe, the name
+   * of the root (seed) DataModel whose sub-tree contained this entry.
+   * `undefined` for root DataModels themselves.
+   *
+   * The UI uses this to always call `listComponents(rootSolutionName)`
+   * so the full tree (including sibling formats / mappings) is fetched
+   * even when the user clicks a country-specific derived model.
+   */
+  rootSolutionName?: string;
 }
 
 export type ErComponentType = 'DataModel' | 'ModelMapping' | 'Format' | 'Unknown';
@@ -90,6 +100,45 @@ export interface ErConfigSummary {
    * derived-model references in the bindings resolve to nothing.
    */
   ancestorDataModelGuids?: string[];
+  /**
+   * Name of the configuration that is the direct parent of this node
+   * in the ERSolutionTable hierarchy. For a root-level child this is
+   * the DataModel that was queried; for a derived format/mapping it
+   * is the base format/mapping it derives from.
+   */
+  parentConfigName?: string;
+  /**
+   * Number of derivation steps from the root tree level. Direct
+   * children of the queried root are depth 0; their DerivedSolutions
+   * are depth 1, etc. Used to match formats/mappings to DataModels
+   * at the same derivation depth (e.g. depth-1 formats belong to the
+   * depth-1 DataModel).
+   */
+  derivationDepth?: number;
+  /**
+   * Name of the nearest DataModel ancestor in the ER derivation tree.
+   * For depth-0 Format / ModelMapping nodes this is the root DataModel
+   * that was queried (i.e. the seed). For nodes nested under a derived
+   * DataModel in DerivedSolutions, this is that derived DataModel's
+   * name. DataModel nodes themselves get the name of the DataModel
+   * they derive from (or the root if they are depth-0).
+   * Used by scopeComponentsToModel for precise ownership filtering.
+   */
+  ownerDataModelName?: string;
+  /**
+   * GUID of the DataModel that this Format / ModelMapping *references*
+   * (i.e. the model whose structure it implements). Extracted from the
+   * `ModelID` / `ModelId` field in the API response. For DataModel
+   * rows this is their own ID and is not set.
+   *
+   * This is different from `parentDataModelGuid` which is determined
+   * by the tree-walk (nearest DataModel ancestor in the ERSolutionTable
+   * hierarchy). `referencedModelGuid` is the *actual* model the
+   * component references — critical when a derived format (e.g.
+   * Asl MT940) sits under its base format (MT940) in DerivedSolutions
+   * but references a derived DataModel (Asl BS model).
+   */
+  referencedModelGuid?: string;
   /**
    * Extra `_dataContainerDescriptorName` candidates to try when
    * downloading a ModelMapping via the
