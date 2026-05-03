@@ -278,14 +278,14 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     }
     markUsed(activeProfile.id);
     setConnState({ kind: 'connected', account: auth.account?.username ?? 'unknown' });
-    // Phase 2 — list ER solutions via OData.
+    // Phase 2 — list ER solutions via custom services.
     setLoadingSolutions(true);
     try {
       const list = await fnoSession.listSolutions(activeProfile);
       list.sort((a, b) => (a.solutionName ?? '').localeCompare(b.solutionName ?? '', undefined, { sensitivity: 'base', numeric: true }));
       // Dev diagnostic: always log so we can inspect shape in DevTools.
       console.info(
-        '[fno-odata] listSolutions returned',
+        '[fno] listSolutions returned',
         list.length,
         'solutions',
         list.map(s => s.solutionName),
@@ -304,7 +304,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         });
       }
     } catch (err) {
-      console.error('[fno-odata] listSolutions failed', err);
+      console.error('[fno] listSolutions failed', err);
       const detail = describeHttpError(err);
       pushToast({ kind: 'error', message: t.fnoLoadingFailed(detail) });
     } finally {
@@ -1440,6 +1440,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           <div className={styles.listBox}>
             <div className={styles.listHeader}>
               <Body1Strong>{t.fnoSolutions}</Body1Strong>
+              {!loadingSolutions && solutions.length > 0 && (
+                <Caption1 style={{ marginLeft: 6, opacity: 0.7 }}>({solutions.filter(s => s.componentType === 'DataModel' || s.componentType === 'Unknown').length})</Caption1>
+              )}
               {loadingSolutions && <Spinner size="tiny" />}
             </div>
             <div style={{ padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalM}` }}>

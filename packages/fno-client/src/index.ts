@@ -13,6 +13,6 @@ export {
   extractServiceNames,
   ER_SERVICES,
   ER_SERVICE_OPS,
-  escapeServiceString as escapeODataString,
+  escapeServiceString,
   decodeXmlPayload,
 } from './er-services';

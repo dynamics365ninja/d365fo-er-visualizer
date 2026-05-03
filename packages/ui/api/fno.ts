@@ -1,7 +1,7 @@
 /**
  * F&O proxy running on Vercel Edge.
  *
- * Browser SPA cannot call D365 F&O OData directly because F&O does not send
+ * Browser SPA cannot call D365 F&O directly because F&O does not send
  * CORS headers. This function forwards the request server-side, preserving
  * the caller's bearer token, then returns the response with permissive CORS
  * headers so the SPA can read it.

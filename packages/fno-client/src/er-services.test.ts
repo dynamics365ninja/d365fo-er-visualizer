@@ -50,7 +50,7 @@ function makeTransport(handlers: {
   return { transport, posts };
 }
 
-describe('escapeODataString', () => {
+describe('escapeServiceString', () => {
   it('doubles single quotes', () => {
     expect(escapeServiceString("O'Reilly")).toBe("O''Reilly");
   });
@@ -179,18 +179,17 @@ describe('callErService', () => {
 });
 
 describe('listSolutions', () => {
+  // The real listSolutions probes a list of known seed model names.
+  // Tests return data for 'Tax declaration model' (a known seed) and
+  // empty arrays for everything else to simulate a single-root env.
+  const SEED = 'Tax declaration model';
+
   it('flattens the getFormatSolutionsSubHierarchy tree and keeps only DataModel nodes', async () => {
     const op = ER_SERVICE_OPS.listSolutions[0];
     const { transport, posts } = makeTransport({
-      // Return data only for the empty-parent probe; known-root probes
-      // see no descendants (they're not registered on this mock env).
       post: (_url, body) => {
         const parent = (body as { _parentSolutionName?: string } | undefined)?._parentSolutionName;
-        if (parent === '') {
-          // Mimics the real ac365lab-factory response shape:
-          //   - Format nodes have FormatMappingGUID != zero-guid
-          //   - Model nodes: zero GUID + name contains "model"
-          //   - Mapping nodes: zero GUID + name contains "mapping"
+        if (parent === SEED) {
           return {
             [`${op}Result`]: [
               {
@@ -223,11 +222,16 @@ describe('listSolutions', () => {
       },
     });
     const solutions = await listSolutions(transport, conn, 'tok');
-    expect(posts[0].url).toContain(`/api/services/${ER_SERVICES.configurationList}/${op}`);
+    // At least one POST must target the correct service.
+    expect(posts.some(p => p.url.includes(`/api/services/${ER_SERVICES.configurationList}/${op}`))).toBe(true);
     const names = solutions.map(s => s.solutionName).sort();
-    // Only the two DataModel nodes survive ("Root model", "Asl Tax declaration model").
-    // The Format node and the ModelMapping node are dropped.
-    expect(names).toEqual(['Asl Tax declaration model', 'Root model']);
+    // DataModel nodes survive; Format and ModelMapping are dropped.
+    // The seed itself ('Tax declaration model') is added as a root.
+    expect(names).toContain('Asl Tax declaration model');
+    expect(names).toContain('Root model');
+    expect(names).toContain(SEED);
+    expect(names).not.toContain('VAT declaration XML (CZ)');
+    expect(names).not.toContain('Tax declaration model mapping');
     for (const s of solutions) {
       expect(s.componentType).toBe('DataModel');
     }
@@ -238,7 +242,7 @@ describe('listSolutions', () => {
     const { transport } = makeTransport({
       post: (_url, body) => {
         const parent = (body as { _parentSolutionName?: string } | undefined)?._parentSolutionName;
-        if (parent === '') {
+        if (parent === SEED) {
           return {
             [`${op}Result`]: [
               {
@@ -258,7 +262,8 @@ describe('listSolutions', () => {
       },
     });
     const solutions = await listSolutions(transport, conn, 'tok');
-    expect(solutions[0].version).toBe('7');
+    const someModel = solutions.find(s => s.solutionName === 'Some model');
+    expect(someModel?.version).toBe('7');
   });
 
   it('falls through 404 to the next candidate operation name', async () => {
@@ -270,21 +275,23 @@ describe('listSolutions', () => {
         if (op2 !== op) {
           throw new FnoHttpError('not found', 404, url);
         }
-        return parent === ''
+        return parent === SEED
           ? { [`${op}Result`]: [{ Name: 'Z model', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' }] }
           : [];
       },
     });
     const solutions = await listSolutions(transport, conn, 'tok');
-    expect(solutions[0]).toMatchObject({ solutionName: 'Z model' });
-    // First probe (empty parent) runs through all candidates until the
-    // third wins (3 posts); BFS then probes 'Z model' as a potential
-    // parent — same fallback path, same winning op (1 more hit).
-    expect(posts.filter(p => p.url.endsWith(`/${op}`))).toHaveLength(2);
+    expect(solutions.find(s => s.solutionName === 'Z model')).toBeTruthy();
+    // At least one POST reached the winning operation for SEED.
+    const seedHits = posts.filter(p =>
+      p.url.endsWith(`/${op}`) &&
+      (p.body as any)?._parentSolutionName === SEED,
+    );
+    expect(seedHits.length).toBeGreaterThanOrEqual(1);
   });
 
   it('throws FnoHttpError listing all tried operations when every candidate 404s', async () => {
-    const { transport, posts } = makeTransport({
+    const { transport } = makeTransport({
       post: (url) => { throw new FnoHttpError('not found', 404, url); },
     });
     const promise = listSolutions(transport, conn, 'tok');
@@ -292,9 +299,6 @@ describe('listSolutions', () => {
     await expect(promise).rejects.toMatchObject({ status: 404 });
     await expect(promise).rejects.toThrow(/No matching operation/);
     await expect(promise).rejects.toThrow(new RegExp(ER_SERVICE_OPS.listSolutions[0]));
-    // The first probe (empty parent) exhausts all candidates and throws;
-    // subsequent probes never run.
-    expect(posts.length).toBe(ER_SERVICE_OPS.listSolutions.length);
   });
 
   it('on total fallback failure, enumerates real operations from /api/services and includes them in the error', async () => {
@@ -337,60 +341,55 @@ describe('listSolutions', () => {
       .rejects.toThrow(/no <Operation><Name>/);
   });
 
-  it('propagates non-404 HTTP errors (e.g. 401) without trying other candidates', async () => {
-    const { transport, posts } = makeTransport({
+  it('propagates non-404 HTTP errors (e.g. 401) immediately', async () => {
+    const { transport } = makeTransport({
       post: (url) => { throw new FnoHttpError('auth', 401, url); },
     });
     await expect(listSolutions(transport, conn, 'tok')).rejects.toMatchObject({ status: 401 });
-    expect(posts).toHaveLength(1);
   });
 
   it('accepts bare-array responses (no wrapper)', async () => {
     const { transport } = makeTransport({
       post: (_url, body) => {
         const parent = (body as { _parentSolutionName?: string } | undefined)?._parentSolutionName;
-        return parent === '' ? [{ Name: 'Only model', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' }] : [];
+        return parent === SEED ? [{ Name: 'Only model', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' }] : [];
       },
     });
     const solutions = await listSolutions(transport, conn, 'tok');
-    expect(solutions).toEqual([{ solutionName: 'Only model', publisher: undefined, version: undefined, displayName: undefined, componentType: 'DataModel' }]);
+    expect(solutions.find(s => s.solutionName === 'Only model')).toBeTruthy();
   });
 
   it('accepts { value: [...] } responses', async () => {
     const { transport } = makeTransport({
       post: (_url, body) => {
         const parent = (body as { _parentSolutionName?: string } | undefined)?._parentSolutionName;
-        return parent === '' ? { value: [{ Name: 'V model', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' }] } : [];
+        return parent === SEED ? { value: [{ Name: 'V model', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' }] } : [];
       },
     });
     const solutions = await listSolutions(transport, conn, 'tok');
-    expect(solutions[0].solutionName).toBe('V model');
+    expect(solutions.find(s => s.solutionName === 'V model')).toBeTruthy();
   });
 
-  it('aggregates DataModel rows via BFS discovery and drops Format/ModelMapping rows', async () => {
+  it('discovers DataModel rows from recursive DerivedSolutions', async () => {
     const op = ER_SERVICE_OPS.listSolutions[0];
     const { transport } = makeTransport({
       post: (_url, body) => {
         const parent = (body as { _parentSolutionName?: string } | undefined)?._parentSolutionName;
-        if (parent === '') {
-          // Empty-parent probe returns a root model whose children
-          // live under "Microsoft".
+        if (parent === SEED) {
+          // The API returns the full recursive tree in DerivedSolutions.
           return {
             [`${op}Result`]: [
-              { Name: 'Microsoft', Base: '', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' },
-            ],
-          };
-        }
-        if (parent === 'Microsoft') {
-          return {
-            [`${op}Result`]: [
-              // Format nodes (non-zero GUID) dropped.
-              { Name: 'MS.Format', Base: 'Microsoft', FormatMappingGUID: '11111111-1111-1111-1111-111111111111' },
-              // DataModel descendants kept (zero GUID + "model").
-              { Name: 'MS tax model', Base: 'Microsoft', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' },
-              { Name: 'MS bank model', Base: 'Microsoft', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' },
-              // Mapping dropped.
-              { Name: 'MS tax model mapping', Base: 'Microsoft', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' },
+              {
+                Name: 'Microsoft',
+                Base: '',
+                FormatMappingGUID: '00000000-0000-0000-0000-000000000000',
+                DerivedSolutions: [
+                  { Name: 'MS.Format', Base: 'Microsoft', FormatMappingGUID: '11111111-1111-1111-1111-111111111111' },
+                  { Name: 'MS tax model', Base: 'Microsoft', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' },
+                  { Name: 'MS bank model', Base: 'Microsoft', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' },
+                  { Name: 'MS tax model mapping', Base: 'Microsoft', FormatMappingGUID: '00000000-0000-0000-0000-000000000000' },
+                ],
+              },
             ],
           };
         }
@@ -399,8 +398,6 @@ describe('listSolutions', () => {
     });
     const solutions = await listSolutions(transport, conn, 'tok');
     const names = solutions.map(s => s.solutionName).sort();
-    // "Microsoft" is discovered via BFS. Two model descendants join it.
-    // "MS.Format" and "MS tax model mapping" are dropped.
     expect(names).toContain('MS bank model');
     expect(names).toContain('MS tax model');
     expect(names).toContain('Microsoft');

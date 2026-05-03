@@ -5781,6 +5781,25 @@ body {
 /* ─── Drop zone above orbs/grid ─── */
 .lp-above { position: relative; z-index: 1; }
 
+/* ─── Mobile: reduce GPU-heavy effects ─── */
+@media (max-width: 768px) {
+  .lp-orb { filter: blur(60px); will-change: transform; }
+  .lp-glass-card {
+    -webkit-backdrop-filter: none !important;
+            backdrop-filter: none !important;
+  }
+}
+
+/* ─── Respect reduced-motion preference ─── */
+@media (prefers-reduced-motion: reduce) {
+  .lp-orb { animation: none !important; }
+  .lp-badge::before { animation: none !important; }
+  .lp-badge-dot { animation: none !important; }
+  .lp-title { animation: none !important; }
+  .lp-glass-card,
+  .lp-glass-card::before { transition: none !important; }
+}
+
 /* ─── Enhanced ConfigExplorer ─────────────────────────────────────────── */
 
 .explorer-chip-row {

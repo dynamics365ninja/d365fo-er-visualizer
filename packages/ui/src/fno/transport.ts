@@ -58,7 +58,7 @@ class BrowserFnoTransport implements FnoTransport {
   /**
    * Browser fetch routed through the Vercel Edge proxy at /api/fno.
    *
-   * F&O SaaS OData endpoints do not send CORS headers, so direct calls from
+   * F&O SaaS endpoints do not send CORS headers, so direct calls from
    * a web origin are blocked. The proxy forwards the bearer token and target
    * URL server-side and returns the response with permissive CORS headers.
    *
