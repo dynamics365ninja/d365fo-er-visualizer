@@ -899,6 +899,21 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
 
 // ─── Format Designer (PRIMARY VIEW) ───
 
+/** Recursively scan all datasources (and their children) for an ImportFormat datasource
+ *  that references the given format GUID (braces stripped, lower-cased). */
+function hasImportFormatDatasource(datasources: any[], normalizedFormatId: string): boolean {
+  for (const ds of datasources) {
+    if (ds.type === 'ImportFormat') {
+      const raw = (ds.importFormatInfo?.formatGuid ?? '').replace(/[{}]/g, '').toLowerCase();
+      if (raw === normalizedFormatId) return true;
+    }
+    if (ds.children?.length > 0 && hasImportFormatDatasource(ds.children, normalizedFormatId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfiguration; configIndex: number; focusNode: any | null }) {
   const fc = config.content as ERFormatContent;
   const fmt = fc.formatVersion.format;
@@ -910,6 +925,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const registry = useAppStore(s => s.registry);
   const treeNodes = useAppStore(s => s.treeNodes);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const configurations = useAppStore(s => s.configurations);
 
   const [filter, setFilter] = useState('');
   const [view, setView] = useState<'structure' | 'bindings' | 'datasources' | 'preview'>('structure');
@@ -917,6 +933,22 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const [structureExpandMode, setStructureExpandMode] = useState<'all' | 'none'>('all');
   const [structureExpandVersion, setStructureExpandVersion] = useState(0);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+
+  // For import formats: find all loaded standalone ModelMapping configs that reference this format
+  const linkedMappings = useMemo(() => {
+    if (fc.direction !== ERDirection.Import) return [];
+    const normalizedFormatId = fmt.id.replace(/[{}]/g, '').toLowerCase();
+    const result: Array<{ name: string; configIdx: number }> = [];
+    configurations.forEach((cfg, idx) => {
+      if (idx === configIndex) return;
+      if (cfg.content.kind !== 'ModelMapping') return;
+      const mm = (cfg.content as ERModelMappingContent).version.mapping;
+      if (hasImportFormatDatasource(mm.datasources ?? [], normalizedFormatId)) {
+        result.push({ name: cfg.solutionVersion.solution.name, configIdx: idx });
+      }
+    });
+    return result;
+  }, [fc.direction, fmt.id, configurations, configIndex]);
 
   useEffect(() => {
     if (!focusNode) return;
@@ -1113,6 +1145,28 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
           {stats.transformations > 0 && <span className="fmt-stat">🔄 {stats.transformations} {t.transforms}</span>}
         </div>
       </div>
+
+      {/* ── Linked Mappings banner (import formats only) ── */}
+      {fc.direction === ERDirection.Import && (
+        <div className="fmt-linked-mappings-bar">
+          <span className="fmt-linked-mappings-label">📥 {t.importLinkedMappingsLabel}:</span>
+          {linkedMappings.length === 0
+            ? <span className="fmt-linked-mappings-empty">{t.importNoLinkedMappings}</span>
+            : linkedMappings.map(lm => (
+                <button
+                  key={lm.configIdx}
+                  className="fmt-linked-mapping-chip"
+                  onClick={() => {
+                    const rootNode = treeNodes[lm.configIdx];
+                    if (rootNode) navigateToTreeNode(rootNode.id);
+                  }}
+                >
+                  {lm.name}
+                </button>
+              ))
+          }
+        </div>
+      )}
 
       {/* ── Toolbar ── */}
       <div className="fmt-toolbar">

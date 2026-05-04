@@ -84,6 +84,7 @@ export interface Translations {
   drillSteps: (n: number) => string;
   back: string;
   closeConfiguration: string;
+  closeAllConfigurations: string;
   openInExplorerAction: string;
   explorerActionShort: string;
   noSelection: string;
@@ -149,6 +150,8 @@ export interface Translations {
   formatDirectionImport: string;
   formatDirectionExport: string;
   formatDirectionUnknown: string;
+  importLinkedMappingsLabel: string;
+  importNoLinkedMappings: string;
   // Status bar
   statusConfigs: (n: number) => string;
   statusConfigsWord: string;
@@ -480,6 +483,7 @@ const cs: Translations = {
   drillSteps: (n: number) => `${n} krok${n === 1 ? '' : n < 5 ? 'y' : 'ů'}`,
   back: 'Zpět',
   closeConfiguration: 'Zavřít konfiguraci',
+  closeAllConfigurations: 'Zavřít vše',
   openInExplorerAction: 'Otevřít v Exploreru',
   explorerActionShort: 'Explorer',
   noSelection: 'Není vybraný žádný prvek.',
@@ -547,6 +551,8 @@ const cs: Translations = {
   formatDirectionImport: 'Import',
   formatDirectionExport: 'Export',
   formatDirectionUnknown: 'Neznámý směr',
+  importLinkedMappingsLabel: 'Mapování na model',
+  importNoLinkedMappings: 'Žádné mapování na model nenačteno',
 
   // Status bar
   statusConfigs: (n: number) => `${n} konfigurace`,
@@ -882,6 +888,7 @@ const en: Translations = {
   drillSteps: (n: number) => `${n} step${n === 1 ? '' : 's'}`,
   back: 'Back',
   closeConfiguration: 'Close configuration',
+  closeAllConfigurations: 'Close all',
   openInExplorerAction: 'Open in Explorer',
   explorerActionShort: 'Explorer',
   noSelection: 'No element selected.',
@@ -946,6 +953,8 @@ const en: Translations = {
   formatDirectionImport: 'Import',
   formatDirectionExport: 'Export',
   formatDirectionUnknown: 'Unknown direction',
+  importLinkedMappingsLabel: 'Model mappings',
+  importNoLinkedMappings: 'No model mappings loaded',
 
   statusConfigs: (n: number) => `${n} configuration${n === 1 ? '' : 's'}`,
   statusConfigsWord: 'configurations',

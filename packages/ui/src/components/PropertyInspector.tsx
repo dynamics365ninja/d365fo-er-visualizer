@@ -122,7 +122,7 @@ function FileProps({ data, showTechnicalDetails }: { data: any; showTechnicalDet
     [t.propName, sol.name],
     [t.propDescription, sol.description ?? '–'],
     [t.propVersion, config.solutionVersion.publicVersionNumber],
-    [t.propVendor, sol.vendor?.name ?? '–'],
+    [t.propVendor, sol.vendor?.name || '–'],
   ];
 
   if (config.content?.kind === 'Format') {

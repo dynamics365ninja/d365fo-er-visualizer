@@ -244,6 +244,7 @@ export interface AppState {
   // Actions
   loadXmlFile: (xml: string, filePath: string) => void;
   removeConfiguration: (index: number) => void;
+  removeAllConfigurations: () => void;
   selectNode: (nodeId: string | null) => void;
   openTab: (id: string, label: string, configIndex: number) => void;
   openDrillDownTab: (expression: string, configIndex: number, elementName?: string) => void;
@@ -431,6 +432,26 @@ function findNodeById(nodes: TreeNode[], id: string): TreeNode | null {
   return null;
 }
 
+/**
+ * Normalise a solution GUID to a comparable lowercase string without
+ * surrounding curly braces (both "{guid}" and "guid" inputs work).
+ */
+function normalizeSolutionId(id: string | undefined): string {
+  return (id ?? '').replace(/^\{|\}$/g, '').toLowerCase();
+}
+
+/**
+ * Parse a configuration version string to a single comparable integer.
+ * Handles both simple integers ("68") and multi-part versions ("1.68.1234").
+ * Returns 0 when the version is empty or unparseable so that a config
+ * without version info is treated as oldest and can be replaced.
+ */
+function parseVersionForComparison(version: string | undefined | null): number {
+  if (!version) return 0;
+  const match = version.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 0;
+}
+
 function buildDerivedState(configurations: ERConfiguration[]): { registry: GUIDRegistry; treeNodes: TreeNode[]; warnings: ConfigWarning[] } {
   const registry = new GUIDRegistry();
   for (const config of configurations) {
@@ -469,7 +490,8 @@ function collectConfigurationWarnings(configurations: ERConfiguration[]): Config
 
   configurations.forEach((config, ci) => {
     if (config.content.kind === 'Format') {
-      const fmtMap = (config.content as ERFormatContent).formatMappingVersion.formatMapping;
+      const fc = config.content as ERFormatContent;
+      const fmtMap = fc.formatMappingVersion.formatMapping;
       const dsNames = new Set<string>();
       const walkDs = (list: any[]) => {
         for (const d of list) {
@@ -477,6 +499,12 @@ function collectConfigurationWarnings(configurations: ERConfiguration[]): Config
           if (d.children) walkDs(d.children);
         }
       };
+      // Include datasources from embedded model mapping versions so that
+      // format bindings referencing model-mapping datasources are not
+      // incorrectly flagged as referencing unknown datasources.
+      for (const embVersion of fc.embeddedModelMappingVersions) {
+        walkDs(embVersion.mapping.datasources);
+      }
       walkDs(fmtMap.datasources);
       // Count bindings whose expression root is unknown datasource.
       // Skip known ER expression functions, boolean/null literals, and operators.
@@ -568,9 +596,40 @@ export const useAppStore = create<AppState>((set, get) => ({
       // a duplicate. Prevents React "two children with the same key"
       // warnings and keeps the tree view tidy.
       const existingIdx = state.configurations.findIndex(c => c.filePath === filePath);
-      const newConfigs = existingIdx >= 0
-        ? state.configurations.map((c, i) => (i === existingIdx ? config : c))
-        : [...state.configurations, config];
+
+      // Secondary deduplication by solution GUID + kind: when the same
+      // logical configuration appears at a different path (e.g. two versions
+      // loaded from files, or a model auto-fetched by F&O at a version the
+      // user already has at a newer path), keep only the latest version so
+      // that the explorer always shows a single, coherent version set.
+      const newSolutionId = normalizeSolutionId(config.solutionVersion.solution.id);
+      const existingByGuidIdx = existingIdx < 0 && newSolutionId
+        ? state.configurations.findIndex(c =>
+            c.content.kind === config.content.kind
+            && normalizeSolutionId(c.solutionVersion.solution.id) === newSolutionId,
+          )
+        : -1;
+
+      let newConfigs: ERConfiguration[];
+      if (existingIdx >= 0) {
+        // Same path — always replace (user explicitly reloaded this file).
+        newConfigs = state.configurations.map((c, i) => (i === existingIdx ? config : c));
+      } else if (existingByGuidIdx >= 0) {
+        const existingVersion = parseVersionForComparison(
+          state.configurations[existingByGuidIdx].solutionVersion.publicVersionNumber,
+        );
+        const newVersion = parseVersionForComparison(config.solutionVersion.publicVersionNumber);
+        if (newVersion >= existingVersion) {
+          // New config is the same version or newer — replace in-place so
+          // that configIndex references in openTabs / selectedNodeId stay valid.
+          newConfigs = state.configurations.map((c, i) => (i === existingByGuidIdx ? config : c));
+        } else {
+          // Existing config is already newer — silently skip to keep the latest.
+          return;
+        }
+      } else {
+        newConfigs = [...state.configurations, config];
+      }
 
       const { registry, treeNodes, warnings } = buildDerivedState(newConfigs);
 
@@ -695,6 +754,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       navigationHistory,
       navigationForward: [],
       canNavigateBack: navigationHistory.length > 0,
+      canNavigateForward: false,
+    });
+  },
+
+  removeAllConfigurations: () => {
+    const { registry, treeNodes, warnings } = buildDerivedState([]);
+    set({
+      configurations: [],
+      registry,
+      treeNodes,
+      warnings,
+      openTabs: [],
+      activeTabId: null,
+      selectedNodeId: null,
+      selectedNode: null,
+      navigationHistory: [],
+      navigationForward: [],
+      canNavigateBack: false,
       canNavigateForward: false,
     });
   },
@@ -2377,14 +2454,7 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
     children.push(...(inner.children ?? []));
   }
 
-  // Build display name with version for ModelMapping
-  const displayVersion = config.solutionVersion.publicVersionNumber
-    || (config.content.kind === 'ModelMapping'
-      ? String((config.content as ERModelMappingContent).version.number || '')
-      : '');
-  const displayName = displayVersion
-    ? `${sol.name}  (v${displayVersion})`
-    : sol.name;
+  const displayName = sol.name;
 
   if (config.content.kind === 'Format') {
     const fc = config.content as ERFormatContent;
