@@ -21,15 +21,116 @@ import {
   DocumentFilled,
   TextExpandRegular,
   TextCollapseRegular,
+  DismissSquareMultipleRegular,
 } from '@fluentui/react-icons';
 import { locale, t } from '../i18n';
 import { useAppStore, type TreeNode } from '../state/store';
 import { ERDirection } from '@er-visualizer/core';
+import type { ERConfiguration, ERModelMappingContent } from '@er-visualizer/core';
 import { loadBrowserFiles } from '../utils/file-loading';
 import { ArrowSyncRegular } from '@fluentui/react-icons';
 
 type ConfigKind = 'DataModel' | 'ModelMapping' | 'Format';
 type SortMode = 'loadOrder' | 'nameAsc' | 'nameDesc';
+
+// ─── Model hierarchy helpers ─────────────────────────────────────────────────
+
+/** Normalize a solution GUID to lowercase without surrounding curly braces. */
+function normGuid(g: string | undefined): string {
+  return (g ?? '').replace(/^\{|\}$/g, '').toLowerCase();
+}
+
+/**
+ * Returns the best version string to display for a configuration.
+ * Priority:
+ *  1. ModelMapping: internal version.number from the XML body (most precise)
+ *  2. publicVersionNumber from the ERSolutionVersion envelope
+ *  3. solutionVersion.number  (integer attribute, always present as last resort)
+ */
+function getBestVersion(cfg: ERConfiguration | undefined): string | undefined {
+  if (!cfg) return undefined;
+  if (cfg.content.kind === 'ModelMapping') {
+    const num = (cfg.content as ERModelMappingContent).version.number;
+    if (num > 0) return String(num);
+  }
+  if (cfg.solutionVersion.publicVersionNumber) return cfg.solutionVersion.publicVersionNumber;
+  if (cfg.solutionVersion.number > 0) return String(cfg.solutionVersion.number);
+  return undefined;
+}
+
+interface ExplorerModelGroup {
+  configIdx: number;
+  /** Direct non-DataModel children (mappings / formats). */
+  children: number[];
+  /** Derived DataModel children. */
+  subModels: ExplorerModelGroup[];
+}
+
+/**
+ * Build a model-centric hierarchy from the loaded configurations.
+ * Each DataModel acts as a container for its derived models and for
+ * the ModelMappings / Formats whose `baseSolutionId` matches it.
+ * Returns root model groups + orphaned non-DataModel indices that
+ * have no matching parent model in the loaded set.
+ */
+function buildExplorerModelGroups(
+  configurations: ERConfiguration[],
+): { roots: ExplorerModelGroup[]; orphans: number[] } {
+  // Map normalized solution ID → config index (DataModels only)
+  const modelIdToIdx = new Map<string, number>();
+  configurations.forEach((cfg, idx) => {
+    if (cfg.content.kind !== 'DataModel') return;
+    const id = normGuid(cfg.solutionVersion.solution.id);
+    if (id) modelIdToIdx.set(id, idx);
+  });
+
+  const childrenOf = new Map<number, number[]>();   // modelIdx → non-DM children
+  const subModelsOf = new Map<number, number[]>();  // modelIdx → derived DM children
+  const orphans: number[] = [];
+
+  configurations.forEach((cfg, idx) => {
+    const parentId = normGuid(cfg.solutionVersion.solution.baseSolutionId);
+    const parentIdx = parentId ? modelIdToIdx.get(parentId) : undefined;
+    if (cfg.content.kind === 'DataModel') {
+      if (parentIdx != null) {
+        if (!subModelsOf.has(parentIdx)) subModelsOf.set(parentIdx, []);
+        subModelsOf.get(parentIdx)!.push(idx);
+      }
+      return;
+    }
+    if (parentIdx != null) {
+      if (!childrenOf.has(parentIdx)) childrenOf.set(parentIdx, []);
+      childrenOf.get(parentIdx)!.push(idx);
+    } else {
+      orphans.push(idx);
+    }
+  });
+
+  const buildGroup = (modelIdx: number, visited: Set<number>): ExplorerModelGroup => {
+    visited.add(modelIdx);
+    return {
+      configIdx: modelIdx,
+      children: childrenOf.get(modelIdx) ?? [],
+      subModels: (subModelsOf.get(modelIdx) ?? [])
+        .filter(idx => !visited.has(idx))
+        .map(idx => buildGroup(idx, visited)),
+    };
+  };
+
+  const rootModelIdxs = configurations
+    .map((cfg, idx) => ({ cfg, idx }))
+    .filter(({ cfg }) => cfg.content.kind === 'DataModel')
+    .filter(({ idx }) => {
+      const parentId = normGuid(configurations[idx].solutionVersion.solution.baseSolutionId);
+      return !parentId || !modelIdToIdx.has(parentId);
+    })
+    .map(({ idx }) => idx);
+
+  return {
+    roots: rootModelIdxs.map(idx => buildGroup(idx, new Set())),
+    orphans,
+  };
+}
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -135,6 +236,7 @@ export function ConfigExplorer() {
   const selectedNodeId = useAppStore(s => s.selectedNodeId);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const removeConfiguration = useAppStore(s => s.removeConfiguration);
+  const removeAllConfigurations = useAppStore(s => s.removeAllConfigurations);
   const selectNode = useAppStore(s => s.selectNode);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const explorerExpandCommand = useAppStore(s => s.explorerExpandCommand);
@@ -243,9 +345,24 @@ export function ConfigExplorer() {
       .filter(group => group.nodes.length > 0);
   }, [filteredTreeNodes, kindFilter, sortNodes]);
 
+  // Model-centric hierarchy (used when DataModel configs are loaded).
+  const hasModels = configurations.some(c => c.content.kind === 'DataModel');
+  const modelGroups = useMemo(
+    () => buildExplorerModelGroups(configurations),
+    [configurations],
+  );
+  // Fast lookup: which top-level node IDs pass the search filter.
+  const filteredNodeIds = useMemo(
+    () => new Set(filteredTreeNodes.map(n => n.id)),
+    [filteredTreeNodes],
+  );
+
   const totalVisible = useMemo(
-    () => groupedTreeNodes.reduce((sum, g) => sum + g.nodes.length, 0),
-    [groupedTreeNodes],
+    () => configurations.filter((cfg, idx) => {
+      if (!kindFilter.has(cfg.content.kind as ConfigKind)) return false;
+      return treeNodes[idx] ? filteredNodeIds.has(treeNodes[idx].id) : false;
+    }).length,
+    [configurations, treeNodes, filteredNodeIds, kindFilter],
   );
   const totalAll = kindCounts.DataModel + kindCounts.ModelMapping + kindCounts.Format;
   const isFiltering = filterQuery.trim().length > 0 || kindFilter.size < 3;
@@ -395,6 +512,14 @@ export function ConfigExplorer() {
               title={t.collapse}
               onClick={() => { setExpandMode('none'); setExpandVersion(v => v + 1); }}
             />
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<DismissSquareMultipleRegular />}
+              aria-label={t.closeAllConfigurations}
+              title={t.closeAllConfigurations}
+              onClick={removeAllConfigurations}
+            />
           </div>
         </div>
 
@@ -408,6 +533,53 @@ export function ConfigExplorer() {
         <div className="explorer-empty-state">
           <p>{t.noResults}</p>
         </div>
+      ) : hasModels ? (
+        // ── Hierarchical model view ──────────────────────────────────────
+        <>
+          {modelGroups.roots.map(group => (
+            <ModelGroupSection
+              key={group.configIdx}
+              group={group}
+              depth={0}
+              configurations={configurations}
+              treeNodes={treeNodes}
+              filteredNodeIds={filteredNodeIds}
+              kindFilter={kindFilter}
+              selectedNodeId={selectedNodeId}
+              selectedPathIds={selectedPathIds}
+              showTechnicalDetails={showTechnicalDetails}
+              expandMode={expandMode}
+              expandVersion={expandVersion}
+              onSelect={selectNode}
+              onNavigate={navigateToTreeNode}
+              onRemove={removeConfiguration}
+            />
+          ))}
+          {modelGroups.orphans
+            .filter(idx => kindFilter.has(configurations[idx]?.content.kind as ConfigKind))
+            .filter(idx => filteredNodeIds.has(treeNodes[idx]?.id ?? ''))
+            .map(idx => {
+              const node = treeNodes[idx];
+              const cfg = configurations[idx];
+              return (
+                <TreeNodeRow
+                  key={node.id}
+                  node={node}
+                  depth={0}
+                  selectedId={selectedNodeId}
+                  selectedPathIds={selectedPathIds}
+                  showTechnicalDetails={showTechnicalDetails}
+                  version={getBestVersion(cfg)}
+                  onSelect={selectNode}
+                  onNavigate={navigateToTreeNode}
+                  expandMode={expandMode}
+                  expandVersion={expandVersion}
+                  onDoubleClick={n => { if (n.configIndex != null) navigateToTreeNode(n.id); }}
+                  onCloseConfiguration={n => { if (n.configIndex != null) removeConfiguration(n.configIndex); }}
+                />
+              );
+            })}
+        </>
       ) : groupedTreeNodes.length > 0 ? groupedTreeNodes.map(group => {
           const isCollapsed = collapsedGroups.has(group.kind);
           return (
@@ -430,7 +602,7 @@ export function ConfigExplorer() {
                 <div className="explorer-kind-group-body">
                   {group.nodes.map(node => {
                     const cfg = node.configIndex != null ? configurations[node.configIndex] : undefined;
-                    const version = cfg?.solutionVersion?.publicVersionNumber;
+                    const version = getBestVersion(cfg);
                     return (
                       <TreeNodeRow
                         key={node.id}
@@ -638,5 +810,126 @@ function ExplorerKindChip({
       <span className="explorer-kind-chip-label">{label}</span>
       <span className="explorer-kind-chip-count">{count}</span>
     </button>
+  );
+}
+
+// ─── Hierarchical model group section ───
+
+interface ModelGroupSectionProps {
+  group: ExplorerModelGroup;
+  depth: number;
+  configurations: ERConfiguration[];
+  treeNodes: TreeNode[];
+  filteredNodeIds: Set<string>;
+  kindFilter: Set<ConfigKind>;
+  selectedNodeId: string | null;
+  selectedPathIds: Set<string>;
+  showTechnicalDetails: boolean;
+  expandMode: 'default' | 'all' | 'none';
+  expandVersion: number;
+  onSelect: (id: string) => void;
+  onNavigate: (id: string) => void;
+  onRemove: (index: number) => void;
+}
+
+function ModelGroupSection({
+  group,
+  depth,
+  configurations,
+  treeNodes,
+  filteredNodeIds,
+  kindFilter,
+  selectedNodeId,
+  selectedPathIds,
+  showTechnicalDetails,
+  expandMode,
+  expandVersion,
+  onSelect,
+  onNavigate,
+  onRemove,
+}: ModelGroupSectionProps) {
+  const modelNode = treeNodes[group.configIdx];
+  if (!modelNode) return null;
+
+  const modelVisible = kindFilter.has('DataModel') && filteredNodeIds.has(modelNode.id);
+  const modelCfg = configurations[group.configIdx];
+
+  const visibleChildren = group.children.filter(idx => {
+    const cfg = configurations[idx];
+    if (!cfg) return false;
+    if (!kindFilter.has(cfg.content.kind as ConfigKind)) return false;
+    return filteredNodeIds.has(treeNodes[idx]?.id ?? '');
+  });
+
+  // Check if any nested content is visible before rendering the group at all.
+  const hasVisible = modelVisible || visibleChildren.length > 0 || group.subModels.length > 0;
+  if (!hasVisible) return null;
+
+  const sharedRowProps = (idx: number) => {
+    const cfg = configurations[idx];
+    return {
+      depth: 0 as const,
+      selectedId: selectedNodeId,
+      selectedPathIds,
+      showTechnicalDetails,
+      version: getBestVersion(cfg),
+      onSelect,
+      onNavigate,
+      expandMode,
+      expandVersion,
+      onDoubleClick: (n: TreeNode) => { if (n.configIndex != null) onNavigate(n.id); },
+      onCloseConfiguration: (n: TreeNode) => { if (n.configIndex != null) onRemove(n.configIndex); },
+    };
+  };
+
+  // Indent child items with a subtle left border guide. The model node
+  // itself sits flush with the current indent level.
+  const childIndent: React.CSSProperties = depth === 0
+    ? { paddingLeft: 12, borderLeft: '2px solid var(--border-subtle, rgba(128,128,128,0.2))', marginLeft: 4 }
+    : { paddingLeft: 8, borderLeft: '2px solid var(--border-subtle, rgba(128,128,128,0.2))', marginLeft: 4 };
+
+  return (
+    <div className="explorer-model-hierarchy-group">
+      {modelVisible && (
+        <TreeNodeRow
+          key={modelNode.id}
+          node={modelNode}
+          {...sharedRowProps(group.configIdx)}
+        />
+      )}
+      {(visibleChildren.length > 0 || group.subModels.length > 0) && (
+        <div style={childIndent}>
+          {visibleChildren.map(idx => {
+            const node = treeNodes[idx];
+            return (
+              <TreeNodeRow
+                key={node.id}
+                node={node}
+                {...sharedRowProps(idx)}
+              />
+            );
+          })}
+          {group.subModels.map(subGroup => (
+            <ModelGroupSection
+              key={subGroup.configIdx}
+              group={subGroup}
+              depth={depth + 1}
+              configurations={configurations}
+              treeNodes={treeNodes}
+              filteredNodeIds={filteredNodeIds}
+              kindFilter={kindFilter}
+              selectedNodeId={selectedNodeId}
+              selectedPathIds={selectedPathIds}
+              showTechnicalDetails={showTechnicalDetails}
+              expandMode={expandMode}
+              expandVersion={expandVersion}
+              onSelect={onSelect}
+              onNavigate={onNavigate}
+              onRemove={onRemove}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

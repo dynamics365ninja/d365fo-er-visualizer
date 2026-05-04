@@ -818,7 +818,7 @@ export async function listComponents(
   } catch { /* non-fatal — fall back to per-call discovery */ }
 
   /** Fetch direct children of `parentName` from the ER service. */
-  const fetchChildren = async (parentName: string): Promise<RawErComponentRow[]> => {
+  const fetchChildren = async (parentName: string): Promise<{ rows: RawErComponentRow[]; rawTopLevelKeys: string[] }> => {
     try {
       if (confirmedOp) {
         const raw = await callErService<unknown>(
@@ -826,25 +826,50 @@ export async function listComponents(
           ER_SERVICES.configurationList, confirmedOp,
           { _parentSolutionName: parentName }, signal,
         );
-        return unwrapServiceArray<RawErComponentRow>(raw, confirmedOp);
+        const rawTopLevelKeys = raw && typeof raw === 'object' && !Array.isArray(raw)
+          ? Object.keys(raw as Record<string, unknown>)
+          : [];
+        return { rows: unwrapServiceArray<RawErComponentRow>(raw, confirmedOp), rawTopLevelKeys };
       }
       const { operation, raw } = await callErServiceWithFallback<unknown>(
         transport, conn, token,
         ER_SERVICES.configurationList, ER_SERVICE_OPS.listComponents,
         { _parentSolutionName: parentName }, signal,
       );
-      return unwrapServiceArray<RawErComponentRow>(raw, operation);
+      const rawTopLevelKeys = raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? Object.keys(raw as Record<string, unknown>)
+        : [];
+      return { rows: unwrapServiceArray<RawErComponentRow>(raw, operation), rawTopLevelKeys };
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[fno-client] listComponents fetchChildren failed', { parentName, err });
-      return [];
+      return { rows: [], rawTopLevelKeys: [] };
     }
   };
 
   // Initial fetch: root model and whatever DerivedSolutions the server provides.
-  const rootRows = await fetchChildren(solutionName);
+  const { rows: rootRows, rawTopLevelKeys } = await fetchChildren(solutionName);
   // eslint-disable-next-line no-console
-  console.info('[fno-client] listComponents root fetch', { solutionName, confirmedOp, rowCount: rootRows.length });
+  console.info('[fno-client] listComponents root fetch', {
+    solutionName,
+    confirmedOp,
+    rowCount: rootRows.length,
+    // Log the raw top-level response keys — F&O sometimes wraps the result
+    // array in an object that also contains metadata fields (e.g. a solution
+    // GUID). If we see unexpected keys here they may carry the DataModel GUID
+    // we need for GetModelMappingByID.
+    rawTopLevelKeys,
+    // Log all fields of the first few rows (before DerivedSolutions expansion)
+    // so we can spot extra GUID fields not in our RawErComponentRow interface.
+    firstRowScalars: rootRows.slice(0, 5).map(r => {
+      const scalars: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(r as Record<string, unknown>)) {
+        if (k === 'DerivedSolutions' || k === 'Versions') continue;
+        if (typeof v !== 'object') scalars[k] = v;
+      }
+      return scalars;
+    }),
+  });
 
   // Flatten the initial response (respects DerivedSolutions nesting from the API).
   // The X++ implementation of getFormatSolutionsSubHierarchy is fully
@@ -998,30 +1023,48 @@ export function buildDownloadAttempts(
       // a ERModelMappingTable row directly, try the (_dataModelGuid +
       // _dataContainerDescriptorName) branch using the parent
       // DataModel GUID harvested from the hierarchy. The descriptor
-      // name is not exposed by the listing service. Per X++ source
-      // (ERConfigurationStorageService.getModelMappingByID),
-      // `ERDataContainerDescriptorTable::findByName(dmRecId, '')`
-      // returns RecId=0, which `ERModelMappingTableSelector::
-      // constructByModel(dmTable, 0)` interprets as **the default
-      // container** — that selector then returns the model's default
-      // ModelMapping. So an empty descriptor is the strongest single
-      // probe to "give me whatever default mapping you have for this
-      // DataModel". We try it first, then fall back to plausible
-      // human-readable names (configuration / solution / DataModel
-      // name) for environments where the descriptor is named.
+      // name is not exposed by the listing service.
+      //
+      // Candidate ordering — most specific to least specific:
+      //
+      // 1. Caller-supplied real descriptor names (harvested from the
+      //    parsed `ERDataModel.containers[].name`). These come from
+      //    actual `ERDataContainerDescriptorTable` rows in the DataModel
+      //    XML and are the most reliable match.
+      //
+      // 2. `configurationName` — the listing service returns the display
+      //    name of the mapping (e.g. "Tax declaration model mapping (CZ)").
+      //    In many F&O installations the ERDataContainerDescriptorTable
+      //    row's Name column equals this display name, so trying it first
+      //    (before the empty fallback) gives us a chance to land on the
+      //    correct DERIVED mapping rather than the default/base one.
+      //
+      // 3. `solutionName` — the owning solution name; another plausible
+      //    heuristic for environments where descriptor = solution name.
+      //
+      // 4. `''` (empty string) — the catch-all last resort. Per X++ AOT
+      //    (`ERConfigurationStorageService.getModelMappingByID`),
+      //    `ERDataContainerDescriptorTable::findByName(dmRecId, '')` returns
+      //    RecId=0 and `ERModelMappingTableSelector::constructByModel(dm, 0)`
+      //    returns the model's DEFAULT mapping (typically the base/root one).
+      //    We keep this as the FINAL fallback so we always get SOMETHING
+      //    even when named descriptors don't match.
       const dmGuid = component.parentDataModelGuid ?? '';
       const dmRev = component.parentDataModelRevisionGuid ?? '';
       const descriptorCandidates = Array.from(
         new Set(
           [
-            '', // ← primary: default container / default mapping
-            // Caller-supplied real descriptor names (e.g. harvested
-            // from the parsed `ERDataModel.containers[].name`). Tried
-            // before the heuristic fall-backs because they actually
-            // match real `ERDataContainerDescriptorTable` rows.
+            // Caller-supplied descriptor names come first — most likely
+            // to match a real ERDataContainerDescriptorTable row.
             ...(component.descriptorNameCandidates ?? []),
+            // Configuration display name: often equals the descriptor
+            // name for country-specific / derived mappings.
             component.configurationName,
             component.solutionName,
+            // Empty string last: returns the default (base) mapping for
+            // the DataModel regardless of which specific mapping was
+            // intended. Kept as a guaranteed fallback.
+            '',
           ]
             .map(s => (s ?? '').trim()),
         ),
@@ -1124,13 +1167,21 @@ export async function downloadConfigXml(
     //                       _dataContainerDescriptorName)
     // however accepts a `(parent DataModel GUID, descriptor name)`
     // resolution path, which `buildDownloadAttempts` emits. Allow
-    // the call to proceed if we have at least one of those parent
-    // GUIDs — the attempt loop will surface a meaningful error if
-    // the descriptor-name guess doesn't match.
-    const canResolveMappingViaParent =
+    // the call to proceed if:
+    //   (a) we have a parent DataModel GUID/revision to use with the
+    //       descriptor-name resolution path, OR
+    //   (b) we have the mapping's own configurationGuid/revisionGuid,
+    //       which `buildDownloadAttempts` passes directly as `_mappingGuid`
+    //       — F&O ignores `_dataModelGuid` in that case.
+    const canDownloadMapping =
       component.componentType === 'ModelMapping' &&
-      Boolean(component.parentDataModelGuid || component.parentDataModelRevisionGuid);
-    if (!canResolveMappingViaParent) {
+      Boolean(
+        component.parentDataModelGuid ||
+        component.parentDataModelRevisionGuid ||
+        component.configurationGuid ||
+        component.revisionGuid,
+      );
+    if (!canDownloadMapping) {
       throw new FnoSourceUnsupportedError(
         `Component "${component.configurationName}" has no GUID (revisionGuid/configurationGuid). ` +
           `This usually means it's a branch node in the ER tree rather than a downloadable ` +
@@ -1206,6 +1257,12 @@ export async function downloadConfigXml(
       extractedXml = candidateXml;
       successBody = att.body;
       success = true;
+      // eslint-disable-next-line no-console
+      console.info('[fno-client] downloadConfigXml attempt succeeded', {
+        configurationName: component.configurationName,
+        operation: att.operation,
+        body: att.body,
+      });
       break;
     } catch (err) {
       if (err instanceof FnoHttpError) {
@@ -1324,6 +1381,14 @@ export async function downloadConfigXml(
       referencedDataModelRevisions,
     });
   }
+  const referencedModelMappingGuids = extractModelMappingGuidsFromXml(finalXml);
+  if (referencedModelMappingGuids.length > 0) {
+    // eslint-disable-next-line no-console
+    console.info('[fno-client] downloadConfigXml found model-mapping refs', {
+      configurationName: component.configurationName,
+      referencedModelMappingGuids,
+    });
+  }
   return {
     xml: finalXml,
     syntheticPath: buildFnoPath({
@@ -1338,6 +1403,7 @@ export async function downloadConfigXml(
     referencedDataModelRevisions: Object.keys(referencedDataModelRevisions).length > 0
       ? referencedDataModelRevisions
       : undefined,
+    referencedModelMappingGuids: referencedModelMappingGuids.length > 0 ? referencedModelMappingGuids : undefined,
   };
 }
 
@@ -1433,7 +1499,67 @@ function extractReferencedDataModelGuids(xml: string): {
     const guid = m[1].toLowerCase();
     if (guid !== ZERO_GUID) guids.add(guid);
   }
+  // 5) ERSolution.Base="{guid},N" attribute — the parent DataModel's ERSolution
+  //    GUID with an appended version number. Import formats often carry ONLY
+  //    this attribute on their <ERSolution> root element and have no
+  //    ERModelMappingVersion section, making it the only reliably extractable
+  //    DataModel reference in the GetEffectiveFormatMappingByID response.
+  //    The appended ",N" suffix causes attrGuidRe (which expects a closing
+  //    quote after the GUID) to silently skip these values; this dedicated
+  //    pattern handles them explicitly and records the revision number.
+  const baseGuidVersionRe = new RegExp(
+    `\\bBase\\s*=\\s*"\\{?(${guidBody})\\}?,(\\d+)"`,
+    'gi',
+  );
+  for (const m of xml.matchAll(baseGuidVersionRe)) {
+    const guid = m[1].toLowerCase();
+    const rev = parseInt(m[2], 10);
+    if (guid !== ZERO_GUID) {
+      guids.add(guid);
+      if (Number.isFinite(rev)) {
+        revisions[guid] = Math.max(revisions[guid] ?? 0, rev);
+      }
+    }
+  }
   return { guids: Array.from(guids), revisions };
+}
+
+/**
+ * Scan a format XML for GUIDs that reference the specific model mapping
+ * the format is bound to. F&O's `ERFormatMappingVersion` element typically
+ * carries a `ModelMappingVersion` attribute (or similar) pointing to the
+ * `ERModelMappingTable` / `ERSolutionTable` GUID of the linked mapping.
+ *
+ * This GUID can be used directly as `_mappingGuid` in `GetModelMappingByID`
+ * to bypass the descriptor-based lookup that always resolves to the DEFAULT
+ * (base) mapping instead of the country-specific derived one.
+ *
+ * We look for GUIDs in any attribute whose name contains "Mapping"
+ * (case-insensitive) but NOT "Format" (to avoid picking up the format's
+ * own mapping-version self-reference).
+ */
+function extractModelMappingGuidsFromXml(xml: string): string[] {
+  const guidBody = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+  const seen = new Set<string>();
+  const results: string[] = [];
+  // Match: SomeAttrContainingMapping="{guid}" or "{guid},N"
+  const re = new RegExp(
+    `([A-Za-z_][A-Za-z0-9_]*[Mm]apping[A-Za-z0-9_]*)\\s*=\\s*"\\{?(${guidBody})\\}?(?:,\\d+)?"`,
+    'gi',
+  );
+  for (const m of xml.matchAll(re)) {
+    const attr = m[1];
+    const guid = m[2].toLowerCase();
+    if (guid === ZERO_GUID) continue;
+    const attrLower = attr.toLowerCase();
+    if (attrLower.includes('format')) continue; // skip self-referential format-mapping IDs
+    if (seen.has(guid)) continue;
+    seen.add(guid);
+    // eslint-disable-next-line no-console
+    console.info('[fno-client] extractModelMappingGuids found', { attr, guid });
+    results.push(guid);
+  }
+  return results;
 }
 
 // ─── Service-response parsing helpers ───
@@ -1710,8 +1836,14 @@ export function flattenErHierarchy<T extends { DerivedSolutions?: unknown }>(row
 }
 
 interface RawErVersion {
+  // D365FO ER version status (ERSolutionVersionStatus enum):
+  //   1 = Draft, 2 = Completed, 3 = Shared
+  // Multiple field name variants observed across F&O versions.
   Status?: number;
+  VersionStatus?: number;
+  State?: number;
   VersionNumber?: number;
+  Number?: number;
 }
 
 interface RawErSolutionRow {
@@ -1745,9 +1877,16 @@ function pickDisplayVersion(versions?: RawErVersion[]): string | undefined {
   if (!Array.isArray(versions) || versions.length === 0) return undefined;
   let max = -Infinity;
   for (const v of versions) {
-    if (typeof v?.VersionNumber === 'number' && v.VersionNumber > max) max = v.VersionNumber;
+    const n = v?.VersionNumber ?? v?.Number;
+    if (typeof n !== 'number' || !Number.isFinite(n)) continue;
+    if (n > max) max = n;
   }
-  return Number.isFinite(max) ? String(max) : undefined;
+  if (!Number.isFinite(max)) return undefined;
+  // D365FO listing API always surfaces the currently open Draft as the
+  // highest version number. The D365FO invariant is Draft = last Completed + 1,
+  // so last Completed = max - 1. Display that value.
+  // When max === 1 the configuration has never been completed — omit the version.
+  return max > 1 ? String(max - 1) : undefined;
 }
 
 /** Extract a component-type hint from a row under any plausible key. */
@@ -1794,10 +1933,42 @@ function mapSolutionRow(r: RawErSolutionRow): ErSolutionSummary {
   if (componentType === 'Unknown' && baseField === '') {
     componentType = 'DataModel';
   }
+
+  // Diagnostic: for DataModel or Unknown solution rows, log all scalar fields
+  // and any extra (unknown) fields. The solution rows from getFormatSolutionsSubHierarchy
+  // may include a GUID field (e.g. SolutionId) that we currently ignore —
+  // if so, we'll see it in extraFieldsInline below.
+  if (componentType === 'DataModel' || componentType === 'Unknown') {
+    const rec2 = r as Record<string, unknown>;
+    const knownSolKeys = new Set([
+      'Name', 'Description', 'FormatMappingGUID', 'Versions', 'DerivedSolutions',
+      'SolutionName', 'Publisher', 'SolutionVersion', 'Version', 'SolutionDisplayName',
+      'DisplayName', 'ComponentType', 'Type', 'Base',
+    ]);
+    const extraSolFields: Record<string, unknown> = {};
+    const scalarSolFields: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(rec2)) {
+      if (key === 'DerivedSolutions' || key === 'Versions') continue;
+      if (typeof value !== 'object') scalarSolFields[key] = value;
+      if (!knownSolKeys.has(key)) extraSolFields[key] = value;
+    }
+    // eslint-disable-next-line no-console
+    console.info('[fno-client] solution row diagnostic (DataModel/Unknown)', {
+      componentType,
+      name,
+      scalarSolFields,
+      extraFieldsInline: Object.entries(extraSolFields).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join('; ') || '(none)',
+      extraSolFields,
+    });
+  }
+
   return {
     solutionName: name,
     publisher: r.Publisher,
-    version: pickDisplayVersion(r.Versions) ?? r.SolutionVersion ?? r.Version,
+    // pickDisplayVersion already prefers highest Completed (Status=2) version.
+    // The string fallbacks r.SolutionVersion / r.Version have no Status info
+    // so they may carry a draft number — omit them for the display field.
+    version: pickDisplayVersion(r.Versions),
     displayName: description && description !== name ? description : r.SolutionDisplayName ?? r.DisplayName,
     componentType,
   };
@@ -1872,6 +2043,32 @@ function findAnyGuid(r: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
+/**
+ * Deep-search `Versions` array entries for any GUID-shaped string value.
+ *
+ * Some F&O environments include an `Id` or similar GUID field on version
+ * rows (e.g. `ERSolutionVersionTable.Id`) that is NOT declared in our
+ * `RawErVersion` interface. This extracts the first non-zero GUID found
+ * in any string field of any version entry.
+ *
+ * Note: this intentionally does NOT recurse into `DerivedSolutions` to
+ * avoid accidentally picking up child Format GUIDs.
+ */
+function findGuidInVersions(r: RawErComponentRow): string | undefined {
+  if (!Array.isArray(r.Versions)) return undefined;
+  for (const v of r.Versions) {
+    if (typeof v !== 'object' || v === null) continue;
+    for (const value of Object.values(v as Record<string, unknown>)) {
+      if (typeof value !== 'string') continue;
+      const clean = value.replace(/^\{|\}$/g, '').replace(/,\d+$/, '');
+      if (!GUID_LIKE_RE.test(clean)) continue;
+      if (clean.toLowerCase() === ZERO_GUID) continue;
+      return clean;
+    }
+  }
+  return undefined;
+}
+
 function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSummary {
   const rec = r as Record<string, unknown>;
   const name = r.ConfigurationName ?? r.Name ?? '';
@@ -1897,10 +2094,15 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
   // `Base` / `base` is the ERSolution ID of the DataModel this format
   // references — the most reliable identifier. `ModelID` / `ModelId`
   // is a fallback observed on some environments.
+  // The Base field often carries a revision suffix: "{GUID},N" — extract
+  // just the GUID part before testing against the regex.
   const rawModelRef = r.Base ?? r.base ?? r.ModelID ?? r.ModelId;
+  const rawModelRefGuid = typeof rawModelRef === 'string'
+    ? (rawModelRef.match(/^\{?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\}?/i)?.[1] ?? rawModelRef)
+    : rawModelRef;
   const referencedModelGuid =
-    typeof rawModelRef === 'string' && GUID_LIKE_RE.test(rawModelRef) && rawModelRef.toLowerCase() !== ZERO_GUID
-      ? rawModelRef
+    typeof rawModelRefGuid === 'string' && GUID_LIKE_RE.test(rawModelRefGuid) && rawModelRefGuid.toLowerCase() !== ZERO_GUID
+      ? rawModelRefGuid
       : undefined;
 
   const revisionGuid =
@@ -1922,7 +2124,13 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
     findGuidByKeyHint(rec, 'format') ??
     findGuidByKeyHint(rec, 'model') ??
     findGuidByKeyHint(rec, 'config') ??
-    findAnyGuid(rec);
+    findAnyGuid(rec) ??
+    // Last resort: scan nested Versions[] entries for any GUID field.
+    // Some F&O environments surface the ERSolution or ERSolutionVersion
+    // GUID as `Id` (or similar) inside each version row — not in the
+    // known top-level fields. We pick the first one found so callers
+    // have SOMETHING to attempt a download with.
+    findGuidInVersions(r);
 
   const hasChildren = Array.isArray(r.DerivedSolutions) && r.DerivedSolutions.length > 0;
 
@@ -1930,6 +2138,9 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
   // component. `GetDataModelByIDAndRevision` needs a *specific*
   // integer; the highest-version probe alone returns 200-empty when
   // the actual content was authored on an earlier revision.
+  // Keep ALL version numbers (including Draft) for download probing —
+  // the content may live on any revision. The *display* version uses
+  // only Completed (Status=2) via pickDisplayVersion.
   const versionNumbers = Array.isArray(r.Versions)
     ? r.Versions
         .map(v => (typeof v?.VersionNumber === 'number' ? v.VersionNumber : undefined))
@@ -1937,11 +2148,49 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
         .sort((a, b) => b - a)
     : undefined;
 
+  // Diagnostic: log the complete raw row when a DataModel or ModelMapping
+  // has no GUID in any known field. This helps diagnose environments where
+  // the listing API returns only zero-GUIDs. The log includes:
+  //   - all scalar fields (excluding DerivedSolutions to avoid noise)
+  //   - raw Versions[] entries (may carry hidden GUID fields)
+  //   - any extra fields not in the known interface
+  if (!configurationGuid && !revisionGuid && (componentType === 'DataModel' || componentType === 'ModelMapping')) {
+    const scalarFields: Record<string, unknown> = {};
+    const extraFields: Record<string, unknown> = {};
+    const knownKeys = new Set([
+      'SolutionName', 'ConfigurationName', 'Name', 'Description', 'ComponentType', 'Type',
+      'ConfigurationVersion', 'Version', 'Versions', 'DerivedSolutions',
+      'FormatMappingGUID', 'ConfigurationRevisionGuid', 'RevisionGuid', 'ConfigurationGuid',
+      'Guid', 'Id', 'ID', 'ConfigurationID', 'ConfigurationId', 'RevisionID', 'RevisionId',
+      'FormatID', 'FormatId', 'ModelID', 'ModelId', 'Base', 'base',
+      'CountryRegion', 'CountryRegionCodes',
+    ]);
+    for (const [key, value] of Object.entries(rec)) {
+      if (key === 'DerivedSolutions') continue; // too noisy
+      if (typeof value !== 'object' && value !== null) scalarFields[key] = value;
+      if (!knownKeys.has(key)) extraFields[key] = value;
+    }
+    // eslint-disable-next-line no-console
+    console.warn('[fno-client] component row has no GUID — raw diagnostic', {
+      componentType,
+      name,
+      scalarFields,
+      versions: r.Versions,
+      extraFieldKeys: Object.keys(extraFields),
+      // Print key=value inline so it's readable without DevTools expansion:
+      extraFieldsInline: Object.entries(extraFields).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join('; '),
+      extraFields,
+    });
+  }
+
   return {
     solutionName: r.SolutionName ?? solutionName,
     configurationName: name,
     componentType,
-    version: pickDisplayVersion(r.Versions) ?? r.ConfigurationVersion ?? r.Version,
+    // pickDisplayVersion prefers highest Completed (Status=2).
+    // String fallbacks r.ConfigurationVersion / r.Version have no Status
+    // info and may carry a draft number — omit for display field.
+    version: pickDisplayVersion(r.Versions),
     revisionGuid,
     configurationGuid,
     countryRegion: r.CountryRegion ?? r.CountryRegionCodes,

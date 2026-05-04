@@ -45,6 +45,13 @@ async function bootstrap() {
     throw new Error('Missing #root element in index.html');
   }
 
+  // Expose the Zustand store on window in dev so the DevTools console can
+  // inspect state without a browser extension.
+  if (import.meta.env.DEV) {
+    const { useAppStore } = await import('./state/store');
+    (window as unknown as Record<string, unknown>).__store = useAppStore;
+  }
+
   const React = await import('react');
   const { createRoot } = await import('react-dom/client');
   const { FluentRoot } = await import('./components/FluentRoot');
