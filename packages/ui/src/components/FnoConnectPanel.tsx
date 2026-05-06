@@ -17,15 +17,20 @@ import {
   Checkbox,
   Spinner,
   Caption1,
+  Caption2,
   Title3,
+  Subtitle2,
   Body1,
   Body1Strong,
+  Badge,
+  Tooltip,
   Divider,
   MessageBar,
   MessageBarBody,
   makeStyles,
   tokens,
   shorthands,
+  mergeClasses,
 } from '@fluentui/react-components';
 import {
   DeleteRegular,
@@ -34,6 +39,18 @@ import {
   CloudArrowDownRegular,
   ArrowSyncRegular,
   SearchRegular,
+  ChevronRightRegular,
+  ChevronDownRegular,
+  AddRegular,
+  PersonCircleRegular,
+  LinkMultiple20Regular,
+  DocumentTableRegular,
+  TableSimpleRegular,
+  CheckmarkCircleRegular,
+  DismissCircleRegular,
+  ArrowLeftRegular,
+  SelectAllOffRegular,
+  CheckboxCheckedRegular,
 } from '@fluentui/react-icons';
 import type {
   ErComponentType,
@@ -60,32 +77,68 @@ const useStyles = makeStyles({
     ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
     boxSizing: 'border-box',
   },
-  header: {
+
+  // ── Page header ──────────────────────────────────────────────
+  pageHeader: {
     display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalXS,
-  },
-  row: {
-    display: 'flex',
-    gap: tokens.spacingHorizontalM,
-    flexWrap: 'wrap',
     alignItems: 'center',
-  },
-  fieldGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
     gap: tokens.spacingHorizontalM,
-    width: '100%',
   },
-  section: {
+  pageHeaderIcon: {
+    width: '40px',
+    height: '40px',
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorBrandBackground,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: tokens.colorNeutralForegroundOnBrand,
+    flexShrink: 0,
+  },
+
+  // ── Card wrapper ─────────────────────────────────────────────
+  card: {
     display: 'flex',
     flexDirection: 'column',
     gap: tokens.spacingVerticalM,
-    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
+    ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground1,
+    boxShadow: tokens.shadow2,
   },
+  cardHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: tokens.spacingHorizontalS,
+    marginBottom: tokens.spacingVerticalXS,
+  },
+  cardHeaderLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+  },
+  cardIcon: {
+    color: tokens.colorBrandForeground1,
+  },
+
+  // ── Field grid ───────────────────────────────────────────────
+  fieldGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+    gap: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalM}`,
+    width: '100%',
+  },
+  fieldActions: {
+    display: 'flex',
+    gap: tokens.spacingHorizontalS,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: tokens.spacingVerticalXS,
+  },
+
+  // ── Profile list ─────────────────────────────────────────────
   profileList: {
     display: 'flex',
     flexDirection: 'column',
@@ -94,12 +147,12 @@ const useStyles = makeStyles({
   profileRow: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: tokens.spacingHorizontalM,
     ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     borderRadius: tokens.borderRadiusMedium,
     cursor: 'pointer',
+    transition: 'background-color 0.1s, border-color 0.1s',
     ':hover': {
       backgroundColor: tokens.colorNeutralBackground1Hover,
     },
@@ -108,11 +161,66 @@ const useStyles = makeStyles({
     ...shorthands.borderColor(tokens.colorBrandStroke1),
     backgroundColor: tokens.colorBrandBackground2,
   },
+  profileAvatar: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '50%',
+    backgroundColor: tokens.colorBrandBackground,
+    color: tokens.colorNeutralForegroundOnBrand,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '11px',
+    fontWeight: '700',
+    flexShrink: 0,
+    textTransform: 'uppercase',
+  },
+  profileAvatarActive: {
+    backgroundColor: tokens.colorBrandBackgroundPressed,
+  },
+  profileMeta: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  // ── Connection status bar ─────────────────────────────────────
+  connBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalM,
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground2,
+    flexWrap: 'wrap',
+  },
+  connStatusDot: {
+    width: '10px',
+    height: '10px',
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  connStatusDotConnected: { backgroundColor: tokens.colorPaletteGreenForeground1 },
+  connStatusDotConnecting: { backgroundColor: tokens.colorPaletteYellowForeground1 },
+  connStatusDotDisconnected: { backgroundColor: tokens.colorNeutralForeground3 },
+  connStatusDotError: { backgroundColor: tokens.colorPaletteRedForeground1 },
+  connBarInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  connBarActions: {
+    display: 'flex',
+    gap: tokens.spacingHorizontalS,
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+
+  // ── Browser (two-column) ──────────────────────────────────────
   columns: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(280px, 360px) minmax(0, 1fr)',
+    gridTemplateColumns: 'minmax(260px, 340px) minmax(0, 1fr)',
     gap: tokens.spacingHorizontalL,
-    minHeight: '420px',
+    minHeight: '480px',
     width: '100%',
     '@media (max-width: 860px)': {
       gridTemplateColumns: '1fr',
@@ -125,8 +233,30 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground1,
     overflow: 'hidden',
-    minHeight: '420px',
-    maxHeight: '640px',
+    minHeight: '480px',
+    maxHeight: '660px',
+  },
+  listHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: tokens.spacingHorizontalS,
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    flexShrink: 0,
+    minHeight: '44px',
+  },
+  listHeaderLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalXS,
+    minWidth: 0,
+  },
+  listSearchBar: {
+    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalM),
+    borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
+    flexShrink: 0,
   },
   listScroll: {
     flex: 1,
@@ -138,7 +268,6 @@ const useStyles = makeStyles({
     alignItems: 'center',
     gap: tokens.spacingHorizontalS,
     ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
-    cursor: 'pointer',
     borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
     ':hover': {
       backgroundColor: tokens.colorNeutralBackground1Hover,
@@ -146,34 +275,89 @@ const useStyles = makeStyles({
   },
   listItemActive: {
     backgroundColor: tokens.colorBrandBackground2,
+    borderLeftWidth: '3px',
+    borderLeftStyle: 'solid',
+    borderLeftColor: tokens.colorBrandStroke1,
   },
-  listHeader: {
+  listItemContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  listItemDead: {
+    opacity: 0.5,
+  },
+
+  // ── Component type badge ──────────────────────────────────────
+  typeBadge: {
+    flexShrink: 0,
+    fontSize: '10px',
+    fontWeight: '600',
+    letterSpacing: '0.02em',
+    textTransform: 'uppercase',
+  },
+
+  // ── Breadcrumb ────────────────────────────────────────────────
+  breadcrumb: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: tokens.spacingHorizontalS,
-    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    flexShrink: 0,
+    gap: '2px',
+    minWidth: 0,
+    overflow: 'hidden',
   },
+  breadcrumbSep: {
+    color: tokens.colorNeutralForeground3,
+    flexShrink: 0,
+    fontSize: '12px',
+  },
+  breadcrumbItem: {
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    minWidth: 0,
+  },
+
+  // ── Empty states ──────────────────────────────────────────────
   emptyState: {
     display: 'flex',
     flexDirection: 'column',
+    alignItems: 'center',
     gap: tokens.spacingVerticalS,
-    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
+    ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalM),
+    textAlign: 'center',
+    color: tokens.colorNeutralForeground3,
   },
   emptyStateRow: {
     display: 'flex',
     gap: tokens.spacingHorizontalS,
     alignItems: 'stretch',
+    width: '100%',
+    maxWidth: '340px',
   },
+
+  // ── Footer ────────────────────────────────────────────────────
   footer: {
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: tokens.spacingHorizontalM,
-    justifyContent: 'flex-end',
     flexWrap: 'wrap',
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL),
+    backgroundColor: tokens.colorNeutralBackground2,
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    borderRadius: tokens.borderRadiusMedium,
+  },
+  footerStatus: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+    minWidth: 0,
+    flex: 1,
+  },
+  row: {
+    display: 'flex',
+    gap: tokens.spacingHorizontalM,
+    flexWrap: 'wrap',
+    alignItems: 'center',
   },
 });
 
@@ -386,7 +570,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         rootComponentCacheRef.current.set(rootName, fullTree);
       }
       fullTree.sort((a, b) => (a.configurationName ?? '').localeCompare(b.configurationName ?? '', undefined, { sensitivity: 'base', numeric: true }));
-      console.info('[fno-ui] components for', solutionName, '(root:', rootName, ')', fullTree);
 
       // Accumulate every DataModel we've ever seen so handleLoadSelected
       // can resolve ancestor GUIDs back to downloadable summaries.
@@ -449,7 +632,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     try {
       const list = await fnoSession.listComponents(activeProfile, name);
       list.sort((a, b) => (a.configurationName ?? '').localeCompare(b.configurationName ?? '', undefined, { sensitivity: 'base', numeric: true }));
-      console.info('[fno-ui] components for', name, list);
       setAllDataModelsSeen(prev => rememberDataModels(prev, list));
       setComponents(annotateWithParentDataModel(list, nextChain));
       // Determine root from the solution path entry (the DataModel the user originally clicked).
@@ -606,7 +788,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         if (!model.configurationGuid && !model.revisionGuid) {
           console.info(
             '[fno-ui] skipping ancestor model without downloadable GUID',
-            { name: model.configurationName },
+            model.configurationName,
           );
           continue;
         }
@@ -646,11 +828,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         m => m.configurationName === c.solutionName,
       );
       if (rootByName) {
-        console.info('[fno-ui] name-based DataModel fallback', {
-          formatName: c.configurationName,
-          solutionName: c.solutionName,
-          foundDmGuid: rootByName.configurationGuid ?? rootByName.revisionGuid,
-        });
+
         augmented.set(componentKey(rootByName), rootByName);
         continue;
       }
@@ -664,12 +842,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         ? Array.from(allDataModelsSeen.values()).find(m => m.configurationName === rootSolName)
         : undefined;
       if (rootByRootName) {
-        console.info('[fno-ui] root-solution-name DataModel fallback', {
-          formatName: c.configurationName,
-          solutionName: c.solutionName,
-          rootSolName,
-          foundDmGuid: rootByRootName.configurationGuid ?? rootByRootName.revisionGuid,
-        });
+
         augmented.set(componentKey(rootByRootName), rootByRootName);
         continue;
       }
@@ -687,11 +860,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           hasContent: true,
           versionNumbers: [1, 2, 3, 0],
         };
-        console.info('[fno-ui] referencedModelGuid DataModel fallback', {
-          formatName: c.configurationName,
-          solutionName: c.solutionName,
-          referencedModelGuid: c.referencedModelGuid,
-        });
+
         augmented.set(componentKey(synthDm), synthDm);
       }
     }
@@ -876,12 +1045,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 finalToLoad.unshift(synthDm); // DataModel first
                 dmNamesInLoad.add(parentDmName);
               }
-              console.info('[fno-ui] GUID discovery: scouted DataModel GUID from sibling format', {
-                parentDmName,
-                dmGuid,
-                rev,
-                scoutFormat: scout.configurationName,
-              });
               break;
             }
           } catch {
@@ -890,10 +1053,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         }
 
         if (!discoveredGuid) {
-          console.warn('[fno-ui] GUID discovery: no sibling export format found DataModel GUID', {
-            parentDmName,
-            scoutCount: scouts.length,
-          });
           // Fallback: include ModelMapping siblings — GetModelMappingByID(mappingGuid)
           // returns both the ModelMapping XML and the DataModel XML via parmModel.
           const mmSiblings: ErConfigSummary[] = [];
@@ -915,10 +1074,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               finalToLoad.push(mm);
             }
             dmNamesInLoad.add(parentDmName);
-            console.info('[fno-ui] GUID discovery: auto-including ModelMapping siblings to retrieve DataModel', {
-              parentDmName,
-              mmSiblings: mmSiblings.slice(0, 2).map(m => m.configurationName),
-            });
+
           }
         }
       }
@@ -997,11 +1153,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           }
         }
       }
-      // Follow-up: referenced DataModels from downloaded XML
       if (pendingModelFollowUps.size > 0) {
         setIngestStatus(t.fnoStatusResolvingDM);
         const followUpEntries = Array.from(pendingModelFollowUps.values());
-        console.info('[fno-ui] pendingModelFollowUps to probe', followUpEntries.length, followUpEntries.map(e => e.guid));
         const FOLLOW_UP_BATCH_SIZE = 2;
         for (let fub = 0; fub < followUpEntries.length; fub += FOLLOW_UP_BATCH_SIZE) {
           const fuSlice = followUpEntries.slice(fub, fub + FOLLOW_UP_BATCH_SIZE);
@@ -1064,6 +1218,10 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     // Populated when listComponents returns a DataModel node with a GUID —
     // used in the synth pass to resolve dmByName for derived/customer DataModels.
     const discoveredDmGuidsByName = new Map<string, string>();
+    // DataModel names found during the scan that have NO GUID in the listing API.
+    // These are customer-derived DataModels (e.g. "Asl Advanced bank reconciliation
+    // statement model") whose ERDataModel.ID we need to get via legacy name-based ops.
+    const noGuidDmNamesFromScan = new Set<string>();
     const pendingMappingBranchesByDmName = new Map<string, {
       parentDmName: string;
       mappingName: string;
@@ -1117,7 +1275,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         }
       }
     }
-    console.info('[fno-ui] mapping-scan dmNamesToScan', Array.from(dmNamesToScan));
+    // Format children of no-GUID DataModels — collected during the scan and
+    // downloaded afterwards to extract the DataModel GUID via Model= attribute.
+    const noGuidDmFormatScouts = new Map<string, ErConfigSummary>();
     const queue: { name: string; owningDmName: string }[] = Array.from(dmNamesToScan).map(n => ({ name: n, owningDmName: n }));
     while (queue.length > 0) {
       const { name: dmName, owningDmName } = queue.shift()!;
@@ -1146,12 +1306,24 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           // own ModelMapping descendants.
           if (child.configurationName && !visitedScanNames.has(child.configurationName)) {
             queue.push({ name: child.configurationName, owningDmName: child.configurationName });
-            // Capture GUID from DataModel children too (may be present in parent listing).
-            if (child.configurationGuid && !discoveredDmGuidsByName.has(child.configurationName)) {
-              discoveredDmGuidsByName.set(child.configurationName, child.configurationGuid);
+            if (child.configurationGuid) {
+              if (!discoveredDmGuidsByName.has(child.configurationName))
+                discoveredDmGuidsByName.set(child.configurationName, child.configurationGuid);
+            } else {
+              // No GUID — track this name for the legacy name-probe retry pass.
+              noGuidDmNamesFromScan.add(child.configurationName);
             }
           }
           continue;
+        }
+        // Format children of a no-GUID DataModel: collect as scouts for DM GUID extraction.
+        // The DM node itself always precedes its DerivedSolutions in the flat DFS list, so
+        // noGuidDmNamesFromScan already contains ownerDataModelName by this point.
+        if (child.componentType === 'Format' && child.configurationGuid) {
+          const ownerDm = child.ownerDataModelName ?? owningDmName;
+          if (ownerDm && noGuidDmNamesFromScan.has(ownerDm) && !discoveredDmGuidsByName.has(ownerDm) && !noGuidDmFormatScouts.has(ownerDm)) {
+            noGuidDmFormatScouts.set(ownerDm, child);
+          }
         }
         if (child.componentType !== 'ModelMapping') continue;
         if (!child.revisionGuid && !child.configurationGuid) {
@@ -1186,6 +1358,91 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           });
           pendingMappingBranchesByDmName.set(owningDmName, branches);
         }
+      }
+    }
+
+    // ── Post-scan: extract no-GUID DataModel GUIDs via child format scouts ──
+    // For each DataModel with no GUID (e.g. "Asl Advanced bank reconciliation
+    // statement model"), we try three escalating approaches:
+    // 1. referencedModelGuid on the scout format row (free, from listing Base/ModelID field).
+    // 2. Download the format XML and read Model= attributes (extractReferencedDataModelGuids).
+    // 3. Probe every non-zero GUID in the format XML with GetDataModelByIDAndRevision
+    //    until one succeeds — the first success is the DM GUID.
+    for (const [scoutDmName, scoutFormat] of noGuidDmFormatScouts) {
+      if (discoveredDmGuidsByName.has(scoutDmName)) continue;
+
+      // Phase 1 — listing row already carries referencedModelGuid (r.Base / r.ModelID).
+      if (scoutFormat.referencedModelGuid) {
+        const lower = scoutFormat.referencedModelGuid.replace(/^\{|\}$/g, '').toLowerCase();
+        if (lower && lower !== ZERO_GUID_LOWER) {
+          discoveredDmGuidsByName.set(scoutDmName, lower);
+          continue;
+        }
+      }
+
+      // Phase 2 & 3 — download the format XML.
+      try {
+        const dl = await fnoSession.downloadConfiguration(activeProfile, scoutFormat);
+
+        // Phase 2: standard model-attribute extraction.
+        const refs = dl.referencedDataModelGuids ?? [];
+        for (const refGuid of refs) {
+          const lower = refGuid.replace(/^\{|\}$/g, '').toLowerCase();
+          if (!lower || lower === ZERO_GUID_LOWER) continue;
+          discoveredDmGuidsByName.set(scoutDmName, lower);
+          break;
+        }
+
+        if (!discoveredDmGuidsByName.has(scoutDmName)) {
+          // Phase 3: probe each GUID from the format XML as a potential ERDataModelTable GUID
+          // by calling GetModelMappingByID(ZERO, candidateGuid, descriptor).
+          const candidateGuids = Array.from(
+            new Set(
+              (dl.xml.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) ?? [])
+                .map(g => g.toLowerCase())
+                .filter(g => g !== ZERO_GUID_LOWER),
+            ),
+          );
+          const phase3Descriptors = Array.from(
+            new Set(
+              Array.from(pendingMappingBranchesByDmName.values())
+                .flat()
+                .map(b => b.mappingName)
+                .filter(Boolean)
+                .concat(['']),
+            ),
+          );
+          for (const candidateGuid of candidateGuids) {
+            if (discoveredDmGuidsByName.has(scoutDmName)) break;
+            try {
+              const mappingProbe: ErConfigSummary = {
+                solutionName: scoutDmName,
+                configurationName: scoutDmName,
+                componentType: 'ModelMapping',
+                parentDataModelGuid: candidateGuid,
+                descriptorNameCandidates: phase3Descriptors,
+                hasContent: true,
+                hasChildren: false,
+              };
+              await fnoSession.downloadConfiguration(activeProfile, mappingProbe);
+              discoveredDmGuidsByName.set(scoutDmName, candidateGuid);
+            } catch {
+              // Not the DataModel GUID, try next.
+            }
+          }
+          if (!discoveredDmGuidsByName.has(scoutDmName)) {
+            // All phases failed. The mapping's ERDataModelTable GUID is not discoverable:
+            // - The listing API returns ZERO GUIDs for all ABR-family components
+            // - Format XML GUIDs are format-component GUIDs (not the DataModel GUID)
+            // - Legacy name-based ops are unavailable in this F&O environment
+            // The mapping will be skipped during import.
+            console.warn('[fno-ui] scan-scout: DataModel GUID not discoverable — mapping will be skipped', {
+              dmName: scoutDmName,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[fno-ui] scan-scout: format download failed', scoutDmName, err);
       }
     }
 
@@ -1299,11 +1556,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       }
     }
 
-    console.info('[fno-ui] mapping-scan finished', {
-      scannedDmNames: Array.from(visitedScanNames),
-      guidMappingsFound: mappingsToLoad.size,
-      pendingBranchKeys: Array.from(pendingMappingBranchesByDmName.keys()),
-    });
     }; // end mappingListingScanTask
 
     // ── Run listing scan concurrently with Format/ModelMapping downloads ──
@@ -1614,10 +1866,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         console.warn('[fno-ui] ancestor DataModel fetch failed', baseGuid, err);
       }
     }
-    console.info('[fno-ui] synthesized mapping pass', {
-      dmCount: dmGuidIndex.size,
-    });
-
     const dmByName = new Map<string, DmSynthCandidate>();
     for (const dm of dmGuidIndex.values()) {
       if (!dm.name.startsWith('DataModel ')) {
@@ -1687,7 +1935,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         dmGuidIndex.set(lower, candidate);
       }
       dmByName.set(dmName, candidate);
-      console.info('[fno-ui] synth-pass: resolved DM name from scan GUID', { dmName, guid: lower });
     }
 
     const synthQueue: { synth: ErConfigSummary; dmGuid: string; label: string }[] = [];
@@ -1697,8 +1944,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     // buildDownloadAttempts tries descriptor candidates in order and stops at the
     // first success → F&O returns the effective mapping for this environment.
     const dmGuidsWithResolvedBranch = new Set<string>();
-    let resolvedBranchCount = 0;
-    let unresolvedBranchCount = 0;
     for (const [dmName, branches] of pendingMappingBranchesByDmName) {
       if (branches.length === 0) continue;
 
@@ -1740,7 +1985,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         // downloading both the base variant ("ABR…") AND the customer variant
         // ("Asl ABR…") simultaneously — F&O returns exactly ONE effective mapping
         // for this DM in the customer's environment.
-        resolvedBranchCount += 1;
         dmGuidsWithResolvedBranch.add(ownerDm.guid);
         const allBranchNames = [...new Set(branches.map(b => b.mappingName).filter(s => s))];
         const descriptors = [...new Set([...allBranchNames, ...ownerDm.descriptorNames, ''])];
@@ -1767,7 +2011,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         // GetModelMappingByID(mappingGuid) returns BOTH the mapping AND the DataModel.
         const branchWithGuid = branches.find(b => b.configurationGuid);
         if (branchWithGuid?.configurationGuid) {
-          unresolvedBranchCount += 1;
           synthQueue.push({
             synth: {
               solutionName: branchWithGuid.mappingSolutionName,
@@ -1782,7 +2025,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           });
         } else {
           // No GUID at all — brute-force across all known DataModel GUIDs.
-          unresolvedBranchCount += 1;
           const branchDescriptors = [...new Set(branches.map(b => b.mappingName).filter(Boolean))];
           for (const candidate of dmGuidIndex.values()) {
             synthQueue.push({
@@ -1803,11 +2045,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           }
         }
       }
-    }
-    if (resolvedBranchCount > 0 || unresolvedBranchCount > 0) {
-      console.info('[fno-ui] pending ModelMapping branches', {
-        resolved: resolvedBranchCount, unresolved: unresolvedBranchCount,
-      });
     }
 
     // Suppress default probes for DMs whose mapping was already loaded in Phase 2
@@ -1877,15 +2114,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     }
 
     if (allMappingDownloads.length > 0) {
-      console.info('[fno-ui] DIAG allMappingDownloads', allMappingDownloads.map(d => ({
-        label: d.label,
-        dmGuid: d.dmGuid,
-        descriptorCandidates: d.synth.descriptorNameCandidates,
-        parentDataModelGuid: d.synth.parentDataModelGuid,
-        configGuid: d.synth.configurationGuid,
-        solutionName: d.synth.solutionName,
-        configurationName: d.synth.configurationName,
-      })));
       setIngestStatus(t.fnoStatusDownloadingMMCount(allMappingDownloads.length));
       // Track DM GUIDs for which a mapping was *successfully* downloaded.
       // Once a branch for a given DM GUID returns real XML, all remaining
@@ -1920,7 +2148,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           } else {
             const reason = result.reason;
             if (reason instanceof FnoEmptyContentError) {
-              console.info('[fno-ui] DIAG mapping empty content', result.reason instanceof Error ? result.reason.message.slice(0, 200) : String(result.reason));
+              // empty — try next branch for same DM
             } else {
               console.warn('[fno-ui] mapping fetch failed', reason);
             }
@@ -1935,11 +2163,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // For export formats the initial pass usually SUCCEEDS → no retry needed.
       // For import-only formats the initial pass returns empty → retry fires here.
       if (downloadedMappingDmGuids.size === 0) {
-        console.info('[fno-ui] synth-retry: all mapping downloads failed — branches with referencedModelGuid',
-          Array.from(pendingMappingBranchesByDmName.entries()).flatMap(([k, v]) =>
-            v.map(b => ({ dmKey: k, mapping: b.mappingName, refGuid: b.referencedModelGuid })),
-          ),
-        );
         const retryDownloads: { synth: ErConfigSummary; label: string; dmGuid: string }[] = [];
         for (const [dmName, branches] of pendingMappingBranchesByDmName) {
           if (branches.length === 0) continue;
@@ -1959,15 +2182,15 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               if (lower === (resolvedDm.solutionGuid ?? '').toLowerCase()) continue;
               altGuids.add(lower);
             }
-            if (altGuids.size === 0) continue;
             const allBranchNames = [...new Set(branches.map(b => b.mappingName).filter(Boolean))];
             const primaryBranch = branches.find(b => b.configurationGuid) ?? branches[branches.length - 1];
+
+            // Case A: branch referencedModelGuids as alternative DM GUIDs.
             for (const altGuid of altGuids) {
               const retryDescriptors = [...new Set([...allBranchNames, ...resolvedDm.descriptorNames, ''])];
               const retryKey = `synth-retry:${altGuid}`;
               if (synthesizedMappingKeys.has(retryKey)) continue;
               synthesizedMappingKeys.add(retryKey);
-              console.info('[fno-ui] synth-retry: trying altGuid for resolved-but-failed DM', { dmName, altGuid, descriptors: retryDescriptors });
               retryDownloads.push({
                 synth: {
                   solutionName: primaryBranch.mappingSolutionName,
@@ -1983,7 +2206,35 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 label: `${primaryBranch.mappingName} (retry altGuid ${altGuid} under ${dmName})`,
               });
             }
-            continue;
+
+            // Case D: try DM GUIDs discovered via the post-scan format scout
+            // (e.g. the Asl derived DM GUID found via GetModelMappingByID probing).
+            // These are keyed under Asl DM names and not yet in dmByName, but they
+            // may resolve mappings that are listed under the base DM name.
+            for (const [discoveredName, discoveredGuid] of discoveredDmGuidsByName) {
+              if (discoveredGuid === resolvedDm.guid) continue;
+              if (dmByName.has(discoveredName) && dmByName.get(discoveredName)?.guid === discoveredGuid) continue;
+              const retryDescriptorsD = [...new Set([...allBranchNames, ...resolvedDm.descriptorNames, ''])];
+              const retryKeyD = `synth-retry-d:${discoveredGuid}:${dmName}`;
+              if (synthesizedMappingKeys.has(retryKeyD)) continue;
+              synthesizedMappingKeys.add(retryKeyD);
+              retryDownloads.push({
+                synth: {
+                  solutionName: primaryBranch.mappingSolutionName,
+                  configurationName: primaryBranch.mappingName,
+                  componentType: 'ModelMapping',
+                  configurationGuid: primaryBranch.configurationGuid,
+                  version: primaryBranch.mappingVersion,
+                  parentDataModelGuid: discoveredGuid,
+                  descriptorNameCandidates: retryDescriptorsD,
+                  hasContent: true,
+                },
+                dmGuid: discoveredGuid,
+                label: `${primaryBranch.mappingName} (retry Case D: discovered ${discoveredName} → ${discoveredGuid})`,
+              });
+            }
+
+            if (altGuids.size > 0 || retryDownloads.some(r => r.label.includes('Case D'))) continue;
           }
 
           // Case B: DM unresolved — probe by DataModel name via legacy ops.
@@ -2016,7 +2267,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               if (candidate) {
                 dmByName.set(dmName, candidate);
                 resolvedGuid = candidate.guid;
-                console.info('[fno-ui] synth-retry: resolved unmatched DM name', { dmName, guid: lower });
               }
             }
           } catch (err) {
@@ -2056,8 +2306,108 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             });
           }
         }
+        // Case C: probe no-GUID DataModels from allDataModelsSeen via legacy name-based ops.
+        // Handles the scenario where ALL mappings are registered under a DERIVED DataModel
+        // (e.g. "Asl Advanced bank reconciliation statement model") whose GUID is unknown
+        // because F&O's listing API returns it without a GUID. The derived DM appears in
+        // allDataModelsSeen because the user browsed it (rememberDataModels logs it as
+        // "DataModel has no GUID — skipping"). We try downloading it by name; if the
+        // environment has legacy ops (getRevisionContent / getConfigurationXml), we get
+        // its XML → parse its ERDataModel.ID → retry GetModelMappingByID with that GUID.
+        if (retryDownloads.length === 0) {
+          // Collect all pending branch descriptor candidates (used for each new DM GUID).
+          const allPendingDescriptors = [...new Set(
+            Array.from(pendingMappingBranchesByDmName.values())
+              .flat()
+              .map(b => b.mappingName)
+              .filter(Boolean),
+          )];
+          const allPendingBranches = Array.from(pendingMappingBranchesByDmName.values()).flat();
+          const primaryBranchGlobal =
+            allPendingBranches.find(b => b.configurationGuid) ?? allPendingBranches[allPendingBranches.length - 1];
+
+          // Merge allDataModelsSeen (stale closure) with noGuidDmNamesFromScan
+          // (collected live during this ingest). allDataModelsSeen may be empty
+          // when the user hasn't browsed the tree first (ingest from a fresh session).
+          const noGuidNamesC = new Set<string>(noGuidDmNamesFromScan);
+          for (const dm of allDataModelsSeen.values()) {
+            if (!dm.configurationGuid && !dm.revisionGuid && dm.configurationName)
+              noGuidNamesC.add(dm.configurationName);
+          }
+          for (const dmNameC of noGuidNamesC) {
+            if (dmByName.has(dmNameC)) continue; // already resolved
+            let candidateGuid: string | undefined;
+
+            // Step 1 — try legacy name-based download (works on older F&O builds).
+            const probeSpecC: ErConfigSummary = {
+              solutionName: dmNameC,
+              configurationName: dmNameC,
+              componentType: 'DataModel',
+              hasContent: false, // no GUID → legacy name-based ops
+              versionNumbers: [1, 2, 3, 0],
+            };
+            try {
+              const dmDl = await fnoSession.downloadConfiguration(activeProfile, probeSpecC);
+              loadXmlFile(dmDl.xml, dmDl.syntheticPath);
+              ok += 1;
+              const newest = useAppStore.getState().configurations;
+              const parsed = newest.find(
+                c => c.kind === 'DataModel' &&
+                  (c.solutionVersion?.solution?.name === dmNameC ||
+                   (c.content as ParsedDmContent | undefined)?.version?.model?.name === dmNameC),
+              );
+              const parsedModel = (parsed?.content as ParsedDmContent | undefined)?.version?.model;
+              if (parsedModel?.id) {
+                const lower = parsedModel.id.replace(/^\{|\}$/g, '').toLowerCase();
+                if (lower && lower !== ZERO_GUID_LOWER) {
+                  const containers = (parsedModel.containers ?? [])
+                    .map(c => (c?.name ?? '').trim())
+                    .filter(s => s.length > 0);
+                  recordDm(parsedModel.id, parsedModel.name ?? dmNameC, parsed?.solutionVersion?.solution?.name, containers);
+                  let cand = dmGuidIndex.get(lower);
+                  if (!cand) {
+                    cand = { name: dmNameC, guid: lower, solutionName: dmNameC, solutionGuid: undefined, descriptorNames: containers };
+                    dmGuidIndex.set(lower, cand);
+                  }
+                  dmByName.set(dmNameC, cand);
+                  candidateGuid = lower;
+                }
+              }
+            } catch (err) {
+              if (!(err instanceof FnoEmptyContentError)) {
+                console.warn('[fno-ui] synth-retry-C: legacy DM probe failed', dmNameC, err);
+              }
+            }
+
+            // Step 2 — (OData entities for ER DataModels do not exist in F&O,
+            // so this is intentionally left as a no-op. If a future F&O build
+            // exposes such an entity, probe it here.)
+
+            if (!candidateGuid || allPendingDescriptors.length === 0 || !primaryBranchGlobal) continue;
+            const ownerCand = dmByName.get(dmNameC);
+            const descriptorsComb = [...new Set([...allPendingDescriptors, ...(ownerCand?.descriptorNames ?? []), ''])];
+            const retryKeyC = `synth-retry-c:${candidateGuid}`;
+            if (synthesizedMappingKeys.has(retryKeyC)) continue;
+            synthesizedMappingKeys.add(retryKeyC);
+            retryDownloads.push({
+              synth: {
+                solutionName: primaryBranchGlobal.mappingSolutionName,
+                configurationName: primaryBranchGlobal.mappingName,
+                componentType: 'ModelMapping',
+                configurationGuid: primaryBranchGlobal.configurationGuid,
+                version: primaryBranchGlobal.mappingVersion,
+                parentDataModelGuid: candidateGuid,
+                parentDataModelRevisionGuid: ownerCand?.solutionGuid,
+                descriptorNameCandidates: descriptorsComb,
+                hasContent: true,
+              },
+              dmGuid: candidateGuid,
+              label: `mapping (Case C: ${dmNameC} → ${candidateGuid})`,
+            });
+          }
+        }
+
         if (retryDownloads.length > 0) {
-          console.info('[fno-ui] synth-retry: mapping downloads after DM name probe', retryDownloads.map(d => d.label));
           setIngestStatus(t.fnoStatusDownloadingMMCount(retryDownloads.length));
           for (let batch = 0; batch < retryDownloads.length; batch += MAPPING_BATCH_SIZE) {
             const slice = retryDownloads.slice(batch, batch + MAPPING_BATCH_SIZE);
@@ -2078,7 +2428,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               } else {
                 const reason = result.reason;
                 if (reason instanceof FnoEmptyContentError) {
-                  console.info('[fno-ui] synth-retry mapping empty', reason instanceof Error ? reason.message.slice(0, 200) : String(reason));
+                  // empty — mapping not found for this DM GUID, retry with next
                 } else {
                   console.warn('[fno-ui] synth-retry mapping fetch failed', reason);
                 }
@@ -2094,7 +2444,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     // Covers import formats: their ModelMapping XML carries the correct Model= attribute.
     if (lateModelFollowUps.size > 0) {
       setIngestStatus(t.fnoStatusLateDM);
-      console.info('[fno-ui] late DataModel follow-ups', Array.from(lateModelFollowUps.values()));
       const lateEntries = Array.from(lateModelFollowUps.values());
       const LATE_BATCH_SIZE = 2;
       for (let lb = 0; lb < lateEntries.length; lb += LATE_BATCH_SIZE) {
@@ -2145,81 +2494,174 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     }
   }, [activeProfile, selected, allDataModelsSeen, solutions, solutionPath, loadXmlFile, pushToast]);
 
+  // ── Helper: type badge ──────────────────────────────────────────────────
+  const TypeBadge = ({ type }: { type: ErComponentType }) => {
+    const color =
+      type === 'ModelMapping' ? 'success' :
+      type === 'Format' ? 'informative' :
+      type === 'DataModel' ? 'important' : 'subtle';
+    const label =
+      type === 'ModelMapping' ? 'Mapping' :
+      type === 'Format' ? 'Format' :
+      type === 'DataModel' ? 'Model' : type;
+    return (
+      <Badge appearance="tint" color={color} size="small" className={styles.typeBadge}>
+        {label}
+      </Badge>
+    );
+  };
+
+  // ── Helper: profile initials avatar ─────────────────────────────────────
+  const initials = (name: string) => {
+    const parts = name.trim().split(/[\s·\-_]+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  // ── Connection state derived values ──────────────────────────────────────
+  const connDotClass =
+    connState.kind === 'connected' ? styles.connStatusDotConnected :
+    connState.kind === 'connecting' ? styles.connStatusDotConnecting :
+    connState.kind === 'error' ? styles.connStatusDotError :
+    styles.connStatusDotDisconnected;
+
   return (
     <div className={styles.root}>
-      <div className={styles.header}>
-        <Title3>{t.fnoHeading}</Title3>
-        <Caption1>{t.fnoSubheading}</Caption1>
+
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <div className={styles.pageHeader}>
+        <div className={styles.pageHeaderIcon}>
+          <LinkMultiple20Regular fontSize={22} />
+        </div>
+        <div>
+          <Subtitle2>{t.fnoHeading}</Subtitle2>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{t.fnoSubheading}</Caption1>
+        </div>
       </div>
 
-      <div className={styles.fieldGrid}>
-        <Field label={t.fnoProfileName}>
-          <Input value={profileName} onChange={(_, d) => setProfileName(d.value)} placeholder="CHE · Sandbox" />
-        </Field>
-        <Field label={t.fnoEnvUrl}>
-          <Input value={envUrl} onChange={(_, d) => setEnvUrl(d.value)} placeholder="https://org.sandbox.operations.dynamics.com" />
-        </Field>
-        <Field label={t.fnoTenantId}>
-          <Input value={tenantId} onChange={(_, d) => setTenantId(d.value)} placeholder="contoso.onmicrosoft.com nebo GUID" />
-        </Field>
-        <Field label={t.fnoClientId}>
-          <Input value={clientId} onChange={(_, d) => setClientId(d.value)} />
-        </Field>
-      </div>
-      <div>
-        <Button appearance="primary" disabled={!canSave} onClick={handleSaveProfile}>
-          {isEditing ? t.fnoUpdateProfile : t.fnoSaveProfile}
-        </Button>
-        {isEditing && (
-          <Button style={{ marginLeft: 8 }} onClick={handleNewProfile}>
-            {t.fnoNewProfile}
+      {/* ── Profile editor card ─────────────────────────────────────────── */}
+      <div className={styles.card}>
+        <div className={styles.cardHeader}>
+          <div className={styles.cardHeaderLeft}>
+            <PersonCircleRegular fontSize={18} className={styles.cardIcon} />
+            <Body1Strong>{isEditing ? t.fnoUpdateProfile : t.fnoSaveProfile}</Body1Strong>
+          </div>
+          {isEditing && (
+            <Button size="small" appearance="subtle" icon={<AddRegular />} onClick={handleNewProfile}>
+              {t.fnoNewProfile}
+            </Button>
+          )}
+        </div>
+
+        <div className={styles.fieldGrid}>
+          <Field label={t.fnoProfileName}>
+            <Input value={profileName} onChange={(_, d) => setProfileName(d.value)} placeholder="CHE · Sandbox" />
+          </Field>
+          <Field label={t.fnoEnvUrl}>
+            <Input value={envUrl} onChange={(_, d) => setEnvUrl(d.value)} placeholder="https://org.sandbox.operations.dynamics.com" />
+          </Field>
+          <Field label={t.fnoTenantId}>
+            <Input value={tenantId} onChange={(_, d) => setTenantId(d.value)} placeholder="contoso.onmicrosoft.com nebo GUID" />
+          </Field>
+          <Field label={t.fnoClientId}>
+            <Input value={clientId} onChange={(_, d) => setClientId(d.value)} />
+          </Field>
+        </div>
+
+        <div className={styles.fieldActions}>
+          <Button appearance="primary" disabled={!canSave} icon={<CheckmarkCircleRegular />} onClick={handleSaveProfile}>
+            {isEditing ? t.fnoUpdateProfile : t.fnoSaveProfile}
           </Button>
+        </div>
+
+        {/* Profile list */}
+        {profiles.length > 0 && (
+          <>
+            <Divider style={{ marginTop: tokens.spacingVerticalXS }} />
+            <Caption2 style={{ color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {t.fnoProfiles}
+            </Caption2>
+            <div className={styles.profileList}>
+              {profiles.map(p => (
+                <div
+                  key={p.id}
+                  className={mergeClasses(styles.profileRow, activeProfileId === p.id ? styles.profileRowActive : '')}
+                  onClick={() => setActiveProfileId(p.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setActiveProfileId(p.id); }}
+                >
+                  <div className={mergeClasses(styles.profileAvatar, activeProfileId === p.id ? styles.profileAvatarActive : '')}>
+                    {initials(p.displayName || p.envUrl)}
+                  </div>
+                  <div className={styles.profileMeta}>
+                    <Body1Strong>{p.displayName}</Body1Strong>
+                    <div>
+                      <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{p.envUrl}</Caption1>
+                    </div>
+                  </div>
+                  <Tooltip content={t.fnoRemoveProfile} relationship="label">
+                    <Button
+                      appearance="subtle"
+                      icon={<DeleteRegular />}
+                      aria-label={t.fnoRemoveProfile}
+                      onClick={e => {
+                        e.stopPropagation();
+                        remove(p.id);
+                        if (activeProfileId === p.id) setActiveProfileId(null);
+                      }}
+                    />
+                  </Tooltip>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        {profiles.length === 0 && (
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{t.fnoNoProfiles}</Caption1>
         )}
       </div>
 
-      <Divider />
-
-      <Body1Strong>{t.fnoProfiles}</Body1Strong>
-      {profiles.length === 0 ? (
-        <Body1>{t.fnoNoProfiles}</Body1>
-      ) : (
-        <div className={styles.profileList}>
-          {profiles.map(p => (
-            <div
-              key={p.id}
-              className={`${styles.profileRow} ${activeProfileId === p.id ? styles.profileRowActive : ''}`}
-              onClick={() => setActiveProfileId(p.id)}
-              role="button"
-              tabIndex={0}
-            >
-              <div>
-                <Body1Strong>{p.displayName}</Body1Strong>
-                <div><Caption1>{p.envUrl}</Caption1></div>
-              </div>
-              <Button
-                appearance="subtle"
-                icon={<DeleteRegular />}
-                aria-label={t.fnoRemoveProfile}
-                onClick={(e) => { e.stopPropagation(); remove(p.id); if (activeProfileId === p.id) setActiveProfileId(null); }}
-              />
-            </div>
-          ))}
-        </div>
-      )}
-
+      {/* ── Connection status bar ────────────────────────────────────────── */}
       {activeProfile && (
-        <>
-          <Divider />
-          <div className={styles.row}>
+        <div className={styles.connBar}>
+          <div className={mergeClasses(styles.connStatusDot, connDotClass)} />
+          <div className={styles.connBarInfo}>
             {connState.kind === 'connected' ? (
               <>
-                <Body1>{t.fnoConnected(connState.account)}</Body1>
-                <Button icon={<PlugDisconnectedRegular />} onClick={handleDisconnect}>{t.fnoDisconnect}</Button>
+                <Body1Strong style={{ color: tokens.colorPaletteGreenForeground1 }}>
+                  {t.fnoConnected(connState.account)}
+                </Body1Strong>
+                <div>
+                  <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{activeProfile.envUrl}</Caption1>
+                </div>
               </>
+            ) : connState.kind === 'connecting' ? (
+              <Body1Strong style={{ fontStyle: 'italic', color: tokens.colorNeutralForeground2 }}>
+                {t.fnoConnecting}
+              </Body1Strong>
+            ) : connState.kind === 'error' ? (
+              <Body1Strong style={{ color: tokens.colorPaletteRedForeground1 }}>
+                {connState.message}
+              </Body1Strong>
+            ) : (
+              <>
+                <Body1Strong>{activeProfile.displayName}</Body1Strong>
+                <div>
+                  <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{activeProfile.envUrl}</Caption1>
+                </div>
+              </>
+            )}
+          </div>
+          <div className={styles.connBarActions}>
+            {connState.kind === 'connected' ? (
+              <Button icon={<PlugDisconnectedRegular />} onClick={handleDisconnect}>
+                {t.fnoDisconnect}
+              </Button>
             ) : (
               <Button
                 appearance="primary"
-                icon={<PlugConnectedRegular />}
+                icon={connState.kind === 'connecting' ? <Spinner size="tiny" /> : <PlugConnectedRegular />}
                 onClick={handleConnect}
                 disabled={connState.kind === 'connecting'}
               >
@@ -2227,257 +2669,315 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               </Button>
             )}
           </div>
-
-          {connState.kind === 'error' && (
-            <MessageBar intent="error">
-              <MessageBarBody>{connState.message}</MessageBarBody>
-            </MessageBar>
-          )}
-        </>
+        </div>
       )}
 
+      {/* ── Browser ──────────────────────────────────────────────────────── */}
       {connState.kind === 'connected' && (
-        <div className={styles.columns}>
-          <div className={styles.listBox}>
-            <div className={styles.listHeader}>
-              <Body1Strong>{t.fnoSolutions}</Body1Strong>
-              {!loadingSolutions && solutions.length > 0 && (
-                <Caption1 style={{ marginLeft: 6, opacity: 0.7 }}>({solutions.filter(s => s.componentType === 'DataModel' || s.componentType === 'Unknown').length})</Caption1>
-              )}
-              {loadingSolutions && <Spinner size="tiny" />}
-            </div>
-            <div style={{ padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalM}` }}>
-              <Input
-                size="small"
-                placeholder={t.fnoFilterModels}
-                value={solutionFilter}
-                onChange={(_, d) => setSolutionFilter(d.value)}
-                contentBefore={<SearchRegular />}
-                style={{ width: '100%' }}
-              />
-            </div>
-            <div className={styles.listScroll}>
-              {solutions
-                .filter(sol => sol.componentType === 'DataModel' || sol.componentType === 'Unknown')
-                .filter(sol => {
-                  if (!solutionFilter) return true;
-                  const q = solutionFilter.toLowerCase();
-                  return (sol.solutionName ?? '').toLowerCase().includes(q)
-                    || (sol.displayName ?? '').toLowerCase().includes(q)
-                    || (sol.publisher ?? '').toLowerCase().includes(q);
-                })
-                .map(sol => (
-                  <div
-                    key={sol.solutionName}
-                    className={`${styles.listItem} ${activeSolution === sol.solutionName ? styles.listItemActive : ''}`}
-                    onClick={() => handlePickSolution(sol.solutionName)}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <div>
-                      <Body1Strong>{sol.solutionName}</Body1Strong>
-                      {sol.publisher && <div><Caption1>{sol.publisher}</Caption1></div>}
+        <>
+          <div className={styles.columns}>
+            {/* Left: DataModel navigator */}
+            <div className={styles.listBox}>
+              <div className={styles.listHeader}>
+                <div className={styles.listHeaderLeft}>
+                  <TableSimpleRegular fontSize={16} style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }} />
+                  <Body1Strong style={{ whiteSpace: 'nowrap' }}>{t.fnoSolutions}</Body1Strong>
+                  {!loadingSolutions && solutions.length > 0 && (
+                    <Badge appearance="filled" color="brand" size="small" style={{ flexShrink: 0 }}>
+                      {solutions.filter(s => s.componentType === 'DataModel' || s.componentType === 'Unknown').length}
+                    </Badge>
+                  )}
+                </div>
+                {loadingSolutions && <Spinner size="tiny" />}
+              </div>
+              <div className={styles.listSearchBar}>
+                <Input
+                  size="small"
+                  placeholder={t.fnoFilterModels}
+                  value={solutionFilter}
+                  onChange={(_, d) => setSolutionFilter(d.value)}
+                  contentBefore={<SearchRegular />}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div className={styles.listScroll}>
+                {solutions
+                  .filter(sol => sol.componentType === 'DataModel' || sol.componentType === 'Unknown')
+                  .filter(sol => {
+                    if (!solutionFilter) return true;
+                    const q = solutionFilter.toLowerCase();
+                    return (sol.solutionName ?? '').toLowerCase().includes(q)
+                      || (sol.displayName ?? '').toLowerCase().includes(q)
+                      || (sol.publisher ?? '').toLowerCase().includes(q);
+                  })
+                  .map(sol => (
+                    <div
+                      key={sol.solutionName}
+                      className={mergeClasses(
+                        styles.listItem,
+                        activeSolution === sol.solutionName ? styles.listItemActive : '',
+                      )}
+                      onClick={() => handlePickSolution(sol.solutionName)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={e => { if (e.key === 'Enter') handlePickSolution(sol.solutionName); }}
+                    >
+                      <div className={styles.listItemContent}>
+                        <Body1Strong style={{ display: 'block' }}>{sol.solutionName}</Body1Strong>
+                        {sol.publisher && (
+                          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{sol.publisher}</Caption1>
+                        )}
+                      </div>
+                      <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+                    </div>
+                  ))}
+                {!loadingSolutions && solutions.filter(s => s.componentType === 'DataModel' || s.componentType === 'Unknown').length === 0 && !solutionFilter && (
+                  <div className={styles.emptyState}>
+                    <TableSimpleRegular fontSize={32} style={{ opacity: 0.3 }} />
+                    <Caption1>No solutions found under the known roots.</Caption1>
+                    <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                      If you know a specific publisher name, type it here and retry:
+                    </Caption1>
+                    <div className={styles.emptyStateRow}>
+                      <Input
+                        size="small"
+                        placeholder="Publisher / root solution name"
+                        value={customRoot}
+                        onChange={(_, d) => setCustomRoot(d.value)}
+                        style={{ flex: 1, minWidth: 0 }}
+                      />
+                      <Button
+                        size="small"
+                        appearance="primary"
+                        disabled={!customRoot.trim() || loadingSolutions}
+                        onClick={handleRetryWithRoot}
+                      >
+                        {t.fnoRetry}
+                      </Button>
                     </div>
                   </div>
-                ))}
-              {!loadingSolutions && solutions.filter(s => s.componentType === 'DataModel' || s.componentType === 'Unknown').length === 0 && !solutionFilter && (
-                <div className={styles.emptyState}>
-                  <Caption1>
-                    No solutions found under the known roots. If you know a specific publisher
-                    name (e.g. a custom solution root), type it here and retry:
-                  </Caption1>
-                  <div className={styles.emptyStateRow}>
-                    <Input
-                      size="small"
-                      placeholder="Publisher / root solution name"
-                      value={customRoot}
-                      onChange={(_, d) => setCustomRoot(d.value)}
-                      style={{ flex: 1, minWidth: 0 }}
-                    />
+                )}
+              </div>
+            </div>
+
+            {/* Right: configuration browser */}
+            <div className={styles.listBox}>
+              <div className={styles.listHeader}>
+                {/* Breadcrumb */}
+                <div className={styles.listHeaderLeft} style={{ minWidth: 0, flex: 1 }}>
+                  {solutionPath.length > 0 && (
+                    <Tooltip content={t.fnoBack} relationship="label">
+                      <Button
+                        size="small"
+                        appearance="subtle"
+                        icon={<ArrowLeftRegular />}
+                        onClick={handleBack}
+                        style={{ flexShrink: 0 }}
+                      />
+                    </Tooltip>
+                  )}
+                  <div className={styles.breadcrumb}>
+                    {solutionPath.length === 0 ? (
+                      <Body1Strong className={styles.breadcrumbItem}>{t.fnoConfigurations}</Body1Strong>
+                    ) : (
+                      solutionPath.map((seg, i) => (
+                        <React.Fragment key={seg}>
+                          {i > 0 && <ChevronRightRegular fontSize={12} className={styles.breadcrumbSep} />}
+                          <Caption1
+                            className={styles.breadcrumbItem}
+                            style={{ fontWeight: i === solutionPath.length - 1 ? '600' : undefined, color: i < solutionPath.length - 1 ? tokens.colorNeutralForeground3 : undefined }}
+                            title={seg}
+                          >
+                            {seg}
+                          </Caption1>
+                        </React.Fragment>
+                      ))
+                    )}
+                  </div>
+                </div>
+                {/* Controls */}
+                <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, alignItems: 'center', flexShrink: 0 }}>
+                  {loadingComponents && <Spinner size="tiny" />}
+                  <Dropdown
+                    size="small"
+                    value={componentTypeFilter === 'All' ? t.fnoAllTypes : componentTypeFilter}
+                    selectedOptions={[componentTypeFilter]}
+                    onOptionSelect={(_, d) => setComponentTypeFilter(d.optionValue as ErComponentType | 'All')}
+                  >
+                    <Option value="All">{t.fnoAllTypes}</Option>
+                    <Option value="ModelMapping">Mapping</Option>
+                    <Option value="Format">Format</Option>
+                  </Dropdown>
+                  <Tooltip content={t.fnoSelectAll} relationship="label">
                     <Button
                       size="small"
-                      appearance="primary"
-                      disabled={!customRoot.trim() || loadingSolutions}
-                      onClick={handleRetryWithRoot}
-                    >
-                      {t.fnoRetry}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className={styles.listBox}>
-            <div className={styles.listHeader}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                {solutionPath.length > 0 && (
-                  <Button size="small" appearance="subtle" onClick={handleBack}>
-                    {t.fnoBack}
-                  </Button>
-                )}
-                <Body1Strong
-                  style={{
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                  title={solutionPath.join(' / ') || t.fnoConfigurations}
-                >
-                  {solutionPath.length > 0 ? solutionPath.join(' / ') : t.fnoConfigurations}
-                </Body1Strong>
-              </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                {loadingComponents && <Spinner size="tiny" />}
-                <Dropdown
-                  size="small"
-                  value={componentTypeFilter === 'All' ? t.fnoAllTypes : componentTypeFilter}
-                  selectedOptions={[componentTypeFilter]}
-                  onOptionSelect={(_, d) => setComponentTypeFilter(d.optionValue as ErComponentType | 'All')}
-                >
-                  <Option value="All">{t.fnoAllTypes}</Option>
-                  <Option value="ModelMapping">ModelMapping</Option>
-                  <Option value="Format">Format</Option>
-                </Dropdown>
-                <Button size="small" onClick={selectAllVisible} disabled={filteredComponents.length === 0}>{t.fnoSelectAll}</Button>
-                <Button size="small" onClick={clearSelection} disabled={selected.size === 0}>{t.fnoSelectNone}</Button>
-              </div>
-            </div>
-            <div className={styles.listScroll}>
-              {filteredComponents.map(comp => {
-                const key = componentKey(comp);
-                const hasGuid = Boolean(comp.revisionGuid || comp.configurationGuid);
-                const hasChildren = Boolean(comp.hasChildren);
-                // ModelMapping rows from `getFormatSolutionsSubHierarchy`
-                // typically come back without their own GUID — the
-                // listing service only surfaces FormatMappingGUID for
-                // Format leaves. The X++ AOT signature
-                //   getModelMappingByID(_mappingGuid, _dataModelGuid,
-                //                       _dataContainerDescriptorName)
-                // however accepts an alternative resolution path: when
-                // `_mappingGuid` is empty the service looks the mapping
-                // up by `(_dataModelGuid, _dataContainerDescriptorName)`.
-                // We therefore treat a ModelMapping as downloadable
-                // whenever we know its parent DataModel GUID, even
-                // without its own GUID. `buildDownloadAttempts` in
-                // fno-client emits the matching fallback request.
-                const canResolveMappingViaParent =
-                  comp.componentType === 'ModelMapping' &&
-                  Boolean(comp.parentDataModelGuid || comp.parentDataModelRevisionGuid);
-                const isDownloadable = hasGuid || canResolveMappingViaParent;
-                // Three classes of rows:
-                //   1) isDownloadable → directly downloadable (selectable).
-                //   2) !isDownloadable && hasChildren → branch (drill in).
-                //   3) !isDownloadable && !hasChildren → dead row: F&O
-                //      surfaces it but it has neither own GUID nor
-                //      descendants. Most often a pure-inheritance
-                //      derived configuration whose content lives in
-                //      the base — already auto-included when the base
-                //      is loaded. Disable both drill and select.
-                const isDead = !isDownloadable && !hasChildren;
-                // Country-variant ModelMapping where we *also* lack
-                // the parent DataModel GUID is genuinely unreachable
-                // — F&O does not expose any service ID we could use.
-                // Its rules are already merged into Format XML downloads.
-                const isUnreachableMapping =
-                  !isDownloadable && comp.componentType === 'ModelMapping';
-                const disabledCheckboxTitle = isUnreachableMapping
-                  ? 'F&O does not expose a service ID for this ModelMapping. Its rules are bundled into the Format XML, so loading the parent Format is enough.'
-                  : isDead
-                    ? 'No downloadable content — pure-inheritance derived configuration. Loading the base solution already brings its definition.'
-                    : 'Branch node — drill in (click row) to find downloadable children';
-                const drillTitle = hasChildren
-                  ? isUnreachableMapping
-                    ? 'Click to drill in (informational only — children are not downloadable either).'
-                    : 'Click to drill into children'
-                  : isDead
-                    ? 'No children and no own GUID — nothing to open.'
-                    : undefined;
-                let captionSuffix = '';
-                if (isUnreachableMapping) {
-                  captionSuffix = ' · (not downloadable — bundled into Format XML)';
-                } else if (canResolveMappingViaParent && !hasGuid) {
-                  captionSuffix = ' · (resolved via parent DataModel)';
-                } else if (!isDownloadable) {
-                  captionSuffix = hasChildren
-                    ? ' · (no own content — click to drill in)'
-                    : ' · (no own content, no children — derived from a base configuration)';
-                }
-                return (
-                  <div
-                    key={key}
-                    className={styles.listItem}
-                    style={{ gap: 8, opacity: isDead || isUnreachableMapping ? 0.55 : 1 }}
-                  >
-                    <Checkbox
-                      checked={selected.has(key)}
-                      disabled={!isDownloadable}
-                      title={isDownloadable ? undefined : disabledCheckboxTitle}
-                      onChange={() => toggleSelect(comp)}
+                      appearance="subtle"
+                      icon={<CheckboxCheckedRegular />}
+                      disabled={filteredComponents.length === 0}
+                      onClick={selectAllVisible}
                     />
-                    <div
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        cursor: hasChildren ? 'pointer' : isDownloadable ? 'default' : 'not-allowed',
-                      }}
-                      onClick={hasChildren ? () => handleDrillInto(comp) : undefined}
-                      onKeyDown={hasChildren ? e => { if (e.key === 'Enter') handleDrillInto(comp); } : undefined}
-                      role={hasChildren ? 'button' : undefined}
-                      tabIndex={hasChildren ? 0 : undefined}
-                      title={drillTitle}
-                    >
-                      <Body1Strong>{comp.configurationName}</Body1Strong>
-                      <div>
-                        <Caption1>
-                          {comp.componentType}
-                          {comp.countryRegion ? ` · ${comp.countryRegion}` : ''}
-                          {captionSuffix}
-                        </Caption1>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              {!loadingComponents && filteredComponents.length === 0 && solutionPath.length > 0 && (
-                <div className={styles.emptyState}>
-                  <Caption1>{t.fnoNoChildren(solutionPath[solutionPath.length - 1])}</Caption1>
+                  </Tooltip>
+                  <Tooltip content={t.fnoSelectNone} relationship="label">
+                    <Button
+                      size="small"
+                      appearance="subtle"
+                      icon={<SelectAllOffRegular />}
+                      disabled={selected.size === 0}
+                      onClick={clearSelection}
+                    />
+                  </Tooltip>
                 </div>
-              )}
+              </div>
+
+              <div className={styles.listScroll}>
+                {filteredComponents.map(comp => {
+                  const key = componentKey(comp);
+                  const hasGuid = Boolean(comp.revisionGuid || comp.configurationGuid);
+                  const hasChildren = Boolean(comp.hasChildren);
+                  const canResolveMappingViaParent =
+                    comp.componentType === 'ModelMapping' &&
+                    Boolean(comp.parentDataModelGuid || comp.parentDataModelRevisionGuid);
+                  const isDownloadable = hasGuid || canResolveMappingViaParent;
+                  const isDead = !isDownloadable && !hasChildren;
+                  const isUnreachableMapping =
+                    !isDownloadable && comp.componentType === 'ModelMapping';
+
+                  const disabledTitle = isUnreachableMapping
+                    ? 'F&O does not expose a service ID for this ModelMapping. Its rules are bundled into the Format XML.'
+                    : isDead
+                      ? 'No downloadable content — pure-inheritance derived configuration.'
+                      : 'Branch node — click to drill into children';
+
+                  return (
+                    <div
+                      key={key}
+                      className={mergeClasses(
+                        styles.listItem,
+                        (isDead || isUnreachableMapping) ? styles.listItemDead : '',
+                      )}
+                    >
+                      {/* Checkbox */}
+                      <Checkbox
+                        checked={selected.has(key)}
+                        disabled={!isDownloadable}
+                        title={isDownloadable ? undefined : disabledTitle}
+                        onChange={() => toggleSelect(comp)}
+                      />
+
+                      {/* Content */}
+                      <div
+                        className={styles.listItemContent}
+                        style={{ cursor: hasChildren ? 'pointer' : 'default' }}
+                        onClick={hasChildren ? () => handleDrillInto(comp) : undefined}
+                        onKeyDown={hasChildren ? e => { if (e.key === 'Enter') handleDrillInto(comp); } : undefined}
+                        role={hasChildren ? 'button' : undefined}
+                        tabIndex={hasChildren ? 0 : undefined}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalXS, flexWrap: 'wrap' }}>
+                          <TypeBadge type={comp.componentType} />
+                          {comp.countryRegion && (
+                            <Badge appearance="outline" size="small" style={{ fontSize: '10px' }}>
+                              {comp.countryRegion}
+                            </Badge>
+                          )}
+                          {canResolveMappingViaParent && !hasGuid && (
+                            <Badge appearance="outline" color="success" size="small" style={{ fontSize: '10px' }}>
+                              via parent
+                            </Badge>
+                          )}
+                        </div>
+                        <Body1Strong style={{ display: 'block', marginTop: '2px' }}>
+                          {comp.configurationName}
+                        </Body1Strong>
+                        {comp.version && (
+                          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>v{comp.version}</Caption1>
+                        )}
+                      </div>
+
+                      {/* Drill icon */}
+                      {hasChildren ? (
+                        <Tooltip content="Drill into children" relationship="label">
+                          <ChevronRightRegular
+                            fontSize={16}
+                            style={{ color: tokens.colorBrandForeground1, flexShrink: 0, cursor: 'pointer' }}
+                            onClick={() => handleDrillInto(comp)}
+                          />
+                        </Tooltip>
+                      ) : isDownloadable ? (
+                        <CloudArrowDownRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+                      ) : (
+                        <DismissCircleRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+                      )}
+                    </div>
+                  );
+                })}
+
+                {!loadingComponents && filteredComponents.length === 0 && solutionPath.length > 0 && (
+                  <div className={styles.emptyState}>
+                    <DocumentTableRegular fontSize={32} style={{ opacity: 0.3 }} />
+                    <Caption1>{t.fnoNoChildren(solutionPath[solutionPath.length - 1])}</Caption1>
+                  </div>
+                )}
+                {!loadingComponents && filteredComponents.length === 0 && solutionPath.length === 0 && !loadingSolutions && (
+                  <div className={styles.emptyState}>
+                    <ChevronDownRegular fontSize={32} style={{ opacity: 0.3 }} />
+                    <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                      Select a Data Model on the left to browse its configurations.
+                    </Caption1>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {connState.kind === 'connected' && (
-        <div className={styles.footer}>
-          {ingesting && ingestStatus ? (
-            <Caption1 style={{ fontStyle: 'italic' }}>{ingestStatus}</Caption1>
-          ) : (
-            <Caption1
-              title={
-                selected.size > 0
-                  ? Array.from(selected.values())
-                      .map(c => `${c.solutionName} / ${c.configurationName} (${c.componentType})`)
-                      .join('\n')
-                  : undefined
-              }
+          {/* ── Footer / download bar ─────────────────────────────────────── */}
+          <div className={styles.footer}>
+            <div className={styles.footerStatus}>
+              {ingesting && ingestStatus ? (
+                <>
+                  <Spinner size="tiny" />
+                  <Caption1 style={{ fontStyle: 'italic', color: tokens.colorNeutralForeground2 }}>
+                    {ingestStatus}
+                  </Caption1>
+                </>
+              ) : selected.size > 0 ? (
+                <>
+                  <CheckmarkCircleRegular fontSize={16} style={{ color: tokens.colorBrandForeground1 }} />
+                  <Caption1>
+                    <strong>{selected.size}</strong> {t.fnoSelectedCount(selected.size).replace(String(selected.size), '').trim()}
+                  </Caption1>
+                  <Tooltip
+                    content={Array.from(selected.values()).map(c => `${c.solutionName} / ${c.configurationName} (${c.componentType})`).join('\n')}
+                    relationship="description"
+                  >
+                    <Caption1 style={{ color: tokens.colorNeutralForeground3, cursor: 'default' }}>
+                      {Array.from(selected.values()).slice(0, 2).map(c => c.configurationName).join(', ')}
+                      {selected.size > 2 ? ` +${selected.size - 2}` : ''}
+                    </Caption1>
+                  </Tooltip>
+                </>
+              ) : (
+                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                  Select configurations to download
+                </Caption1>
+              )}
+            </div>
+            <Button
+              appearance="primary"
+              size="large"
+              icon={ingesting ? <ArrowSyncRegular style={{ animation: 'spin 1s linear infinite' }} /> : <CloudArrowDownRegular />}
+              disabled={selected.size === 0 || ingesting}
+              onClick={handleLoadSelected}
             >
-              {selected.size > 0 ? t.fnoSelectedCount(selected.size) : ''}
-            </Caption1>
-          )}
-          <Button
-            appearance="primary"
-            icon={ingesting ? <ArrowSyncRegular /> : <CloudArrowDownRegular />}
-            disabled={selected.size === 0 || ingesting}
-            onClick={handleLoadSelected}
-          >
-            {ingesting ? t.fnoLoading : t.fnoLoadSelected}
-          </Button>
-        </div>
+              {ingesting ? t.fnoLoading : t.fnoLoadSelected}
+            </Button>
+          </div>
+        </>
       )}
     </div>
   );
 };
+
 
 function componentKey(c: ErConfigSummary): string {
   return `${c.solutionName}::${c.configurationName}::${c.componentType}::${c.version ?? ''}`;
