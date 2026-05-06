@@ -28,7 +28,11 @@ import { useAppStore, type TreeNode } from '../state/store';
 import { ERDirection } from '@er-visualizer/core';
 import type { ERConfiguration, ERModelMappingContent } from '@er-visualizer/core';
 import { loadBrowserFiles } from '../utils/file-loading';
-import { ArrowSyncRegular } from '@fluentui/react-icons';
+import {
+  ArrowSyncRegular,
+  CloudArrowDownRegular,
+  CheckmarkCircleRegular,
+} from '@fluentui/react-icons';
 
 type ConfigKind = 'DataModel' | 'ModelMapping' | 'Format';
 type SortMode = 'loadOrder' | 'nameAsc' | 'nameDesc';
@@ -367,36 +371,86 @@ export function ConfigExplorer() {
   const totalAll = kindCounts.DataModel + kindCounts.ModelMapping + kindCounts.Format;
   const isFiltering = filterQuery.trim().length > 0 || kindFilter.size < 3;
 
+  // ── Ingest progress helpers ──────────────────────────────────────────
+  const INGEST_STEPS = [
+    { key: 'prepare',  label: locale === 'cs' ? 'Příprava' : 'Preparing' },
+    { key: 'dm',       label: locale === 'cs' ? 'Stahuji datové modely' : 'Downloading data models' },
+    { key: 'fm',       label: locale === 'cs' ? 'Stahuji formáty a mapování' : 'Downloading formats & mappings' },
+    { key: 'mm',       label: locale === 'cs' ? 'Stahování mapování modelů' : 'Downloading model mappings' },
+    { key: 'finalize', label: locale === 'cs' ? 'Dokončuji' : 'Finalizing' },
+  ];
+
+  function getIngestStep(status: string): number {
+    const s = status.toLowerCase();
+    if (!status) return -1;
+    if (s.includes('připravu') || s.includes('prepar')) return 0;
+    if (s.includes('datamodel') || s.includes('datový') || s.includes('datové')) return 1;
+    if (s.includes('formát') || s.includes('format') || s.includes('konfigurace') || s.includes('configuration')) return 2;
+    if (s.includes('mapping') || s.includes('mapování')) return 3;
+    if (s.includes('dokonču') || s.includes('řeším') || s.includes('resolv') || s.includes('cross')) return 4;
+    return 2; // default to middle step
+  }
+
+  const ingestStep = fnoIngestStatus ? getIngestStep(fnoIngestStatus) : -1;
+
   if (treeNodes.length === 0) {
     return (
       <div
         className={`explorer-empty-state explorer-dropzone ${isDragging ? 'explorer-dropzone-dragging' : ''}`}
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {fnoIngestStatus && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 12px',
-            fontSize: 12,
-            fontWeight: 600,
-            color: 'var(--text-primary)',
-            background: 'var(--surface-info-bg, rgba(0,120,212,0.08))',
-            borderRadius: 6,
-            animation: 'statusbar-pulse 1.6s ease-in-out infinite',
-            width: '100%',
-            maxWidth: 320,
-            marginBottom: 12,
-          }}>
-            <ArrowSyncRegular fontSize={16} style={{ animation: 'spin 1.2s linear infinite', flexShrink: 0 }} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fnoIngestStatus}</span>
+        {fnoIngestStatus ? (
+          <div className="fno-ingest-card">
+            <div className="fno-ingest-card-header">
+              <div className="fno-ingest-card-icon">
+                <CloudArrowDownRegular fontSize={20} style={{ animation: 'fno-ingest-icon-float 2s ease-in-out infinite' }} />
+              </div>
+              <div>
+                <div className="fno-ingest-card-title">
+                  {locale === 'cs' ? 'Načítám konfigurace' : 'Loading configurations'}
+                </div>
+                <div className="fno-ingest-card-subtitle">
+                  {locale === 'cs' ? 'z Dynamics 365 F&O' : 'from Dynamics 365 F&O'}
+                </div>
+              </div>
+            </div>
+            <div className="fno-ingest-card-body">
+              <div className="fno-ingest-progress-track">
+                <div className="fno-ingest-progress-bar" />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {INGEST_STEPS.map((step, i) => (
+                  <div
+                    key={step.key}
+                    className={`fno-ingest-step ${
+                      i < ingestStep ? 'done' : i === ingestStep ? 'active' : ''
+                    }`}
+                  >
+                    {i < ingestStep ? (
+                      <CheckmarkCircleRegular fontSize={13} style={{ flexShrink: 0, color: 'var(--colorPaletteGreenBackground3, #107c10)' }} />
+                    ) : (
+                      <div className="fno-ingest-step-dot" />
+                    )}
+                    <span>{step.label}</span>
+                    {i === ingestStep && (
+                      <span style={{ fontSize: 10, color: 'var(--colorNeutralForeground3)', marginLeft: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 110 }}>
+                        {fnoIngestStatus}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
+        ) : (
+          <>
+            <p style={{ marginBottom: 8 }}>{t.noConfigurationsLoaded}</p>
+            <p style={{ fontSize: 11 }}>{t.loadXmlHint}</p>
+          </>
         )}
-        <p style={{ marginBottom: 8 }}>{t.noConfigurationsLoaded}</p>
-        <p style={{ fontSize: 11 }}>{t.loadXmlHint}</p>
         {isDragging && <div className="explorer-dropzone-overlay">{t.landingDropRelease}</div>}
       </div>
     );
@@ -412,20 +466,21 @@ export function ConfigExplorer() {
       {isDragging && <div className="explorer-dropzone-overlay">{t.landingDropRelease}</div>}
 
       {fnoIngestStatus && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '6px 12px',
-          fontSize: 11,
-          fontWeight: 600,
-          color: 'var(--text-primary)',
-          background: 'var(--surface-info-bg, rgba(0,120,212,0.08))',
-          borderBottom: '1px solid var(--border-subtle)',
-          animation: 'statusbar-pulse 1.6s ease-in-out infinite',
-        }}>
-          <ArrowSyncRegular fontSize={14} style={{ animation: 'spin 1.2s linear infinite', flexShrink: 0 }} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fnoIngestStatus}</span>
+        <div className="fno-ingest-banner">
+          <ArrowSyncRegular
+            className="fno-ingest-banner-icon"
+            fontSize={14}
+            style={{ animation: 'spin 1.2s linear infinite' }}
+          />
+          <div className="fno-ingest-banner-text">
+            <div className="fno-ingest-banner-label">
+              {locale === 'cs' ? 'Načítám' : 'Loading'}
+            </div>
+            <div className="fno-ingest-banner-status">{fnoIngestStatus}</div>
+          </div>
+          <div className="fno-ingest-progress-track" style={{ width: 48, flexShrink: 0 }}>
+            <div className="fno-ingest-progress-bar" />
+          </div>
         </div>
       )}
 

@@ -342,22 +342,47 @@ export async function listSolutions(
   // stored as `rootSolutionName` so the UI can always fetch the full tree.
   const skippedFormats: string[] = [];
   const skippedMappings: string[] = [];
-  const processFlatRows = (flat: RawErSolutionRow[], seedName: string) => {
-    for (const r of flat) {
+  /**
+   * Walk the `DerivedSolutions` tree recursively so we can derive
+   * `parentSolutionName` from the actual nesting position — without
+   * relying on the `Base` field that F&O often omits.
+   *
+   * @param rows      Current level of the DerivedSolutions tree
+   * @param seedName  Top-level root DataModel (used as `rootSolutionName`)
+   * @param parentName Name of the node one level up (direct parent)
+   */
+  const processSolutionTree = (rows: RawErSolutionRow[], seedName: string, parentName: string | undefined) => {
+    for (const r of rows) {
       const mapped = mapSolutionRow(r);
       if (mapped.componentType === 'Format') {
         skippedFormats.push(mapped.solutionName ?? '<unnamed>');
+        // Still recurse — derived formats can contain derived DataModels
+        if (Array.isArray(r.DerivedSolutions) && r.DerivedSolutions.length > 0) {
+          processSolutionTree(r.DerivedSolutions, seedName, mapped.solutionName ?? parentName);
+        }
         continue;
       }
       if (mapped.componentType === 'ModelMapping') {
         skippedMappings.push(mapped.solutionName ?? '<unnamed>');
+        if (Array.isArray(r.DerivedSolutions) && r.DerivedSolutions.length > 0) {
+          processSolutionTree(r.DerivedSolutions, seedName, mapped.solutionName ?? parentName);
+        }
         continue;
       }
       if (mapped.solutionName && !seen.has(mapped.solutionName)) {
         if (mapped.solutionName !== seedName) {
           mapped.rootSolutionName = seedName;
+          // Use the caller's node name as the direct parent so the UI can
+          // build a proper multi-level tree (parent → child → grandchild…).
+          if (parentName && parentName !== mapped.solutionName) {
+            mapped.parentSolutionName = parentName;
+          }
         }
         seen.set(mapped.solutionName, mapped);
+      }
+      // Recurse into children, passing this node as the new parent
+      if (Array.isArray(r.DerivedSolutions) && r.DerivedSolutions.length > 0) {
+        processSolutionTree(r.DerivedSolutions, seedName, mapped.solutionName ?? parentName);
       }
     }
   };
@@ -558,7 +583,7 @@ export async function listSolutions(
         const rows = unwrapServiceArray<RawErSolutionRow>(raw, operation);
         if (rows.length > 0) {
           probesWithHits.push(parent);
-          processFlatRows(flattenErHierarchy(rows), parent);
+          processSolutionTree(rows, parent, undefined);
           // Add the probed parent itself as a DataModel entry so it
           // appears in the tree as a navigable root.
           if (!seen.has(parent)) {

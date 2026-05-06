@@ -1,8 +1,8 @@
-# Architecture Documentation
+# Architecture
 
 ## System Overview
 
-D365FO ER Visualizer is a monorepo application for visualizing and analyzing Electronic Reporting (ER) configurations exported from Dynamics 365 Finance & Operations. It transforms raw XML configuration bundles into an interactive visual workspace.
+D365FO ER Visualizer is a pnpm monorepo for visualizing and analyzing Dynamics 365 Finance & Operations Electronic Reporting (ER) configurations. It transforms raw XML bundles (or live API responses) into an interactive visual workspace.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -44,24 +44,25 @@ D365FO ER Visualizer is a monorepo application for visualizing and analyzing Ele
 ## Data Flow
 
 ```
-  ER XML File(s)
+  ER XML (disk) or F&O API response
        │
        ▼
   parseERConfiguration()          ← @er-visualizer/core
        │
        ├── Detect component kind (DataModel / ModelMapping / Format)
-       ├── Parse solution version envelope
+       ├── Unwrap ErFnoBundle / bare-content / base64 payload
+       ├── Resolve correct version node from Solution → Contents → Ref.IDs
        ├── Parse version-specific content
-       │     ├── Data Model → containers, items
-       │     ├── Model Mapping → datasources, bindings, validations
-       │     └── Format → elements, format bindings, enums, transformations
+       │     ├── DataModel    → containers, items
+       │     ├── ModelMapping → datasources, bindings, validations
+       │     └── Format       → elements, format bindings, enums, transformations
        └── Parse expression AST (recursive XML → discriminated union)
        │
        ▼
   ERConfiguration (typed object)
        │
        ▼
-  Zustand Store (loadXmlFile action)
+  Zustand Store  loadXmlFile(xml, path)
        │
        ├── Append to configurations[]
        ├── Rebuild GUIDRegistry (indexConfiguration for all configs)
@@ -70,13 +71,12 @@ D365FO ER Visualizer is a monorepo application for visualizing and analyzing Ele
        │
        ▼
   UI Components
-       │
-       ├── ConfigExplorer ← treeNodes (filterable tree)
-       ├── DesignerView   ← active config (ReactFlow graph)
+       ├── ConfigExplorer    ← treeNodes (filterable/grouped tree)
+       ├── DesignerView      ← active config (ReactFlow graph)
        ├── PropertyInspector ← selectedNode (property grid)
-       ├── SearchPanel     ← registry.search() + whereUsed()
-       ├── ClickablePath   ← resolveDatasource/resolveBinding
-       └── DrillDownPanel  ← resolveDeepExpression chain
+       ├── SearchPanel       ← registry.search() + whereUsed()
+       ├── ClickablePath     ← resolveDatasource / resolveBinding
+       └── DrillDownPanel    ← resolveDeepExpression chain
 ```
 
 ---
@@ -101,17 +101,17 @@ The parser uses `fast-xml-parser` with a configuration tuned for ER XML:
 
 ### GUID Registry (`guid-registry.ts`)
 
-Central index for all GUIDs found across loaded configurations:
+Central cross-reference index over all loaded configurations:
 
 ```
-GUIDEntry:
-  guid            → normalized lowercase
+GUIDEntry
+  guid            → normalized lowercase (braces stripped)
   kind            → Solution / ModelVersion / Container / FormatElement / …
-  name            → human-readable name
-  configFilePath  → source file
+  name            → human-readable label
+  configFilePath  → source file path (disk path or synthetic fno:// URI)
   componentKind   → DataModel / ModelMapping / Format
 
-CrossRefEntry:
+CrossRefEntry
   target          → referenced entity (table name, GUID, model path, …)
   targetType      → Table / Field / GUID / ModelPath / Enum / Class / EDT / Label / Formula
   sourceConfigPath → where the reference occurs
@@ -119,7 +119,7 @@ CrossRefEntry:
   sourceContext    → human-readable description
 ```
 
-The `indexConfiguration()` method walks the entire typed config tree and registers all GUIDs and cross-references in a single pass.
+`indexConfiguration()` walks the full typed config tree and registers every GUID and cross-reference in a single pass.
 
 ### Type System
 
@@ -135,7 +135,7 @@ The type system uses TypeScript interfaces with discriminated unions for polymor
 
 ### State Management
 
-The Zustand store (`useAppStore`) is the single source of truth. Key state:
+The Zustand store (`useAppStore`) is the single source of truth for workspace state:
 
 | State | Type | Description |
 |---|---|---|
@@ -145,7 +145,8 @@ The Zustand store (`useAppStore`) is the single source of truth. Key state:
 | `selectedNodeId` / `selectedNode` | `string` / `TreeNode` | Currently selected node |
 | `openTabs` / `activeTabId` | Tab array + active ID | Designer tab state |
 | `searchQuery` / `searchResults` | string / any[] | Search state |
-| `showTechnicalDetails` | `boolean` | Global consultant/technical detail mode, persisted in local storage |
+| `showTechnicalDetails` | `boolean` | Consultant/technical mode (persisted in localStorage) |
+| `fnoIngestStatus` | `string` | Current ingest phase label; empty when idle |
 
 Key actions:
 
@@ -156,47 +157,92 @@ Key actions:
 | `resolveDatasource(expr, configIdx)` | Find datasource matching an expression segment |
 | `resolveBinding(path, configIdx)` | Find model mapping binding for a model path |
 | `resolveModelPath(dotPath)` | End-to-end: model path → binding → datasource |
-| `whereUsed(entityName)` | Trace table / enum / class / datasource → datasource → binding → format element |
+| `whereUsed(entityName)` | Trace table / enum / class / datasource → binding → format element |
+| `setFnoIngestStatus(text)` | Update the ingest progress label (empty = idle) |
+
+**F&O session state** (`state/fno-session.ts`) is separate from the main store. It holds connection state, solution list, component list, and selection across drill levels so that navigating away from `FnoConnectPanel` does not lose browsing progress.
+
+### FnoConnectPanel — F&O Ingest Pipeline
+
+`FnoConnectPanel` orchestrates the full download lifecycle via `handleLoadSelected`. The pipeline runs in 5 sequential phases, each reflected in the `fnoIngestStatus` label that drives the progress UI:
+
+1. **Phase 0 — GUID discovery** (scout downloads) — for Formats whose parent DataModel has no GUID in the listing API, sibling Format XML is downloaded to extract the `Model=` GUID attribute. If that also fails, ModelMapping siblings are included as scouts (their download returns both the mapping and the DataModel via `parmModel`).
+
+2. **Phase 1 — DataModels** — downloaded in parallel batches of 2. Cross-references (`referencedDataModelGuids`) are harvested for the follow-up queue.
+
+3. **Phase 2 — Formats & Mappings + listing scan** (concurrent) — selected non-DataModel configs download in parallel while a recursive `listComponents` walk builds `pendingMappingBranchesByDmName` without downloading anything yet.
+
+4. **Phase 3 — Model Mappings** (synth pass) — for every DataModel GUID now known (from XML, listing, and cross-refs), `GetModelMappingByID(dmGuid, descriptorName)` is called. Branches sharing a DataModel GUID are attempted in batches; once one succeeds, remaining branches for that GUID are skipped.
+
+5. **Phase 4 — Late DataModels** — GUIDs discovered inside ModelMapping XML during Phase 3 but not yet loaded are fetched in a final follow-up pass.
+
+**Ingest progress UI:**
+- `LandingPage` renders a full-screen modal card (backdrop blur + slide-in animation) with an indeterminate progress bar and a 5-step checklist. Steps show a pulsing dot when active and a green checkmark when done.
+- `ConfigExplorer` renders a compact in-tree banner while configurations are already visible in the explorer.
+- Both derive the active step index by matching `fnoIngestStatus` against well-known phase strings.
 
 ### Component Interaction
 
 ```
-Toolbar ─── file open ──→ loadXmlFile ──→ store update ──→ tree + designer re-render
-                                                             │
-ConfigExplorer ─── click ──→ selectNode ──→ PropertyInspector re-render
-                   dblclick ─→ openTab ──→ DesignerView re-render
-                                 │
-                                 └─ non-root node → Focused detail-only tab
-                                             │
+Toolbar ────── file open ──→ loadXmlFile ──→ store update ──→ tree + designer re-render
+                                                              │
+ConfigExplorer ── click ──→ selectNode ──→ PropertyInspector re-render
+                  dblclick → openTab ──→ DesignerView re-render
+                                │
+                                └─ non-root node → Focused detail-only tab
+
 DesignerView ─── node click ──→ selectNode
-             ─── expression click ──→ DrillDownPanel push frame
-                                       │
-ClickablePath ─── hover/click ──→ resolveDatasource / resolveModelPath
-                                   │
-SearchPanel ─── search ──→ registry.search()
-            ─── result action ──→ navigateToTreeNode()
-            ─── where-used ──→ whereUsed() ──→ render trace cards
+             ─── expression click → DrillDownPanel push frame
+
+ClickablePath ── hover/click ──→ resolveDatasource / resolveModelPath
+
+SearchPanel ──── search ──→ registry.search()
+            ──── result action → navigateToTreeNode()
+            ──── where-used ──→ whereUsed() → render trace cards
+
+FnoConnectPanel ─ connect ──→ fnoSession.signIn() → listSolutions()
+                ─ pick solution → listComponents() → setComponents()
+                ─ load selected → 5-phase ingest pipeline → loadXmlFile (for each)
 ```
+
+---
+
+### Hierarchical Solutions List
+
+`FnoConnectPanel` builds a 2-level solution tree from the flat `ErSolutionSummary[]` list returned by the F&O API:
+
+- **Root nodes** — summaries with no `rootSolutionName`. Displayed as expandable rows with a collapse/expand toggle and a child-count badge.
+- **Child nodes** — summaries whose `rootSolutionName` points to a root in the list. These represent derived (country/region-specific) DataModels. Displayed indented under their root.
+
+Clicking a root auto-expands it (via `expandedSolutions` state) so children are immediately visible. Selection from the left panel triggers `handlePickSolution`, which fetches the full component tree from `rootSolutionName` (not the clicked name) to ensure sibling formats and mappings are included.
+
+The `promoteDmToSolutions` helper appends newly-discovered derived DataModels (found inside `listComponents` responses) to the solutions list so they appear as navigable child rows without requiring a separate API call.
+
+---
 
 ### Designer Views
 
 Three specialized designers, all using `@xyflow/react`:
 
 1. **ModelDesigner** — BFS-based left-to-right layout of containers as card nodes, with edges for type references between containers.
-2. **MappingDesigner** — Three-column view: datasources, bindings (model paths → expressions), validations.
-3. **FormatDesigner** — Hierarchical element tree with binding status badges (bound/unbound/structural) and category-grouped binding display.
+2. **MappingDesigner** — Three-column view: datasources → bindings (model paths → expressions) → validations.
+3. **FormatDesigner** — Hierarchical element tree with binding status badges (bound / unbound / structural) and category-grouped binding display.
 
-Additionally, a **FocusedNodeTab** mode is used for non-root explorer items. Instead of rendering the full designer underneath, the center pane shows a dedicated properties-only detail view for the selected node.
+A **FocusedNodeTab** mode is used for non-root explorer items: the center pane shows a dedicated properties-only detail view instead of the full designer.
 
 ### Theming
 
-The app uses CSS custom properties for a semantic color system:
+The app uses two complementary systems:
 
-- `--surface-info-*` / `--surface-success-*` / `--surface-warning-*` / `--surface-danger-*` / `--surface-purple-*` — category tints
+**Fluent UI tokens** (`tokens.*`) — used for all Fluent component styling (colors, spacing, typography, shadows, border radii). Theme is controlled by wrapping the tree in `FluentProvider` with a light or dark theme object.
+
+**CSS custom properties** — semantic surface variables shared across custom (non-Fluent) CSS:
+
+- `--surface-info-*` / `--surface-success-*` / `--surface-warning-*` / `--surface-danger-*` / `--surface-purple-*` — category tint surfaces
 - `--format-type-*` — per-format-element-type accent colors
-- `--accent`, `--bg-primary`, `--bg-secondary`, `--text-primary`, `--text-secondary` — base theme
+- `--accent`, `--bg-primary`, `--bg-secondary`, `--text-primary`, `--text-secondary` — base theme tokens
 
-Both dark and light modes are supported, and the UI also supports a consultant/technical detail toggle. The detail toggle is stored in local storage so the preferred level of information survives reloads.
+Both light and dark variants are defined. The active mode is stored in Zustand (`themeMode`) and persisted in localStorage.
 
 ---
 

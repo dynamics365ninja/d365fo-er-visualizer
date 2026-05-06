@@ -31,8 +31,12 @@ import {
 import {
   ArrowUploadRegular,
   ArrowDownloadRegular,
+  ArrowSyncRegular,
   CheckmarkCircleFilled,
+  CheckmarkCircleRegular,
   CloudArrowDownFilled,
+  CloudArrowDownRegular,
+  CloudRegular,
   DataBarVerticalFilled,
   DismissRegular,
   DocumentFilled,
@@ -45,7 +49,7 @@ import {
   WeatherSunnyRegular,
 } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
-import { t } from '../i18n';
+import { locale, t } from '../i18n';
 import { FnoConnectPanel } from './FnoConnectPanel';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 
@@ -447,14 +451,14 @@ const useStyles = makeStyles({
   ingestCard: {
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    gap: '20px',
-    padding: '40px 48px',
+    alignItems: 'stretch',
+    gap: '16px',
+    padding: '28px 32px',
     borderRadius: tokens.borderRadiusXLarge,
     backgroundColor: tokens.colorNeutralBackground1,
     boxShadow: tokens.shadow64,
-    maxWidth: '420px',
-    textAlign: 'center',
+    width: '360px',
+    maxWidth: 'calc(100vw - 48px)',
     animationName: {
       from: { opacity: 0, transform: 'scale(0.92) translateY(12px)' },
       to: { opacity: 1, transform: 'scale(1) translateY(0)' },
@@ -465,8 +469,8 @@ const useStyles = makeStyles({
     animationFillMode: 'both',
   },
   ingestIcon: {
-    width: '72px',
-    height: '72px',
+    width: '56px',
+    height: '56px',
     borderRadius: '50%',
     backgroundColor: tokens.colorBrandBackground,
     backgroundImage: `linear-gradient(135deg, ${tokens.colorBrandBackground} 0%, ${tokens.colorBrandBackgroundPressed} 100%)`,
@@ -474,23 +478,20 @@ const useStyles = makeStyles({
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: tokens.shadow16,
-    animationName: {
-      '0%': { transform: 'rotate(0deg)' },
-      '100%': { transform: 'rotate(360deg)' },
-    },
-    animationDuration: '2.5s',
-    animationTimingFunction: 'linear',
-    animationIterationCount: 'infinite',
+    position: 'relative',
+    zIndex: 1,
   },
   ingestPulse: {
-    width: '96px',
-    height: '96px',
+    width: '56px',
+    height: '56px',
     borderRadius: '50%',
     border: `2px solid ${tokens.colorBrandBackground}`,
     position: 'absolute',
+    top: 0,
+    left: 0,
     animationName: {
-      '0%': { transform: 'scale(0.8)', opacity: 0.6 },
-      '100%': { transform: 'scale(1.4)', opacity: 0 },
+      '0%': { transform: 'scale(1)', opacity: 0.7 },
+      '100%': { transform: 'scale(1.8)', opacity: 0 },
     },
     animationDuration: '1.8s',
     animationTimingFunction: 'ease-out',
@@ -580,17 +581,79 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
       {fnoIngestStatus && (
         <div className={styles.ingestOverlay}>
           <div className={styles.ingestCard}>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div className={styles.ingestPulse} />
-              <div className={styles.ingestIcon}>
-                <CloudArrowDownFilled fontSize={32} style={{ color: tokens.colorNeutralForegroundOnBrand }} />
+            {/* Icon + title */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
+              <div style={{ position: 'relative', flexShrink: 0, width: '56px', height: '56px' }}>
+                <div className={styles.ingestPulse} />
+                <div className={styles.ingestIcon}>
+                  <CloudRegular fontSize={28} style={{ color: tokens.colorNeutralForegroundOnBrand }} />
+                </div>
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <Subtitle2 style={{ display: 'block' }}>{t.fnoLoading}</Subtitle2>
+                <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginTop: '3px' }}>
+                  {locale === 'cs' ? 'z Dynamics 365 F&O' : 'from Dynamics 365 F\u0026O'}
+                </Caption1>
               </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <Subtitle2>{t.fnoLoading}</Subtitle2>
-              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{fnoIngestStatus}</Caption1>
+
+            {/* Progress bar */}
+            <div className="fno-ingest-progress-track" style={{ width: '100%' }}>
+              <div className="fno-ingest-progress-bar" />
             </div>
-            <Spinner size="small" />
+
+            {/* Step list */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+              {[
+                { key: 'prepare',  label: locale === 'cs' ? 'P\u0159\u00edprava' : 'Preparing' },
+                { key: 'dm',       label: locale === 'cs' ? 'Stahuji datov\u00e9 modely' : 'Downloading data models' },
+                { key: 'fm',       label: locale === 'cs' ? 'Stahuji form\u00e1ty a mapov\u00e1n\u00ed' : 'Downloading formats \u0026 mappings' },
+                { key: 'mm',       label: locale === 'cs' ? 'Stahov\u00e1n\u00ed mapov\u00e1n\u00ed model\u016f' : 'Downloading model mappings' },
+                { key: 'finalize', label: locale === 'cs' ? 'Dokon\u010duji' : 'Finalizing' },
+              ].map((step, i) => {
+                const s = fnoIngestStatus.toLowerCase();
+                let activeStep = 2;
+                if (s.includes('p\u0159ipravu') || s.includes('prepar')) activeStep = 0;
+                else if (s.includes('datamodel') || s.includes('datov')) activeStep = 1;
+                else if (s.includes('form') || s.includes('konfigurace') || s.includes('configuration')) activeStep = 2;
+                else if (s.includes('mapping') || s.includes('mapov')) activeStep = 3;
+                else if (s.includes('dokon') || s.includes('\u0159e\u0161') || s.includes('resolv') || s.includes('cross')) activeStep = 4;
+
+                const isDone   = i < activeStep;
+                const isActive = i === activeStep;
+
+                return (
+                  <div
+                    key={step.key}
+                    className={`fno-ingest-step${isDone ? ' done' : isActive ? ' active' : ''}`}
+                    style={{ fontSize: '13px' }}
+                  >
+                    {isDone ? (
+                      <CheckmarkCircleRegular
+                        fontSize={15}
+                        style={{ flexShrink: 0, color: tokens.colorPaletteGreenForeground1 }}
+                      />
+                    ) : (
+                      <div className="fno-ingest-step-dot" style={{ width: '9px', height: '9px' }} />
+                    )}
+                    <span>{step.label}</span>
+                    {isActive && (
+                      <span style={{
+                        fontSize: '11px',
+                        color: tokens.colorNeutralForeground3,
+                        marginLeft: 'auto',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        maxWidth: '160px',
+                      }}>
+                        {fnoIngestStatus}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
