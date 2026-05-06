@@ -178,17 +178,6 @@ export interface ErConfigDownload {
    * revision to `GetDataModelByIDAndRevision`.
    */
   referencedDataModelRevisions?: Record<string, number>;
-  /**
-   * GUIDs of ModelMapping configurations referenced from inside a
-   * downloaded Format XML — e.g. `ERFormatMappingVersion.ModelMappingVersion`
-   * or similar attributes that point to the specific (possibly country-
-   * specific) model mapping the format is bound to.
-   *
-   * Each GUID can be passed directly as `_mappingGuid` to
-   * `GetModelMappingByID`, bypassing the descriptor-based fallback that
-   * always resolves to the DEFAULT mapping regardless of country settings.
-   */
-  referencedModelMappingGuids?: string[];
 }
 
 /** A successfully acquired token, valid for an envUrl. */

@@ -696,6 +696,10 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       }
     }
     setIngesting(true);
+    // Set a non-empty status immediately so the "Already loaded / Open" button
+    // is hidden from the very first moment (fnoIngestStatus gate in LandingPage).
+    // Without this, Phase 0 scout downloads run with fnoIngestStatus='', leaving
+    // the Open button visible for several seconds while the user has cached configs.
     setIngestStatus(t.fnoStatusPreparing);
 
     const finalToLoad = Array.from(augmented.values());
@@ -706,6 +710,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         k === 'DataModel' ? 0 : k === 'ModelMapping' ? 1 : 2;
       return order(a.componentType) - order(b.componentType);
     });
+
     // Key set of components the user picked explicitly — used to
     // differentiate "real failure on user-selected item" (error toast)
     // from "auto-injected root model had no own XML" (silent skip).
@@ -734,23 +739,10 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       }
     }
 
-    // GUIDs of ModelMapping configs referenced from downloaded Format XMLs
-    // (via ERFormatMappingVersion.ModelMappingVersion or similar attributes).
-    // Populated by downloadSelectedTask; consumed by the synth pass to queue
-    // direct-GUID mapping downloads that bypass the unreliable descriptor
-    // fallback (which always returns the DEFAULT mapping, not the CZ/SK one).
-    const formatMmGuids = new Set<string>();
-
-    // Maps DataModel VERSION GUID (from ERModelDataSourceHandler.ModelGuid inside
-    // format XML) → DataModel ERSolution GUID (from the listing API's `Base` field
-    // stored as referencedModelGuid on the format ErConfigSummary).
-    //
-    // WHY: `GetModelMappingByID(_mappingGuid=zero, _dataModelGuid, descriptor)`
-    // resolves `_dataModelGuid` through ERSolutionTable (keyed by ERSolution.ID).
-    // The version GUID (from inside XML) is NOT in ERSolutionTable.ID — so F&O
-    // falls through to the global default mapping instead of the country-specific
-    // one. The ERSolution GUID from the listing's `Base` field IS in
-    // ERSolutionTable.ID and resolves directly to the CZ/SK mapping.
+    // Maps DataModel VERSION GUID (from format XML ERModelDataSourceHandler.ModelGuid)
+    // → DataModel ERSolution GUID (from listing API `Base` field / referencedModelGuid).
+    // WHY: GetModelMappingByID resolves _dataModelGuid via ERSolutionTable.ID;
+    // the version GUID isn't there — the ERSolution GUID IS, and resolves correctly.
     const dmVersionToSolutionGuid = new Map<string, string>();
 
     // Helper: process a single download result, harvest cross-references.
@@ -770,13 +762,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               dmVersionToSolutionGuid.set(lower, solGuid);
             }
           }
-          // For import formats, GetEffectiveFormatMappingByID returns only the format
-          // structure — no ERSolution wrapper (no Base= attribute) and no embedded
-          // ERModelMappingVersion (no Model= attribute). extractReferencedDataModelGuids
-          // therefore finds 0 GUIDs and pendingModelFollowUps stays empty.
-          // The listing API's referencedModelGuid IS reliable — it comes from the
-          // ERSolution.Base field in the listing row. Use it as a fallback so the
-          // synth pass can try GetDataModelByIDAndRevision with the ERSolution GUID.
+          // Import format XML carries no Base= or Model= → extractReferencedDataModelGuids
+          // finds 0 GUIDs. Use listing API's referencedModelGuid (= ERSolution.Base) as
+          // fallback so the synth pass can try GetDataModelByIDAndRevision.
           if (refs.length === 0 && !alreadyLoadedGuids.has(solGuid)) {
             if (!pendingModelFollowUps.has(solGuid)) {
               pendingModelFollowUps.set(solGuid, { guid: solGuid, rev: undefined });
@@ -814,20 +802,11 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     };
 
     // ── Phase 0: GUID discovery for no-GUID DataModels ──
-    // F&O's getFormatSolutionsSubHierarchy does not return GUIDs for DataModel /
-    // ModelMapping rows on modern builds. However Format siblings in the same tree
-    // carry FormatMappingGUID AND referencedModelGuid (ERSolution GUID from Base field).
-    //
-    // Root cause of the problem: F&O listing API returns no GUIDs for DataModel/ModelMapping.
-    // Import format XML (GetEffectiveFormatMappingByID) returns only the bare format element
-    // tree — no <ERSolutionVersion> wrapper, no Base= attribute, no Model= attribute.
-    // So neither allDataModelsSeen nor XML extraction can provide a DataModel GUID.
-    //
-    // Strategy: for each selected Format that has no DataModel in finalToLoad,
-    // find sibling Format rows (with FormatMappingGUID = configurationGuid) from
-    // rootComponentCacheRef keyed by the format's solutionName, and download up to 3
-    // of them as scouts. Export-format siblings embed Model="{dm-guid}" in their XML.
-    // Once we have the GUID, synthesize a DataModel entry and push it into finalToLoad.
+    // F&O listing API returns no GUIDs for DataModel/ModelMapping rows on modern builds.
+    // For Formats whose parent DataModel has no GUID, we use sibling Formats from the
+    // listing cache as scouts: export-format siblings embed Model="{dm-guid}" in XML.
+    // For import formats (no Model= in XML), we auto-include ModelMapping siblings —
+    // GetModelMappingByID(mappingGuid) returns DataModel XML for free via parmModel.
     {
       // Build a set of DataModel solution/config names already covered in finalToLoad.
       const dmNamesInLoad = new Set(
@@ -872,38 +851,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           try {
             const scoutDownload = await fnoSession.downloadConfiguration(activeProfile, scout);
 
-            // Harvest ModelMapping GUIDs from the scout XML.
-            // er-services.ts handles standard camelCase attributes; here we also
-            // cover the non-standard `Mapping ID.="{guid}"` pattern that F&O ER
-            // uses on ERModelMappingVersion elements (attribute name has a space
-            // and a dot — technically invalid XML but real in F&O responses).
-            for (const mmGuid of scoutDownload.referencedModelMappingGuids ?? []) {
-              formatMmGuids.add(mmGuid);
-            }
-            // Fallback: scan raw XML for `Mapping ID.="{guid}"` pattern directly.
-            // F&O ER XML uses a non-standard attribute name with space+dot.
-            // Using indexOf instead of regex to avoid encoding/boundary issues.
-            {
-              const xml = scoutDownload.xml;
-              const needle = 'mapping id';
-              let searchFrom = 0;
-              const simpleGuidRe = /\{?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\}?/i;
-              while (true) {
-                const idx = xml.toLowerCase().indexOf(needle, searchFrom);
-                if (idx < 0) break;
-                // Look ahead up to 60 chars for a GUID value
-                const segment = xml.slice(idx, idx + 80);
-                const gm = segment.match(simpleGuidRe);
-                if (gm) {
-                  const guid = gm[1].toLowerCase();
-                  if (guid !== '00000000-0000-0000-0000-000000000000') {
-                    formatMmGuids.add(guid);
-                  }
-                }
-                searchFrom = idx + needle.length;
-              }
-            }
-
             const refs = scoutDownload.referencedDataModelGuids ?? [];
             if (refs.length > 0) {
               const dmGuid = refs[0].toLowerCase();
@@ -916,9 +863,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 componentType: 'DataModel',
                 configurationGuid: dmGuid,
                 hasContent: true,
-                // Wide probe range: the format XML references a specific revision (e.g. 1)
-                // but the locally-stored revision may be much higher (e.g. 8-15 in newer F&O).
-                // Probe 1-20 + 0 to maximise the chance of finding the correct local revision.
+                // Probe a wide range: the format XML references a specific revision,
+                // but the locally-stored revision may be much higher on newer F&O builds.
                 versionNumbers: [
                   ...(typeof rev === 'number' ? [rev] : []),
                   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 0,
@@ -935,7 +881,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 dmGuid,
                 rev,
                 scoutFormat: scout.configurationName,
-                formatMmGuidsTotal: formatMmGuids.size,
               });
               break;
             }
@@ -949,6 +894,32 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             parentDmName,
             scoutCount: scouts.length,
           });
+          // Fallback: include ModelMapping siblings — GetModelMappingByID(mappingGuid)
+          // returns both the ModelMapping XML and the DataModel XML via parmModel.
+          const mmSiblings: ErConfigSummary[] = [];
+          for (const [cacheKey, rootComponents] of rootComponentCacheRef.current) {
+            if (cacheKey !== parentDmName) continue;
+            for (const c of rootComponents) {
+              if (
+                c.componentType === 'ModelMapping' &&
+                c.configurationGuid &&
+                !finalToLoad.some(existing => componentKey(existing) === componentKey(c))
+              ) {
+                mmSiblings.push(c);
+              }
+            }
+          }
+          if (mmSiblings.length > 0) {
+            // Add at most 2 — their download will return the DataModel XML too.
+            for (const mm of mmSiblings.slice(0, 2)) {
+              finalToLoad.push(mm);
+            }
+            dmNamesInLoad.add(parentDmName);
+            console.info('[fno-ui] GUID discovery: auto-including ModelMapping siblings to retrieve DataModel', {
+              parentDmName,
+              mmSiblings: mmSiblings.slice(0, 2).map(m => m.configurationName),
+            });
+          }
         }
       }
     }
@@ -980,10 +951,26 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       }
     }
 
+    // Refresh alreadyLoadedGuids with all DataModel GUIDs now in the store.
+    // The Phase 0 scout may have identified the DataModel via one revision GUID,
+    // while the selected Format XML embeds a DIFFERENT revision GUID for the same
+    // DataModel. Without this refresh, harvestRefs would add that second GUID to
+    // pendingModelFollowUps and trigger a duplicate DataModel download.
+    {
+      const freshDmConfigs = useAppStore.getState().configurations;
+      for (const cfg of freshDmConfigs) {
+        if (cfg.kind !== 'DataModel') continue;
+        const solId = (cfg.solutionVersion?.solution?.id ?? '').replace(/^\{|\}$/g, '').toLowerCase();
+        if (solId && solId !== ZERO_GUID_LOWER) alreadyLoadedGuids.add(solId);
+        const dmVersionId = ((cfg.content as { version?: { model?: { id?: string } } } | undefined)
+          ?.version?.model?.id ?? '').replace(/^\{|\}$/g, '').toLowerCase();
+        if (dmVersionId && dmVersionId !== ZERO_GUID_LOWER) alreadyLoadedGuids.add(dmVersionId);
+      }
+    }
+
     // ── Phase 2: Downloads + Mapping listing scan run concurrently ──
-    // The mapping listing scan (listComponents calls) can run in parallel
-    // with Format/ModelMapping downloads since it only queries the F&O
-    // listing API. The actual synth-pass downloads need parsed DM data
+    // Mapping listing scan runs in parallel with Format/ModelMapping downloads
+    // (only queries the listing API). Synth-pass downloads need parsed DM data
     // from the store, so they run after both tasks complete.
 
     // --- Concurrent task A: download selected Formats + ModelMappings ---
@@ -1004,10 +991,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
             ok += 1;
             harvestRefs(result.value.download);
-            // Collect ModelMapping GUIDs from format XMLs for the synth pass.
-            for (const mmGuid of result.value.download.referencedModelMappingGuids ?? []) {
-              formatMmGuids.add(mmGuid);
-            }
           } else {
             const component = slice[results.indexOf(result)];
             handleDownloadError(component, result.reason);
@@ -1057,6 +1040,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             if (result.status === 'fulfilled') {
               loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
               ok += 1;
+              alreadyLoadedGuids.add(result.value.guid.toLowerCase());
             } else {
               const reason = result.reason;
               if (reason instanceof FnoEmptyContentError) {
@@ -1076,11 +1060,17 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     const alreadyLoadedKeys = new Set(finalToLoad.map(c => componentKey(c)));
     const mappingsToLoad = new Map<string, ErConfigSummary>();
     const visitedScanNames = new Set<string>();
+    // DataModel GUIDs discovered during the listing scan (name → configurationGuid).
+    // Populated when listComponents returns a DataModel node with a GUID —
+    // used in the synth pass to resolve dmByName for derived/customer DataModels.
+    const discoveredDmGuidsByName = new Map<string, string>();
     const pendingMappingBranchesByDmName = new Map<string, {
       parentDmName: string;
       mappingName: string;
       mappingSolutionName: string;
       mappingVersion: string | undefined;
+      /** ERModelMappingTable.Guid from listing — used when DataModel GUID is not yet known. */
+      configurationGuid?: string;
       /** ERSolution GUID of the parent DataModel from the listing's Base field. */
       referencedModelGuid?: string;
     }[]>();
@@ -1112,6 +1102,21 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     for (const step of solutionPath) {
       if (step) dmNamesToScan.add(step);
     }
+    // For formats whose DataModel is not in finalToLoad (e.g. import formats),
+    // add their solutionName so the listing scan finds ModelMapping children.
+    // GetModelMappingByID(mappingGuid) returns both the ModelMapping AND the DataModel.
+    {
+      const dmNamesInLoad = new Set(
+        finalToLoad
+          .filter(c => c.componentType === 'DataModel')
+          .flatMap(c => [c.configurationName, c.solutionName].filter(Boolean)),
+      );
+      for (const c of finalToLoad) {
+        if (c.componentType === 'Format' && c.solutionName && !dmNamesInLoad.has(c.solutionName)) {
+          dmNamesToScan.add(c.solutionName);
+        }
+      }
+    }
     console.info('[fno-ui] mapping-scan dmNamesToScan', Array.from(dmNamesToScan));
     const queue: { name: string; owningDmName: string }[] = Array.from(dmNamesToScan).map(n => ({ name: n, owningDmName: n }));
     while (queue.length > 0) {
@@ -1125,33 +1130,32 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         console.warn('[fno-ui] listComponents failed during mapping scan for', dmName, err);
         continue;
       }
-      // Resolve the owning DM for the *current* parent name so we can
-      // forward it to mapping leaves discovered below this branch.
-      const owningDm = Array.from(allDataModelsSeen.values()).find(
-        m => m.configurationName === owningDmName && (m.configurationGuid || m.revisionGuid),
-      );
+      // Capture the GUID of the root DataModel when it appears as the first element
+      // (getFormatSolutionsSubHierarchy includes the query root in its flat output).
+      // This is the only place we see the GUID for derived DataModels like
+      // "Asl Advanced bank reconciliation statement model" — the listing of their
+      // parent DM returns them without a GUID, but their OWN listing has one.
+      if (children.length > 0 && children[0].componentType === 'DataModel' &&
+          children[0].configurationName === dmName && children[0].configurationGuid &&
+          !discoveredDmGuidsByName.has(dmName)) {
+        discoveredDmGuidsByName.set(dmName, children[0].configurationGuid);
+      }
       for (const child of children) {
         if (child.componentType === 'DataModel') {
           // Walk into derived DataModels too — they can host their
           // own ModelMapping descendants.
           if (child.configurationName && !visitedScanNames.has(child.configurationName)) {
             queue.push({ name: child.configurationName, owningDmName: child.configurationName });
+            // Capture GUID from DataModel children too (may be present in parent listing).
+            if (child.configurationGuid && !discoveredDmGuidsByName.has(child.configurationName)) {
+              discoveredDmGuidsByName.set(child.configurationName, child.configurationGuid);
+            }
           }
           continue;
         }
         if (child.componentType !== 'ModelMapping') continue;
         if (!child.revisionGuid && !child.configurationGuid) {
-          // F&O surfaces this row but does not expose the mapping's
-          // own GUID (the listing service only attaches GUIDs to
-          // Format leaves). We still want to download it though —
-          // X++ `getModelMappingByID(_mappingGuid=zero, _dataModelGuid,
-          // _dataContainerDescriptorName)` resolves the default
-          // mapping for any DM whose GUID we eventually know.
-          //
-          // Stash the mapping under its owning DM name. The synth
-          // pass below will look up the DM GUID (parsed XML or
-          // base-walk) and queue the actual download with the right
-          // `descriptorNameCandidates` and `parentDataModelGuid`.
+          // No GUID — stash as pending branch; synth pass resolves via descriptor.
           const list = pendingMappingBranchesByDmName.get(owningDmName) ?? [];
           list.push({
             parentDmName: owningDmName,
@@ -1167,32 +1171,21 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           }
           continue;
         }
-        const key = componentKey(child);
-        if (alreadyLoadedKeys.has(key)) continue;
-        if (mappingsToLoad.has(key)) continue;
-        // GetModelMappingByID needs a `_dataModelGuid`. Resolve via
-        // the owning DM (look it up in `allDataModelsSeen` or pull
-        // the freshly-loaded summary).
-        let parentDm = owningDm
-          ?? Array.from(allDataModelsSeen.values()).find(
-            m => m.configurationName === owningDmName && (m.configurationGuid || m.revisionGuid),
-          );
-        if (!parentDm) {
-          // Last-resort: if `dmName` is itself a mapping branch we
-          // drilled into, look up which DM the mapping-branch was
-          // listed under by scanning ancestors via parentDataModelGuid.
-          parentDm = Array.from(allDataModelsSeen.values()).find(
-            m => m.configurationGuid === child.parentDataModelGuid
-              || m.revisionGuid === child.parentDataModelRevisionGuid,
-          );
+        // Has a GUID — stash as pending branch with the GUID preserved so the synth
+        // pass can use GetModelMappingByID(guid) when the DataModel is not yet known.
+        if (alreadyLoadedKeys.has(componentKey(child))) continue;
+        const branches = pendingMappingBranchesByDmName.get(owningDmName) ?? [];
+        if (!branches.some(b => b.mappingName === child.configurationName)) {
+          branches.push({
+            parentDmName: owningDmName,
+            mappingName: child.configurationName,
+            mappingSolutionName: child.solutionName,
+            mappingVersion: child.version,
+            configurationGuid: child.configurationGuid ?? child.revisionGuid,
+            referencedModelGuid: child.referencedModelGuid,
+          });
+          pendingMappingBranchesByDmName.set(owningDmName, branches);
         }
-        const annotated: ErConfigSummary = {
-          ...child,
-          parentDataModelGuid: child.parentDataModelGuid ?? parentDm?.configurationGuid,
-          parentDataModelRevisionGuid:
-            child.parentDataModelRevisionGuid ?? parentDm?.revisionGuid,
-        };
-        mappingsToLoad.set(key, annotated);
       }
     }
 
@@ -1213,21 +1206,23 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       for (const comp of rootComponents) {
         if (comp.componentType !== 'ModelMapping') continue;
 
+        const ownerDmName = comp.ownerDataModelName ?? comp.solutionName ?? '';
         if (comp.configurationGuid || comp.revisionGuid) {
-          // Rare: mapping row already carries a GUID — add directly.
-          const key = componentKey(comp);
-          if (alreadyLoadedKeys.has(key) || mappingsToLoad.has(key)) continue;
-          const parentDm = Array.from(allDataModelsSeen.values()).find(
-            m =>
-              m.configurationGuid === comp.parentDataModelGuid ||
-              m.revisionGuid === comp.parentDataModelRevisionGuid ||
-              m.configurationName === (comp.ownerDataModelName ?? ''),
-          );
-          mappingsToLoad.set(key, {
-            ...comp,
-            parentDataModelGuid: comp.parentDataModelGuid ?? parentDm?.configurationGuid,
-            parentDataModelRevisionGuid: comp.parentDataModelRevisionGuid ?? parentDm?.revisionGuid,
-          });
+          // Has GUID — stash as pending branch (not mappingsToLoad) so
+          // the synth pass downloads only ONE mapping per DataModel.
+          if (alreadyLoadedKeys.has(componentKey(comp))) continue;
+          const branchList = pendingMappingBranchesByDmName.get(ownerDmName) ?? [];
+          if (!branchList.some(b => b.mappingName === comp.configurationName)) {
+            branchList.push({
+              parentDmName: ownerDmName,
+              mappingName: comp.configurationName,
+              mappingSolutionName: comp.solutionName,
+              mappingVersion: comp.version,
+              configurationGuid: comp.configurationGuid ?? comp.revisionGuid,
+              referencedModelGuid: comp.referencedModelGuid,
+            });
+            pendingMappingBranchesByDmName.set(ownerDmName, branchList);
+          }
           continue;
         }
 
@@ -1265,14 +1260,22 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             );
 
           if (derived.configurationGuid || derived.revisionGuid) {
-            // Has a GUID — downloadable directly via _mappingGuid.
-            const dkey = componentKey(derived);
-            if (alreadyLoadedKeys.has(dkey) || mappingsToLoad.has(dkey)) continue;
-            mappingsToLoad.set(dkey, {
-              ...derived,
-              parentDataModelGuid: derived.parentDataModelGuid ?? parentDm?.configurationGuid,
-              parentDataModelRevisionGuid: derived.parentDataModelRevisionGuid ?? parentDm?.revisionGuid,
-            });
+            // Has GUID — stash as pending branch (not mappingsToLoad).
+            if (!alreadyLoadedKeys.has(componentKey(derived))) {
+              const branchDmName2 = parentDm?.configurationName ?? candidateDmName;
+              const bList = pendingMappingBranchesByDmName.get(branchDmName2) ?? [];
+              if (!bList.some(b => b.mappingName === (derived.configurationName ?? ''))) {
+                bList.push({
+                  parentDmName: branchDmName2,
+                  mappingName: derived.configurationName ?? '',
+                  mappingSolutionName: derived.solutionName ?? '',
+                  mappingVersion: derived.version,
+                  configurationGuid: derived.configurationGuid ?? derived.revisionGuid,
+                  referencedModelGuid: derived.referencedModelGuid,
+                });
+                pendingMappingBranchesByDmName.set(branchDmName2, bList);
+              }
+            }
           } else {
             // No GUID — add as pending branch only if the candidate DM
             // is one we are actually interested in (present in dmNamesToScan).
@@ -1308,11 +1311,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     await Promise.all([downloadSelectedTask(), mappingListingScanTask()]);
 
     // ── Import format: post-download ModelMapping listing scan ──
-    // `GetEffectiveFormatMappingByID` returns only the format XML for import formats —
-    // there is no embedded ModelMapping. The listing scan above ran concurrently with
-    // downloads, so it couldn't see DataModels resolved by the follow-up pass.
-    // Re-scan any format's DataModel that wasn't already covered by the listing scan
-    // so we can discover named import ModelMapping children and add them to mappingsToLoad.
+    // GetEffectiveFormatMappingByID returns only the format XML for import formats.
+    // Re-scan DataModels that the concurrent listing scan couldn't see (resolved by
+    // the follow-up pass) to discover import ModelMapping children.
     {
       const stripBraces = (g: string | undefined) =>
         (g ?? '').replace(/^\{|\}$/g, '').toLowerCase();
@@ -1351,9 +1352,16 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         for (const child of children) {
           if (child.componentType !== 'ModelMapping') continue;
           if (!child.configurationGuid && !child.revisionGuid) continue;
+          if (alreadyLoadedKeys.has(componentKey(child))) continue;
+          // Add as pending branch — the synth pass (already built) won't see these,
+          // so push directly into mappingsToLoad for immediate download.
           const dkey = componentKey(child);
-          if (alreadyLoadedKeys.has(dkey) || mappingsToLoad.has(dkey)) continue;
-          mappingsToLoad.set(dkey, child);
+          if (!mappingsToLoad.has(dkey)) {
+            mappingsToLoad.set(dkey, {
+              ...child,
+              configurationGuid: child.configurationGuid ?? child.revisionGuid,
+            });
+          }
         }
       }
     }
@@ -1483,13 +1491,10 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       const baseRaw = cfg.solutionVersion?.solution?.baseSolutionId;
       if (dm?.id) {
         const dmVersionLower = normalizeGuid(dm.id);
-        // Look up the ERSolution GUID paired with this DataModel version GUID.
-        // Primary: from format XML referencedModelGuid (populated by harvestRefs).
-        // Fallback: from allDataModelsSeen — the listing API may expose the
-        // ERSolution GUID of the DM as its configurationGuid, distinct from the
-        // version GUID in dm.id. Passing it as parentDataModelRevisionGuid lets
-        // buildDownloadAttempts try _dataModelGuid=ERSolutionGUID which F&O may
-        // resolve to the country-specific mapping instead of the default.
+        // Look up ERSolution GUID for this DataModel version GUID.
+        // Primary: from format XML via harvestRefs. Fallback: from listing API entry.
+        // Needed so buildDownloadAttempts can pass _dataModelGuid=ERSolutionGUID,
+        // which F&O resolves to the country-specific mapping (not the default).
         let dmSolGuid = dmVersionToSolutionGuid.get(dmVersionLower);
         if (!dmSolGuid) {
           const listingEntry = Array.from(allDataModelsSeen.values()).find(
@@ -1524,15 +1529,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     for (const { guid } of pendingModelFollowUps.values()) {
       recordDm(guid, `DataModel ${guid}`);
     }
-    // ── Scan parsed Format configs for embedded model mapping model IDs ──
-    //
-    // `GetEffectiveFormatMappingByID` may return an embedded `ERModelMappingVersion`
-    // whose `ERModelMapping.Model="{dm-guid}"` is the DataModel GUID. The raw
-    // `extractReferencedDataModelGuids` regex scans are sometimes insufficient
-    // (e.g. when the format is an import format without a bound mapping, or when
-    // GUIDs live in `ID.="{guid},N"` attributes that the regex misses).
-    // After parsing, `cfg.content.embeddedModelMappingVersions[*].mapping.modelId`
-    // (and `.modelVersion`) hold the same GUID in a structured form.
+    // ── Scan parsed Format configs for embedded ModelMapping model IDs ──
+    // After parsing, cfg.content.embeddedModelMappingVersions[*].mapping.modelId
+    // holds the DataModel GUID in structured form (supplements the regex scan).
     type FormatContent = {
       embeddedModelMappingVersions?: Array<{
         mapping?: { modelId?: string; modelVersion?: string };
@@ -1554,14 +1553,11 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       }
     }
     // Walk up the base-solution chain to discover ancestor DataModel GUIDs.
-    // Parsed DM XML carries `Base="{guid},rev"` which leads to the parent;
-    // we repeat until reaching a DM with no parent.
+    // ERSolution.Base on a Format (or DM XML Base=) points to parent DataModel's GUID.
     const ancestorVisited = new Set<string>();
     const ancestorQueue = Array.from(baseGuidsToFetch.values()).map(b => b.baseGuid);
-    // Also seed ancestor walk from downloaded Format configs.
-    // ERSolution.Base on a Format points to the parent DataModel's ERSolution GUID.
-    // On environments that return no GUIDs in the listing API, this is the only way
-    // to discover the parent DataModel GUID without it appearing in extractReferencedDataModelGuids.
+    // Seed ancestor walk from Format configs: on environments with no listing GUIDs,
+    // ERSolution.Base is the only way to discover the parent DataModel GUID.
     for (const cfg of refreshedConfigs) {
       if (cfg.kind !== 'Format') continue;
       const baseRaw = cfg.solutionVersion?.solution?.baseSolutionId;
@@ -1588,6 +1584,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         const download = await fnoSession.downloadConfiguration(activeProfile, synthDm);
         loadXmlFile(download.xml, download.syntheticPath);
         ok += 1;
+        alreadyLoadedGuids.add(baseGuid);
         const newest = useAppStore.getState().configurations
           .find(c => c.kind === 'DataModel'
             && normalizeGuid((c.content as ParsedDmContent | undefined)?.version?.model?.id)
@@ -1673,119 +1670,138 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         }
       }
     }
-    const synthQueue: { synth: ErConfigSummary; dmGuid: string; label: string }[] = [];
-
-    // Priority pass: direct model-mapping GUIDs extracted from format XML.
-    // These target the exact country-specific mapping (e.g. CZ/SK) and bypass
-    // the descriptor-based fallback that always returns the default mapping.
-    const embeddedMappingGuidsQueued = new Set<string>(formatMmGuids);
-    if (formatMmGuids.size > 0) {
-      for (const guid of formatMmGuids) {
-        synthQueue.push({
-          synth: {
-            solutionName: '<from-format-xml>',
-            configurationName: `Mapping ${guid}`,
-            componentType: 'ModelMapping',
-            configurationGuid: guid,
-            hasContent: true,
-          },
-          dmGuid: guid,
-          label: `direct mapping GUID ${guid} (from format XML)`,
-        });
+    // ── Populate dmByName from GUIDs captured during the listing scan ──
+    // discoveredDmGuidsByName holds configurationGuids for DataModel nodes that appeared
+    // as the root of their own listComponents result (e.g. "Asl Advanced..." queried
+    // directly — F&O includes the root node WITH its GUID in that response).
+    // Use these to fill gaps in dmByName that the store-config walk couldn't cover.
+    for (const [dmName, rawGuid] of discoveredDmGuidsByName) {
+      if (dmByName.has(dmName)) continue;
+      const lower = rawGuid.replace(/^\{|\}$/g, '').toLowerCase();
+      if (!lower || lower === ZERO_GUID_LOWER) continue;
+      let candidate = dmGuidIndex.get(lower);
+      if (!candidate) {
+        // Not in the index yet (DM was not downloaded). Create a stub so the
+        // synth pass can at least try GetModelMappingByID with this GUID.
+        candidate = { name: dmName, guid: lower, solutionName: dmName, solutionGuid: undefined, descriptorNames: [] };
+        dmGuidIndex.set(lower, candidate);
       }
+      dmByName.set(dmName, candidate);
+      console.info('[fno-ui] synth-pass: resolved DM name from scan GUID', { dmName, guid: lower });
     }
 
-    // ── Resolve pending mapping branches first ──
-    // These carry correct configurationName + version from the listing
-    // service. When resolved, they also suppress the default probe for
-    // that DM GUID (which would download the same XML without metadata).
+    const synthQueue: { synth: ErConfigSummary; dmGuid: string; label: string }[] = [];
+
+    // ── Resolve pending mapping branches ──
+    // Each DataModel key in `pendingMappingBranchesByDmName` gets ONE synthQueue entry.
+    // buildDownloadAttempts tries descriptor candidates in order and stops at the
+    // first success → F&O returns the effective mapping for this environment.
     const dmGuidsWithResolvedBranch = new Set<string>();
     let resolvedBranchCount = 0;
     let unresolvedBranchCount = 0;
-    for (const branches of pendingMappingBranchesByDmName.values()) {
-      for (const branch of branches) {
-        let ownerDm = dmByName.get(branch.parentDmName);
-        if (!ownerDm) {
-          // Fallback: the branch was listed under a base DM that we
-          // don't have in `dmByName` (typical: base-walk returned
-          // empty XML). Use any available DM — F&O resolves
-          // inheritance automatically, so GetModelMappingByID with a
-          // derived DM GUID returns the effective mapping that covers
-          // the base too.
-          for (const candidate of dmGuidIndex.values()) {
-            if (!candidate.name.startsWith('DataModel ')) {
-              ownerDm = candidate;
-              break;
-            }
+    for (const [dmName, branches] of pendingMappingBranchesByDmName) {
+      if (branches.length === 0) continue;
+
+      let ownerDm = dmByName.get(dmName);
+      if (!ownerDm) {
+        // Fallback: any named DM candidate (F&O resolves inheritance automatically).
+        for (const candidate of dmGuidIndex.values()) {
+          if (!candidate.name.startsWith('DataModel ')) {
+            ownerDm = candidate;
+            break;
           }
         }
-        if (!ownerDm && branch.referencedModelGuid) {
-          const refGuid = branch.referencedModelGuid;
+      }
+      if (!ownerDm) {
+        // Try ERSolution GUID from any branch's referencedModelGuid.
+        const refGuid = branches.find(b => b.referencedModelGuid)?.referencedModelGuid;
+        if (refGuid) {
           const lowerRef = refGuid.toLowerCase();
           let synthCandidate = dmGuidIndex.get(lowerRef);
           if (!synthCandidate) {
             synthCandidate = {
-              name: branch.parentDmName,
-              guid: refGuid,
-              solutionName: branch.mappingSolutionName,
+              name: dmName,
+              guid: lowerRef,
+              solutionName: branches[0].mappingSolutionName,
               solutionGuid: undefined,
               descriptorNames: [],
             };
             dmGuidIndex.set(lowerRef, synthCandidate);
           }
-          if (!dmByName.has(branch.parentDmName)) {
-            dmByName.set(branch.parentDmName, synthCandidate);
-          }
+          if (!dmByName.has(dmName)) dmByName.set(dmName, synthCandidate);
           ownerDm = synthCandidate;
         }
-        if (!ownerDm) {
+      }
+
+      if (ownerDm) {
+        // DataModel GUID known — create ONE entry per DM key (not per branch).
+        // All branch names become ordered descriptor candidates so buildDownloadAttempts
+        // tries each in sequence and stops at the first F&O hit. This prevents
+        // downloading both the base variant ("ABR…") AND the customer variant
+        // ("Asl ABR…") simultaneously — F&O returns exactly ONE effective mapping
+        // for this DM in the customer's environment.
+        resolvedBranchCount += 1;
+        dmGuidsWithResolvedBranch.add(ownerDm.guid);
+        const allBranchNames = [...new Set(branches.map(b => b.mappingName).filter(s => s))];
+        const descriptors = [...new Set([...allBranchNames, ...ownerDm.descriptorNames, ''])];
+        // Pick the most derived branch as primary: GUID-bearing branch first, else
+        // last in the array (deepest in the listing tree = most derived).
+        const primaryBranch = branches.find(b => b.configurationGuid) ?? branches[branches.length - 1];
+        synthQueue.push({
+          synth: {
+            solutionName: primaryBranch.mappingSolutionName,
+            configurationName: primaryBranch.mappingName,
+            componentType: 'ModelMapping',
+            configurationGuid: primaryBranch.configurationGuid,
+            version: primaryBranch.mappingVersion,
+            parentDataModelGuid: ownerDm.guid,
+            parentDataModelRevisionGuid: ownerDm.solutionGuid,
+            descriptorNameCandidates: descriptors,
+            hasContent: true,
+          },
+          dmGuid: ownerDm.guid,
+          label: `mapping (under ${dmName})`,
+        });
+      } else {
+        // DataModel GUID unknown. If any branch has a mapping GUID, use it —
+        // GetModelMappingByID(mappingGuid) returns BOTH the mapping AND the DataModel.
+        const branchWithGuid = branches.find(b => b.configurationGuid);
+        if (branchWithGuid?.configurationGuid) {
           unresolvedBranchCount += 1;
-          // dmByName is empty (all dmGuidIndex entries are synthetic "DataModel {guid}").
-          // Brute-force: try every available DataModel GUID with the mapping's real
-          // configurationName as _dataContainerDescriptorName.
-          // F&O resolves: ERDataContainerDescriptorTable::findByName(dm.RecId, mappingName)
-          // which returns the correct mapping when descriptorName = ERSolution.Name of the mapping.
+          synthQueue.push({
+            synth: {
+              solutionName: branchWithGuid.mappingSolutionName,
+              configurationName: branchWithGuid.mappingName,
+              componentType: 'ModelMapping',
+              configurationGuid: branchWithGuid.configurationGuid,
+              version: branchWithGuid.mappingVersion,
+              hasContent: true,
+            },
+            dmGuid: branchWithGuid.configurationGuid,
+            label: `${branchWithGuid.mappingName} (GUID-direct; DataModel unknown)`,
+          });
+        } else {
+          // No GUID at all — brute-force across all known DataModel GUIDs.
+          unresolvedBranchCount += 1;
+          const branchDescriptors = [...new Set(branches.map(b => b.mappingName).filter(Boolean))];
           for (const candidate of dmGuidIndex.values()) {
             synthQueue.push({
               synth: {
-                solutionName: branch.mappingSolutionName,
-                configurationName: branch.mappingName,
+                solutionName: branches[0].mappingSolutionName,
+                configurationName: `${dmName} mapping (brute-force)`,
                 componentType: 'ModelMapping',
-                version: branch.mappingVersion,
+                version: branches[0].mappingVersion,
                 parentDataModelGuid: candidate.guid,
                 parentDataModelRevisionGuid: candidate.solutionGuid,
-                // Put the real mapping name first — most likely to match the
-                // ERDataContainerDescriptorTable row on this environment.
-                descriptorNameCandidates: [
-                  branch.mappingName,
-                  branch.mappingSolutionName,
-                  ...candidate.descriptorNames,
-                ],
+                descriptorNameCandidates: [...branchDescriptors, ...candidate.descriptorNames],
                 hasContent: true,
               },
               dmGuid: candidate.guid,
-              label: `${branch.mappingName} (brute-force vs ${candidate.guid})`,
+              label: `${dmName} mapping (brute-force vs ${candidate.guid})`,
             });
             dmGuidsWithResolvedBranch.add(candidate.guid);
           }
-          continue;
         }
-        resolvedBranchCount += 1;
-        dmGuidsWithResolvedBranch.add(ownerDm.guid);
-        synthQueue.push({
-          synth: {
-            solutionName: branch.mappingSolutionName,
-            configurationName: branch.mappingName,
-            componentType: 'ModelMapping',
-            version: branch.mappingVersion,
-            parentDataModelGuid: ownerDm.guid,
-              parentDataModelRevisionGuid: ownerDm.solutionGuid,
-              descriptorNameCandidates: ownerDm.descriptorNames,
-              hasContent: true,
-            },
-            dmGuid: ownerDm.guid,
-            label: `${branch.mappingName} (under ${branch.parentDmName})`,
-          });
       }
     }
     if (resolvedBranchCount > 0 || unresolvedBranchCount > 0) {
@@ -1794,14 +1810,23 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       });
     }
 
+    // Suppress default probes for DMs whose mapping was already loaded in Phase 2
+    // (user explicitly selected both a Format and its ModelMapping). The listing scan
+    // filtered that mapping via alreadyLoadedKeys so pendingMappingBranchesByDmName
+    // has no entry for it — without this seed, the default probe would re-download.
+    {
+      type MmContent = { version?: { mapping?: { modelId?: string } } };
+      for (const cfg of useAppStore.getState().configurations) {
+        if (cfg.kind !== 'ModelMapping') continue;
+        const modelId = ((cfg.content as MmContent | undefined)?.version?.mapping?.modelId ?? '')
+          .replace(/^\{|\}$/g, '').toLowerCase();
+        if (modelId && modelId !== ZERO_GUID_LOWER) dmGuidsWithResolvedBranch.add(modelId);
+      }
+    }
+
     // Default mapping probes for DMs without a direct-GUID entry.
     for (const dm of dmGuidIndex.values()) {
       if (dmGuidsWithResolvedBranch.has(dm.guid)) continue;
-      // When embedded mapping GUIDs are present, skip the default probe \u2014
-      // it would return the base mapping, and pending-branch logic already covers edge cases.
-      if (embeddedMappingGuidsQueued.size > 0) {
-        continue;
-      }
       synthQueue.push({
         synth: {
           solutionName: dm.solutionName,
@@ -1858,13 +1883,29 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         descriptorCandidates: d.synth.descriptorNameCandidates,
         parentDataModelGuid: d.synth.parentDataModelGuid,
         configGuid: d.synth.configurationGuid,
+        solutionName: d.synth.solutionName,
+        configurationName: d.synth.configurationName,
       })));
       setIngestStatus(t.fnoStatusDownloadingMMCount(allMappingDownloads.length));
+      // Track DM GUIDs for which a mapping was *successfully* downloaded.
+      // Once a branch for a given DM GUID returns real XML, all remaining
+      // branches for that DM are skipped. Branches that return empty content
+      // do NOT mark the DM as resolved so the next branch in a later batch
+      // still gets a chance (important: "ABR…" may be empty while "Asl ABR…"
+      // for the same DM GUID carries the customer-deployed mapping).
+      // NOTE: no within-batch DM-GUID dedup — concurrent requests for the
+      // same DM are fine because the store deduplicates by solution GUID.
+      const downloadedMappingDmGuids = new Set<string>();
       const MAPPING_BATCH_SIZE = 2;
       for (let batch = 0; batch < allMappingDownloads.length; batch += MAPPING_BATCH_SIZE) {
         const slice = allMappingDownloads.slice(batch, batch + MAPPING_BATCH_SIZE);
+        // Only skip entries whose DM GUID was resolved (success) in a prior batch.
+        const pending = slice.filter(
+          item => !item.dmGuid || !downloadedMappingDmGuids.has(item.dmGuid),
+        );
+        if (pending.length === 0) continue;
         const results = await Promise.allSettled(
-          slice.map(async item => {
+          pending.map(async item => {
             const download = await fnoSession.downloadConfiguration(activeProfile, item.synth);
             return { item, download };
           }),
@@ -1873,6 +1914,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           if (result.status === 'fulfilled') {
             loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
             ok += 1;
+            // Mark DM as resolved so subsequent branches for the same DM are skipped.
+            if (result.value.item.dmGuid) downloadedMappingDmGuids.add(result.value.item.dmGuid);
             collectLateRefs(result.value.download);
           } else {
             const reason = result.reason;
@@ -1884,13 +1927,171 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           }
         }
       }
+      // ── Retry pass: probe unresolved DataModel names when no mapping was found ──
+      // Triggered only when ALL initial download attempts failed (downloadedMappingDmGuids
+      // is empty). This handles the case where the customer has a DERIVED DataModel
+      // (e.g. "Asl Advanced bank reconciliation statement model") registered in F&O
+      // under a different GUID than the standard one we discovered via GUID-scout.
+      // For export formats the initial pass usually SUCCEEDS → no retry needed.
+      // For import-only formats the initial pass returns empty → retry fires here.
+      if (downloadedMappingDmGuids.size === 0) {
+        console.info('[fno-ui] synth-retry: all mapping downloads failed — branches with referencedModelGuid',
+          Array.from(pendingMappingBranchesByDmName.entries()).flatMap(([k, v]) =>
+            v.map(b => ({ dmKey: k, mapping: b.mappingName, refGuid: b.referencedModelGuid })),
+          ),
+        );
+        const retryDownloads: { synth: ErConfigSummary; label: string; dmGuid: string }[] = [];
+        for (const [dmName, branches] of pendingMappingBranchesByDmName) {
+          if (branches.length === 0) continue;
+          const resolvedDm = dmByName.get(dmName);
+
+          // Case A: DM was resolved but all mapping attempts returned empty.
+          // Try each branch's referencedModelGuid as an alternative _dataModelGuid.
+          // For customer-derived DataModels, referencedModelGuid = ERSolution GUID of the
+          // derived DM — F&O may resolve it if it stores a GUID alias on ERDataModelTable.
+          if (resolvedDm) {
+            const altGuids = new Set<string>();
+            for (const branch of branches) {
+              if (!branch.referencedModelGuid) continue;
+              const lower = branch.referencedModelGuid.replace(/^\{|\}$/g, '').toLowerCase();
+              if (!lower || lower === ZERO_GUID_LOWER) continue;
+              if (lower === resolvedDm.guid) continue;
+              if (lower === (resolvedDm.solutionGuid ?? '').toLowerCase()) continue;
+              altGuids.add(lower);
+            }
+            if (altGuids.size === 0) continue;
+            const allBranchNames = [...new Set(branches.map(b => b.mappingName).filter(Boolean))];
+            const primaryBranch = branches.find(b => b.configurationGuid) ?? branches[branches.length - 1];
+            for (const altGuid of altGuids) {
+              const retryDescriptors = [...new Set([...allBranchNames, ...resolvedDm.descriptorNames, ''])];
+              const retryKey = `synth-retry:${altGuid}`;
+              if (synthesizedMappingKeys.has(retryKey)) continue;
+              synthesizedMappingKeys.add(retryKey);
+              console.info('[fno-ui] synth-retry: trying altGuid for resolved-but-failed DM', { dmName, altGuid, descriptors: retryDescriptors });
+              retryDownloads.push({
+                synth: {
+                  solutionName: primaryBranch.mappingSolutionName,
+                  configurationName: primaryBranch.mappingName,
+                  componentType: 'ModelMapping',
+                  configurationGuid: primaryBranch.configurationGuid,
+                  version: primaryBranch.mappingVersion,
+                  parentDataModelGuid: altGuid,
+                  descriptorNameCandidates: retryDescriptors,
+                  hasContent: true,
+                },
+                dmGuid: altGuid,
+                label: `${primaryBranch.mappingName} (retry altGuid ${altGuid} under ${dmName})`,
+              });
+            }
+            continue;
+          }
+
+          // Case B: DM unresolved — probe by DataModel name via legacy ops.
+          const probeSpec: ErConfigSummary = {
+            solutionName: dmName,
+            configurationName: dmName,
+            componentType: 'DataModel',
+            hasContent: false, // no GUID → legacy name-based ops
+            versionNumbers: [1, 2, 3, 0],
+          };
+          let resolvedGuid: string | undefined;
+          try {
+            const dmDownload = await fnoSession.downloadConfiguration(activeProfile, probeSpec);
+            loadXmlFile(dmDownload.xml, dmDownload.syntheticPath);
+            ok += 1;
+            const newestConfigs = useAppStore.getState().configurations;
+            const parsedDm = newestConfigs.find(
+              c => c.kind === 'DataModel' &&
+                (c.solutionVersion?.solution?.name === dmName ||
+                 (c.content as ParsedDmContent | undefined)?.version?.model?.name === dmName),
+            );
+            const dm = (parsedDm?.content as ParsedDmContent | undefined)?.version?.model;
+            if (dm?.id) {
+              const containerNames = (dm.containers ?? [])
+                .map(c => (c?.name ?? '').trim())
+                .filter(s => s.length > 0);
+              recordDm(dm.id, dm.name ?? dmName, parsedDm?.solutionVersion?.solution?.name, containerNames);
+              const lower = dm.id.replace(/^\{|\}$/g, '').toLowerCase();
+              const candidate = dmGuidIndex.get(lower);
+              if (candidate) {
+                dmByName.set(dmName, candidate);
+                resolvedGuid = candidate.guid;
+                console.info('[fno-ui] synth-retry: resolved unmatched DM name', { dmName, guid: lower });
+              }
+            }
+          } catch (err) {
+            if (!(err instanceof FnoEmptyContentError)) {
+              console.warn('[fno-ui] synth-retry: DM name-based probe failed', dmName, err);
+            }
+          }
+          if (!resolvedGuid) continue;
+          const ownerDm = dmByName.get(dmName);
+          if (!ownerDm) continue;
+          const seenBranchNames = new Set<string>();
+          for (const branch of branches) {
+            const bName = branch.mappingName;
+            if (seenBranchNames.has(bName)) continue;
+            seenBranchNames.add(bName);
+            const retryKey = `synth-mapping:${resolvedGuid}:${bName}`;
+            if (synthesizedMappingKeys.has(retryKey)) continue;
+            synthesizedMappingKeys.add(retryKey);
+            const descriptors = (branch.mappingName ? [branch.mappingName] : []).concat(
+              ownerDm.descriptorNames.filter(d => d !== branch.mappingName),
+              [''],
+            );
+            retryDownloads.push({
+              synth: {
+                solutionName: branch.mappingSolutionName,
+                configurationName: bName,
+                componentType: 'ModelMapping',
+                configurationGuid: branch.configurationGuid,
+                version: branch.mappingVersion,
+                parentDataModelGuid: ownerDm.guid,
+                parentDataModelRevisionGuid: ownerDm.solutionGuid,
+                descriptorNameCandidates: descriptors,
+                hasContent: true,
+              },
+              dmGuid: resolvedGuid,
+              label: `${bName} (retry under ${dmName})`,
+            });
+          }
+        }
+        if (retryDownloads.length > 0) {
+          console.info('[fno-ui] synth-retry: mapping downloads after DM name probe', retryDownloads.map(d => d.label));
+          setIngestStatus(t.fnoStatusDownloadingMMCount(retryDownloads.length));
+          for (let batch = 0; batch < retryDownloads.length; batch += MAPPING_BATCH_SIZE) {
+            const slice = retryDownloads.slice(batch, batch + MAPPING_BATCH_SIZE);
+            const pending = slice.filter(item => !downloadedMappingDmGuids.has(item.dmGuid));
+            if (pending.length === 0) continue;
+            const results = await Promise.allSettled(
+              pending.map(async item => {
+                const dl = await fnoSession.downloadConfiguration(activeProfile, item.synth);
+                return { item, dl };
+              }),
+            );
+            for (const result of results) {
+              if (result.status === 'fulfilled') {
+                loadXmlFile(result.value.dl.xml, result.value.dl.syntheticPath);
+                ok += 1;
+                downloadedMappingDmGuids.add(result.value.item.dmGuid);
+                collectLateRefs(result.value.dl);
+              } else {
+                const reason = result.reason;
+                if (reason instanceof FnoEmptyContentError) {
+                  console.info('[fno-ui] synth-retry mapping empty', reason instanceof Error ? reason.message.slice(0, 200) : String(reason));
+                } else {
+                  console.warn('[fno-ui] synth-retry mapping fetch failed', reason);
+                }
+              }
+            }
+          }
+        }
+      }
     }
 
     // ── Late DataModel pass ──
     // DataModel GUIDs discovered from ModelMapping XML in the synth pass.
-    // Covers import formats whose own XML carries no ERFormatMappingVersion.Model
-    // reference: the ModelMapping downloaded above contains the correct
-    // Model= attribute, so we can now fetch the root DataModel.
+    // Covers import formats: their ModelMapping XML carries the correct Model= attribute.
     if (lateModelFollowUps.size > 0) {
       setIngestStatus(t.fnoStatusLateDM);
       console.info('[fno-ui] late DataModel follow-ups', Array.from(lateModelFollowUps.values()));

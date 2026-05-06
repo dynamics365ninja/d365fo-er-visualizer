@@ -720,8 +720,9 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
         </div>
       )}
 
-      {/* Already loaded */}
-      {configs.length > 0 && (
+      {/* Already loaded — hidden while an F&O ingest is running so the user
+           cannot jump to the designer mid-download and see partial results. */}
+      {configs.length > 0 && !fnoIngestStatus && (
         <MessageBar className={styles.loadedBar} intent="info">
           <MessageBarBody>{t.landingLoaded(configs.length)}</MessageBarBody>
           <MessageBarActions>
