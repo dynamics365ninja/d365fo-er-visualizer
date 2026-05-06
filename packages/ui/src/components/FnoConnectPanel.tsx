@@ -286,6 +286,38 @@ const useStyles = makeStyles({
   listItemDead: {
     opacity: 0.5,
   },
+  listItemChild: {
+    paddingLeft: '28px',
+    backgroundColor: tokens.colorNeutralBackground1,
+  },
+  listItemChildActive: {
+    backgroundColor: tokens.colorBrandBackground2,
+    borderLeftWidth: '3px',
+    borderLeftStyle: 'solid',
+    borderLeftColor: tokens.colorBrandStroke1,
+    paddingLeft: '25px',
+  },
+  expandBtn: {
+    flexShrink: 0,
+    width: '20px',
+    height: '20px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    color: tokens.colorNeutralForeground3,
+    borderRadius: tokens.borderRadiusSmall,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground3Hover,
+      color: tokens.colorNeutralForeground2,
+    },
+    transition: 'color 0.1s',
+  },
+  expandBtnPlaceholder: {
+    flexShrink: 0,
+    width: '20px',
+    height: '20px',
+  },
 
   // ── Component type badge ──────────────────────────────────────
   typeBadge: {
@@ -393,6 +425,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   const [clientId, setClientId] = useState(DEFAULT_CLIENT_ID);
   const [customRoot, setCustomRoot] = useState('');
   const [ingesting, setIngesting] = useState(false);
+  const [expandedSolutions, setExpandedSolutions] = useState<Set<string>>(new Set());
 
   // Cache: root DataModel name → full flat component list.
   // When the user clicks a derived DataModel whose root was already
@@ -546,6 +579,15 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     if (!activeProfile) return;
     setActiveSolution(solutionName);
     setSolutionPath([solutionName]);
+
+    // Auto-expand the solution in the left panel tree when it's a root
+    // (so the user can immediately see its derived children).
+    setExpandedSolutions(prev => {
+      if (prev.has(solutionName)) return prev;
+      const next = new Set(prev);
+      next.add(solutionName);
+      return next;
+    });
 
     // Resolve the root DataModel so the API call returns the full tree.
     // Country-specific derived models (e.g. "Asl Tax declaration model (SK)")
@@ -2511,6 +2553,71 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     );
   };
 
+  // ── Helper: skeleton list item for loading states ─────────────────────
+  const SkeletonListItem = ({ wide = false, delay = 0 }: { wide?: boolean; delay?: number }) => (
+    <div className="fno-skeleton-row" style={{ animationDelay: `${delay}ms` }}>
+      <div className="fno-skeleton-block fno-skeleton-icon" />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="fno-skeleton-block fno-skeleton-line-main" style={{ width: wide ? '75%' : '60%' }} />
+        <div className="fno-skeleton-block fno-skeleton-line-sub" style={{ width: wide ? '50%' : '38%' }} />
+      </div>
+    </div>
+  );
+
+  // ── Helper: build 2-level hierarchy from flat solutions list ──────────
+  interface SolutionNode {
+    sol: ErSolutionSummary;
+    children: ErSolutionSummary[];
+  }
+
+  const solutionTree = useMemo<SolutionNode[]>(() => {
+    const rootsMap = new Map<string, SolutionNode>();
+    const roots: SolutionNode[] = [];
+
+    // First pass: collect all root solutions (no rootSolutionName)
+    for (const sol of solutions) {
+      if (sol.componentType !== 'DataModel' && sol.componentType !== 'Unknown') continue;
+      if (!sol.rootSolutionName) {
+        const node: SolutionNode = { sol, children: [] };
+        rootsMap.set(sol.solutionName, node);
+        roots.push(node);
+      }
+    }
+
+    // Second pass: attach derived solutions to their roots
+    for (const sol of solutions) {
+      if (sol.componentType !== 'DataModel' && sol.componentType !== 'Unknown') continue;
+      if (!sol.rootSolutionName) continue;
+      const parent = rootsMap.get(sol.rootSolutionName);
+      if (parent) {
+        parent.children.push(sol);
+      } else {
+        // Root not in list yet — show as standalone root
+        const node: SolutionNode = { sol, children: [] };
+        rootsMap.set(sol.solutionName, node);
+        roots.push(node);
+      }
+    }
+
+    // Sort children alphabetically
+    for (const node of roots) {
+      node.children.sort((a, b) =>
+        (a.solutionName ?? '').localeCompare(b.solutionName ?? '', undefined, { sensitivity: 'base', numeric: true }),
+      );
+    }
+
+    return roots;
+  }, [solutions]);
+
+  const toggleExpanded = useCallback((name: string) => {
+    setExpandedSolutions(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
+
   // ── Helper: profile initials avatar ─────────────────────────────────────
   const initials = (name: string) => {
     const parts = name.trim().split(/[\s·\-_]+/);
@@ -2535,7 +2642,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         </div>
         <div>
           <Subtitle2>{t.fnoHeading}</Subtitle2>
-          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{t.fnoSubheading}</Caption1>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginTop: '4px' }}>{t.fnoSubheading}</Caption1>
         </div>
       </div>
 
@@ -2682,9 +2789,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 <div className={styles.listHeaderLeft}>
                   <TableSimpleRegular fontSize={16} style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }} />
                   <Body1Strong style={{ whiteSpace: 'nowrap' }}>{t.fnoSolutions}</Body1Strong>
-                  {!loadingSolutions && solutions.length > 0 && (
+                  {!loadingSolutions && solutionTree.length > 0 && (
                     <Badge appearance="filled" color="brand" size="small" style={{ flexShrink: 0 }}>
-                      {solutions.filter(s => s.componentType === 'DataModel' || s.componentType === 'Unknown').length}
+                      {solutionTree.length}
                     </Badge>
                   )}
                 </div>
@@ -2701,37 +2808,110 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 />
               </div>
               <div className={styles.listScroll}>
-                {solutions
-                  .filter(sol => sol.componentType === 'DataModel' || sol.componentType === 'Unknown')
-                  .filter(sol => {
+                {/* Skeleton while loading */}
+                {loadingSolutions && (
+                  <>
+                    <SkeletonListItem wide delay={0} />
+                    <SkeletonListItem delay={80} />
+                    <SkeletonListItem wide delay={160} />
+                    <SkeletonListItem delay={240} />
+                    <SkeletonListItem wide delay={320} />
+                  </>
+                )}
+
+                {!loadingSolutions && solutionTree
+                  .filter(node => {
                     if (!solutionFilter) return true;
                     const q = solutionFilter.toLowerCase();
-                    return (sol.solutionName ?? '').toLowerCase().includes(q)
-                      || (sol.displayName ?? '').toLowerCase().includes(q)
-                      || (sol.publisher ?? '').toLowerCase().includes(q);
+                    const rootMatch = (node.sol.solutionName ?? '').toLowerCase().includes(q)
+                      || (node.sol.publisher ?? '').toLowerCase().includes(q);
+                    const childMatch = node.children.some(c =>
+                      (c.solutionName ?? '').toLowerCase().includes(q),
+                    );
+                    return rootMatch || childMatch;
                   })
-                  .map(sol => (
-                    <div
-                      key={sol.solutionName}
-                      className={mergeClasses(
-                        styles.listItem,
-                        activeSolution === sol.solutionName ? styles.listItemActive : '',
-                      )}
-                      onClick={() => handlePickSolution(sol.solutionName)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={e => { if (e.key === 'Enter') handlePickSolution(sol.solutionName); }}
-                    >
-                      <div className={styles.listItemContent}>
-                        <Body1Strong style={{ display: 'block' }}>{sol.solutionName}</Body1Strong>
-                        {sol.publisher && (
-                          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{sol.publisher}</Caption1>
-                        )}
-                      </div>
-                      <ChevronRightRegular fontSize={14} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
-                    </div>
-                  ))}
-                {!loadingSolutions && solutions.filter(s => s.componentType === 'DataModel' || s.componentType === 'Unknown').length === 0 && !solutionFilter && (
+                  .map(node => {
+                    const { sol, children } = node;
+                    const hasChildren = children.length > 0;
+                    const isExpanded = expandedSolutions.has(sol.solutionName);
+                    const isActive = activeSolution === sol.solutionName;
+
+                    // When filtering, show only matching children
+                    const visibleChildren = solutionFilter
+                      ? children.filter(c => (c.solutionName ?? '').toLowerCase().includes(solutionFilter.toLowerCase()))
+                      : children;
+
+                    return (
+                      <React.Fragment key={sol.solutionName}>
+                        {/* Root solution row */}
+                        <div
+                          className={mergeClasses(
+                            styles.listItem,
+                            isActive ? styles.listItemActive : '',
+                          )}
+                          onClick={() => handlePickSolution(sol.solutionName)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={e => { if (e.key === 'Enter') handlePickSolution(sol.solutionName); }}
+                        >
+                          {/* Expand / collapse toggle */}
+                          {hasChildren ? (
+                            <div
+                              className={styles.expandBtn}
+                              role="button"
+                              tabIndex={0}
+                              aria-label={isExpanded ? 'Sbalit' : 'Rozbalit'}
+                              onClick={e => { e.stopPropagation(); toggleExpanded(sol.solutionName); }}
+                              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); toggleExpanded(sol.solutionName); } }}
+                            >
+                              {isExpanded
+                                ? <ChevronDownRegular fontSize={12} />
+                                : <ChevronRightRegular fontSize={12} />}
+                            </div>
+                          ) : (
+                            <div className={styles.expandBtnPlaceholder} />
+                          )}
+                          <div className={styles.listItemContent}>
+                            <Body1Strong style={{ display: 'block' }}>{sol.solutionName}</Body1Strong>
+                            {sol.publisher && (
+                              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{sol.publisher}</Caption1>
+                            )}
+                          </div>
+                          {hasChildren && (
+                            <Badge appearance="outline" size="small" style={{ flexShrink: 0, fontSize: '10px' }}>
+                              {children.length}
+                            </Badge>
+                          )}
+                        </div>
+
+                        {/* Child solution rows (shown when expanded or filtering) */}
+                        {(isExpanded || !!solutionFilter) && visibleChildren.map(child => {
+                          const isChildActive = activeSolution === child.solutionName;
+                          return (
+                            <div
+                              key={child.solutionName}
+                              className={mergeClasses(
+                                styles.listItem,
+                                isChildActive ? styles.listItemChildActive : styles.listItemChild,
+                              )}
+                              onClick={() => handlePickSolution(child.solutionName)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={e => { if (e.key === 'Enter') handlePickSolution(child.solutionName); }}
+                            >
+                              <div className={styles.expandBtnPlaceholder} />
+                              <div className={styles.listItemContent}>
+                                <Caption1 style={{ display: 'block', fontWeight: '600' }}>{child.solutionName}</Caption1>
+                              </div>
+                              <ChevronRightRegular fontSize={12} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
+                            </div>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
+
+                {!loadingSolutions && solutionTree.length === 0 && !solutionFilter && (
                   <div className={styles.emptyState}>
                     <TableSimpleRegular fontSize={32} style={{ opacity: 0.3 }} />
                     <Caption1>No solutions found under the known roots.</Caption1>
@@ -2830,7 +3010,16 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               </div>
 
               <div className={styles.listScroll}>
-                {filteredComponents.map(comp => {
+                {/* Skeleton while loading components */}
+                {loadingComponents && (
+                  <>
+                    <SkeletonListItem wide delay={0} />
+                    <SkeletonListItem delay={60} />
+                    <SkeletonListItem wide delay={120} />
+                  </>
+                )}
+
+                {!loadingComponents && filteredComponents.map(comp => {
                   const key = componentKey(comp);
                   const hasGuid = Boolean(comp.revisionGuid || comp.configurationGuid);
                   const hasChildren = Boolean(comp.hasChildren);
@@ -2935,10 +3124,15 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             <div className={styles.footerStatus}>
               {ingesting && ingestStatus ? (
                 <>
-                  <Spinner size="tiny" />
-                  <Caption1 style={{ fontStyle: 'italic', color: tokens.colorNeutralForeground2 }}>
-                    {ingestStatus}
-                  </Caption1>
+                  <ArrowSyncRegular fontSize={16} style={{ animation: 'spin 1s linear infinite', flexShrink: 0, color: tokens.colorBrandForeground1 }} />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <Caption2 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginBottom: '2px' }}>
+                      Stahování konfigurací&hellip;
+                    </Caption2>
+                    <Caption1 style={{ fontWeight: '600', color: tokens.colorNeutralForeground1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                      {ingestStatus}
+                    </Caption1>
+                  </div>
                 </>
               ) : selected.size > 0 ? (
                 <>
