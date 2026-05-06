@@ -11,15 +11,9 @@ import { FnoHttpError, FnoSourceUnsupportedError, FnoEmptyContentError } from '.
 import { buildFnoPath } from './path-key';
 
 /** F&O ER client — enumerates and downloads Electronic Reporting configurations
- * via F&O custom services under `/api/services`. Network I/O is delegated to
- * {@link FnoTransport}. */
+ * via F&O custom services under `/api/services`. */
 
-/**
- * Module-level cache for `listServiceOperations` results.
- * Key: `${envUrl}::${servicePath}`. Ops don't change during a session so we
- * never invalidate — the cache is keyed on envUrl so switching environments
- * always starts fresh (page reload in browser context).
- */
+/** Per-session cache of service operation names. Key: `${envUrl}::${servicePath}`. */
 const _serviceOpsCache = new Map<string, string[]>();
 
 /** Stable service-path constants (group + service). */
@@ -67,13 +61,7 @@ export const ER_STORAGE_OPS_BY_TYPE: Record<ErComponentType, readonly string[]> 
   Unknown: ['GetEffectiveFormatMappingByID', 'GetModelMappingByID', 'GetDataModelByIDAndRevision'],
 };
 
-/**
- * Low-level helper: invoke an F&O custom service operation.
- *
- * Builds `POST <envUrl>/api/services/<servicePath>/<operation>` with a
- * JSON body and parses the JSON response. Callers should pass the exact
- * parameter names expected by the X++ operation (PascalCase).
- */
+/** Invoke an F&O custom service operation via `POST /api/services/<path>/<op>`. */
 export async function callErService<T = unknown>(
   transport: FnoTransport,
   conn: FnoConnection,
@@ -87,15 +75,7 @@ export async function callErService<T = unknown>(
   return transport.postJson<T>(url, token, body ?? {}, signal);
 }
 
-/**
- * Fetch the list of service names exposed in a service group.
- *
- * `GET <envUrl>/api/services/<groupName>` returns a payload listing the
- * services in that group. Used for diagnostics when the service we call
- * returns an unexpected empty result — we enumerate siblings so the user
- * can discover the right service to target. Accepts both XML and JSON
- * shapes (newer F&O versions prefer JSON).
- */
+/** List service names in an F&O service group (used for diagnostics). */
 export async function listGroupServices(
   transport: FnoTransport,
   conn: FnoConnection,
@@ -160,23 +140,7 @@ function collectServiceNamesFromJson(value: unknown): string[] {
   return [];
 }
 
-/**
- * Fetch the list of operation names exposed by a custom service.
- *
- * `GET <envUrl>/api/services/<servicePath>` typically returns XML of the form
- *
- * ```xml
- * <Service>
- *   <Name>ERConfigurationListService</Name>
- *   <Operations>
- *     <Operation><Name>foo</Name> ... </Operation>
- *   </Operations>
- * </Service>
- * ```
- *
- * but newer F&O versions sometimes return the equivalent JSON
- * (`{"Name":"...","Operations":[{"Name":"foo"}]}`). We accept both.
- */
+/** Fetch operation names exposed by `GET /api/services/<servicePath>`. Accepts XML and JSON. */
 export async function listServiceOperations(
   transport: FnoTransport,
   conn: FnoConnection,
@@ -195,16 +159,7 @@ export async function listServiceOperations(
   return ops;
 }
 
-/**
- * Parse operation names from the response of `/api/services/<servicePath>`.
- *
- * Handles three shapes:
- *  - XML: `<Operation><Name>foo</Name>...</Operation>` repeated.
- *  - JSON: `{ "Operations": [ { "Name": "foo" }, ... ] }`.
- *  - Top-level array of operation strings or `{Name}` objects.
- *
- * Returns `[]` if the payload matches none of them.
- */
+/** Parse operation names from a service discovery response. Accepts XML and JSON. */
 export function extractOperationNames(payload: string): string[] {
   const trimmed = payload.trim();
   if (!trimmed) return [];
@@ -257,20 +212,9 @@ function collectOperationNamesFromJson(value: unknown): string[] {
 }
 
 /**
- * Try a list of candidate operation names on the same service and return
- * the first non-4xx response together with the operation name that worked.
- *
- * Strategy:
- *  1. Discover the real operation names exposed by the service
- *     (`GET /api/services/<servicePath>`).
- *  2. Reorder candidates so those actually exposed are tried first.
- *  3. When an exposed candidate fails with a 4xx, surface the server's
- *     response body verbatim — F&O usually explains which parameter is
- *     missing or wrong. Do **not** keep trying other names in that case,
- *     because the op is real and the problem is the request shape.
- *  4. If none of the candidates is in the exposed list, throw with the
- *     discovered operation names so the caller can update
- *     {@link ER_SERVICE_OPS}.
+ * Try candidate operation names in order; return the first successful response.
+ * Prefers operations actually exposed by the service (via discovery GET).
+ * Throws with actionable hint if no candidate matches.
  */
 async function callErServiceWithFallback<T = unknown>(
   transport: FnoTransport,
@@ -376,13 +320,9 @@ function truncate(s: string, max: number): string {
 }
 
 /**
- * Enumerate all ER solutions available in the environment.
- *
- * Probes `getFormatSolutionsSubHierarchy(parentName)` for every known root
- * DataModel name in parallel. The X++ implementation is fully recursive, so
- * one probe on a root model returns its entire sub-tree.
- *
- * Callers can supply additional root names via `options.extraRoots`.
+ * Enumerate ER solutions by probing `getFormatSolutionsSubHierarchy` for every known
+ * root DataModel name in parallel. The X++ implementation recurses, so one call
+ * returns the entire sub-tree. Extra roots can be injected via `options.extraRoots`.
  */
 export async function listSolutions(
   transport: FnoTransport,
@@ -568,7 +508,6 @@ export async function listSolutions(
   // Pre-discover the confirmed operation name ONCE so each probe doesn't
   // have to try multiple candidates.
   let confirmedListOp = '';
-  let firstOperation = '';
   try {
     const available = await listServiceOperations(
       transport, conn, token, ER_SERVICES.configurationList, signal,
@@ -580,7 +519,6 @@ export async function listSolutions(
         { candidates: ER_SERVICE_OPS.listSolutions, available },
       );
     }
-    firstOperation = confirmedListOp;
   } catch (err) {
     console.warn('[fno-client] listSolutions: pre-discovery failed (non-fatal), will use per-probe fallback', err);
   }
@@ -616,7 +554,6 @@ export async function listSolutions(
           );
           operation = result.operation;
           raw = result.raw;
-          if (!firstOperation) firstOperation = operation;
         }
         const rows = unwrapServiceArray<RawErSolutionRow>(raw, operation);
         if (rows.length > 0) {
@@ -711,25 +648,10 @@ export async function listSolutions(
   return results;
 }
 
-/** Produce a bounded JSON preview of an arbitrary value for error messages. */
-function previewJson(raw: unknown, max = 600): string {
-  let s: string;
-  try {
-    s = JSON.stringify(raw);
-  } catch {
-    s = String(raw);
-  }
-  if (!s) return '<empty>';
-  return s.length <= max ? s : `${s.slice(0, max)}… [+${s.length - max} chars]`;
-}
-
 /**
  * Enumerate configuration components inside a single solution.
- *
- * A single call to `getFormatSolutionsSubHierarchy(solutionName)` returns
- * the complete sub-tree because the X++ implementation recurses into
- * DerivedSolutions. Each Format/ModelMapping is annotated with the nearest
- * DataModel ancestor GUID for use in download helpers.
+ * One `getFormatSolutionsSubHierarchy` call returns the complete sub-tree
+ * because X++ recurses into DerivedSolutions.
  */
 export async function listComponents(
   transport: FnoTransport,
@@ -788,16 +710,9 @@ export async function listComponents(
 }
 
 /**
- * Recursively flatten a `getFormatSolutionsSubHierarchy` response tree
- * into a flat list of components.
- *
- * As we descend we track the nearest DataModel's configurationGuid /
- * revisionGuid and stamp them onto every Format and ModelMapping node.
- * This means a deeply-derived format (e.g. model → base format →
- * derived format) arrives with the correct `parentDataModelGuid` even
- * though the listing service only reports its immediate children per
- * level. The UI `annotateWithParentDataModel` call is then a no-op
- * because `parentDataModelGuid` is already set.
+ * Flatten a `getFormatSolutionsSubHierarchy` response tree into a list.
+ * Propagates the nearest DataModel's GUID/revision down to Format/ModelMapping nodes
+ * so downstream code can call `GetModelMappingByID` / `GetDataModelByIDAndRevision`.
  */
 function flattenComponentsWithParent(
   rows: RawErComponentRow[],
@@ -863,24 +778,12 @@ function flattenComponentsWithParent(
 }
 
 /**
- * Build the ordered list of (operation, body) attempts to download XML
- * for a single component. The F&O ERConfigurationStorageService exposes
- * three typed getters (signatures confirmed against the X++ AOT source
- * in `ElectronicReporting/AxClass/ERConfigurationStorageService.xml`,
- * D365FO 2026-04):
- *
- *   - `getEffectiveFormatMappingByID(guid _formatMappingGuid)`
- *   - `getModelMappingByID(Guid _mappingGuid, guid _dataModelGuid,`
- *     `Name _dataContainerDescriptorName)`
- *   - `getDataModelByIDAndRevision(guid _dataModelGuid,`
- *     `ERRevisionNumber _revisionNumber)`
- *
- * The custom-service JSON deserializer requires every method parameter
- * to be present in the request body — missing keys yield HTTP 400
- * `Parameter '_X' is not found.` Empty/zero values are accepted for
- * parameters X++ ignores on the chosen code path.
- *
- * Exported for unit testing.
+ * Build ordered download attempts for a component.
+ * ERConfigurationStorageService exposes three typed ops (confirmed against AOT source):
+ *   - `GetEffectiveFormatMappingByID(guid _formatMappingGuid)`
+ *   - `GetModelMappingByID(Guid _mappingGuid, guid _dataModelGuid, Name _dataContainerDescriptorName)`
+ *   - `GetDataModelByIDAndRevision(guid _dataModelGuid, ERRevisionNumber _revisionNumber)`
+ * All parameters must be present in every request body (missing key → HTTP 400).
  */
 export function buildDownloadAttempts(
   component: ErConfigSummary,
@@ -969,14 +872,7 @@ export function buildDownloadAttempts(
   return attempts;
 }
 
-/**
- * Download the XML content for a single configuration component.
- *
- * Dispatches to one of the three typed `ERConfigurationStorageService`
- * ops based on `component.componentType` and tries a small set of body
- * parameter-name variants. The service returns the XML either as a plain
- * string or as a base64-encoded string embedded in the JSON response.
- */
+/** Download the XML content for a single configuration component. */
 export async function downloadConfigXml(
   transport: FnoTransport,
   conn: FnoConnection,
@@ -985,15 +881,10 @@ export async function downloadConfigXml(
   signal?: AbortSignal,
 ): Promise<ErConfigDownload> {
   if (!component.revisionGuid && !component.configurationGuid) {
-    // ModelMapping: allow download if parent DataModel GUID is available (for descriptor-name resolution).
+    // ModelMapping: can still download via descriptor path if parent DataModel GUID is known.
     const canDownloadMapping =
       component.componentType === 'ModelMapping' &&
-      Boolean(
-        component.parentDataModelGuid ||
-        component.parentDataModelRevisionGuid ||
-        component.configurationGuid ||
-        component.revisionGuid,
-      );
+      Boolean(component.parentDataModelGuid || component.parentDataModelRevisionGuid);
     // DataModel/ModelMapping without any GUID: try legacy name-based ops as a last resort.
     const canDownloadByName =
       (component.componentType === 'DataModel' || component.componentType === 'ModelMapping') &&
@@ -1171,8 +1062,6 @@ export async function downloadConfigXml(
     revisions: referencedDataModelRevisions,
   } = extractReferencedDataModelGuids(finalXml);
 
-  const referencedModelMappingGuids = extractModelMappingGuidsFromXml(finalXml);
-
   return {
     xml: finalXml,
     syntheticPath: buildFnoPath({
@@ -1187,20 +1076,12 @@ export async function downloadConfigXml(
     referencedDataModelRevisions: Object.keys(referencedDataModelRevisions).length > 0
       ? referencedDataModelRevisions
       : undefined,
-    referencedModelMappingGuids: referencedModelMappingGuids.length > 0 ? referencedModelMappingGuids : undefined,
   };
 }
 
 /**
- * Scan an ER configuration XML string for `Model="{guid}"` and
- * `ModelVersion="{guid},rev"` attribute references on the two
- * mapping-bearing elements (`ERFormatMapping` / `ERModelMapping`).
- * Returns the unique set of non-zero GUIDs plus the highest revision
- * observed per GUID.
- *
- * We stay at the string level (no XML re-parse) so this is cheap
- * enough to run on every download and doesn't require importing the
- * core parser into fno-client.
+ * Scan an ER XML string for DataModel GUID references (`Model=`, `Base=`, etc.).
+ * Returns unique non-zero GUIDs and the highest revision number seen per GUID.
  */
 function extractReferencedDataModelGuids(xml: string): {
   guids: string[];
@@ -1297,68 +1178,9 @@ function extractReferencedDataModelGuids(xml: string): {
   return { guids: Array.from(guids), revisions };
 }
 
-/**
- * Scan a format XML for GUIDs that reference the specific model mapping
- * the format is bound to. F&O's `ERFormatMappingVersion` element typically
- * carries a `ModelMappingVersion` attribute (or similar) pointing to the
- * `ERModelMappingTable` / `ERSolutionTable` GUID of the linked mapping.
- *
- * This GUID can be used directly as `_mappingGuid` in `GetModelMappingByID`
- * to bypass the descriptor-based lookup that always resolves to the DEFAULT
- * (base) mapping instead of the country-specific derived one.
- *
- * We look for GUIDs in any attribute whose name contains "Mapping"
- * (case-insensitive) but NOT "Format" (to avoid picking up the format's
- * own mapping-version self-reference).
- */
-function extractModelMappingGuidsFromXml(xml: string): string[] {
-  const guidBody = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
-  const seen = new Set<string>();
-  const results: string[] = [];
-
-  const addGuid = (guid: string, attrName: string): void => {
-    const lower = guid.toLowerCase();
-    if (lower === ZERO_GUID) return;
-    const attrLower = attrName.toLowerCase();
-    if (attrLower.includes('format')) return; // skip self-referential format-mapping IDs
-    if (seen.has(lower)) return;
-    seen.add(lower);
-    results.push(lower);
-  };
-
-  // Match standard camelCase/PascalCase: SomeAttrContainingMapping="{guid}" or "{guid},N"
-  const re = new RegExp(
-    `([A-Za-z_][A-Za-z0-9_]*[Mm]apping[A-Za-z0-9_]*)\\s*=\\s*"\\{?(${guidBody})\\}?(?:,\\d+)?"`,
-    'gi',
-  );
-  for (const m of xml.matchAll(re)) {
-    addGuid(m[2], m[1]);
-  }
-
-  // F&O ER XML uses non-standard attribute names with spaces and dots.
-  // E.g. `Mapping ID.="{guid}"` on ERModelMappingVersion elements.
-  // This is the primary source of ModelMapping GUIDs on import-format environments.
-  const spaceDotRe = new RegExp(
-    `\\bMapping\\s+ID\\.?\\s*=\\s*"\\{?(${guidBody})\\}?(?:,\\d+)?"`,
-    'gi',
-  );
-  for (const m of xml.matchAll(spaceDotRe)) {
-    addGuid(m[1], 'Mapping ID');
-  }
-
-  return results;
-}
-
 // ─── Service-response parsing helpers ───
 
-/**
- * F&O custom services wrap the return value in either:
- * - `{ "<operationName>Result": <value> }` (most common), or
- * - a bare `<value>` (no wrapper), or
- * - `{ "value": [...] }` (collection wrapper).
- *
- * This helper normalizes collection responses to a flat array.
- */
+/** Normalizes `{ "<opName>Result": value }` / `{ "value": [...] }` service wrappers to a flat array. */
 function unwrapServiceArray<T>(raw: unknown, operationName: string): T[] {
   const unwrapped = unwrapServiceValue(raw, operationName);
   if (Array.isArray(unwrapped)) return unwrapped as T[];
@@ -1407,18 +1229,9 @@ function extractXmlFromServiceResult(raw: unknown, operationName: string): strin
 }
 
 /**
- * If the extracted XML payload is an `<ErFnoBundle>` wrapper, annotate
- * it with a `Name=` attribute so the parser in `@er-visualizer/core`
- * has a reliable fallback for the synthetic ERSolution name (and thus
- * the tab label / designer title in the UI). Non-bundle fragments get
- * wrapped so they carry the name hint too — `wrapBareContent` unwraps
- * the bundle before content detection, so this doesn't change parsing
- * semantics.
- *
- * The hint only fires when the name is non-empty and the payload
- * starts with a known bare-content root; otherwise we return the XML
- * unchanged to avoid corrupting already-wrapped ERSolutionVersion
- * envelopes from disk.
+ * Annotate an `<ErFnoBundle>` (or bare payload) with `Name=` so the parser
+ * has a reliable display name fallback. Returns the XML unchanged if the
+ * payload already has a proper `ERSolutionVersion` envelope.
  */
 function injectNameHint(xml: string, name: string, version?: string): string {
   if (!name) return xml;
@@ -1441,15 +1254,7 @@ function injectNameHint(xml: string, name: string, version?: string): string {
   return `<ErFnoBundle Name="${escaped}"${versionAttr}>${trimmed}</ErFnoBundle>`;
 }
 
-/**
- * Walk `value` recursively and collect every string that looks like XML
- * (starts with `<` after BOM/whitespace stripping) or decodes from
- * base64 into XML. Handles arrays, nested objects, and common wrapper
- * field names used by F&O custom services.
- *
- * Duplicates are suppressed. Depth is capped to avoid pathological
- * recursion.
- */
+/** Walk `value` recursively, collecting every string that is (or decodes to) XML. Deduplicates. */
 function collectXml(value: unknown): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -1476,50 +1281,6 @@ function collectXml(value: unknown): string[] {
   };
   visit(value, 0);
   return out;
-}
-
-/**
- * Walk `value` recursively and return the first string that looks like
- * XML (starts with `<` after BOM/whitespace stripping) or decodes from
- * base64 into XML. Handles arrays, nested objects, and common wrapper
- * field names used by F&O custom services. Stops at the first hit.
- */
-function scanForXml(value: unknown, depth = 0): string | null {
-  if (depth > 6) return null; // safety
-  if (value == null) return null;
-  if (typeof value === 'string') {
-    const normalized = normalizeXmlString(value);
-    return normalized.trimStart().startsWith('<') ? normalized : null;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const hit = scanForXml(item, depth + 1);
-      if (hit) return hit;
-    }
-    return null;
-  }
-  if (typeof value === 'object') {
-    // Prefer common content-bearing keys first.
-    const obj = value as Record<string, unknown>;
-    const preferred = ['Xml', 'xml', 'XmlContent', 'xmlContent', 'XMLContent',
-                       'Content', 'content', 'Data', 'data', 'value', 'Value',
-                       'Result', 'result', 'Body', 'body',
-                       'FormatXml', 'ModelXml', 'MappingXml', 'ConfigurationXml',
-                       'File', 'Payload'];
-    for (const key of preferred) {
-      if (key in obj) {
-        const hit = scanForXml(obj[key], depth + 1);
-        if (hit) return hit;
-      }
-    }
-    // Then any remaining property.
-    for (const [key, v] of Object.entries(obj)) {
-      if (preferred.includes(key)) continue;
-      const hit = scanForXml(v, depth + 1);
-      if (hit) return hit;
-    }
-  }
-  return null;
 }
 
 function normalizeXmlString(s: string): string {
@@ -1580,19 +1341,9 @@ function decodeBase64Utf8(b64: string): string {
 const ZERO_GUID = '00000000-0000-0000-0000-000000000000';
 
 /**
- * Classify an ER tree node by name + FormatMappingGUID.
- *
- * Confirmed on ac365lab-factory (2026-04) — `getFormatSolutionsSubHierarchy`
- * returns a tree with fields: `Name`, `Description`, `FormatMappingGUID`,
- * `Versions: [{Status, VersionNumber}]`, `DerivedSolutions: []`. There is
- * **no** explicit ComponentType field. The heuristic:
- *
- * 1. `FormatMappingGUID` non-zero → **Format** (Format has a mapping GUID).
- * 2. Zero GUID + name contains `mapping` → **ModelMapping**.
- * 3. Zero GUID + name contains `model`   → **DataModel**.
- * 4. Otherwise → Unknown.
- *
- * Case-insensitive on the name test.
+ * Classify an ER tree node by name and FormatMappingGUID.
+ * Non-zero FormatMappingGUID → Format; name containing "mapping" → ModelMapping;
+ * name containing "model" → DataModel.
  */
 export function classifyErNode(name: string, formatMappingGuid: unknown): ErComponentType {
   const guid = typeof formatMappingGuid === 'string' ? formatMappingGuid.trim() : '';
@@ -1604,11 +1355,7 @@ export function classifyErNode(name: string, formatMappingGuid: unknown): ErComp
   return 'Unknown';
 }
 
-/**
- * Recursively walk a getFormatSolutionsSubHierarchy tree and collect
- * every node (including the root rows themselves) into a flat list.
- * Children live under `DerivedSolutions`.
- */
+/** Recursively flatten a `DerivedSolutions` tree into a flat array. */
 export function flattenErHierarchy<T extends { DerivedSolutions?: unknown }>(rows: readonly T[]): T[] {
   const out: T[] = [];
   const walk = (node: T) => {
@@ -1734,6 +1481,8 @@ interface RawErComponentRow {
   Versions?: RawErVersion[];
   DerivedSolutions?: RawErComponentRow[];
   FormatMappingGUID?: string;
+  /** ERModelMappingTable.Guid — returned by getFormatSolutionsSubHierarchy for ModelMapping rows. */
+  ModelMappingGuid?: string;
   ConfigurationRevisionGuid?: string;
   RevisionGuid?: string;
   ConfigurationGuid?: string;
@@ -1788,17 +1537,7 @@ function findAnyGuid(r: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-/**
- * Deep-search `Versions` array entries for any GUID-shaped string value.
- *
- * Some F&O environments include an `Id` or similar GUID field on version
- * rows (e.g. `ERSolutionVersionTable.Id`) that is NOT declared in our
- * `RawErVersion` interface. This extracts the first non-zero GUID found
- * in any string field of any version entry.
- *
- * Note: this intentionally does NOT recurse into `DerivedSolutions` to
- * avoid accidentally picking up child Format GUIDs.
- */
+/** Search Versions array entries for any GUID-shaped string (for rows that don't carry a top-level GUID field). */
 function findGuidInVersions(r: RawErComponentRow): string | undefined {
   if (!Array.isArray(r.Versions)) return undefined;
   for (const v of r.Versions) {
@@ -1844,8 +1583,15 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
     r.RevisionID ??
     r.RevisionId ??
     findGuidByKeyHint(rec, 'revision');
+  // ModelMappingGuid = ERModelMappingTable.Guid from the listing API (explicit field for ModelMapping rows).
+  // Check it BEFORE the generic findGuidByKeyHint to avoid ModelID (DataModel ERSolution GUID) winning.
+  const modelMappingGuid = typeof r.ModelMappingGuid === 'string' && r.ModelMappingGuid !== ZERO_GUID
+    ? r.ModelMappingGuid
+    : undefined;
+
   const configurationGuid =
     formatMappingGuid ??
+    modelMappingGuid ??
     r.ConfigurationGuid ??
     r.Guid ??
     r.ConfigurationID ??
@@ -1855,7 +1601,7 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
     r.Id ??
     r.ID ??
     findGuidByKeyHint(rec, 'format') ??
-    findGuidByKeyHint(rec, 'model') ??
+    findGuidByKeyHint(rec, 'mappingguid') ??
     findGuidByKeyHint(rec, 'config') ??
     findAnyGuid(rec) ??
     findGuidInVersions(r);
@@ -1872,7 +1618,13 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
     : undefined;
 
   if (!configurationGuid && !revisionGuid && (componentType === 'DataModel' || componentType === 'ModelMapping')) {
-    console.warn('[fno-client] component row has no GUID', { componentType, name, raw: rec });
+    // Log all primitive fields so we can spot any GUID the interface doesn't capture yet.
+    const simpleFields: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(rec)) {
+      if (v === null || v === undefined || typeof v === 'object') continue;
+      simpleFields[k] = v;
+    }
+    console.warn('[fno-client] component row has no GUID', { componentType, name, simpleFields });
   }
 
   return {
@@ -1899,14 +1651,8 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
 }
 
 /**
- * Map an F&O component-type hint to our internal union. Accepts strings
- * (`"DataModel"`, `"ERSolutionComponentType::Format"`, etc.), the raw
- * X++ enum integer (exported from AxDB as `0 | 1 | 2`), and booleans
- * (`true`/`false` appear in some service responses).
- *
- * ⚠️ The X++ `ERSolutionComponentType` enum ordering on D365 F&O 10.0.x
- * is: `DataModel = 0`, `Mapping = 1`, `Format = 2`. This has been stable
- * for many releases; verify if a new version reshuffles it.
+ * Map an F&O component-type hint to our internal union.
+ * Accepts strings, the X++ enum int (`DataModel=0, Mapping=1, Format=2`), and booleans.
  */
 function mapComponentType(raw?: unknown): ErComponentType {
   if (raw === undefined || raw === null) return 'Unknown';
