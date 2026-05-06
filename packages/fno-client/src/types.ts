@@ -44,6 +44,12 @@ export interface ErSolutionSummary {
    * even when the user clicks a country-specific derived model.
    */
   rootSolutionName?: string;
+  /**
+   * Name of the direct parent DataModel in the ER derivation hierarchy.
+   * Distinct from `rootSolutionName` which is always the top-level root.
+   * Used by the UI to build a multi-level solution tree.
+   */
+  parentSolutionName?: string;
 }
 
 export type ErComponentType = 'DataModel' | 'ModelMapping' | 'Format' | 'Unknown';

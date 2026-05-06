@@ -287,7 +287,6 @@ const useStyles = makeStyles({
     opacity: 0.5,
   },
   listItemChild: {
-    paddingLeft: '28px',
     backgroundColor: tokens.colorNeutralBackground1,
   },
   listItemChildActive: {
@@ -295,7 +294,6 @@ const useStyles = makeStyles({
     borderLeftWidth: '3px',
     borderLeftStyle: 'solid',
     borderLeftColor: tokens.colorBrandStroke1,
-    paddingLeft: '25px',
   },
   expandBtn: {
     flexShrink: 0,
@@ -395,6 +393,21 @@ const useStyles = makeStyles({
 
 const DEFAULT_CLIENT_ID = '';
 const ZERO_GUID_LOWER = '00000000-0000-0000-0000-000000000000';
+
+// ── Solution tree node (N-level recursive) ───────────────────────────────────
+interface SolutionNode {
+  sol: ErSolutionSummary;
+  children: SolutionNode[];
+}
+
+/** Recursively checks whether a node or any of its descendants match `q`. */
+function solNodeMatchesFilter(node: SolutionNode, q: string): boolean {
+  return (
+    (node.sol.solutionName ?? '').toLowerCase().includes(q) ||
+    (node.sol.publisher ?? '').toLowerCase().includes(q) ||
+    node.children.some(c => solNodeMatchesFilter(c, q))
+  );
+}
 
 interface FnoConnectPanelProps {
   onFilesLoaded?: () => void;
@@ -2564,47 +2577,36 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     </div>
   );
 
-  // ── Helper: build 2-level hierarchy from flat solutions list ──────────
-  interface SolutionNode {
-    sol: ErSolutionSummary;
-    children: ErSolutionSummary[];
-  }
-
+  // ── Helper: build N-level recursive tree from flat solutions list ────────
   const solutionTree = useMemo<SolutionNode[]>(() => {
-    const rootsMap = new Map<string, SolutionNode>();
+    // Create a node for every DataModel/Unknown solution
+    const nodeMap = new Map<string, SolutionNode>();
+    for (const sol of solutions) {
+      if (sol.componentType !== 'DataModel' && sol.componentType !== 'Unknown') continue;
+      nodeMap.set(sol.solutionName, { sol, children: [] });
+    }
+
+    // Attach each node to its direct parent; collect true roots.
+    // Prefer parentSolutionName (direct parent) over rootSolutionName (root)
+    // so multi-level hierarchies render correctly.
     const roots: SolutionNode[] = [];
-
-    // First pass: collect all root solutions (no rootSolutionName)
-    for (const sol of solutions) {
-      if (sol.componentType !== 'DataModel' && sol.componentType !== 'Unknown') continue;
-      if (!sol.rootSolutionName) {
-        const node: SolutionNode = { sol, children: [] };
-        rootsMap.set(sol.solutionName, node);
-        roots.push(node);
-      }
-    }
-
-    // Second pass: attach derived solutions to their roots
-    for (const sol of solutions) {
-      if (sol.componentType !== 'DataModel' && sol.componentType !== 'Unknown') continue;
-      if (!sol.rootSolutionName) continue;
-      const parent = rootsMap.get(sol.rootSolutionName);
-      if (parent) {
-        parent.children.push(sol);
+    for (const node of nodeMap.values()) {
+      const parentName = node.sol.parentSolutionName ?? (node.sol.rootSolutionName ? node.sol.rootSolutionName : undefined);
+      if (parentName && nodeMap.has(parentName) && parentName !== node.sol.solutionName) {
+        nodeMap.get(parentName)!.children.push(node);
       } else {
-        // Root not in list yet — show as standalone root
-        const node: SolutionNode = { sol, children: [] };
-        rootsMap.set(sol.solutionName, node);
         roots.push(node);
       }
     }
 
-    // Sort children alphabetically
-    for (const node of roots) {
-      node.children.sort((a, b) =>
-        (a.solutionName ?? '').localeCompare(b.solutionName ?? '', undefined, { sensitivity: 'base', numeric: true }),
+    // Sort all levels alphabetically
+    const sortLevel = (nodes: SolutionNode[]) => {
+      nodes.sort((a, b) =>
+        (a.sol.solutionName ?? '').localeCompare(b.sol.solutionName ?? '', undefined, { sensitivity: 'base', numeric: true }),
       );
-    }
+      for (const n of nodes) sortLevel(n.children);
+    };
+    sortLevel(roots);
 
     return roots;
   }, [solutions]);
@@ -2617,6 +2619,75 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       return next;
     });
   }, []);
+
+  // ── Recursive solution-row renderer ─────────────────────────────────────
+  const renderSolNode = (node: SolutionNode, depth: number): React.ReactNode => {
+    const { sol, children } = node;
+    const hasChildren = children.length > 0;
+    const isExpanded = expandedSolutions.has(sol.solutionName);
+    const isActive = activeSolution === sol.solutionName;
+    const q = solutionFilter.toLowerCase();
+
+    const visibleChildren = solutionFilter
+      ? children.filter(c => solNodeMatchesFilter(c, q))
+      : children;
+
+    // Fluent spacingHorizontalM ≈ 12px; add 16px per extra level
+    const basePad = 12;
+    const padLeft = depth > 0 ? `${basePad + depth * 16}px` : undefined;
+    const padLeftActive = depth > 0 ? `${basePad + depth * 16 - 3}px` : undefined;
+
+    return (
+      <React.Fragment key={sol.solutionName}>
+        <div
+          className={mergeClasses(
+            styles.listItem,
+            isActive
+              ? (depth > 0 ? styles.listItemChildActive : styles.listItemActive)
+              : (depth > 0 ? styles.listItemChild : ''),
+          )}
+          style={depth > 0 ? { paddingLeft: isActive ? padLeftActive : padLeft } : undefined}
+          onClick={() => handlePickSolution(sol.solutionName)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter') handlePickSolution(sol.solutionName); }}
+        >
+          {hasChildren ? (
+            <div
+              className={styles.expandBtn}
+              role="button"
+              tabIndex={0}
+              aria-label={isExpanded ? 'Sbalit' : 'Rozbalit'}
+              onClick={e => { e.stopPropagation(); toggleExpanded(sol.solutionName); }}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); toggleExpanded(sol.solutionName); } }}
+            >
+              {isExpanded
+                ? <ChevronDownRegular fontSize={12} />
+                : <ChevronRightRegular fontSize={12} />}
+            </div>
+          ) : (
+            <div className={styles.expandBtnPlaceholder} />
+          )}
+          <div className={styles.listItemContent}>
+            {depth === 0 ? (
+              <Body1Strong style={{ display: 'block' }}>{sol.solutionName}</Body1Strong>
+            ) : (
+              <Caption1 style={{ display: 'block', fontWeight: '600' }}>{sol.solutionName}</Caption1>
+            )}
+            {sol.publisher && depth === 0 && (
+              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{sol.publisher}</Caption1>
+            )}
+          </div>
+          {hasChildren && (
+            <Badge appearance="outline" size="small" style={{ flexShrink: 0, fontSize: '10px' }}>
+              {children.length}
+            </Badge>
+          )}
+        </div>
+        {(isExpanded || !!solutionFilter) && visibleChildren.map(child => renderSolNode(child, depth + 1))}
+      </React.Fragment>
+    );
+  };
 
   // ── Helper: profile initials avatar ─────────────────────────────────────
   const initials = (name: string) => {
@@ -2820,96 +2891,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 )}
 
                 {!loadingSolutions && solutionTree
-                  .filter(node => {
-                    if (!solutionFilter) return true;
-                    const q = solutionFilter.toLowerCase();
-                    const rootMatch = (node.sol.solutionName ?? '').toLowerCase().includes(q)
-                      || (node.sol.publisher ?? '').toLowerCase().includes(q);
-                    const childMatch = node.children.some(c =>
-                      (c.solutionName ?? '').toLowerCase().includes(q),
-                    );
-                    return rootMatch || childMatch;
-                  })
-                  .map(node => {
-                    const { sol, children } = node;
-                    const hasChildren = children.length > 0;
-                    const isExpanded = expandedSolutions.has(sol.solutionName);
-                    const isActive = activeSolution === sol.solutionName;
-
-                    // When filtering, show only matching children
-                    const visibleChildren = solutionFilter
-                      ? children.filter(c => (c.solutionName ?? '').toLowerCase().includes(solutionFilter.toLowerCase()))
-                      : children;
-
-                    return (
-                      <React.Fragment key={sol.solutionName}>
-                        {/* Root solution row */}
-                        <div
-                          className={mergeClasses(
-                            styles.listItem,
-                            isActive ? styles.listItemActive : '',
-                          )}
-                          onClick={() => handlePickSolution(sol.solutionName)}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={e => { if (e.key === 'Enter') handlePickSolution(sol.solutionName); }}
-                        >
-                          {/* Expand / collapse toggle */}
-                          {hasChildren ? (
-                            <div
-                              className={styles.expandBtn}
-                              role="button"
-                              tabIndex={0}
-                              aria-label={isExpanded ? 'Sbalit' : 'Rozbalit'}
-                              onClick={e => { e.stopPropagation(); toggleExpanded(sol.solutionName); }}
-                              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); toggleExpanded(sol.solutionName); } }}
-                            >
-                              {isExpanded
-                                ? <ChevronDownRegular fontSize={12} />
-                                : <ChevronRightRegular fontSize={12} />}
-                            </div>
-                          ) : (
-                            <div className={styles.expandBtnPlaceholder} />
-                          )}
-                          <div className={styles.listItemContent}>
-                            <Body1Strong style={{ display: 'block' }}>{sol.solutionName}</Body1Strong>
-                            {sol.publisher && (
-                              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{sol.publisher}</Caption1>
-                            )}
-                          </div>
-                          {hasChildren && (
-                            <Badge appearance="outline" size="small" style={{ flexShrink: 0, fontSize: '10px' }}>
-                              {children.length}
-                            </Badge>
-                          )}
-                        </div>
-
-                        {/* Child solution rows (shown when expanded or filtering) */}
-                        {(isExpanded || !!solutionFilter) && visibleChildren.map(child => {
-                          const isChildActive = activeSolution === child.solutionName;
-                          return (
-                            <div
-                              key={child.solutionName}
-                              className={mergeClasses(
-                                styles.listItem,
-                                isChildActive ? styles.listItemChildActive : styles.listItemChild,
-                              )}
-                              onClick={() => handlePickSolution(child.solutionName)}
-                              role="button"
-                              tabIndex={0}
-                              onKeyDown={e => { if (e.key === 'Enter') handlePickSolution(child.solutionName); }}
-                            >
-                              <div className={styles.expandBtnPlaceholder} />
-                              <div className={styles.listItemContent}>
-                                <Caption1 style={{ display: 'block', fontWeight: '600' }}>{child.solutionName}</Caption1>
-                              </div>
-                              <ChevronRightRegular fontSize={12} style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
-                            </div>
-                          );
-                        })}
-                      </React.Fragment>
-                    );
-                  })}
+                  .filter(node => !solutionFilter || solNodeMatchesFilter(node, solutionFilter.toLowerCase()))
+                  .map(node => renderSolNode(node, 0))}
 
                 {!loadingSolutions && solutionTree.length === 0 && !solutionFilter && (
                   <div className={styles.emptyState}>
@@ -3296,9 +3279,10 @@ function rememberDataModels(
  * ensures nested DataModels discovered while browsing appear as
  * top-level navigable entries alongside root DataModels.
  *
- * `rootSolutionName` is the root DataModel whose sub-tree these
- * components belong to — propagated so `handlePickSolution` can
- * always call `listComponents(root)` and get the full tree.
+ * `rootSolutionName` is the top-level root — propagated so `handlePickSolution`
+ * can always call `listComponents(root)` and get the full tree.
+ * `parentConfigName` on each `ErConfigSummary` is used as the direct-parent
+ * pointer so the UI can render a multi-level tree.
  *
  * Returns the same array reference when nothing changed.
  */
@@ -3314,14 +3298,17 @@ function promoteDmToSolutions(
     const name = c.configurationName;
     if (!name || existing.has(name)) continue;
     existing.add(name);
+    // parentSolutionName = direct parent in ER hierarchy (for tree rendering)
+    // rootSolutionName   = top-level root (for listComponents API calls)
+    const directParent = c.parentConfigName && c.parentConfigName !== name ? c.parentConfigName : undefined;
     toAdd.push({
       solutionName: name,
       publisher: undefined,
       version: c.version,
       displayName: undefined,
       componentType: 'DataModel',
-      // Point back to the root so handlePickSolution fetches the full tree.
       rootSolutionName: name === rootSolutionName ? undefined : rootSolutionName,
+      parentSolutionName: directParent,
     });
   }
   if (toAdd.length === 0) return prev;
