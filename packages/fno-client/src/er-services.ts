@@ -1620,11 +1620,29 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
   if (!configurationGuid && !revisionGuid && (componentType === 'DataModel' || componentType === 'ModelMapping')) {
     // Log all primitive fields so we can spot any GUID the interface doesn't capture yet.
     const simpleFields: Record<string, unknown> = {};
+    const objectFields: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(rec)) {
-      if (v === null || v === undefined || typeof v === 'object') continue;
-      simpleFields[k] = v;
+      if (v === null || v === undefined) continue;
+      if (typeof v === 'object') objectFields[k] = v;
+      else simpleFields[k] = v;
     }
-    console.warn('[fno-client] component row has no GUID', { componentType, name, simpleFields });
+    // Serialize Versions and DerivedSolutions as plain strings so they appear
+    // in saved log files without requiring Chrome DevTools expansion.
+    const versionsJson = Array.isArray(r.Versions)
+      ? JSON.stringify(r.Versions).substring(0, 800)
+      : 'none';
+    const derivedJson = Array.isArray(r.DerivedSolutions) && (r.DerivedSolutions as unknown[]).length > 0
+      ? JSON.stringify((r.DerivedSolutions as unknown[]).slice(0, 3)).substring(0, 2000)
+      : 'none';
+    const simpleFieldsJson = JSON.stringify(simpleFields);
+    const otherObjectKeys = Object.keys(objectFields)
+      .filter(k => k !== 'Versions' && k !== 'DerivedSolutions')
+      .map(k => `${k}=${JSON.stringify(objectFields[k]).substring(0, 200)}`)
+      .join('; ');
+    console.warn('[fno-client] component row has no GUID', {
+      componentType, name, simpleFieldsJson,
+      versionsJson, derivedJson, otherObjectKeys,
+    });
   }
 
   return {

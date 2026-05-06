@@ -322,6 +322,7 @@ export function App() {
   const expandAll = useAppStore(s => s.expandAll);
   const rebuildDerivedState = useAppStore(s => s.rebuildDerivedState);
   const requestExplorerExpand = useAppStore(s => s.requestExplorerExpand);
+  const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
   const shouldAutoOpenFirstTabRef = useRef(false);
 
   useEffect(() => {
@@ -340,7 +341,14 @@ export function App() {
     navigateToTreeNode(treeNodes[0].id);
   }, [showLanding, activeTabId, treeNodes, navigateToTreeNode]);
 
-  const isLandingVisible = showLanding || configs.length === 0;
+  // Designer is only shown when:
+  // 1. showLanding is false (user navigated away from landing page)
+  // 2. At least one configuration is loaded
+  // 3. No F&O download is in progress (fnoIngestStatus is empty)
+  // The third condition prevents the designer from appearing mid-download
+  // if React processes the showLanding=false update before fnoIngestStatus=''
+  // (Zustand and useState re-renders may be batched separately in some paths).
+  const isLandingVisible = showLanding || configs.length === 0 || !!fnoIngestStatus;
 
   const handleFilesLoaded = useCallback(() => {
     shouldAutoOpenFirstTabRef.current = !activeTabId;
