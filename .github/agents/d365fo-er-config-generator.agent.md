@@ -12,8 +12,6 @@ tools:
   - list_dir
   - fetch_webpage
   - execution_subagent
-instructions:
-  - .github/agents/d365fo-er-config-patterns.md
 ---
 
 # ER Configuration Generator Agent
@@ -237,6 +235,273 @@ format.Document.BkToCstmrStmt.Stmt.Acct.Svcr.Data.FinInstnId.BICFI.IsMatched
 </ERModelMappingVersion>
 ```
 
+### Delta Section — Derived Configuration Differences
+
+The `<Delta>` section records only the changes between the derived configuration and its base. It appears inside each version node (`ERModelMappingVersion`, `ERFormatVersion`, `ERFormatMappingVersion`) after `<Mapping>` / `<Format>`.
+
+```xml
+<Delta>
+  <ERObjectOperationSequence>
+    <Contents.>
+      <!-- one or more operation elements -->
+    </Contents.>
+  </ERObjectOperationSequence>
+</Delta>
+```
+
+#### Operation types
+
+**`ERObjectOperationModify`** — replaces properties of an existing object:
+```xml
+<ERObjectOperationModify ModifiedProperties="..." Object="...">
+  <Data>
+    <!-- replacement XML node -->
+  </Data>
+</ERObjectOperationModify>
+```
+
+**`ERObjectOperationInsert`** — inserts new child elements into a section:
+```xml
+<ERObjectOperationInsert Destination="...">
+  <Contents.>
+    <!-- new elements -->
+  </Contents.>
+</ERObjectOperationInsert>
+```
+
+**`ERObjectOperationDelete`** — removes an existing element. Always includes `ObjectContainer` to specify where the object lives:
+```xml
+<ERObjectOperationDelete Object="..." ObjectContainer="..." />
+```
+
+---
+
+#### CRITICAL: `Object` / `Destination` / `ObjectContainer` path syntax differs per version type
+
+The path format is **completely different** in each version type. Using the wrong format will produce an invalid config.
+
+---
+
+##### `ERFormatVersion` — GUID-based paths
+
+Format tree operations use **element GUIDs directly** — not name-based paths.
+
+| Operation | Syntax | Notes |
+|---|---|---|
+| Delete format element | `Object="{elementGUID}" ObjectContainer="{parentGUID}"` | Both Object and ObjectContainer are GUIDs |
+| Modify element property | `Object="{elementGUID}"` | Target element by GUID |
+| Insert into parent | `Destination="{parentGUID}"` | Appended at end of parent |
+| Insert before sibling | `Destination="{parentGUID}" AppendBefore="{siblingGUID}"` | Inserts before the sibling |
+| Modify format root | `Object="root"` | Special keyword for the root `ERTextFormat` element |
+| Insert enum | `Destination=".EnumList"` | Name-based, targets the enum list section |
+
+Example — derived format delta (delete elements, change properties, insert new elements):
+```xml
+<!-- Delete a format element (both GUIDs are from the BASE format) -->
+<ERObjectOperationDelete Object="{5A9415EE-EE97-44BE-8228-86EE2FCF0B19}"
+    ObjectContainer="{D403A787-A12A-42BE-A62A-4B6E53E66685}" />
+
+<!-- Change MaximalLength on an existing element -->
+<ERObjectOperationModify ModifiedProperties="parmMaximalLength" Object="{56690FA4-5F1B-4E8A-9B9F-C7D724B34882}">
+  <Data>
+    <ERTextFormatString MaximalLength="70" />
+  </Data>
+</ERObjectOperationModify>
+
+<!-- Change MaximalLength and Transformation -->
+<ERObjectOperationModify ModifiedProperties="parmMaximalLength,parmTransformation"
+    Object="{A835AD41-BF5B-407B-B717-3AC49E2DB5E2}">
+  <Data>
+    <ERTextFormatString MaximalLength="35" Transformation="{transformationGUID}" />
+  </Data>
+</ERObjectOperationModify>
+
+<!-- Modify the format root (rename, change root component) -->
+<ERObjectOperationModify ModifiedProperties="parmName,parmRoot,ParmRootComponent" Object="root">
+  <Data>
+    <ERTextFormat Name="Asl ISO20022 Credit transfer ČSOB (SK)" ... />
+  </Data>
+</ERObjectOperationModify>
+
+<!-- Insert new elements at end of a parent container -->
+<ERObjectOperationInsert Destination="{parentContainerGUID}">
+  <Contents.>
+    <ERTextFormatXMLElement ID.="{newGUID}" Name="NewElement" Multiplicity="10">
+      <Contents.>
+        <ERTextFormatString ID.="{newLeafGUID}" Name="Str" MaximalLength="35" />
+      </Contents.>
+    </ERTextFormatXMLElement>
+  </Contents.>
+</ERObjectOperationInsert>
+
+<!-- Insert before a specific sibling -->
+<ERObjectOperationInsert AppendBefore="{siblingGUID}" Destination="{parentGUID}">
+  <Contents.>
+    <ERTextFormatXMLElement ID.="{newGUID}" Name="NewElement" Multiplicity="1">
+      <Contents.><ERTextFormatString ID.="{newLeafGUID}" Name="Str" /></Contents.>
+    </ERTextFormatXMLElement>
+  </Contents.>
+</ERObjectOperationInsert>
+
+<!-- Add new enum definitions -->
+<ERObjectOperationInsert Destination=".EnumList">
+  <Contents.>
+    <EREnumDefinition ID.="{GUID}" Label="@GER_LABEL:MyEnum" Name="MyEnum">
+      <Contents.>
+        <EREnumValue Name="Value1" Value="0" />
+      </Contents.>
+    </EREnumDefinition>
+  </Contents.>
+</ERObjectOperationInsert>
+```
+
+---
+
+##### `ERModelMappingVersion` — dot-bracket syntax
+
+Paths start with `.` and use `[Name]` brackets:
+
+| Path | Targets |
+|---|---|
+| `root` | The `ERModelMapping` root element |
+| `.Datasource[Name].ValueDefinition.ValueSource` | Value source of a top-level datasource |
+| `.Datasource[Parent/ChildName].ValueDefinition.ValueSource` | Nested datasource (slash = child path) |
+| `.Binding` | The `ERDataContainerBinding` section |
+
+Example:
+```xml
+<ERObjectOperationModify ModifiedProperties="parmFormatGUID"
+    Object=".Datasource[format].ValueDefinition.ValueSource">
+  <Data><ERImportFormatDatasource FormatGUID="{newFormatGUID}" /></Data>
+</ERObjectOperationModify>
+
+<ERObjectOperationModify ModifiedProperties="parmModelName,ParmModelVersion" Object="root">
+  <Data><ERModelMapping ... ModelVersion="{newGUID},2" ... /></Data>
+</ERObjectOperationModify>
+
+<ERObjectOperationInsert Destination=".Binding">
+  <Contents.>
+    <ERDataContainerPathBinding Path="NewField/SubField" ExpressionAsString="SomeDs.SomeValue" />
+  </Contents.>
+</ERObjectOperationInsert>
+```
+
+---
+
+##### `ERFormatMappingVersion` — colon-prefix syntax + ObjectContainer for deletes
+
+Paths use a **colon** to separate type prefix from name. Delete operations always specify `ObjectContainer`.
+
+| Path pattern | Targets |
+|---|---|
+| `ModelItemDefinition:DatasourceName` | A top-level datasource (for delete with `ObjectContainer=".Datasource"`) |
+| `ModelItemDefinition:Parent/$ChildName` | Nested datasource path |
+| `ModelItemDefinition:Name.ValueDefinition.ValueSource` | Value source (for modify) |
+| `ModelItemDefinition:Parent/$Child.ValueDefinition.ValueSource.GroupedFields` | `GroupedFields` in GroupBy |
+| `FormatComponentFieldBinding::{GUID}` | Format element value binding |
+| `FormatComponentFieldBinding:Enabled:{GUID}` | Enabled condition binding on a format element |
+| `FormatComponentFieldBinding:FileName:{GUID}` | FileName binding on a file component |
+| `FormatComponentFieldBinding:FileLanguage:{GUID}` | FileLanguage binding on a file component |
+| `FormatComponentFieldBinding:Validation:{GUID}` | Validation binding on a format element |
+| `.Datasource` | The datasource section (for inserts / ObjectContainer for deletes) |
+| `.Binding` | The binding section (ObjectContainer for deletes) |
+
+Example — format mapping delta:
+```xml
+<!-- Delete a datasource -->
+<ERObjectOperationDelete Object="ModelItemDefinition:ExportFormat" ObjectContainer=".Datasource" />
+<ERObjectOperationDelete Object="ModelItemDefinition:model/Payments/$hasStructuredRemittance" ObjectContainer=".Datasource" />
+
+<!-- Delete specific bindings on a format element -->
+<ERObjectOperationDelete Object="FormatComponentFieldBinding::{AF47335D-637A-42B3-9383-83EA20D4831C}" ObjectContainer=".Binding" />
+<ERObjectOperationDelete Object="FormatComponentFieldBinding:Enabled:{AF47335D-637A-42B3-9383-83EA20D4831C}" ObjectContainer=".Binding" />
+<ERObjectOperationDelete Object="FormatComponentFieldBinding:FileName:{1029A815-5742-4FE5-9433-A95CD84FDB6B}" ObjectContainer=".Binding" />
+<ERObjectOperationDelete Object="FormatComponentFieldBinding:FileLanguage:{D5326E09-4B81-4FCF-9FAF-2E68C7563084}" ObjectContainer=".Binding" />
+<ERObjectOperationDelete Object="FormatComponentFieldBinding:Validation:{9C75AC2C-4D4D-47A5-9B05-703EA344A9E1}" ObjectContainer=".Binding" />
+
+<!-- Update model enum reference -->
+<ERObjectOperationModify ModifiedProperties="parmModelGuid,parmRevisionNumber"
+    Object="ModelItemDefinition:$MyEnumDs.ValueDefinition.ValueSource">
+  <Data><ERModelEnumDataSourceHandler ModelEnumName="MyEnum" ModelGuid="{newGUID}" ModelVersion="{newGUID},2" /></Data>
+</ERObjectOperationModify>
+
+<!-- Insert new datasources -->
+<ERObjectOperationInsert Destination=".Datasource">
+  <Contents.>
+    <ERModelItemDefinition ParentPath="">
+      <!-- new datasource definition -->
+    </ERModelItemDefinition>
+  </Contents.>
+</ERObjectOperationInsert>
+
+<!-- Add a grouped field to an existing GroupBy -->
+<ERObjectOperationInsert
+    Destination="ModelItemDefinition:Control statement/$MyGroupBy.ValueDefinition.ValueSource.GroupedFields">
+  <Contents.>
+    <ERModelGroupByFieldReference FieldPath="#Root/$Source/SomeField" />
+  </Contents.>
+</ERObjectOperationInsert>
+
+<!-- Update GroupBy structure entirely -->
+<ERObjectOperationModify ModifiedProperties="parmAggregations,parmGroupedFields"
+    Object="ModelItemDefinition:Control statement/$MyGroupBy.ValueDefinition.ValueSource">
+  <Data>
+    <ERModelGroupByFunction ExecutionTarget="2" ListToGroup="#Root/$Source">
+      <Aggregations>...</Aggregations>
+      <GroupedFields>...</GroupedFields>
+    </ERModelGroupByFunction>
+  </Data>
+</ERObjectOperationModify>
+
+<!-- Change expression on a format binding -->
+<ERObjectOperationModify ModifiedProperties="parmExpressionAsString,parmExpression,parmSyntaxVersion"
+    Object="FormatComponentFieldBinding::{7968935e-9142-465c-9e44-395705407c1c}">
+  <Data>
+    <ERFormatComponentPropertyBinding Component="{7968935e-9142-465c-9e44-395705407c1c}"
+        ExpressionAsString="NEW_EXPRESSION" SyntaxVersion="1" />
+  </Data>
+</ERObjectOperationModify>
+
+<!-- Change expression on a format mapping datasource -->
+<ERObjectOperationModify ModifiedProperties="parmExpressionAsString,parmExpression"
+    Object="ModelItemDefinition:Control statement/$A1Trans.ValueDefinition.ValueSource">
+  <Data>
+    <ERModelExpressionItem ExpressionAsString="NEW_EXPRESSION" SyntaxVersion="2" />
+  </Data>
+</ERObjectOperationModify>
+```
+
+---
+
+#### `ModifiedProperties` values
+
+| Value | When to use |
+|---|---|
+| `parmModelGuid,parmRevisionNumber` | Model enum/type reference update after model rebase |
+| `parmModelGUID,parmRevisionNumber` | Same — uppercase variant (depends on datasource type) |
+| `parmExpressionAsString,parmExpression` | Computed field / format binding expression changed |
+| `parmExpressionAsString,parmExpression,parmSyntaxVersion` | Expression changed and SyntaxVersion also changed |
+| `parmModelName,ParmModelVersion` | Root mapping model version changed (`Object="root"` in mapping) |
+| `parmName,parmRoot,ParmRootComponent` | Format root element renamed or root component changed (`Object="root"` in format) |
+| `parmFormatGUID` | Format GUID reference updated in mapping |
+| `parmMaximalLength` | String element length limit changed in format tree |
+| `parmMaximalLength,parmTransformation` | String element length and transformation changed |
+| `parmAggregations,parmGroupedFields` | GroupBy datasource structure changed |
+
+---
+
+#### Rules for building Delta
+
+1. **Include only actual differences** — never copy unchanged elements from the base.
+2. **Match the path syntax to the version type** — each type uses completely different path conventions.
+3. **`ERFormatVersion` uses GUIDs** for all format tree operations (delete/insert/modify elements). Reference element GUIDs from the base format, not names.
+4. **`ERObjectOperationDelete` always has `ObjectContainer`** — never omit it.
+5. **`ERObjectOperationInsert` can have `AppendBefore`** — use it to control element ordering within a parent container.
+6. **Model enum references** need `parmModelGuid,parmRevisionNumber` on every datasource that holds a model GUID when the model version changes.
+7. **Format binding property deletes** distinguish between `::` (value), `Enabled:`, `FileName:`, `FileLanguage:`, `Validation:` — delete only the specific property that changed.
+8. **GroupBy structural changes** use `parmAggregations,parmGroupedFields` or targeted insert into `.GroupedFields`.
+9. **Expression + SyntaxVersion changed together** → use `parmExpressionAsString,parmExpression,parmSyntaxVersion`.
+
 ### Common Datasource Types
 ```xml
 <!-- Import format reference (links mapping to format tree) -->
@@ -342,23 +607,15 @@ format.Document.BkToCstmrStmt.Stmt.Acct.Svcr.Data.FinInstnId.BICFI.IsMatched
 - `BASE64STRINGTOCONTAINER(string)`, `CONTAINERTOBASE64STRING(container)`
 - `JSONVALUE(json, path)`
 
-## CRITICAL: Execution Model
+## Execution Model
 
-**You are a SCRIPT GENERATOR, not an XML generator.**
+You generate ER configurations by writing and running a PowerShell script that builds the XML programmatically. Follow this 3-step pattern for every file generation task.
 
-### ABSOLUTE RULES — violating these makes your output USELESS:
+### Step 1 — Write the generation script to disk
 
-1. **NEVER write ER XML directly in chat, reasoning, or thinking.** ER configs are thousands of lines long — they MUST be generated programmatically by a PowerShell script.
-2. **NEVER use `create_file` tool.** It is unreliable and files may not appear on disk. ALWAYS use `run_in_terminal` with PowerShell `Set-Content`.
-3. **NEVER claim a file was created without verifying.** After every file write, run `Test-Path` to confirm.
-4. **NEVER reference files you haven't verified exist.** Use `list_dir` or `file_search` first.
-5. **NEVER fabricate tool outputs.** If a tool fails, say so. Do not pretend it succeeded.
+Use `run_in_terminal` with `Set-Content` to save the script:
 
-### Mandatory 3-Step Pattern
-
-**Step 1 — Write the PowerShell generation script to disk:**
 ```powershell
-# Use run_in_terminal to save the script
 @'
 # === ER Config Generation Script ===
 # <description of what this generates>
@@ -366,7 +623,7 @@ format.Document.BkToCstmrStmt.Stmt.Acct.Svcr.Data.FinInstnId.BICFI.IsMatched
 $outputPath = "output/<ConfigName>.version.X.Y.Z.xml"
 $doc = New-Object System.Xml.XmlDocument
 
-# ... all XML building logic here using [xml] / XmlDocument API ...
+# ... all XML building logic here using XmlDocument API ...
 
 # Save
 $settings = New-Object System.Xml.XmlWriterSettings
@@ -385,19 +642,22 @@ if (Test-Path $outputPath) {
 '@ | Set-Content -Path "scripts/generate-<name>.ps1" -Encoding UTF8
 ```
 
-**Step 2 — Execute the script:**
+### Step 2 — Execute the script
+
 ```powershell
 & "scripts/generate-<name>.ps1"
 ```
 
-**Step 3 — Report to user:**
-Only after seeing `OK:` output with file size, tell the user the file was created and where.
+### Step 3 — Report to user
 
-### FORBIDDEN
-- ❌ XML content in chat/reasoning (use script instead)
-- ❌ `create_file` tool (use `run_in_terminal` + `Set-Content`)
-- ❌ Claiming file exists without `Test-Path` proof
-- ❌ Referencing files without verifying via `list_dir`/`file_search`
+Only after seeing `OK:` output with a non-zero file size, confirm to the user the file path and size.
+
+### Key rules
+
+- All ER XML is produced inside the PowerShell script — not written inline in chat.
+- Use `run_in_terminal` + `Set-Content` for all file writes (reliable cross-platform).
+- Confirm file existence via `Test-Path` output before reporting success.
+- Verify referenced files exist via `list_dir` or `file_search` before using them.
 - ❌ Generating XML in reasoning then "summarizing" it
 - ❌ Using `read_file` on ER XML files larger than 300 lines (use `execution_subagent` instead — see below)
 
