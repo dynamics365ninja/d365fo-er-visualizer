@@ -904,7 +904,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           componentType: 'DataModel',
           configurationGuid: c.referencedModelGuid,
           hasContent: true,
-          versionNumbers: [1, 2, 3, 0],
+          // Probe high→low so we always get the latest version.
+          versionNumbers: [50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
         };
 
         augmented.set(componentKey(synthDm), synthDm);
@@ -1078,11 +1079,11 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 componentType: 'DataModel',
                 configurationGuid: dmGuid,
                 hasContent: true,
-                // Probe a wide range: the format XML references a specific revision,
-                // but the locally-stored revision may be much higher on newer F&O builds.
+                // Probe high→low so we always get the latest version.
+                // If the format XML references a specific revision, try it first.
                 versionNumbers: [
                   ...(typeof rev === 'number' ? [rev] : []),
-                  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 0,
+                  50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
                 ],
                 version: typeof rev === 'number' ? String(rev) : undefined,
               };
@@ -1208,11 +1209,11 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           const followUpResults = await Promise.allSettled(
             fuSlice.map(async ({ guid, rev }) => {
               // When we know the exact revision from the XML, probe only that revision.
-              // For GUIDs from broad listing-fallback (no revision info), limit probing
-              // to the most common DataModel revisions.
+              // For GUIDs from broad listing-fallback (no revision info), probe high→low
+              // so we always get the latest version.
               const versionNumbers = typeof rev === 'number'
                 ? [rev]
-                : [1, 2, 3, 4, 5, 0];
+                : [50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
               // Try to resolve a real DM name from listing data — enables legacy name-based
               // ops (getRevisionContent etc.) as fallback when GUID-based op returns empty.
               // For import formats, the guid here is the ERSolution GUID from the listing's
@@ -1910,7 +1911,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           configurationName: dmName,
           componentType: 'DataModel',
           hasContent: false, // no GUID — will use legacy name-based ops
-          versionNumbers: [1, 2, 3, 0],
+          versionNumbers: [50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
         };
         try {
           const download = await fnoSession.downloadConfiguration(activeProfile, synthDm);
@@ -2276,7 +2277,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             configurationName: dmName,
             componentType: 'DataModel',
             hasContent: false, // no GUID → legacy name-based ops
-            versionNumbers: [1, 2, 3, 0],
+            versionNumbers: [50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
           };
           let resolvedGuid: string | undefined;
           try {
@@ -2377,7 +2378,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               configurationName: dmNameC,
               componentType: 'DataModel',
               hasContent: false, // no GUID → legacy name-based ops
-              versionNumbers: [1, 2, 3, 0],
+              versionNumbers: [50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
             };
             try {
               const dmDl = await fnoSession.downloadConfiguration(activeProfile, probeSpecC);
