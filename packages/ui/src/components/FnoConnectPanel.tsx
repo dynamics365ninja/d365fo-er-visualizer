@@ -1375,6 +1375,12 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           }
         }
         if (child.componentType !== 'ModelMapping') continue;
+        // Only accept mappings whose ownerDataModelName matches one of
+        // the DataModels we're actually downloading. This prevents
+        // downloading a derived mapping when a base format is selected
+        // (and vice versa). The mapping's model must match the format's model.
+        const childOwnerDm = child.ownerDataModelName ?? owningDmName;
+        if (!dmNamesToScan.has(childOwnerDm)) continue;
         if (!child.revisionGuid && !child.configurationGuid) {
           // No GUID — stash as pending branch; synth pass resolves via descriptor.
           const list = pendingMappingBranchesByDmName.get(owningDmName) ?? [];
@@ -1513,6 +1519,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         if (comp.componentType !== 'ModelMapping') continue;
 
         const ownerDmName = comp.ownerDataModelName ?? comp.solutionName ?? '';
+        // Only include mappings owned by DataModels we're actually downloading.
+        if (!dmNamesToScan.has(ownerDmName)) continue;
         if (comp.configurationGuid || comp.revisionGuid) {
           // Has GUID — stash as pending branch (not mappingsToLoad) so
           // the synth pass downloads only ONE mapping per DataModel.
@@ -1569,6 +1577,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             // Has GUID — stash as pending branch (not mappingsToLoad).
             if (!alreadyLoadedKeys.has(componentKey(derived))) {
               const branchDmName2 = parentDm?.configurationName ?? candidateDmName;
+              // Only include if the owner DM is one we're actually downloading.
+              if (!dmNamesToScan.has(branchDmName2)) continue;
               const bList = pendingMappingBranchesByDmName.get(branchDmName2) ?? [];
               if (!bList.some(b => b.mappingName === (derived.configurationName ?? ''))) {
                 bList.push({
