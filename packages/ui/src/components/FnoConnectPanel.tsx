@@ -830,25 +830,16 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // them, but we still pull ancestors above it below via the
       // parentDataModelGuid path.
       const ancestorGuids = c.ancestorDataModelGuids ?? [];
-      for (const guid of ancestorGuids) {
-        const model = resolveByGuid(guid);
-        if (!model) continue;
-        // Skip DataModels whose rows carried no real GUID. F&O's
-        // `getFormatSolutionsSubHierarchy` returns DataModel entries
-        // with only `FormatMappingGUID=00000000…` (zero placeholder)
-        // and no separate DataModel GUID, so we have nothing usable
-        // to pass to `GetDataModelByIDAndRevision`. Queuing them
-        // would cascade into "all revisions empty" errors and red
-        // toasts on the user's Load action.
-        if (!model.configurationGuid && !model.revisionGuid) {
-          console.info(
-            '[fno-ui] skipping ancestor model without downloadable GUID',
-            model.configurationName,
-          );
-          continue;
+      // Only include the NEAREST (immediate parent) DataModel — not the
+      // entire ancestor chain. For derived formats we want just the derived
+      // model, not the base one. The nearest parent is the last element.
+      if (ancestorGuids.length > 0) {
+        const nearestGuid = ancestorGuids[ancestorGuids.length - 1];
+        const model = resolveByGuid(nearestGuid);
+        if (model && (model.configurationGuid || model.revisionGuid)) {
+          const key = componentKey(model);
+          if (!augmented.has(key)) augmented.set(key, model);
         }
-        const key = componentKey(model);
-        if (!augmented.has(key)) augmented.set(key, model);
       }
       // Backstop for older component objects (without ancestor list)
       // that only have parentDataModelGuid set.
@@ -1309,12 +1300,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       const name = cfg.solutionVersion?.solution?.name;
       if (name) dmNamesToScan.add(name);
     }
-    // Also include every `solutionPath` step the user navigated, plus
-    // the active F&O explorer roots — captures derived DMs the user
-    // browsed past without explicitly selecting.
-    for (const step of solutionPath) {
-      if (step) dmNamesToScan.add(step);
-    }
+    // Only scan DataModels that are directly relevant to the selected
+    // components — skip browsed-past ancestors to avoid downloading
+    // base mappings for derived configurations.
     // For formats whose DataModel is not in finalToLoad (e.g. import formats),
     // add their solutionName so the listing scan finds ModelMapping children.
     // GetModelMappingByID(mappingGuid) returns both the ModelMapping AND the DataModel.
@@ -1357,9 +1345,11 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       }
       for (const child of children) {
         if (child.componentType === 'DataModel') {
-          // Walk into derived DataModels too — they can host their
-          // own ModelMapping descendants.
-          if (child.configurationName && !visitedScanNames.has(child.configurationName)) {
+          // Only walk into derived DataModels that are directly relevant
+          // (in dmNamesToScan) — avoid recursing into the entire tree
+          // which would download base mappings for derived configurations.
+          if (child.configurationName && !visitedScanNames.has(child.configurationName)
+            && dmNamesToScan.has(child.configurationName)) {
             queue.push({ name: child.configurationName, owningDmName: child.configurationName });
             if (child.configurationGuid) {
               if (!discoveredDmGuidsByName.has(child.configurationName))
@@ -1368,6 +1358,10 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               // No GUID — track this name for the legacy name-probe retry pass.
               noGuidDmNamesFromScan.add(child.configurationName);
             }
+          } else if (child.configurationName && child.configurationGuid
+            && !discoveredDmGuidsByName.has(child.configurationName)) {
+            // Still record the GUID even if we don't recurse into it.
+            discoveredDmGuidsByName.set(child.configurationName, child.configurationGuid);
           }
           continue;
         }
@@ -1859,12 +1853,12 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         }
       }
     }
-    // Walk up the base-solution chain to discover ancestor DataModel GUIDs.
+    // Register base-solution GUIDs in dmGuidIndex for mapping resolution
+    // but do NOT download/load the ancestor DataModel XML — for derived
+    // configs we only want the derived model, not the entire ancestor chain.
     // ERSolution.Base on a Format (or DM XML Base=) points to parent DataModel's GUID.
     const ancestorVisited = new Set<string>();
     const ancestorQueue = Array.from(baseGuidsToFetch.values()).map(b => b.baseGuid);
-    // Seed ancestor walk from Format configs: on environments with no listing GUIDs,
-    // ERSolution.Base is the only way to discover the parent DataModel GUID.
     for (const cfg of refreshedConfigs) {
       if (cfg.kind !== 'Format') continue;
       const baseRaw = cfg.solutionVersion?.solution?.baseSolutionId;
@@ -1874,52 +1868,15 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         ancestorQueue.push(baseGuid);
       }
     }
-    while (ancestorQueue.length > 0) {
-      const baseGuid = ancestorQueue.shift()!;
+    // Only register ancestor GUIDs in the index (for mapping descriptor
+    // resolution) — skip actual download of base DataModels.
+    for (const baseGuid of ancestorQueue) {
       if (ancestorVisited.has(baseGuid)) continue;
       ancestorVisited.add(baseGuid);
       if (dmGuidIndex.has(baseGuid)) continue;
-      const synthDm: ErConfigSummary = {
-        solutionName: '<ancestor>',
-        configurationName: `DataModel ${baseGuid}`,
-        componentType: 'DataModel',
-        configurationGuid: baseGuid,
-        hasContent: true,
-        versionNumbers: [1, 2, 3, 4, 5, 0],
-      };
-      try {
-        const download = await fnoSession.downloadConfiguration(activeProfile, synthDm);
-        loadXmlFile(download.xml, download.syntheticPath);
-        ok += 1;
-        alreadyLoadedGuids.add(baseGuid);
-        const newest = useAppStore.getState().configurations
-          .find(c => c.kind === 'DataModel'
-            && normalizeGuid((c.content as ParsedDmContent | undefined)?.version?.model?.id)
-              === baseGuid);
-        const dm = (newest?.content as ParsedDmContent | undefined)?.version?.model;
-        const containerNames = (dm?.containers ?? [])
-          .map(c => (c?.name ?? '').trim())
-          .filter(s => s.length > 0);
-        recordDm(
-          baseGuid,
-          dm?.name ?? newest?.solutionVersion?.solution?.name ?? `DataModel ${baseGuid}`,
-          newest?.solutionVersion?.solution?.name,
-          containerNames,
-        );
-        const grandRaw = newest?.solutionVersion?.solution?.baseSolutionId;
-        if (grandRaw) {
-          const grandGuid = normalizeGuid(grandRaw);
-          if (grandGuid && grandGuid !== ZERO_GUID_LOWER && !ancestorVisited.has(grandGuid)) {
-            ancestorQueue.push(grandGuid);
-          }
-        }
-      } catch (err) {
-        if (err instanceof FnoEmptyContentError) {
-          recordDm(baseGuid, `DataModel ${baseGuid}`);
-          continue;
-        }
-        console.warn('[fno-ui] ancestor DataModel fetch failed', baseGuid, err);
-      }
+      // Register the base GUID so mapping synth pass can reference it,
+      // but don't download it.
+      recordDm(baseGuid, `DataModel ${baseGuid}`);
     }
     const dmByName = new Map<string, DmSynthCandidate>();
     for (const dm of dmGuidIndex.values()) {
@@ -2117,8 +2074,19 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     }
 
     // Default mapping probes for DMs without a direct-GUID entry.
+    // Only probe DataModels that are actually in finalToLoad (selected +
+    // immediate parent) — skip base/ancestor DataModels to avoid
+    // downloading their mappings for derived configurations.
+    const loadedDmGuids = new Set<string>();
+    for (const c of finalToLoad) {
+      if (c.componentType === 'DataModel') {
+        if (c.configurationGuid) loadedDmGuids.add(normalizeGuid(c.configurationGuid));
+        if (c.revisionGuid) loadedDmGuids.add(normalizeGuid(c.revisionGuid));
+      }
+    }
     for (const dm of dmGuidIndex.values()) {
       if (dmGuidsWithResolvedBranch.has(dm.guid)) continue;
+      if (!loadedDmGuids.has(dm.guid)) continue;
       synthQueue.push({
         synth: {
           solutionName: dm.solutionName,
