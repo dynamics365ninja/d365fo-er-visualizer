@@ -15,4 +15,7 @@ export {
   ER_SERVICE_OPS,
   escapeServiceString,
   decodeXmlPayload,
+  extractVersionFromXml,
+  extractReferencedDataModelGuids,
+  pickDisplayVersion,
 } from './er-services';

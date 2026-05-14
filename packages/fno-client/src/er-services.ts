@@ -1084,12 +1084,22 @@ export async function downloadConfigXml(
     );
   }
 
-  const finalVersion = component.version
+  // For `GetModelMappingByID` the XML payload wraps the inner content in
+  // `<ERModelMappingVersion Number="N">` where N is the *descriptor-level*
+  // sub-version (often 1), NOT the public configuration version (e.g. 386).
+  // Skip `extractVersionFromXml` for that operation so the listing version
+  // from `component.version` takes priority, then fall back to the XML value
+  // only when no listing version is available.
+  const xmlVersion = operation === 'GetModelMappingByID' ? undefined : extractVersionFromXml(xml);
+  const finalVersion = xmlVersion
+    ?? component.version
+    ?? extractVersionFromXml(xml)
     ?? (successBody?._revisionNumber != null ? String(successBody._revisionNumber) : undefined);
   const finalXml = injectNameHint(xml, component.configurationName, finalVersion);
   const {
     guids: referencedDataModelGuids,
     revisions: referencedDataModelRevisions,
+    baseOnlyGuids: referencedBaseOnlyGuids,
   } = extractReferencedDataModelGuids(finalXml);
 
   return {
@@ -1106,18 +1116,40 @@ export async function downloadConfigXml(
     referencedDataModelRevisions: Object.keys(referencedDataModelRevisions).length > 0
       ? referencedDataModelRevisions
       : undefined,
+    /** GUIDs that came exclusively from Base= (inheritance parents). Skip as follow-up
+     *  downloads when the derived DataModel's own Model= GUID is already known. */
+    referencedBaseOnlyGuids: referencedBaseOnlyGuids.size > 0 ? referencedBaseOnlyGuids : undefined,
   };
+}
+
+/**
+ * Extract the version number from the root ERSolutionVersion or inner
+ * ER*Version element's `Number` attribute — or from the `<ErFnoBundle Version="N">`
+ * wrapper injected by `injectNameHint` for custom-service payloads.
+ * Returns the number as a string or undefined if not found.
+ */
+export function extractVersionFromXml(xml: string): string | undefined {
+  // 1. Standard ER config: <ER*Version ... Number="N"> (ERSolutionVersion, ERFormatVersion, etc.)
+  const mStd = xml.match(/<ER\w*Version[^>]+\bNumber="(\d+)"/);
+  if (mStd) return mStd[1];
+  // 2. Custom-service payload wrapped by injectNameHint: <ErFnoBundle ... Version="N">
+  const mBundle = xml.match(/<ErFnoBundle[^>]+\bVersion="(\d+)"/);
+  return mBundle?.[1] ?? undefined;
 }
 
 /**
  * Scan an ER XML string for DataModel GUID references (`Model=`, `Base=`, etc.).
  * Returns unique non-zero GUIDs and the highest revision number seen per GUID.
  */
-function extractReferencedDataModelGuids(xml: string): {
+export function extractReferencedDataModelGuids(xml: string): {
   guids: string[];
   revisions: Record<string, number>;
+  /** GUIDs that came exclusively from Base= (inheritance parent), not from Model= */
+  baseOnlyGuids: Set<string>;
 } {
   const guids = new Set<string>();
+  const ownGuids = new Set<string>(); // GUIDs from Model= / ModelVersion= / paired patterns (not Base=)
+  const baseOnlyGuids = new Set<string>(); // GUIDs from Base= only (inheritance parents)
   const revisions: Record<string, number> = {};
   const guidBody = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 
@@ -1144,6 +1176,7 @@ function extractReferencedDataModelGuids(xml: string): {
     if (!lowerAttr.includes('model')) continue;
     if (lowerAttr.includes('mapping')) continue;
     guids.add(guid);
+    ownGuids.add(guid);
   }
   for (const m of xml.matchAll(attrVersionRe)) {
     const attr = m[1];
@@ -1153,6 +1186,7 @@ function extractReferencedDataModelGuids(xml: string): {
     if (!lowerAttr.includes('model')) continue;
     if (lowerAttr.includes('mapping')) continue;
     guids.add(guid);
+    ownGuids.add(guid);
     const rev = parseInt(m[3], 10);
     if (Number.isFinite(rev)) {
       revisions[guid] = Math.max(revisions[guid] ?? 0, rev);
@@ -1163,6 +1197,7 @@ function extractReferencedDataModelGuids(xml: string): {
     const rev = parseInt(m[3], 10);
     if (guid === ZERO_GUID) continue;
     guids.add(guid);
+    ownGuids.add(guid);
     if (Number.isFinite(rev)) {
       revisions[guid] = Math.max(revisions[guid] ?? 0, rev);
     }
@@ -1177,10 +1212,13 @@ function extractReferencedDataModelGuids(xml: string): {
   for (const m of xml.matchAll(baseSolutionIdRe)) {
     const guid = m[1].toLowerCase();
     if (guid !== ZERO_GUID) guids.add(guid);
+    // BaseSolution is also an inheritance reference — mark as base-only if not already own.
+    if (!ownGuids.has(guid)) baseOnlyGuids.add(guid);
   }
 
   // ERSolution.Base="{guid},N" — parent DataModel's ERSolution GUID + version.
-  // Import formats often carry ONLY this attribute and no ERModelMappingVersion section.
+  // Import formats often carry ONLY this attribute and no Model= section.
+  // These GUIDs are inheritance parents, not direct data dependencies — track separately.
   const baseGuidVersionRe = new RegExp(
     `\\bBase\\s*=\\s*"\\{?(${guidBody})\\}?,(\\d+)"`,
     'gi',
@@ -1190,6 +1228,7 @@ function extractReferencedDataModelGuids(xml: string): {
     const rev = parseInt(m[2], 10);
     if (guid !== ZERO_GUID) {
       guids.add(guid);
+      if (!ownGuids.has(guid)) baseOnlyGuids.add(guid);
       if (Number.isFinite(rev)) {
         revisions[guid] = Math.max(revisions[guid] ?? 0, rev);
       }
@@ -1202,10 +1241,13 @@ function extractReferencedDataModelGuids(xml: string): {
   );
   for (const m of xml.matchAll(baseGuidOnlyRe)) {
     const guid = m[1].replace(/^\{|\}$/g, '').toLowerCase();
-    if (guid && guid !== ZERO_GUID && !guids.has(guid)) guids.add(guid);
+    if (guid && guid !== ZERO_GUID) {
+      guids.add(guid);
+      if (!ownGuids.has(guid)) baseOnlyGuids.add(guid);
+    }
   }
 
-  return { guids: Array.from(guids), revisions };
+  return { guids: Array.from(guids), revisions, baseOnlyGuids };
 }
 
 // ─── Service-response parsing helpers ───
@@ -1436,21 +1478,30 @@ interface RawErSolutionRow {
   [extra: string]: unknown;
 }
 
-/** Pick the highest `VersionNumber` from the versions array. */
-function pickDisplayVersion(versions?: RawErVersion[]): string | undefined {
+/** Pick the display version from the versions array.
+ * Prefers the highest completed (Status=2 or 3) VersionNumber.
+ * Falls back to highest draft minus 1 only when no completed version is visible.
+ */
+export function pickDisplayVersion(versions?: RawErVersion[]): string | undefined {
   if (!Array.isArray(versions) || versions.length === 0) return undefined;
-  let max = -Infinity;
+  let maxCompleted = -Infinity;
+  let maxAny = -Infinity;
   for (const v of versions) {
     const n = v?.VersionNumber ?? v?.Number;
     if (typeof n !== 'number' || !Number.isFinite(n)) continue;
-    if (n > max) max = n;
+    if (n > maxAny) maxAny = n;
+    const status = v?.Status ?? v?.VersionStatus ?? v?.State;
+    if (status === 2 || status === 3) {
+      if (n > maxCompleted) maxCompleted = n;
+    }
   }
-  if (!Number.isFinite(max)) return undefined;
-  // D365FO listing API always surfaces the currently open Draft as the
-  // highest version number. The D365FO invariant is Draft = last Completed + 1,
-  // so last Completed = max - 1. Display that value.
-  // When max === 1 the configuration has never been completed — omit the version.
-  return max > 1 ? String(max - 1) : undefined;
+  // If we found a completed version, use it directly.
+  if (Number.isFinite(maxCompleted) && maxCompleted > 0) return String(maxCompleted);
+  // No completed version visible (all drafts, or Status field missing).
+  // Fall back: max - 1 (D365FO invariant: Draft = lastCompleted + 1).
+  // When max === 1 the configuration has never been completed — omit.
+  if (Number.isFinite(maxAny) && maxAny > 1) return String(maxAny - 1);
+  return undefined;
 }
 
 /** Extract a component-type hint from a row under any plausible key. */
@@ -1568,13 +1619,28 @@ function findAnyGuid(r: Record<string, unknown>): string | undefined {
 }
 
 /** Search Versions array entries for any GUID-shaped string (for rows that don't carry a top-level GUID field). */
-function findGuidInVersions(r: RawErComponentRow): string | undefined {
+export function findGuidInVersions(r: RawErComponentRow): string | undefined {
   if (!Array.isArray(r.Versions)) return undefined;
-  for (const v of r.Versions) {
+  // Iterate versions in reverse (highest VersionNumber last in the array
+  // = latest completed revision) so we pick the newest version's GUID.
+  // Prefer completed (Status=2) or shared (Status=3) over draft (Status=1).
+  const versions = [...r.Versions];
+  // Sort: completed/shared first (descending by VersionNumber), draft last.
+  versions.sort((a, b) => {
+    const statusA = a?.Status ?? a?.VersionStatus ?? a?.State ?? 0;
+    const statusB = b?.Status ?? b?.VersionStatus ?? b?.State ?? 0;
+    const isCompletedA = statusA === 2 || statusA === 3 ? 1 : 0;
+    const isCompletedB = statusB === 2 || statusB === 3 ? 1 : 0;
+    if (isCompletedA !== isCompletedB) return isCompletedB - isCompletedA;
+    const numA = a?.VersionNumber ?? a?.Number ?? 0;
+    const numB = b?.VersionNumber ?? b?.Number ?? 0;
+    return (numB as number) - (numA as number); // highest first
+  });
+  for (const v of versions) {
     if (typeof v !== 'object' || v === null) continue;
     for (const value of Object.values(v as Record<string, unknown>)) {
       if (typeof value !== 'string') continue;
-      const clean = value.replace(/^\{|\}$/g, '').replace(/,\d+$/, '');
+      const clean = value.replace(/,\d+$/, '').replace(/^\{|\}$/g, '');
       if (!GUID_LIKE_RE.test(clean)) continue;
       if (clean.toLowerCase() === ZERO_GUID) continue;
       return clean;

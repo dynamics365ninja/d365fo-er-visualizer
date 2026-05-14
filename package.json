@@ -9,7 +9,12 @@
     "build": "pnpm -r build",
     "test": "pnpm --filter @er-visualizer/core test",
     "test:watch": "pnpm --filter @er-visualizer/core test:watch",
+    "test:integration": "tsx scripts/integration-test.ts",
     "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "@azure/msal-node": "^3.2.0",
+    "tsx": "^4.19.0"
   },
   "engines": {
     "node": ">=20.0.0"

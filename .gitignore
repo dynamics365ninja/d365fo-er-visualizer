@@ -7,3 +7,6 @@ generators/
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
+
+# Integration test — connection secrets (never commit)
+scripts/.fno-integration.json

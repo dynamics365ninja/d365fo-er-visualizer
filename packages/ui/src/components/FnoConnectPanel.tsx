@@ -965,6 +965,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     const harvestRefs = (download: Awaited<ReturnType<typeof fnoSession.downloadConfiguration>>) => {
       const refs = download.referencedDataModelGuids ?? [];
       const refRevs = download.referencedDataModelRevisions ?? {};
+      const baseOnly = download.referencedBaseOnlyGuids;
       // Capture version GUID → ERSolution GUID mapping from Format downloads.
       // `referencedModelGuid` on a Format component = listing API `Base` field =
       // the ERSolution GUID of the DataModel this format derives from.
@@ -988,9 +989,17 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           }
         }
       }
+      // Determine whether own (Model=) GUIDs exist — if so, Base=-only GUIDs are
+      // inheritance parents and must NOT be downloaded as separate DataModels.
+      const ownRefs = refs.filter(g => !baseOnly?.has(g.toLowerCase()));
+      const hasOwnModelRefs = ownRefs.length > 0;
       for (const guid of refs) {
         const lower = guid.toLowerCase();
         if (alreadyLoadedGuids.has(lower)) continue;
+        // Skip Base=-only GUIDs when the XML already has own Model= references.
+        // Base= points to the inheritance parent (base DataModel), which must not
+        // be downloaded when we only selected the derived variant.
+        if (baseOnly?.has(lower) && hasOwnModelRefs) continue;
         const existing = pendingModelFollowUps.get(lower);
         const rev = refRevs[lower];
         if (!existing || (typeof rev === 'number' && (existing.rev ?? -1) < rev)) {
@@ -2011,9 +2020,16 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         dmGuidsWithResolvedBranch.add(ownerDm.guid);
         const allBranchNames = [...new Set(branches.map(b => b.mappingName).filter(s => s))];
         const descriptors = [...new Set([...allBranchNames, ...ownerDm.descriptorNames, ''])];
-        // Pick the most derived branch as primary: GUID-bearing branch first, else
-        // last in the array (deepest in the listing tree = most derived).
-        const primaryBranch = branches.find(b => b.configurationGuid) ?? branches[branches.length - 1];
+        // Pick the most relevant branch as primary: GUID-bearing branch first, then
+        // the branch with the highest completed version number. Using "last in array"
+        // is wrong when unrelated sibling mappings (e.g. "Invent transfer model mapping"
+        // v1) end up last — they would poison the name/version hint stamped on the XML.
+        const primaryBranch = branches.find(b => b.configurationGuid) ??
+          branches.reduce((best, b) => {
+            const bestV = parseInt(best.mappingVersion ?? '0', 10) || 0;
+            const bV = parseInt(b.mappingVersion ?? '0', 10) || 0;
+            return bV > bestV ? b : best;
+          });
         synthQueue.push({
           synth: {
             solutionName: primaryBranch.mappingSolutionName,
@@ -2118,10 +2134,14 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     const collectLateRefs = (download: Awaited<ReturnType<typeof fnoSession.downloadConfiguration>>): void => {
       const refs = download.referencedDataModelGuids ?? [];
       const refRevs = download.referencedDataModelRevisions ?? {};
+      const baseOnly = download.referencedBaseOnlyGuids;
+      const ownRefs = refs.filter(g => !baseOnly?.has(g.toLowerCase()));
+      const hasOwnModelRefs = ownRefs.length > 0;
       for (const guid of refs) {
         const lower = guid.toLowerCase();
         if (alreadyLoadedGuids.has(lower)) continue;
         if (pendingModelFollowUps.has(lower)) continue; // already scheduled
+        if (baseOnly?.has(lower) && hasOwnModelRefs) continue; // skip base-only when own refs exist
         const existing = lateModelFollowUps.get(lower);
         const rev = refRevs[lower];
         if (!existing || (typeof rev === 'number' && (existing.rev ?? -1) < rev)) {

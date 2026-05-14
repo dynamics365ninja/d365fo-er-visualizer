@@ -47,17 +47,21 @@ function normGuid(g: string | undefined): string {
 /**
  * Returns the best version string to display for a configuration.
  * Priority:
- *  1. ModelMapping: internal version.number from the XML body (most precise)
- *  2. publicVersionNumber from the ERSolutionVersion envelope
+ *  1. publicVersionNumber from the ERSolutionVersion envelope (set by
+ *     `injectNameHint` to the listing version, e.g. 386 for a mapping).
+ *     This beats the inner `ERModelMappingVersion.Number` which can be a
+ *     descriptor-level sub-version (often 1) rather than the public version.
+ *  2. ModelMapping: internal version.number from the XML body (present when
+ *     the XML carries a real `ERSolutionVersion` envelope, e.g. offline files).
  *  3. solutionVersion.number  (integer attribute, always present as last resort)
  */
 function getBestVersion(cfg: ERConfiguration | undefined): string | undefined {
   if (!cfg) return undefined;
+  if (cfg.solutionVersion.publicVersionNumber) return cfg.solutionVersion.publicVersionNumber;
   if (cfg.content.kind === 'ModelMapping') {
     const num = (cfg.content as ERModelMappingContent).version.number;
     if (num > 0) return String(num);
   }
-  if (cfg.solutionVersion.publicVersionNumber) return cfg.solutionVersion.publicVersionNumber;
   if (cfg.solutionVersion.number > 0) return String(cfg.solutionVersion.number);
   return undefined;
 }

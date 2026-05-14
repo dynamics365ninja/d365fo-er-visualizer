@@ -184,6 +184,13 @@ export interface ErConfigDownload {
    * revision to `GetDataModelByIDAndRevision`.
    */
   referencedDataModelRevisions?: Record<string, number>;
+  /**
+   * Subset of `referencedDataModelGuids` whose GUIDs came exclusively
+   * from `Base=` attributes (inheritance parents). When own `Model=`
+   * GUIDs are present, these should NOT be downloaded as standalone
+   * DataModels — they are base/parent configs, not data dependencies.
+   */
+  referencedBaseOnlyGuids?: Set<string>;
 }
 
 /** A successfully acquired token, valid for an envUrl. */
