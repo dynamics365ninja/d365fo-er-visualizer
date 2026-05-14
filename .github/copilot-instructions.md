@@ -29,3 +29,5 @@ ER configurations are XML files with root element `<ERSolutionVersion>` containi
 - Element `Multiplicity` values: `"1"` = required (no `.Data.`), `"10"` = optional 0..1 (uses `.Data.`), `"20"` = list 0..N, `"200"` = list 0..N
 - `Contents.` (with dot) wraps child elements in the format tree
 - Derived configurations use `Base="{parentGUID},version"` attribute
+
+
