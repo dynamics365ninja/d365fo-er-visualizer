@@ -868,10 +868,15 @@ export function buildDownloadAttempts(
       const revCandidates: (string | number)[] = [];
       if (component.versionNumbers && component.versionNumbers.length > 0) {
         for (const n of component.versionNumbers) revCandidates.push(n);
+      } else {
+        // No version info from listing (common for DerivedSolutions rows) —
+        // probe a wide descending range so we always get the latest version.
+        revCandidates.push(50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1);
       }
       const displayRev = component.version;
       if (displayRev && !revCandidates.some(r => String(r) === String(displayRev))) {
-        revCandidates.push(displayRev);
+        // Insert displayRev at the beginning so it's tried first.
+        revCandidates.unshift(displayRev);
       }
       if (!revCandidates.includes(0) && !revCandidates.includes('0')) {
         revCandidates.push(0);
