@@ -286,14 +286,6 @@ function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> 
     }
   }
 
-  if (aggregatedLabels.length > 0) {
-    // eslint-disable-next-line no-console
-    console.info('[er-parser] aggregated ERLabel entries from ERClassList fragments:', aggregatedLabels.length);
-  } else {
-    // eslint-disable-next-line no-console
-    console.info('[er-parser] no ERClassList/ERLabel fragments found in response — label resolution will fall back to IDs');
-  }
-
   // Surface the component's *own* Name / Description onto the
   // synthetic `ERSolution` so the UI tab title and designer header
   // don't come out blank. F&O's custom services return only the
