@@ -394,6 +394,12 @@ const useStyles = makeStyles({
 const DEFAULT_CLIENT_ID = '';
 const ZERO_GUID_LOWER = '00000000-0000-0000-0000-000000000000';
 
+/** True when `guid` is a non-empty, non-zero GUID — i.e. usable as a download parameter. */
+function isUsableGuid(guid: string | undefined): boolean {
+  if (!guid) return false;
+  return guid.replace(/^\{|\}$/g, '').toLowerCase() !== ZERO_GUID_LOWER;
+}
+
 // ── Solution tree node (N-level recursive) ───────────────────────────────────
 interface SolutionNode {
   sol: ErSolutionSummary;
@@ -439,6 +445,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   const [customRoot, setCustomRoot] = useState('');
   const [ingesting, setIngesting] = useState(false);
   const [expandedSolutions, setExpandedSolutions] = useState<Set<string>>(new Set());
+  // Credential form is collapsed by default when the user already has profiles.
+  const [formOpen, setFormOpen] = useState(() => profiles.length === 0);
 
   // Cache: root DataModel name → full flat component list.
   // When the user clicks a derived DataModel whose root was already
@@ -637,7 +645,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // downloads can carry `parentDataModelGuid`, and seed the
       // model-ancestor chain at depth 0.
       const rootModel = list.find(
-        c => c.componentType === 'DataModel' && (c.configurationGuid || c.revisionGuid),
+        c => c.componentType === 'DataModel' && (isUsableGuid(c.configurationGuid) || isUsableGuid(c.revisionGuid)),
       );
       setRootDataModelByPath(prev => {
         const next = new Map(prev);
@@ -667,7 +675,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     // so downstream Formats / Mappings inherit *all* the models the
     // user traversed (root → derived → …). Non-DataModel drill-ins
     // (e.g. a ModelMapping container) don't modify the chain.
-    const nextChain = comp.componentType === 'DataModel' && (comp.configurationGuid || comp.revisionGuid)
+    const nextChain = comp.componentType === 'DataModel' && (isUsableGuid(comp.configurationGuid) || isUsableGuid(comp.revisionGuid))
       ? [...dataModelChain, comp]
       : dataModelChain;
     setDataModelChain(nextChain);
@@ -754,15 +762,15 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   }, [activeProfile, solutions, solutionPath, dataModelChain, pushToast]);
 
   const filteredComponents = useMemo(() => {
-    // DataModel nodes are shown only in the left navigation panel — exclude
-    // them from the right detail/download panel entirely.
+    // DataModel nodes are navigation-only (left panel) — exclude them from
+    // the right detail/download panel entirely.
     const base = components.filter(c => c.componentType !== 'DataModel');
     if (componentTypeFilter === 'All') return base;
     return base.filter(c => c.componentType === componentTypeFilter);
   }, [components, componentTypeFilter]);
 
   const isComponentDownloadable = useCallback((comp: ErConfigSummary): boolean => {
-    if (comp.revisionGuid || comp.configurationGuid) return true;
+    if (isUsableGuid(comp.revisionGuid) || isUsableGuid(comp.configurationGuid)) return true;
     // ModelMapping rows from `getFormatSolutionsSubHierarchy` are
     // missing their own GUID but can still be resolved via
     // `getModelMappingByID(_dataModelGuid, _dataContainerDescriptorName)`
@@ -2803,17 +2811,30 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
 
       {/* ── Profile editor card ─────────────────────────────────────────── */}
       <div className={styles.card}>
-        <div className={styles.cardHeader}>
+        <div
+          className={styles.cardHeader}
+          style={{ cursor: 'pointer', userSelect: 'none' }}
+          onClick={() => setFormOpen(o => !o)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setFormOpen(o => !o); }}
+          aria-expanded={formOpen}
+        >
           <div className={styles.cardHeaderLeft}>
             <PersonCircleRegular fontSize={18} className={styles.cardIcon} />
-            <Body1Strong>{isEditing ? t.fnoUpdateProfile : t.fnoSaveProfile}</Body1Strong>
+            <Body1Strong>{t.fnoCredentials}</Body1Strong>
           </div>
-          {isEditing && (
-            <Button size="small" appearance="subtle" icon={<AddRegular />} onClick={handleNewProfile}>
-              {t.fnoNewProfile}
-            </Button>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalXS }}>
+            {isEditing && (
+              <Button size="small" appearance="subtle" icon={<AddRegular />} onClick={e => { e.stopPropagation(); handleNewProfile(); }}>
+                {t.fnoNewProfile}
+              </Button>
+            )}
+            {formOpen ? <ChevronDownRegular fontSize={16} /> : <ChevronRightRegular fontSize={16} />}
+          </div>
         </div>
+
+        {formOpen && (<>
 
         <div className={styles.fieldGrid}>
           <Field label={t.fnoProfileName}>
@@ -2835,8 +2856,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             {isEditing ? t.fnoUpdateProfile : t.fnoSaveProfile}
           </Button>
         </div>
+        </>)}
 
-        {/* Profile list */}
+        {/* Profile list — always visible regardless of formOpen */}
         {profiles.length > 0 && (
           <>
             <Divider style={{ marginTop: tokens.spacingVerticalXS }} />
@@ -2937,6 +2959,11 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       {/* ── Browser ──────────────────────────────────────────────────────── */}
       {connState.kind === 'connected' && (
         <>
+          <MessageBar intent="info" style={{ borderRadius: tokens.borderRadiusMedium }}>
+            <MessageBarBody>
+              {t.fnoDownloadInfo}
+            </MessageBarBody>
+          </MessageBar>
           <div className={styles.columns}>
             {/* Left: DataModel navigator */}
             <div className={styles.listBox}>
@@ -3088,7 +3115,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
 
                 {!loadingComponents && filteredComponents.map(comp => {
                   const key = componentKey(comp);
-                  const hasGuid = Boolean(comp.revisionGuid || comp.configurationGuid);
+                  const hasGuid = isUsableGuid(comp.revisionGuid) || isUsableGuid(comp.configurationGuid);
                   const hasChildren = Boolean(comp.hasChildren);
                   const canResolveMappingViaParent =
                     comp.componentType === 'ModelMapping' &&
@@ -3097,9 +3124,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                   const isDead = !isDownloadable && !hasChildren;
                   const isUnreachableMapping =
                     !isDownloadable && comp.componentType === 'ModelMapping';
-
                   const disabledTitle = isUnreachableMapping
-                    ? 'F&O does not expose a service ID for this ModelMapping. Its rules are bundled into the Format XML.'
+                    ? 'F\u0026O does not expose a service ID for this ModelMapping. Its rules are bundled into the Format XML.'
                     : isDead
                       ? 'No downloadable content — pure-inheritance derived configuration.'
                       : 'Branch node — click to drill into children';
@@ -3141,6 +3167,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                               via parent
                             </Badge>
                           )}
+
                         </div>
                         <Body1Strong style={{ display: 'block', marginTop: '2px' }}>
                           {comp.configurationName}
