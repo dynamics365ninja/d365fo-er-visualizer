@@ -314,7 +314,7 @@ Example — derived format delta (delete elements, change properties, insert new
 <!-- Modify the format root (rename, change root component) -->
 <ERObjectOperationModify ModifiedProperties="parmName,parmRoot,ParmRootComponent" Object="root">
   <Data>
-    <ERTextFormat Name="Asl ISO20022 Credit transfer ČSOB (SK)" ... />
+    <ERTextFormat Name="Derived ISO20022 Credit transfer (SK)" ... />
   </Data>
 </ERObjectOperationModify>
 

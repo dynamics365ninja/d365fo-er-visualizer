@@ -1,0 +1,7 @@
+{
+  "envUrl": "https://yourorg.sandbox.operations.dynamics.com",
+  "tenantId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "clientId": "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
+  "solutionName": "Tax 1099 Model",
+  "configName": "1099 Statements (Excel)"
+}

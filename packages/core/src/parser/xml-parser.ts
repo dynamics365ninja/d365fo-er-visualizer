@@ -286,14 +286,6 @@ function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> 
     }
   }
 
-  if (aggregatedLabels.length > 0) {
-    // eslint-disable-next-line no-console
-    console.info('[er-parser] aggregated ERLabel entries from ERClassList fragments:', aggregatedLabels.length);
-  } else {
-    // eslint-disable-next-line no-console
-    console.info('[er-parser] no ERClassList/ERLabel fragments found in response — label resolution will fall back to IDs');
-  }
-
   // Surface the component's *own* Name / Description onto the
   // synthetic `ERSolution` so the UI tab title and designer header
   // don't come out blank. F&O's custom services return only the
@@ -301,26 +293,40 @@ function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> 
   // / ERModelMapping) without the enclosing solution envelope, so we
   // pick the name from whichever fragment is present.
   //
-  // Order matters! When `GetModelMappingByID` returns **both**
-  // `ERDataModel` and `ERModelMapping` in a single response,
-  // `ERDataModel.@_Name` is the *DataModel* name (e.g.
-  // "Tax declaration model") whereas `ERModelMapping.@_Name` is the
-  // *mapping* name (e.g. "Tax declaration model mapping"). The user
-  // expects to see the mapping name, so `ERModelMapping` must come
-  // before `ERDataModel`.
-  //
-  // The transport-injected `@_Name` hint is last-resort only because
-  // it can be a synthetic placeholder (e.g. "DataModel {guid}" for
-  // GUID-resolved DataModels, or "X (default mapping)" for synth
-  // mapping probes).
+  // Order matters:
+  //  • `ERTextFormat`, `ERFormatMapping`, `ERModelDefinition` come
+  //    first because they are the canonical source for their component
+  //    type.
+  //  • The transport-injected `@_Name` hint (= component.configurationName
+  //    from the listing, e.g. "Invoice model mapping") is promoted ABOVE
+  //    `ERModelMapping.@_Name` and `ERDataModel.@_Name` when it looks like
+  //    a real human-readable name.  This matters for `GetModelMappingByID`
+  //    responses, which embed `ERModelMapping.Name` (the descriptor name,
+  //    e.g. "Customer invoice") inside an `ERModelMappingVersion` wrapper
+  //    — `doc['ERModelMapping']` is then undefined at top level, so
+  //    `ERDataModel.Name` would otherwise win and show the DataModel name
+  //    instead of the configuration name.
+  //  • Synthetic `@_Name` placeholders ("DataModel {guid}",
+  //    "… (default mapping)") are filtered out so that real element names
+  //    remain as the fallback.
+  const rawNameHint = doc['@_Name'] as string | undefined;
+  // Only promote the hint when it looks like a real listing name.
+  const realNameHint =
+    rawNameHint &&
+    !rawNameHint.startsWith('DataModel ') &&
+    !rawNameHint.includes('(default mapping)')
+      ? rawNameHint
+      : undefined;
   const nameHintSources: (string | undefined)[] = [
     (doc['ERTextFormat'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
     (doc['ERFormatMapping'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
     (doc['ERModelDefinition'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
+    // Promoted: real listing name beats descriptor- and DataModel-level names.
+    realNameHint,
     (doc['ERModelMapping'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
     (doc['ERDataModel'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
-    // Last-resort: transport-injected hint from the ErFnoBundle wrapper.
-    (doc['@_Name'] as string | undefined),
+    // Absolute last resort: any @_Name hint (including synthetic placeholders).
+    rawNameHint,
   ];
   const solutionName = nameHintSources.find(s => typeof s === 'string' && s.length > 0) ?? '';
   const descHintSources: (string | undefined)[] = [

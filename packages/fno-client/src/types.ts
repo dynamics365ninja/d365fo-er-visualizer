@@ -140,9 +140,8 @@ export interface ErConfigSummary {
    * This is different from `parentDataModelGuid` which is determined
    * by the tree-walk (nearest DataModel ancestor in the ERSolutionTable
    * hierarchy). `referencedModelGuid` is the *actual* model the
-   * component references — critical when a derived format (e.g.
-   * Asl MT940) sits under its base format (MT940) in DerivedSolutions
-   * but references a derived DataModel (Asl BS model).
+   * component references — critical when a derived format sits under
+   * its base format in DerivedSolutions but references a derived DataModel.
    */
   referencedModelGuid?: string;
   /**
@@ -184,6 +183,13 @@ export interface ErConfigDownload {
    * revision to `GetDataModelByIDAndRevision`.
    */
   referencedDataModelRevisions?: Record<string, number>;
+  /**
+   * Subset of `referencedDataModelGuids` whose GUIDs came exclusively
+   * from `Base=` attributes (inheritance parents). When own `Model=`
+   * GUIDs are present, these should NOT be downloaded as standalone
+   * DataModels — they are base/parent configs, not data dependencies.
+   */
+  referencedBaseOnlyGuids?: Set<string>;
 }
 
 /** A successfully acquired token, valid for an envUrl. */

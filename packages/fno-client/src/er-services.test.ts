@@ -10,6 +10,11 @@ import {
   ER_SERVICE_OPS,
   escapeServiceString,
   decodeXmlPayload,
+  buildDownloadAttempts,
+  findGuidInVersions,
+  extractVersionFromXml,
+  extractReferencedDataModelGuids,
+  pickDisplayVersion,
 } from './er-services';
 import { FnoHttpError, FnoSourceUnsupportedError, FnoEmptyContentError } from './types';
 import type { FnoConnection, FnoTransport, ErConfigSummary } from './types';
@@ -204,7 +209,7 @@ describe('listSolutions', () => {
                     DerivedSolutions: [],
                   },
                   {
-                    Name: 'Asl Tax declaration model',
+                    Name: 'Derived Tax declaration model',
                     FormatMappingGUID: '00000000-0000-0000-0000-000000000000',
                     DerivedSolutions: [],
                   },
@@ -227,7 +232,7 @@ describe('listSolutions', () => {
     const names = solutions.map(s => s.solutionName).sort();
     // DataModel nodes survive; Format and ModelMapping are dropped.
     // The seed itself ('Tax declaration model') is added as a root.
-    expect(names).toContain('Asl Tax declaration model');
+    expect(names).toContain('Derived Tax declaration model');
     expect(names).toContain('Root model');
     expect(names).toContain(SEED);
     expect(names).not.toContain('VAT declaration XML (CZ)');
@@ -624,5 +629,323 @@ describe('downloadConfigXml', () => {
     });
     await expect(downloadConfigXml(transport, conn, 'tok', baseComponent))
       .rejects.toBeInstanceOf(FnoEmptyContentError);
+  });
+});
+
+describe('findGuidInVersions', () => {
+  it('returns GUID from the highest completed version (not the first in array)', () => {
+    const row = {
+      Versions: [
+        { VersionNumber: 1, Status: 2, RevisionGuid: '{aaaaaaaa-1111-1111-1111-111111111111}' },
+        { VersionNumber: 2, Status: 2, RevisionGuid: '{bbbbbbbb-2222-2222-2222-222222222222}' },
+        { VersionNumber: 3, Status: 2, RevisionGuid: '{cccccccc-3333-3333-3333-333333333333}' },
+      ],
+    } as any;
+    const result = findGuidInVersions(row);
+    expect(result).toBe('cccccccc-3333-3333-3333-333333333333');
+  });
+
+  it('prefers completed (Status=2) over draft (Status=1) even if draft has higher version', () => {
+    const row = {
+      Versions: [
+        { VersionNumber: 1, Status: 2, RevisionGuid: '{aaaaaaaa-1111-1111-1111-111111111111}' },
+        { VersionNumber: 2, Status: 2, RevisionGuid: '{bbbbbbbb-2222-2222-2222-222222222222}' },
+        { VersionNumber: 3, Status: 1, RevisionGuid: '{cccccccc-3333-3333-3333-333333333333}' },
+      ],
+    } as any;
+    const result = findGuidInVersions(row);
+    expect(result).toBe('bbbbbbbb-2222-2222-2222-222222222222');
+  });
+
+  it('returns undefined when Versions is missing', () => {
+    expect(findGuidInVersions({} as any)).toBeUndefined();
+  });
+
+  it('returns undefined when all GUIDs are zero-guid', () => {
+    const row = {
+      Versions: [
+        { VersionNumber: 1, Status: 2, RevisionGuid: '{00000000-0000-0000-0000-000000000000}' },
+      ],
+    } as any;
+    expect(findGuidInVersions(row)).toBeUndefined();
+  });
+
+  it('handles versions in already-descending order correctly', () => {
+    const row = {
+      Versions: [
+        { VersionNumber: 3, Status: 2, RevisionGuid: '{cccccccc-3333-3333-3333-333333333333}' },
+        { VersionNumber: 2, Status: 2, RevisionGuid: '{bbbbbbbb-2222-2222-2222-222222222222}' },
+        { VersionNumber: 1, Status: 2, RevisionGuid: '{aaaaaaaa-1111-1111-1111-111111111111}' },
+      ],
+    } as any;
+    const result = findGuidInVersions(row);
+    expect(result).toBe('cccccccc-3333-3333-3333-333333333333');
+  });
+
+  it('strips braces and ,revision suffix from GUID values', () => {
+    const row = {
+      Versions: [
+        { VersionNumber: 5, Status: 2, SomeField: '{dddddddd-4444-4444-4444-444444444444},7' },
+      ],
+    } as any;
+    const result = findGuidInVersions(row);
+    expect(result).toBe('dddddddd-4444-4444-4444-444444444444');
+  });
+});
+
+describe('buildDownloadAttempts', () => {
+  describe('DataModel — version probing', () => {
+    it('probes versionNumbers in descending order when provided', () => {
+      const component: ErConfigSummary = {
+        componentType: 'DataModel',
+        configurationGuid: 'aaaaaaaa-0000-0000-0000-000000000001',
+        revisionGuid: undefined,
+        solutionName: 'TestDM',
+        configurationName: 'TestDM',
+        versionNumbers: [30, 20, 10],
+        hasContent: true,
+      };
+      const attempts = buildDownloadAttempts(component);
+      const dmAttempts = attempts.filter(a => a.operation === 'GetDataModelByIDAndRevision');
+      const revisions = dmAttempts.map(a => a.body._revisionNumber);
+      // versionNumbers order preserved (descending), then 0 appended
+      expect(revisions).toEqual([30, 20, 10, 0]);
+    });
+
+    it('probes high→low fallback range when versionNumbers is missing', () => {
+      const component: ErConfigSummary = {
+        componentType: 'DataModel',
+        configurationGuid: 'aaaaaaaa-0000-0000-0000-000000000001',
+        revisionGuid: undefined,
+        solutionName: 'TestDM',
+        configurationName: 'TestDM',
+        hasContent: true,
+      };
+      const attempts = buildDownloadAttempts(component);
+      const dmAttempts = attempts.filter(a => a.operation === 'GetDataModelByIDAndRevision');
+      const revisions = dmAttempts.map(a => a.body._revisionNumber);
+      // Should start from 50 and go down, ending with 0
+      expect(revisions[0]).toBe(50);
+      expect(revisions[revisions.length - 1]).toBe(0);
+      // Verify descending order (except for last 0)
+      for (let i = 0; i < revisions.length - 2; i++) {
+        expect(revisions[i]).toBeGreaterThan(revisions[i + 1] as number);
+      }
+    });
+
+    it('inserts displayRev (version) at the beginning if not in versionNumbers', () => {
+      const component: ErConfigSummary = {
+        componentType: 'DataModel',
+        configurationGuid: 'aaaaaaaa-0000-0000-0000-000000000001',
+        revisionGuid: undefined,
+        solutionName: 'TestDM',
+        configurationName: 'TestDM',
+        versionNumbers: [10, 5],
+        version: '8',
+        hasContent: true,
+      };
+      const attempts = buildDownloadAttempts(component);
+      const dmAttempts = attempts.filter(a => a.operation === 'GetDataModelByIDAndRevision');
+      const revisions = dmAttempts.map(a => a.body._revisionNumber);
+      // displayRev '8' should be first
+      expect(revisions[0]).toBe('8');
+    });
+  });
+
+  describe('ModelMapping — GUID-based lookup', () => {
+    it('uses configurationGuid as _mappingGuid in direct lookup attempts', () => {
+      const component: ErConfigSummary = {
+        componentType: 'ModelMapping',
+        configurationGuid: 'bbbbbbbb-0000-0000-0000-000000000002',
+        revisionGuid: 'cccccccc-0000-0000-0000-000000000003',
+        solutionName: 'TestMapping',
+        configurationName: 'TestMapping',
+        parentDataModelGuid: 'dddddddd-0000-0000-0000-000000000004',
+        descriptorNameCandidates: ['Container1'],
+        hasContent: true,
+      };
+      const attempts = buildDownloadAttempts(component);
+      const directAttempts = attempts.filter(
+        a => a.operation === 'GetModelMappingByID' && a.body._mappingGuid !== '00000000-0000-0000-0000-000000000000',
+      );
+      // Both cfgId and revId should be tried as _mappingGuid
+      const mappingGuids = directAttempts.map(a => a.body._mappingGuid);
+      expect(mappingGuids).toContain('bbbbbbbb-0000-0000-0000-000000000002');
+      expect(mappingGuids).toContain('cccccccc-0000-0000-0000-000000000003');
+    });
+
+    it('includes fallback attempts via parentDataModelGuid + descriptor', () => {
+      const component: ErConfigSummary = {
+        componentType: 'ModelMapping',
+        configurationGuid: 'bbbbbbbb-0000-0000-0000-000000000002',
+        revisionGuid: undefined,
+        solutionName: 'TestMapping',
+        configurationName: 'TestMapping',
+        parentDataModelGuid: 'dddddddd-0000-0000-0000-000000000004',
+        descriptorNameCandidates: ['MyContainer'],
+        hasContent: true,
+      };
+      const attempts = buildDownloadAttempts(component);
+      const fallbacks = attempts.filter(
+        a => a.operation === 'GetModelMappingByID' && a.body._mappingGuid === '00000000-0000-0000-0000-000000000000',
+      );
+      expect(fallbacks.length).toBeGreaterThan(0);
+      const dmGuids = fallbacks.map(a => a.body._dataModelGuid);
+      expect(dmGuids).toContain('dddddddd-0000-0000-0000-000000000004');
+      const descriptors = fallbacks.map(a => a.body._dataContainerDescriptorName);
+      expect(descriptors).toContain('MyContainer');
+      expect(descriptors).toContain(''); // empty string fallback always included
+    });
+  });
+});
+
+describe('extractVersionFromXml', () => {
+  it('extracts Number from ERSolutionVersion root element', () => {
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<ERSolutionVersion DateTime="2025-06-11T07:22:47" Description="test" Number="9" VersionStatus="1">
+  <Contents.><ERModelMappingVersion ID.="{1B092C31}" Number="9"/></Contents.>
+</ERSolutionVersion>`;
+    expect(extractVersionFromXml(xml)).toBe('9');
+  });
+
+  it('extracts Number from ERModelMappingVersion element', () => {
+    const xml = `<ERModelMappingVersion ID.="{1B092C31-09F2-4CA1-BC3C-E64687C5247C},9" DateTime="2025-06-11" Number="9">`;
+    expect(extractVersionFromXml(xml)).toBe('9');
+  });
+
+  it('extracts Number from ERFormatVersion element', () => {
+    const xml = `<ERFormatVersion ID.="{327440E7-F2AE-46B8-9081-C5152A452A67},39" Number="39">`;
+    expect(extractVersionFromXml(xml)).toBe('39');
+  });
+
+  it('extracts Number from ERDataModelVersion element', () => {
+    const xml = `<ERDataModelVersion ID.="{92AA4172-C84A-4D71-8BFD-1BDBB20A8244},6" Number="6">`;
+    expect(extractVersionFromXml(xml)).toBe('6');
+  });
+
+  it('returns undefined for XML without version elements', () => {
+    expect(extractVersionFromXml('<root><child/></root>')).toBeUndefined();
+  });
+
+  it('returns undefined for empty string', () => {
+    expect(extractVersionFromXml('')).toBeUndefined();
+  });
+
+  it('picks the first match (outer ERSolutionVersion) over inner version', () => {
+    const xml = `<ERSolutionVersion Number="344" VersionStatus="2">
+  <Contents.><ERModelMappingVersion Number="307"/></Contents.>
+</ERSolutionVersion>`;
+    expect(extractVersionFromXml(xml)).toBe('344');
+  });
+
+  it('extracts version from ErFnoBundle wrapper (custom-service payload)', () => {
+    const xml = `<ErFnoBundle Name="ACA 1095B PDF Printout" Version="4"><ERTextFormat ID.="{381F3A5D}" Name="ACA 1095B PDF Printout"/></ErFnoBundle>`;
+    expect(extractVersionFromXml(xml)).toBe('4');
+  });
+
+  it('prefers ER*Version Number over ErFnoBundle Version when both present', () => {
+    // Unlikely in practice but the standard element should win
+    const xml = `<ErFnoBundle Version="99"><ERSolutionVersion Number="9" VersionStatus="2"/></ErFnoBundle>`;
+    expect(extractVersionFromXml(xml)).toBe('9');
+  });
+});
+
+describe('extractReferencedDataModelGuids – baseOnlyGuids', () => {
+  const MODEL_GUID = '11111111-aaaa-aaaa-aaaa-111111111111';
+  const BASE_GUID  = '22222222-bbbb-bbbb-bbbb-222222222222';
+
+  it('places Model= GUID in guids but NOT in baseOnlyGuids', () => {
+    const xml = `<ERFormatMappingVersion ModelGuid="{${MODEL_GUID}}" RevisionNumber="5"/>`;
+    const { guids, baseOnlyGuids } = extractReferencedDataModelGuids(xml);
+    expect(guids).toContain(MODEL_GUID);
+    expect(baseOnlyGuids.has(MODEL_GUID)).toBe(false);
+  });
+
+  it('places Base= GUID in both guids and baseOnlyGuids when no Model= exists', () => {
+    const xml = `<ERSolutionVersion Base="{${BASE_GUID}},136" Name="Derived Format">`;
+    const { guids, baseOnlyGuids } = extractReferencedDataModelGuids(xml);
+    expect(guids).toContain(BASE_GUID);
+    expect(baseOnlyGuids.has(BASE_GUID)).toBe(true);
+  });
+
+  it('Base= GUID is baseOnly when own Model= GUID is also present', () => {
+    const xml = `
+<ERSolutionVersion Base="{${BASE_GUID}},136">
+  <ERFormatMappingVersion ModelGuid="{${MODEL_GUID}}" RevisionNumber="9"/>
+</ERSolutionVersion>`;
+    const { guids, baseOnlyGuids } = extractReferencedDataModelGuids(xml);
+    expect(guids).toContain(MODEL_GUID);
+    expect(guids).toContain(BASE_GUID);
+    expect(baseOnlyGuids.has(MODEL_GUID)).toBe(false);
+    expect(baseOnlyGuids.has(BASE_GUID)).toBe(true);
+  });
+
+  it('baseOnlyGuids is empty when only Model= GUIDs are present', () => {
+    const xml = `<ERFormatMappingVersion ModelGuid="{${MODEL_GUID}}" RevisionNumber="3"/>`;
+    const { baseOnlyGuids } = extractReferencedDataModelGuids(xml);
+    expect(baseOnlyGuids.size).toBe(0);
+  });
+
+  it('Base=-only GUID placed in baseOnlyGuids (import format: no Model=)', () => {
+    const xml = `<ERSolutionVersion Base="{${BASE_GUID}},50" Name="Import Format"/>`;
+    const { baseOnlyGuids } = extractReferencedDataModelGuids(xml);
+    expect(baseOnlyGuids.has(BASE_GUID)).toBe(true);
+  });
+
+  it('zero GUID in Base= is ignored', () => {
+    const xml = `<ERSolutionVersion Base="{00000000-0000-0000-0000-000000000000},1"/>`;
+    const { guids, baseOnlyGuids } = extractReferencedDataModelGuids(xml);
+    expect(guids).toHaveLength(0);
+    expect(baseOnlyGuids.size).toBe(0);
+  });
+});
+
+describe('pickDisplayVersion', () => {
+  it('returns highest completed (Status=2) version number directly', () => {
+    const versions = [
+      { VersionNumber: 9, Status: 1 }, // draft
+      { VersionNumber: 8, Status: 2 }, // completed
+    ];
+    expect(pickDisplayVersion(versions)).toBe('8');
+  });
+
+  it('returns completed over draft even when draft has higher number', () => {
+    const versions = [
+      { VersionNumber: 344, Status: 2 }, // completed = highest
+      { VersionNumber: 345, Status: 1 }, // draft
+    ];
+    expect(pickDisplayVersion(versions)).toBe('344');
+  });
+
+  it('handles Status=3 (Shared) as completed', () => {
+    const versions = [{ VersionNumber: 12, Status: 3 }];
+    expect(pickDisplayVersion(versions)).toBe('12');
+  });
+
+  it('uses VersionStatus field when Status is absent', () => {
+    const versions = [
+      { VersionNumber: 7, VersionStatus: 2 },
+      { VersionNumber: 8, VersionStatus: 1 },
+    ];
+    expect(pickDisplayVersion(versions)).toBe('7');
+  });
+
+  it('falls back to max-1 when no completed version is visible', () => {
+    const versions = [
+      { VersionNumber: 5, Status: 1 }, // only draft
+    ];
+    expect(pickDisplayVersion(versions)).toBe('4');
+  });
+
+  it('returns undefined when only version is draft v1 (never completed)', () => {
+    expect(pickDisplayVersion([{ VersionNumber: 1, Status: 1 }])).toBeUndefined();
+  });
+
+  it('returns undefined for empty array', () => {
+    expect(pickDisplayVersion([])).toBeUndefined();
+  });
+
+  it('returns undefined when called with undefined', () => {
+    expect(pickDisplayVersion(undefined)).toBeUndefined();
   });
 });
