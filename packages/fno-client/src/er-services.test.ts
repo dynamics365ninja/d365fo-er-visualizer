@@ -209,7 +209,7 @@ describe('listSolutions', () => {
                     DerivedSolutions: [],
                   },
                   {
-                    Name: 'Asl Tax declaration model',
+                    Name: 'Derived Tax declaration model',
                     FormatMappingGUID: '00000000-0000-0000-0000-000000000000',
                     DerivedSolutions: [],
                   },
@@ -232,7 +232,7 @@ describe('listSolutions', () => {
     const names = solutions.map(s => s.solutionName).sort();
     // DataModel nodes survive; Format and ModelMapping are dropped.
     // The seed itself ('Tax declaration model') is added as a root.
-    expect(names).toContain('Asl Tax declaration model');
+    expect(names).toContain('Derived Tax declaration model');
     expect(names).toContain('Root model');
     expect(names).toContain(SEED);
     expect(names).not.toContain('VAT declaration XML (CZ)');

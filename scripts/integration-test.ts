@@ -437,9 +437,9 @@ async function main(): Promise<void> {
   // ─── 2b. UI simulation: call listComponents(rootSolutionName) ────────────
   // The UI calls listComponents(rootSolutionName) — NOT the derived solutionName.
   // This is what populates allDataModelsSeen in FnoConnectPanel.
-  // The bug: "Invoice model" (base DataModel) has a GUID here; "Asl Invoice model"
-  // (derived) has NO GUID → ancestorDataModelGuids only contains "Invoice model"'s
-  // GUID → the augmented loop adds "Invoice model" to finalToLoad → wrong downloads.
+  // The bug: the base DataModel has a GUID here; the derived DM has NO GUID →
+  // ancestorDataModelGuids only contains the base GUID → the augmented loop adds
+  // the base DM to finalToLoad → wrong downloads.
   console.log('─── Step 2b: UI simulation — listComponents(rootSolutionName)');
   const rootSolName = targetSolution.rootSolutionName ?? targetSolution.solutionName;
   console.log(`  targetSolution.solutionName     = "${targetSolution.solutionName}"`);
@@ -508,7 +508,7 @@ async function main(): Promise<void> {
         // The rootByRootName condition `rootSolName !== c.solutionName` is FALSE → the
         // rootByRootName path is NEVER triggered, regardless of hasDerivedDmInCache.
         // Fix 1's hasDerivedDmInCache guard adds an extra safety layer for environments
-        // where c.solutionName might differ (e.g. direct listComponents("Asl Invoice model")),
+        // where c.solutionName might differ (e.g. direct listComponents on a derived solution),
         // but in THIS environment the natural condition already prevents the bug.
         console.log();
         console.log('  Fix 1: verify rootByRootName is NOT triggered for target format');
@@ -950,9 +950,8 @@ async function main(): Promise<void> {
   // ─── Step 7: Pipeline regression — 1 DataModel + 1 Mapping, correct names ──
   // Step 6 re-downloads the Format inline for XML parsing (not tracked in
   // `results`).  It pushes exactly 2 entries into `results`:
-  //   1 DataModel  — must be the DERIVED model ("Asl Invoice model"), not base
-  //   1 Mapping    — must be the DERIVED mapping ("Asl Invoice model mapping"),
-  //                  not "Invoice model mapping"
+  //   1 DataModel  — must be the DERIVED model, not the base
+  //   1 Mapping    — must be the DERIVED mapping, not the base mapping
   //
   // Regression: before the dmNamesToScan fix in FnoConnectPanel, a stale
   // "Invoice model" entry from the store caused a 2nd mapping download
@@ -983,7 +982,7 @@ async function main(): Promise<void> {
       `${step6Ok.length} found`,
     );
 
-    // Regression check: for "Asl Free text invoice" the mapping must NOT be
+    // Regression check: for a derived format the mapping must NOT be
     // the base "Invoice model mapping" (that was the pre-fix bug symptom).
     if (cfg.configName && step6Maps.length === 1) {
       const mappingName = step6Maps[0]!.name;
@@ -993,19 +992,17 @@ async function main(): Promise<void> {
         !looksLikeBaseName,
         `got "${mappingName}"`,
       );
-      // Fix 2 regression: the synth pass must use the correct DERIVED DM GUID (e1534820)
-      // so GetModelMappingByID returns the derived mapping (not the base).
-      // The Phase 0 scout creates synthDm with configurationName = Format.solutionName
-      // (= "Invoice model" from the listing API); Phase 1 downloads DM with GUID e1534820
-      // and stores it as "Asl Invoice model". currentLoadDmNames includes "Invoice model"
-      // (from synthDm) which matches dmGuidIndex entry → loadedDmGuids gets e1534820.
-      // Fix 2 extends currentLoadDmNames with Format solutionNames as a safety net for
-      // edge cases where Phase 0 is skipped and no synthDm is in finalToLoad.
+      // Fix 2 regression: the synth pass must use the correct DERIVED DM GUID so
+      // GetModelMappingByID returns the derived mapping (not the base). Phase 0 creates
+      // a synthDm with Format.solutionName; Phase 1 downloads the DM XML and stores the
+      // derived DM name. currentLoadDmNames matches the dmGuidIndex entry → loadedDmGuids
+      // gets the derived DM GUID. Fix 2 also adds Format solutionNames as a safety net
+      // for edge cases where Phase 0 is skipped and no synthDm is in finalToLoad.
       if (step6Dms.length === 1 && step6Maps.length === 1) {
         const dmName = step6Dms[0]!.name;
         const mapName = step6Maps[0]!.name;
         // The downloaded DM must be the DERIVED one (= the solution we selected).
-        const solutionName = targetSolution.solutionName; // "Asl Invoice model"
+        const solutionName = targetSolution.solutionName;
         check(
           `Fix 2: downloaded DataModel is the DERIVED one (matches solution name)`,
           dmName === solutionName,
@@ -1034,11 +1031,11 @@ async function main(): Promise<void> {
   if (cfg.configName && cfg.solutionName) {
     try {
       // ── 8a. Determine dmNamesToScan ──────────────────────────────────────
-      // UI: finalToLoad = [Format(solutionName="Asl Invoice model")]
-      // currentLoadDmNames = {"Asl Invoice model"}   (from Format.solutionName)
+      // UI: finalToLoad = [Format(solutionName=cfg.solutionName)]
+      // currentLoadDmNames = {cfg.solutionName}  (from Format.solutionName)
       // dmNamesToScan starts empty; "last resort" block adds fmt.solutionName
-      // when no DataModel is in finalToLoad → dmNamesToScan = {"Asl Invoice model"}
-      const fmtSolutionName = cfg.solutionName; // "Asl Invoice model"
+      // when no DataModel is in finalToLoad.
+      const fmtSolutionName = cfg.solutionName;
       const dmNamesToScan = new Set([fmtSolutionName]);
       console.log(`  8a. dmNamesToScan = [${[...dmNamesToScan].map(s => `"${s}"`).join(', ')}]`);
       console.log();
@@ -1158,7 +1155,7 @@ async function main(): Promise<void> {
         const allBranchNamesPreFix = [...new Set(allBranchesFlat.map(b => b.mappingName).filter(Boolean))];
 
         // POST-FIX: mirrors FnoConnectPanel — derived = mappingName.startsWith(ownerDm.solutionName).
-        // In this test fmtSolutionName equals the DM's own solutionName ("Asl Invoice model").
+        // In this test fmtSolutionName equals the DM's own solutionName.
         const isBranchDerivedByName = (b: { mappingName: string }) =>
           b.mappingName.toLowerCase().startsWith(fmtSolutionName.toLowerCase());
         const derivedBranchesFlat = allBranchesFlat.filter(b => isBranchDerivedByName(b));
@@ -1169,7 +1166,7 @@ async function main(): Promise<void> {
         ].filter(Boolean))];
 
         // Default probe path (no branches): use solutionName + " mapping" as configurationName
-        const defaultProbeConfigName = `${fmtSolutionName} mapping`;  // "Asl Invoice model mapping"
+        const defaultProbeConfigName = `${fmtSolutionName} mapping`;
 
         console.log(`  Branch count: ${allBranchesFlat.length} total`);
         console.log(`    PRE-FIX  order: first="${allBranchNamesPreFix[0] ?? '(empty)'}"`);
@@ -1180,7 +1177,7 @@ async function main(): Promise<void> {
         // ── Test: key individual descriptors ─────────────────────────────────
         console.log('    Key descriptor probes (each tested individually):');
         const keyDescs = [
-          defaultProbeConfigName,            // "Asl Invoice model mapping" — NEW fix
+          defaultProbeConfigName,            // "<solutionName> mapping" — derived mapping name
           allBranchNamesPostFix[0],          // first POST-FIX branch (derived)
           allBranchNamesPreFix[0],           // first PRE-FIX branch (base)
           `${fmtSolutionName} (default mapping)`, // old wrong default probe configName

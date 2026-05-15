@@ -1729,9 +1729,9 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
     versionNumbers: versionNumbers && versionNumbers.length > 0 ? versionNumbers : undefined,
     // For Format / ModelMapping: GUID of the DataModel this component
     // references. Used by scopeComponentsToModel to show each format
-    // under the correct model (especially when a derived format like
-    // Asl MT940 sits under MT940 in DerivedSolutions but references
-    // Asl BS model). DataModel rows get their own GUID here — ignored.
+    // under the correct model (even when a derived format sits under
+    // a root solution but references a derived DM). DataModel rows
+    // get their own GUID here — ignored.
     referencedModelGuid: componentType !== 'DataModel' ? referencedModelGuid : undefined,
   };
 }

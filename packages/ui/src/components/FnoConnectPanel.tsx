@@ -595,10 +595,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     });
 
     // Resolve the root DataModel so the API call returns the full tree.
-    // Country-specific derived models (e.g. "Asl Tax declaration model (SK)")
-    // have very few direct children in ERSolutionTable — their formats and
-    // mappings live as siblings under the root model. Fetching from the root
-    // ensures we always show the complete set of configurations.
+    // Derived solutions have few direct children in ERSolutionTable —
+    // their formats and mappings live as siblings under the root model.
+    // Fetching from the root ensures we always show the complete set.
     const sol = solutions.find(s => s.solutionName === solutionName);
     const rootName = sol?.rootSolutionName ?? solutionName;
 
@@ -628,10 +627,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       if (promoted !== solutions) setSolutions(promoted);
 
       // Scope the component list to the clicked DataModel. When the
-      // user clicks a derived model (e.g. "Asl Bank statement model")
-      // we must show only its direct children — not all formats from
-      // the root. The `ownerDataModelName` on each component identifies
-      // which DataModel it belongs to.
+      // user clicks a derived model we must show only its direct
+      // children — not all formats from the root. The `ownerDataModelName`
+      // on each component identifies which DataModel it belongs to.
       const list = scopeComponentsToModel(fullTree, solutionName);
 
       // The first DataModel we see at level 1 is the *root* DataModel
@@ -830,12 +828,10 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         const model = resolveByGuid(nearestGuid);
         if (model && (model.configurationGuid || model.revisionGuid)) {
           // Only add this ancestor if its name matches the component's solutionName.
-          // When the UI browsed via rootSolutionName (e.g. "Invoice model"), the
-          // nearest GUID-bearing ancestor in the chain is the BASE DataModel —
-          // but the format's solutionName refers to the DERIVED DataModel (e.g.
-          // "Asl Invoice model"). If we added the base DM here, its base mapping
-          // ("Invoice model mapping") would get downloaded too. Skip it instead
-          // and let the name-based fallback below resolve the correct derived DM.
+          // When browsing via rootSolutionName the nearest GUID-bearing ancestor
+          // is the base DataModel — but the format's solutionName may refer to a
+          // derived DataModel. Skip it; the name-based fallback below resolves
+          // the correct derived DM.
           const solutionName = c.solutionName ?? '';
           const matchesSolutionName =
             !solutionName ||
@@ -892,18 +888,15 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         continue;
       }
       // Also try the rootSolutionName from the solutions list — when the user
-      // selected a derived solution (e.g. "Asl Advanced bank reconciliation
-      // statement model") the DataModel's configurationName is the root
-      // ("Advanced bank reconciliation statement model").
+      // selected a derived solution the DataModel's configurationName is the root.
       const sol = solutions.find(s => s.solutionName === c.solutionName);
       const rootSolName = sol?.rootSolutionName ?? c.solutionName;
       // Guard: only fall back to the ROOT DataModel when the format's solution does
       // NOT have its own DERIVED DataModel. A derived DataModel exists when a component
-      // named c.solutionName appears as a DataModel in any of the cached listing trees
-      // (rootComponentCacheRef). If such a derived DM exists — even with no GUID —
-      // adding the root DataModel here would be WRONG: it causes "Invoice model mapping"
-      // to be downloaded instead of "Asl Invoice model mapping". The correct DataModel
-      // GUID is discovered later via the Format XML synth pass (pendingModelFollowUps).
+      // named c.solutionName appears as a DataModel in any cached listing tree. If such
+      // a derived DM exists — even with no GUID — adding the root DataModel here would
+      // pull in the base mapping instead. The derived DM GUID is found later via the
+      // Format XML synth pass (pendingModelFollowUps).
       const hasDerivedDmInCache = Array.from(rootComponentCacheRef.current.values()).some(comps =>
         comps.some(
           comp => comp.componentType === 'DataModel' && comp.configurationName === c.solutionName,
@@ -1309,8 +1302,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     // used in the synth pass to resolve dmByName for derived/customer DataModels.
     const discoveredDmGuidsByName = new Map<string, string>();
     // DataModel names found during the scan that have NO GUID in the listing API.
-    // These are customer-derived DataModels (e.g. "Asl Advanced bank reconciliation
-    // statement model") whose ERDataModel.ID we need to get via legacy name-based ops.
+    // These are derived DataModels whose ERDataModel.ID we need to get via
+    // legacy name-based ops.
     const noGuidDmNamesFromScan = new Set<string>();
     const pendingMappingBranchesByDmName = new Map<string, {
       parentDmName: string;
@@ -1392,9 +1385,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       }
       // Capture the GUID of the root DataModel when it appears as the first element
       // (getFormatSolutionsSubHierarchy includes the query root in its flat output).
-      // This is the only place we see the GUID for derived DataModels like
-      // "Asl Advanced bank reconciliation statement model" — the listing of their
-      // parent DM returns them without a GUID, but their OWN listing has one.
+      // This is the only place we see the GUID for derived DataModels — the listing
+      // of their parent DM returns them without a GUID, but their OWN listing has one.
       if (children.length > 0 && children[0].componentType === 'DataModel' &&
           children[0].configurationName === dmName && children[0].configurationGuid &&
           !discoveredDmGuidsByName.has(dmName)) {
@@ -1479,8 +1471,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     }
 
     // ── Post-scan: extract no-GUID DataModel GUIDs via child format scouts ──
-    // For each DataModel with no GUID (e.g. "Asl Advanced bank reconciliation
-    // statement model"), we try three escalating approaches:
+    // For each DataModel with no GUID, we try three escalating approaches:
     // 1. referencedModelGuid on the scout format row (free, from listing Base/ModelID field).
     // 2. Download the format XML and read Model= attributes (extractReferencedDataModelGuids).
     // 3. Probe every non-zero GUID in the format XML with GetDataModelByIDAndRevision
@@ -1619,8 +1610,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         for (const derived of derivedRows) {
           if (derived.componentType !== 'ModelMapping') continue;
           // Strip " mapping" from the mapping name → candidate DM name.
-          // e.g. "Asl Tax declaration model mapping (CZ)"
-          //    → "Asl Tax declaration model (CZ)"
+          // e.g. "Derived Tax declaration model mapping (CZ)"
+          //    → "Derived Tax declaration model (CZ)"
           const candidateDmName = (derived.configurationName ?? '')
             .replace(/\s+mapping\b/i, '')
             .trim();
@@ -2010,9 +2001,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     }
     // ── Populate dmByName from GUIDs captured during the listing scan ──
     // discoveredDmGuidsByName holds configurationGuids for DataModel nodes that appeared
-    // as the root of their own listComponents result (e.g. "Asl Advanced..." queried
-    // directly — F&O includes the root node WITH its GUID in that response).
-    // Use these to fill gaps in dmByName that the store-config walk couldn't cover.
+    // as the root of their own listComponents result — F&O includes the root node WITH
+    // its GUID in that response. Use these to fill gaps in dmByName.
     for (const [dmName, rawGuid] of discoveredDmGuidsByName) {
       if (dmByName.has(dmName)) continue;
       const lower = rawGuid.replace(/^\{|\}$/g, '').toLowerCase();
@@ -2071,10 +2061,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       if (ownerDm) {
         dmGuidsWithResolvedBranch.add(ownerDm.guid);
         // Identify "derived" branches by name prefix: ownerDm.solutionName comes from
-        // parsed DM XML ("Asl Invoice model"), while the listing API reports all branches
-        // under the root solutionName ("Invoice model") — so format solutionNames are
-        // useless here. Derived first → primaryBranch.mappingName = "Asl Invoice model
-        // mapping" → legacy ops (getRevisionContent) download by that name.
+        // the parsed DM XML, while the listing API reports all branches under the root
+        // solutionName — so format solutionNames are unreliable here. Derived branches
+        // come first → primaryBranch.mappingName → legacy ops download by that name.
         const dmSolLower = (ownerDm.solutionName ?? '').toLowerCase();
         const isBranchDerived = (b: { mappingName?: string }) =>
           Boolean(dmSolLower) && (b.mappingName ?? '').toLowerCase().startsWith(dmSolLower);
@@ -2183,17 +2172,12 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     // finalToLoad entries for DataModels fetched via name-based ops carry no GUID
     // (the listing API returned none), but Phase 1 parsed the XML and populated
     // dmGuidIndex with the real DataModel VERSION GUID (dm.id from the XML content).
-    // Without this, the default mapping probe would never fire for no-GUID DataModels
-    // (e.g. "Asl Invoice model" has no GUID in the listing → loadedDmGuids stays empty
-    // → synthQueue gets no entry → no mapping is downloaded at all).
+    // Without this, the default mapping probe never fires for no-GUID DataModels.
     {
-      // Include DataModels both from explicit finalToLoad entries AND implied by
-      // selected Formats' solutionName. When Fix 1 correctly prevents the base DM
-      // from being added to finalToLoad, the derived DataModel (e.g. "Asl Invoice model")
+      // Include DataModels from both explicit finalToLoad entries AND Format solutionNames.
+      // When Fix 1 prevents the base DM from entering finalToLoad, a derived DataModel
       // is discovered only via Format XML (pendingModelFollowUps) and never appears in
-      // finalToLoad. Without including Format solutionNames here, the default mapping
-      // probe would never fire for that DataModel: its GUID wouldn't be in loadedDmGuids
-      // → no synthQueue entry → no mapping download at all.
+      // finalToLoad. Including Format solutionNames ensures the default probe still fires.
       const currentLoadDmNames = new Set<string>([
         ...finalToLoad
           .filter(c => c.componentType === 'DataModel')
@@ -2215,7 +2199,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       if (!loadedDmGuids.has(dm.guid)) continue;
       // Use "<solutionName> mapping" as configurationName so buildDownloadAttempts
       // adds it to descriptorCandidates. GetModelMappingByID resolves by exact
-      // mapping name — "Asl Invoice model mapping" works; container names do not.
+      // mapping name; container names do not work as descriptors.
       const defaultMappingName = dm.solutionName ? `${dm.solutionName} mapping` : `${dm.name} (default mapping)`;
       synthQueue.push({
         synth: {
@@ -2276,8 +2260,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // Once a branch for a given DM GUID returns real XML, all remaining
       // branches for that DM are skipped. Branches that return empty content
       // do NOT mark the DM as resolved so the next branch in a later batch
-      // still gets a chance (important: "ABR…" may be empty while "Asl ABR…"
-      // for the same DM GUID carries the customer-deployed mapping).
+      // still gets a chance (a base mapping may be empty while the derived
+      // mapping for the same DM GUID carries the customer-deployed logic).
       // NOTE: no within-batch DM-GUID dedup — concurrent requests for the
       // same DM are fine because the store deduplicates by solution GUID.
       const downloadedMappingDmGuids = new Set<string>();
@@ -2315,8 +2299,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // ── Retry pass: probe unresolved DataModel names when no mapping was found ──
       // Triggered only when ALL initial download attempts failed (downloadedMappingDmGuids
       // is empty). This handles the case where the customer has a DERIVED DataModel
-      // (e.g. "Asl Advanced bank reconciliation statement model") registered in F&O
-      // under a different GUID than the standard one we discovered via GUID-scout.
+      // registered in F&O under a different GUID than the one we discovered via GUID-scout.
       // For export formats the initial pass usually SUCCEEDS → no retry needed.
       // For import-only formats the initial pass returns empty → retry fires here.
       if (downloadedMappingDmGuids.size === 0) {
@@ -2365,8 +2348,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             }
 
             // Case D: try DM GUIDs discovered via the post-scan format scout
-            // (e.g. the Asl derived DM GUID found via GetModelMappingByID probing).
-            // These are keyed under Asl DM names and not yet in dmByName, but they
+            // (derived DM GUID found via GetModelMappingByID probing).
+            // These are keyed under derived DM names not yet in dmByName, but they
             // may resolve mappings that are listed under the base DM name.
             for (const [discoveredName, discoveredGuid] of discoveredDmGuidsByName) {
               if (discoveredGuid === resolvedDm.guid) continue;
@@ -2465,8 +2448,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         }
         // Case C: probe no-GUID DataModels from allDataModelsSeen via legacy name-based ops.
         // Handles the scenario where ALL mappings are registered under a DERIVED DataModel
-        // (e.g. "Asl Advanced bank reconciliation statement model") whose GUID is unknown
-        // because F&O's listing API returns it without a GUID. The derived DM appears in
+        // whose GUID is unknown because F&O's listing API returns it without a GUID. The derived DM appears in
         // allDataModelsSeen because the user browsed it (rememberDataModels logs it as
         // "DataModel has no GUID — skipping"). We try downloading it by name; if the
         // environment has legacy ops (getRevisionContent / getConfigurationXml), we get
@@ -3274,7 +3256,7 @@ function componentKey(c: ErConfigSummary): string {
  *    (base configs + child DataModels). Deeper items are derivations
  *    that belong to derived DataModels.
  *
- * 2. **DM with child DataModels** (e.g. MT940 Model → Asl MT940 Model):
+ * 2. **DM with child DataModels** (e.g. BaseModel → DerivedModel):
  *    show directly-owned items at `childDepth` only + child DMs.
  *    Deeper items belong to child DMs.
  *
@@ -3330,11 +3312,10 @@ function scopeComponentsToModel(
       return true;
     }
 
-    // Leaf DMs WITHOUT any direct content (e.g. "Asl Bank statement
-    // model" — its formats derive from the root's base formats so
-    // the tree-walk never attributes them to this DM). Fall back to
-    // parent-DM-owned items at childDepth. This is imprecise but the
-    // API doesn't expose the model-reference link.
+    // Leaf DMs WITHOUT any direct content (e.g. a derived model whose
+    // formats derive from the root's base formats so the tree-walk never
+    // attributes them to this DM). Fall back to parent-DM-owned items at
+    // childDepth. This is imprecise but the API doesn't expose the model-reference link.
     if (!hasDirectContent
         && c.componentType !== 'DataModel'
         && c.ownerDataModelName === parentDmName
