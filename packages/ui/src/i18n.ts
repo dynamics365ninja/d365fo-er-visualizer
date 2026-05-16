@@ -364,6 +364,10 @@ export interface Translations {
   excelStructureView: string;
   excelTemplateCells: (n: number) => string;
   excelTemplateMerged: (n: number) => string;
+  excelTemplateDropHint: string;
+  excelTemplateDropActive: string;
+  excelTemplateDropInvalid: string;
+  excelTemplateLoadBtn: string;
   previewLabel: string;
   previewDescription: string;
 
@@ -775,6 +779,10 @@ const cs: Translations = {
   excelStructureView: 'Struktura',
   excelTemplateCells: (n: number) => `${n} buň${n === 1 ? 'ka' : n < 5 ? 'ky' : 'ek'}`,
   excelTemplateMerged: (n: number) => `${n} sloučen${n === 1 ? 'á' : n < 5 ? 'é' : 'ých'}`,
+  excelTemplateDropHint: 'Přetáhněte sem soubor .xlsx z exportovaného ER solution package',
+  excelTemplateDropActive: 'Pusťte soubor .xlsx…',
+  excelTemplateDropInvalid: 'Pouze soubory .xlsx',
+  excelTemplateLoadBtn: 'Načíst šablonu (.xlsx)',
   previewLabel: 'Náhled',
   previewDescription: 'Náhled struktury souboru — konstantní hodnoty jsou odvozeny z binding výrazů. Dynamické hodnoty (cesty datových zdrojů, funkce) jsou zobrazeny jako {zástupné}.',
 
@@ -1178,6 +1186,10 @@ const en: Translations = {
   excelStructureView: 'Structure',
   excelTemplateCells: (n: number) => `${n} cell${n === 1 ? '' : 's'}`,
   excelTemplateMerged: (n: number) => `${n} merged`,
+  excelTemplateDropHint: 'Drop the .xlsx file from the exported ER solution package here',
+  excelTemplateDropActive: 'Release to load .xlsx…',
+  excelTemplateDropInvalid: '.xlsx files only',
+  excelTemplateLoadBtn: 'Load template (.xlsx)',
   previewLabel: 'Preview',
   previewDescription: 'File structure preview — constant values are resolved from binding expressions. Dynamic values (datasource paths, functions) are shown as {placeholders}.',
 

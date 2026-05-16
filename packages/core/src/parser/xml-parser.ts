@@ -1278,8 +1278,9 @@ function parseFormat(node: any): ERFormat {
 
   // Extract embedded Excel template (base64-encoded .xlsx)
   // Template can be at various levels: directly under Root, under the ExcelFileComponent,
-  // or inside its Contents. node.
-  const template = findExcelTemplate(node['Root']);
+  // or inside a Template sibling element of Root.
+  // Search the entire ERTextFormat node (not just Root) so Template siblings are covered.
+  const template = findExcelTemplate(node);
 
   return {
     id: getAttr(node, 'ID.') ?? '',
@@ -1291,17 +1292,24 @@ function parseFormat(node: any): ERFormat {
   };
 }
 
-/** Recursively search for ERTextFormatExcelTemplate in a node tree (max depth 4). */
-function findExcelTemplate(node: any, depth = 0): { filename: string; base64: string } | undefined {
-  if (!node || typeof node !== 'object' || depth > 4) return undefined;
-  // Direct hit
-  const tplNode = node['ERTextFormatExcelTemplate'];
+/** Recursively search for ERTextFormatExcelTemplate in a node tree (max depth 8).
+ * Returns a template descriptor with filename and optional base64 (embedded binary).
+ * When the format only stores a filename reference (self-closing element), base64 is undefined.
+ */
+function findExcelTemplate(node: any, depth = 0): { filename: string; base64?: string } | undefined {
+  if (!node || typeof node !== 'object' || depth > 8) return undefined;
+  // Direct hit — two element names seen in the wild:
+  // ERTextFormatExcelTemplate (reference-only or older embedded style)
+  // ERTextFormatExcelFileComponentTemplate (newer embedded style inside ExcelFileComponent)
+  const tplNode = node['ERTextFormatExcelTemplate'] ?? node['ERTextFormatExcelFileComponentTemplate'];
   if (tplNode) {
     const tpl = Array.isArray(tplNode) ? tplNode[0] : tplNode;
     const filename = tpl?.['@_Filename'] ?? '';
-    const base64 = tpl?.['Contents.'] ?? '';
-    if (base64 && typeof base64 === 'string') {
-      return { filename, base64: base64.trim() };
+    // Return even when no binary is embedded (reference-only template)
+    if (filename) {
+      const rawBase64 = tpl?.['Contents.'];
+      const base64 = rawBase64 && typeof rawBase64 === 'string' ? rawBase64.trim() : undefined;
+      return { filename, base64 };
     }
   }
   // Search children
