@@ -40,6 +40,7 @@ import {
   ER_SERVICES,
   ER_STORAGE_OPS_BY_TYPE,
 } from '../packages/fno-client/src/er-services.js';
+import { parseERConfiguration, ERComponentKind } from '../packages/core/src/index.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -2206,6 +2207,177 @@ async function main(): Promise<void> {
   } else {
     const reason = !step9DmGuid ? 'Step 9 did not obtain DM GUID' : 'solutionName not set';
     console.log(`  (skipped — ${reason})`);
+  }
+  console.log();
+
+  // ─── Step 11: Extract Excel template from format XML ─────────────────────
+  // Downloads the target format (cfg.configName), parses it with parseERConfiguration
+  // and saves the embedded .xlsx template to scripts/fixtures/ for use in developing
+  // the styles parser and visual preview.
+  console.log('─── Step 11: Extract Excel template from format XML');
+  if (cfg.configName && cfg.solutionName) {
+    try {
+      const targetFmt11 =
+        components.find(c => c.configurationName === cfg.configName && c.hasContent) ??
+        rootComponents.find(c => c.configurationName === cfg.configName && c.hasContent);
+
+      if (!targetFmt11) {
+        console.log(`  ⚠ Format "${cfg.configName}" not found in component listing — skipping`);
+      } else {
+        console.log(`  Downloading format XML: "${cfg.configName}"…`);
+        const fmtDl11 = await downloadConfigXml(transport, conn, token, targetFmt11);
+        console.log(`  XML size: ${fmtDl11.xml.length.toLocaleString()} chars`);
+
+        // Parse with the core library to extract the structured ERFormat including template.
+        const parsed11 = parseERConfiguration(fmtDl11.xml, 'step11.xml');
+        const content11 = parsed11.content;
+        const formatVersion11 = content11.kind === ERComponentKind.Format ? content11.formatVersion : undefined;
+        const template11 = formatVersion11?.format?.template;
+
+        if (!template11) {
+          // No template element at all — check if this is even an Excel format
+          const rootEl = formatVersion11?.format?.rootElement;
+          const isExcelFmt = rootEl?.elementType === 'ExcelFile' ||
+            rootEl?.children?.some(c => c.elementType === 'ExcelFile');
+          if (isExcelFmt) {
+            console.log('  ✗ Excel format but no ERTextFormatExcelTemplate element found');
+            check('Step 11: Excel template element present in format XML', false, 'no template element in Excel format');
+          } else {
+            console.log(`  ℹ Format root element type: ${rootEl?.elementType ?? '(none)'}`);
+            console.log('  ℹ Not an Excel format — no template expected');
+            check('Step 11: format parsed successfully (non-Excel format)', !!formatVersion11, 'no template in non-Excel format');
+          }
+        } else {
+          // Template element found — may or may not have embedded binary
+          const { filename, base64 } = template11;
+          const hasEmbedded = !!base64;
+          console.log(`  ✓ Template reference found: "${filename}" (embedded binary: ${hasEmbedded ? `yes, ${base64!.length.toLocaleString()} chars base64` : 'no — reference-only in this F&O version'})`);
+          check('Step 11: Excel template element present in format XML', true, `"${filename}"`);
+
+          if (hasEmbedded) {
+            // Save fixtures for use in xlsx-parser unit tests
+            const fixturesDir = path.join(__dirname, 'fixtures');
+            if (!fs.existsSync(fixturesDir)) fs.mkdirSync(fixturesDir, { recursive: true });
+
+            const b64Path = path.join(fixturesDir, 'template.b64');
+            fs.writeFileSync(b64Path, base64!, 'utf-8');
+            console.log(`  ✓ Saved base64 → scripts/fixtures/template.b64`);
+
+            const binaryBuf = Buffer.from(base64!, 'base64');
+            const xlsxPath = path.join(fixturesDir, filename || 'template.xlsx');
+            fs.writeFileSync(xlsxPath, binaryBuf);
+            console.log(`  ✓ Saved decoded binary → scripts/fixtures/${filename || 'template.xlsx'} (${(binaryBuf.length / 1024).toFixed(1)} KB)`);
+
+            const isPk = binaryBuf[0] === 0x50 && binaryBuf[1] === 0x4B;
+            check('Step 11: template binary is a valid ZIP/XLSX (PK signature)', isPk, isPk ? 'PK magic bytes OK' : 'unexpected magic bytes');
+
+            const zipText = binaryBuf.toString('latin1');
+            const hasStyles = zipText.includes('xl/styles.xml');
+            const hasSharedStrings = zipText.includes('xl/sharedStrings.xml');
+            console.log(`  xl/styles.xml present in ZIP: ${hasStyles}`);
+            console.log(`  xl/sharedStrings.xml present in ZIP: ${hasSharedStrings}`);
+            check('Step 11: xl/styles.xml found in template ZIP', hasStyles, hasStyles ? 'present' : 'missing');
+          } else {
+            console.log('  ℹ Binary not embedded — F&O stores this template as a filename reference only.');
+            console.log('  ℹ To get the binary, export the full ER solution package from the F&O UI.');
+          }
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message.slice(0, 200) : String(err);
+      console.error(`  ⚠ Step 11 failed: ${msg}`);
+    }
+  } else {
+    console.log('  (skipped — configName / solutionName not set in .fno-integration.json)');
+  }
+  console.log();
+
+  // ─── Step 12: Dump raw API response for format download ──────────────────
+  // Diagnostic step — calls GetEffectiveFormatMappingByID directly and prints
+  // every field in the response so we can see if a template binary is embedded.
+  console.log('─── Step 12: Raw API response dump (format download)');
+  if (cfg.configName && cfg.solutionName) {
+    try {
+      const targetFmt12 =
+        components.find(c => c.configurationName === cfg.configName && c.hasContent) ??
+        rootComponents.find(c => c.configurationName === cfg.configName && c.hasContent);
+
+      if (!targetFmt12) {
+        console.log('  ℹ Config not found — skipping');
+        check('Step 12: raw dump skipped', true, 'config not in listing');
+      } else {
+        const attempts12 = buildDownloadAttempts(targetFmt12);
+        console.log(`  Component: "${targetFmt12.configurationName}" (${targetFmt12.componentType})`);
+        console.log(`  configurationGuid: ${targetFmt12.configurationGuid ?? '(none)'}`);
+        console.log(`  revisionGuid:      ${targetFmt12.revisionGuid ?? '(none)'}`);
+        console.log(`  Planned attempts:  ${attempts12.length}`);
+
+        // Helper: recursively walk an object and collect all (path, value) leaf entries
+        function collectLeaves(
+          node: unknown,
+          path = '',
+          out: Array<{ path: string; type: string; preview: string; isBase64Zip: boolean }> = [],
+          depth = 0,
+        ): typeof out {
+          if (depth > 6 || node === null || node === undefined) return out;
+          if (typeof node === 'string') {
+            const stripped = node.replace(/\s/g, '');
+            const isBase64 = stripped.length > 100 && /^[A-Za-z0-9+/=]+$/.test(stripped.slice(0, 200));
+            let isBase64Zip = false;
+            if (isBase64) {
+              try {
+                const buf = Buffer.from(stripped, 'base64');
+                isBase64Zip = buf[0] === 0x50 && buf[1] === 0x4B;
+              } catch { /* ignore */ }
+            }
+            const preview = node.length > 120 ? node.slice(0, 120) + `…(${node.length} chars)` : node;
+            out.push({ path, type: `string[${node.length}]`, preview, isBase64Zip });
+          } else if (typeof node === 'number' || typeof node === 'boolean') {
+            out.push({ path, type: typeof node, preview: String(node), isBase64Zip: false });
+          } else if (Array.isArray(node)) {
+            out.push({ path, type: `array[${node.length}]`, preview: '', isBase64Zip: false });
+            node.slice(0, 3).forEach((item, i) => collectLeaves(item, `${path}[${i}]`, out, depth + 1));
+          } else if (typeof node === 'object') {
+            for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+              collectLeaves(v, path ? `${path}.${k}` : k, out, depth + 1);
+            }
+          }
+          return out;
+        }
+
+        // Try each download attempt and dump the raw response
+        let dumped = false;
+        for (const att of attempts12.slice(0, 6)) {
+          try {
+            const raw12 = await callErService<unknown>(
+              transport, conn, token,
+              ER_SERVICES.configurationStorage, att.operation, att.body,
+            );
+            console.log(`\n  ✓ ${att.operation} → response received`);
+            const leaves = collectLeaves(raw12);
+            for (const leaf of leaves) {
+              const marker = leaf.isBase64Zip ? ' ← ⚠ BASE64 ZIP!' : '';
+              console.log(`    ${leaf.path.padEnd(40)} ${leaf.type.padEnd(16)} ${leaf.preview}${marker}`);
+            }
+            dumped = true;
+            check('Step 12: raw response dumped', true, `${att.operation}, ${leaves.length} fields`);
+            break;
+          } catch (e) {
+            const msg = e instanceof Error ? e.message.slice(0, 120) : String(e);
+            console.log(`  ✗ ${att.operation} → ${msg}`);
+          }
+        }
+        if (!dumped) {
+          check('Step 12: raw response dump attempted', true, 'all attempts failed');
+        }
+      }
+    } catch (e) {
+      console.log(`  ⚠ Step 12 error: ${e instanceof Error ? e.message.slice(0, 200) : e}`);
+      check('Step 12: raw dump ran without fatal crash', true, 'error caught');
+    }
+  } else {
+    console.log('  ℹ configName / solutionName not set — skipping');
+    check('Step 12: raw dump skipped', true, 'config not configured');
   }
   console.log();
 

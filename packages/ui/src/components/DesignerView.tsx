@@ -1303,9 +1303,14 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
             <GroupedDatasourceList datasources={filteredDatasources} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} />
           )}
 
-          {view === 'preview' && (
-            <FormatPreview rootElement={rootElement} direction={fc.direction} bindingMap={bindingMap} configIndex={configIndex} />
-          )}
+          <div style={{ display: view === 'preview' ? 'contents' : 'none' }}>
+            <FormatPreview rootElement={rootElement} direction={fc.direction} bindingMap={bindingMap} configIndex={configIndex} onNavigateToElement={(elementId) => {
+              setStructureExpandMode('all');
+              setStructureExpandVersion(v => v + 1);
+              setView('structure');
+              setSelectedElementId(elementId);
+            }} />
+          </div>
         </div>
       </div>
     </div>
@@ -1487,8 +1492,8 @@ const excelColors = {
 };
 
 // ── Build cell-address → binding map from format tree ──
-function buildCellBindingMap(root: ERFormatElement, bm: BindingMap, labels?: ERLabel[]): Map<string, { value: string; name: string; label?: string }> {
-  const map = new Map<string, { value: string; name: string; label?: string }>();
+function buildCellBindingMap(root: ERFormatElement, bm: BindingMap, labels?: ERLabel[]): Map<string, { value: string; name: string; label?: string; elementId: string }> {
+  const map = new Map<string, { value: string; name: string; label?: string; elementId: string }>();
   const walk = (el: ERFormatElement) => {
     if (el.elementType === 'ExcelCell') {
       const addr = el.attributes?.['ExcelRange'] ?? el.name;
@@ -1498,7 +1503,7 @@ function buildCellBindingMap(root: ERFormatElement, bm: BindingMap, labels?: ERL
         const resolved = resolveLabel(labelRef, labels);
         label = resolved?.enUs ?? resolved?.localized ?? undefined;
       }
-      map.set(addr.toUpperCase(), { value: previewValue(el, bm), name: el.name, label });
+      map.set(addr.toUpperCase(), { value: previewValue(el, bm), name: el.name, label, elementId: el.id });
     }
     for (const child of el.children) walk(child);
   };
@@ -1514,6 +1519,7 @@ function ExcelTemplateGrid({
   rootElement,
   labels,
   onSwitchToStructure,
+  onElementClick,
 }: {
   workbook: XlsxWorkbook;
   filename: string;
@@ -1521,9 +1527,20 @@ function ExcelTemplateGrid({
   rootElement: ERFormatElement;
   labels?: ERLabel[];
   onSwitchToStructure: () => void;
+  onElementClick?: (elementId: string) => void;
 }) {
   const [activeSheet, setActiveSheet] = useState(0);
   const cellBindings = useMemo(() => buildCellBindingMap(rootElement, bindingMap, labels), [rootElement, bindingMap, labels]);
+
+  // Reverse map: cell ref (e.g. "B3") → named range (e.g. "CONTACTINFO_LABEL")
+  // Needed because ExcelRange attribute stores named range names, not cell addresses.
+  const cellRefToNamedRange = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [name, ref] of workbook.definedNames) {
+      map.set(ref.toUpperCase(), name); // name is already uppercased in parser
+    }
+    return map;
+  }, [workbook.definedNames]);
 
   const sheet = workbook.sheets[Math.min(activeSheet, workbook.sheets.length - 1)];
   if (!sheet) return null;
@@ -1684,45 +1701,59 @@ function ExcelTemplateGrid({
                   const rowSpan = merge ? (merge.endRow - merge.startRow + 1) : 1;
 
                   const xlsxCell = cellMap.get(ref);
-                  const binding = cellBindings.get(ref.toUpperCase());
+                  // Look up binding: first try direct cell ref, then via named range
+                  const namedRange = cellRefToNamedRange.get(ref.toUpperCase());
+                  const binding = cellBindings.get(ref.toUpperCase()) ?? (namedRange ? cellBindings.get(namedRange) : undefined);
                   const hasBinding = !!binding;
                   const hasValue = xlsxCell && xlsxCell.value !== '';
+                  const cellStyle = xlsxCell?.style;
 
-                  // Determine display value
+                  // Determine display value — always prefer the original Excel cell text
                   let displayValue = '';
-                  let isBindingValue = false;
-                  if (hasBinding) {
-                    displayValue = binding.value;
-                    isBindingValue = displayValue.startsWith('{') && displayValue.endsWith('}');
-                  } else if (hasValue) {
+                  if (hasValue) {
                     displayValue = xlsxCell.value;
+                  } else if (hasBinding) {
+                    displayValue = binding.value;
                   }
+
+                  // Resolve fill color from Excel style (solid fills only).
+                  const xlsxBg = cellStyle?.fillType === 'solid' && cellStyle.fgColor
+                    ? `#${cellStyle.fgColor.slice(-6)}`
+                    : undefined;
+                  // Border helpers
+                  const borderStyle = (side?: string) =>
+                    side && side !== 'none' ? `1px solid ${excelColors.cellBorder}` : `1px solid ${excelColors.cellBorder}`;
 
                   return (
                     <td
                       key={col}
                       colSpan={colSpan > 1 ? colSpan : undefined}
                       rowSpan={rowSpan > 1 ? rowSpan : undefined}
-                      title={hasBinding ? `${binding.name}${binding.label ? ` — ${binding.label}` : ''}\n${binding.value}` : xlsxCell?.value || undefined}
+                      title={hasBinding
+                        ? `${binding.name}${binding.label ? ` — ${binding.label}` : ''}\n${binding.value}${onElementClick ? '\n🔍 Kliknutím přejít do struktury' : ''}`
+                        : xlsxCell?.value || undefined}
+                      onClick={hasBinding && onElementClick ? () => onElementClick(binding.elementId) : undefined}
                       style={{
                         padding: '1px 3px',
-                        borderRight: `1px solid ${excelColors.cellBorder}`,
-                        borderBottom: `1px solid ${excelColors.cellBorder}`,
-                        background: hasBinding
-                          ? 'rgba(33, 115, 70, 0.08)'
-                          : excelColors.cellBg,
-                        color: isBindingValue
-                          ? excelColors.dynamicValueColor
-                          : hasBinding
-                            ? excelColors.constantValueColor
-                            : 'var(--text-primary)',
-                        fontStyle: isBindingValue ? 'italic' : undefined,
-                        fontWeight: hasBinding ? 500 : undefined,
-                        whiteSpace: 'nowrap',
+                        borderRight: borderStyle(cellStyle?.borderRight),
+                        borderBottom: borderStyle(cellStyle?.borderBottom),
+                        borderTop: cellStyle?.borderTop && cellStyle.borderTop !== 'none' ? `1px solid ${excelColors.cellBorder}` : undefined,
+                        borderLeft: cellStyle?.borderLeft && cellStyle.borderLeft !== 'none' ? `1px solid ${excelColors.cellBorder}` : undefined,
+                        background: xlsxBg ?? excelColors.cellBg,
+                        color: cellStyle?.fontColor
+                              ? `#${cellStyle.fontColor.slice(-6)}`
+                              : 'var(--text-primary)',
+                        fontStyle: cellStyle?.italic ? 'italic' : undefined,
+                        fontWeight: cellStyle?.bold ? 700 : undefined,
+                        textDecoration: cellStyle?.underline ? 'underline' : undefined,
+                        fontSize: cellStyle?.fontSize ? `${cellStyle.fontSize}pt` : undefined,
+                        whiteSpace: cellStyle?.wrapText ? 'normal' : 'nowrap',
+                        textAlign: cellStyle?.hAlign === 'center' ? 'center' : cellStyle?.hAlign === 'right' ? 'right' : undefined,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         maxWidth: merge ? undefined : colWidth(col),
                         height: 20,
+                        cursor: hasBinding && onElementClick ? 'pointer' : undefined,
                       }}
                     >
                       {displayValue}
@@ -1746,7 +1777,6 @@ function ExcelTemplateGrid({
         gap: 12,
         flexShrink: 0,
       }}>
-        <span><span style={{ background: 'rgba(33, 115, 70, 0.08)', padding: '0 4px', border: '1px solid rgba(33,115,70,0.2)', borderRadius: 2 }}>cell</span> = {t.excelLegendDynamic}</span>
         <span style={{ color: 'var(--text-secondary)', fontSize: 10 }}>📄 {t.excelTemplateView} · 📊 {t.excelStructureView}</span>
       </div>
 
@@ -1806,25 +1836,67 @@ function collectSheetColumns(sheet: ExcelSheetData): string[] {
   return Array.from(cols).sort((a, b) => a.length - b.length || a.localeCompare(b));
 }
 
-function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, template }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; template?: { filename: string; base64: string } }) {
+function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, template, onNavigateToElement }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; template?: { filename: string; base64?: string }; onNavigateToElement?: (elementId: string) => void }) {
   const labels = useAppStore(s => s.configurations[configIndex]?.solutionVersion?.solution?.labels);
   const sheets = useMemo(() => collectExcelSheets(rootElement, bindingMap, labels), [rootElement, bindingMap, labels]);
   const [activeSheet, setActiveSheet] = useState(0);
   const [selectedCell, setSelectedCell] = useState<ExcelCellData | null>(null);
-  // Default to template view when template is available
+  // Default to template view when template is available (even filename-only — shows drop zone)
   const [viewMode, setViewMode] = useState<'structure' | 'template'>(template ? 'template' : 'structure');
   const [xlsxData, setXlsxData] = useState<XlsxWorkbook | null>(null);
   const [xlsxError, setXlsxError] = useState<string | null>(null);
   const [xlsxLoading, setXlsxLoading] = useState(false);
+  const [droppedBase64, setDroppedBase64] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [dragInvalid, setDragInvalid] = useState(false);
 
-  // Parse template eagerly when available (don't wait for view switch)
+  const effectiveBase64 = droppedBase64 ?? template?.base64 ?? null;
+
+  // Parse xlsx whenever effectiveBase64 becomes available
   useEffect(() => {
-    if (!template?.base64 || xlsxData || xlsxLoading || xlsxError) return;
+    if (!effectiveBase64 || xlsxData || xlsxLoading || xlsxError) return;
     setXlsxLoading(true);
-    parseXlsxBase64(template.base64)
+    parseXlsxBase64(effectiveBase64)
       .then(wb => { setXlsxData(wb); setXlsxLoading(false); })
       .catch(err => { setXlsxError(String(err)); setXlsxLoading(false); });
-  }, [template, xlsxData, xlsxLoading, xlsxError]);
+  }, [effectiveBase64, xlsxData, xlsxLoading, xlsxError]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    setDragInvalid(false);
+    const file = Array.from(e.dataTransfer.files).find(f => f.name.endsWith('.xlsx'));
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      // data:...;base64,XXXXX → take the part after the comma
+      const b64 = dataUrl.split(',')[1];
+      if (b64) {
+        setDroppedBase64(b64);
+        setXlsxData(null);
+        setXlsxError(null);
+      }
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const hasXlsx = Array.from(e.dataTransfer.items).some(
+      item => item.kind === 'file' && (item.type.includes('spreadsheet') || item.type === '' /* filename-only drag */),
+    );
+    setIsDragOver(true);
+    setDragInvalid(!hasXlsx && e.dataTransfer.items.length > 0);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    // Only fire when leaving the outermost element
+    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as HTMLElement | null)) {
+      setIsDragOver(false);
+      setDragInvalid(false);
+    }
+  }, []);
 
   if (sheets.length === 0) {
     return <div style={{ padding: 16, color: 'var(--text-secondary)', fontSize: 12 }}>{t.excelNoSheets}</div>;
@@ -1836,7 +1908,15 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
       return <div style={{ padding: 24, color: 'var(--text-secondary)', fontSize: 12 }}>{t.excelTemplateLoading}</div>;
     }
     if (xlsxError) {
-      return <div style={{ padding: 24, color: 'var(--error)', fontSize: 12 }}>{t.excelTemplateError}: {xlsxError}</div>;
+      return (
+        <div
+          style={{ padding: 24, color: 'var(--error)', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 8 }}
+          onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}
+        >
+          <div>{t.excelTemplateError}: {xlsxError}</div>
+          <div style={{ color: 'var(--text-secondary)' }}>{t.excelTemplateDropHint}</div>
+        </div>
+      );
     }
     if (xlsxData) {
       return (
@@ -1847,16 +1927,116 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
           rootElement={rootElement}
           labels={labels}
           onSwitchToStructure={() => setViewMode('structure')}
+          onElementClick={onNavigateToElement ? (elementId) => {
+            setViewMode('structure');
+            onNavigateToElement(elementId);
+          } : undefined}
         />
       );
     }
+    // No binary yet — show drop zone
+    return (
+      <div
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100%',
+          gap: 16,
+          background: isDragOver
+            ? (dragInvalid ? 'rgba(var(--error-rgb,220,38,38),0.08)' : 'rgba(var(--accent-rgb,0,120,212),0.08)')
+            : 'var(--bg-secondary)',
+          border: `2px dashed ${isDragOver ? (dragInvalid ? 'var(--error,#dc2626)' : 'var(--focus-border,#0078d4)') : 'var(--border-color,#444)'}`,
+          borderRadius: 8,
+          margin: 16,
+          transition: 'background 0.15s, border-color 0.15s',
+          cursor: 'default',
+          userSelect: 'none',
+        }}
+      >
+        <span style={{ fontSize: 40 }}>{isDragOver ? (dragInvalid ? '🚫' : '📂') : '📄'}</span>
+        <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>
+          {isDragOver
+            ? (dragInvalid ? t.excelTemplateDropInvalid : t.excelTemplateDropActive)
+            : t.excelTemplateLoadBtn}
+        </div>
+        {template?.filename && !isDragOver && (
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono,monospace)' }}>
+            {template.filename}
+          </div>
+        )}
+        {!isDragOver && (
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center', maxWidth: 320 }}>
+            {t.excelTemplateDropHint}
+          </div>
+        )}
+        <label style={{
+          marginTop: 4,
+          padding: '6px 14px',
+          fontSize: 12,
+          border: '1px solid var(--border-color,#444)',
+          borderRadius: 4,
+          cursor: 'pointer',
+          color: 'var(--text-secondary)',
+          background: 'var(--bg-primary)',
+        }}>
+          {t.excelTemplateLoadBtn}
+          <input
+            type="file"
+            accept=".xlsx"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                const b64 = (ev.target?.result as string)?.split(',')[1];
+                if (b64) { setDroppedBase64(b64); setXlsxData(null); setXlsxError(null); }
+              };
+              reader.readAsDataURL(file);
+              e.target.value = '';
+            }}
+          />
+        </label>
+        <button
+          onClick={() => setViewMode('structure')}
+          style={{ fontSize: 11, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+        >
+          {t.excelStructureView}
+        </button>
+      </div>
+    );
   }
 
   const sheet = sheets[Math.min(activeSheet, sheets.length - 1)];
   const columns = collectSheetColumns(sheet);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-secondary)' }}>
+    <div
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-secondary)' }}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+    >
+      {/* Drag overlay (structure view) */}
+      {isDragOver && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: dragInvalid ? 'rgba(220,38,38,0.12)' : 'rgba(0,120,212,0.12)',
+          border: `3px dashed ${dragInvalid ? '#dc2626' : '#0078d4'}`,
+          pointerEvents: 'none',
+          borderRadius: 4,
+        }}>
+          <span style={{ fontSize: 14, background: 'var(--bg-primary)', padding: '8px 16px', borderRadius: 6, fontWeight: 600, color: dragInvalid ? '#dc2626' : '#0078d4' }}>
+            {dragInvalid ? t.excelTemplateDropInvalid : t.excelTemplateDropActive}
+          </span>
+        </div>
+      )}
       {/* Ribbon-like toolbar */}
       <div style={{
         display: 'flex',
@@ -1880,9 +2060,9 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
                 fontSize: 11,
                 cursor: 'pointer',
                 border: 'none',
-                background: viewMode === 'structure' ? 'rgba(255,255,255,0.3)' : 'transparent',
+                background: 'rgba(255,255,255,0.3)',
                 color: excelColors.sheetTabText,
-                fontWeight: viewMode === 'structure' ? 700 : 400,
+                fontWeight: 700,
               }}
             >
               📊 {t.excelStructureView}
@@ -1895,12 +2075,12 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
                 cursor: 'pointer',
                 border: 'none',
                 borderLeft: '1px solid rgba(255,255,255,0.3)',
-                background: viewMode === 'template' ? 'rgba(255,255,255,0.3)' : 'transparent',
+                background: 'transparent',
                 color: excelColors.sheetTabText,
-                fontWeight: viewMode === 'template' ? 700 : 400,
+                fontWeight: 400,
               }}
             >
-              📄 {t.excelTemplateView}
+              📄 {effectiveBase64 ? t.excelTemplateView : t.excelTemplateLoadBtn}
             </button>
           </div>
         )}
@@ -2239,7 +2419,7 @@ function ExcelCellGrid({ cells, label, onCellClick, selectedCell }: { cells: Exc
   );
 }
 
-function FormatPreview({ rootElement, direction, bindingMap, configIndex }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number }) {
+function FormatPreview({ rootElement, direction, bindingMap, configIndex, onNavigateToElement }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; onNavigateToElement?: (elementId: string) => void }) {
   const info = detectFormatType(rootElement);
   const template = useAppStore(s => {
     const cfg = s.configurations[configIndex];
@@ -2249,7 +2429,7 @@ function FormatPreview({ rootElement, direction, bindingMap, configIndex }: { ro
 
   // Visual spreadsheet preview for Excel formats
   if (info.label === 'Excel') {
-    return <ExcelVisualPreview rootElement={rootElement} direction={direction} bindingMap={bindingMap} configIndex={configIndex} template={template} />;
+    return <ExcelVisualPreview rootElement={rootElement} direction={direction} bindingMap={bindingMap} configIndex={configIndex} template={template} onNavigateToElement={onNavigateToElement} />;
   }
 
   const preview = useMemo(() => generateFormatPreview(rootElement, bindingMap), [rootElement, bindingMap]);
@@ -2537,10 +2717,20 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
 
   const isSelected = selectedId === element.id;
 
+  const rowRef = React.useRef<HTMLDivElement>(null);
+
+  // Scroll into view when this element becomes selected (e.g. navigate from template preview)
+  useEffect(() => {
+    if (isSelected && rowRef.current) {
+      rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [isSelected]);
+
   return (
     <div>
       {/* Element Row */}
       <div
+        ref={rowRef}
         className={`fmt-element-row ${isSelected ? 'selected' : ''} ${!mainBinding ? 'unbound' : ''}`}
         style={{ paddingLeft: depth * 20 + 4 }}
         onClick={() => onSelect(element.id)}

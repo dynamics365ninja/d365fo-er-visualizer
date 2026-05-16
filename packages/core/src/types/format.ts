@@ -16,8 +16,9 @@ export interface ERFormat {
   enumDefinitions: ERFormatEnumDefinition[];
   transformations: ERFormatTransformation[];
   rootElement: ERFormatElement;
-  /** Excel template embedded in the format (base64-encoded .xlsx) */
-  template?: { filename: string; base64: string };
+  /** Excel template reference. base64 is present when the template binary is embedded in the XML;
+   *  it may be absent when the format only stores a filename reference (no embedded binary). */
+  template?: { filename: string; base64?: string };
 }
 
 export interface ERFormatEnumDefinition {
