@@ -2584,6 +2584,12 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           }
         }
       }
+      // All mapping download attempts (including retries) exhausted.
+      // Warn the user if no mapping was downloaded but mappings were expected.
+      if (downloadedMappingDmGuids.size === 0 && pendingMappingBranchesByDmName.size > 0) {
+        const failedNames = [...pendingMappingBranchesByDmName.keys()];
+        pushToast({ kind: 'warning', message: t.fnoMappingNotAvailable(failedNames) });
+      }
     }
 
     // ── Late DataModel pass ──
