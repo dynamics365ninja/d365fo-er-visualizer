@@ -288,6 +288,7 @@ export interface Translations {
   fnoLoadingFailed: (msg: string) => string;
   fnoDownloadFailed: (name: string, msg: string) => string;
   fnoLoadedCount: (n: number) => string;
+  fnoMappingNotAvailable: (names: string[]) => string;
 
   // Property inspector labels
   propDescription: string;
@@ -610,7 +611,7 @@ const cs: Translations = {
     'Rozpoznání typu souboru (XML / Excel / Word / PDF / Text)',
     'Stromový náhled všech prvků včetně vložených formulí',
     'Proklik z formule přes datový zdroj až ke zdrojové tabulce',
-    'Náhled vložené Excel šablony s buňkami, sloučenými oblastmi a vazbami',
+    'Náhled Excel šablony s původním formátováním — kliknutím na buňku přejdeš na svázaný prvek formátu',
     'Přehled transformací a výčtových hodnot definovaných ve formátu',
   ],
   landingCardFormatHint: 'VAT declaration XML (CZ).xml',
@@ -703,6 +704,7 @@ const cs: Translations = {
   fnoLoadingFailed: (msg: string) => `Načítání selhalo: ${msg}`,
   fnoDownloadFailed: (name: string, msg: string) => `Stažení „${name}" selhalo: ${msg}`,
   fnoLoadedCount: (n: number) => `Načteno ${n} konfigurací z F&O.`,
+  fnoMappingNotAvailable: (names: string[]) => `ModelMapping nelze stáhnout pro: ${names.join(', ')}. Vazby formátových elementů jsou i přesto dostupné přes FormatMapping.`,
 
   // Property inspector labels
   propDescription: 'Popis',
@@ -1017,7 +1019,7 @@ const en: Translations = {
     'Detect file type (XML / Excel / Word / PDF / Text)',
     'Tree view of all elements including embedded formulas',
     'Click through from formula via data source to source table',
-    'Preview embedded Excel template with cells, merged regions, and bindings',
+    'Excel template preview with original formatting — click a bound cell to navigate to the format element',
     'Overview of transformations and enumeration values defined in the format',
   ],
   landingCardFormatHint: 'VAT declaration XML (CZ).xml',
@@ -1110,6 +1112,7 @@ const en: Translations = {
   fnoLoadingFailed: (msg: string) => `Loading failed: ${msg}`,
   fnoDownloadFailed: (name: string, msg: string) => `Download of "${name}" failed: ${msg}`,
   fnoLoadedCount: (n: number) => `Loaded ${n} configuration${n === 1 ? '' : 's'} from F&O.`,
+  fnoMappingNotAvailable: (names: string[]) => `ModelMapping could not be downloaded for: ${names.join(', ')}. Format element bindings are still available via FormatMapping.`,
 
   // Property inspector labels
   propDescription: 'Description',
