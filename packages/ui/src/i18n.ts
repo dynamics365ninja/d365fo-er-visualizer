@@ -829,7 +829,7 @@ const cs: Translations = {
   fnoBack: '← Zpět',
   fnoRetry: 'Zkusit znovu',
   fnoNoChildren: (name: string) => `Pod „${name}" nejsou žádné potomky.`,
-  fnoDownloadInfo: 'Výběrem Formátu se automaticky stahuje i DataModel a ModelMapping (export topologie). U čistě importních formátů (např. bankovní výpisy) F&O API DataModel XML neposkytuje — lze stáhnout pouze Format XML.',
+  fnoDownloadInfo: 'Výběrem Formátu se automaticky stáhnou i navázané konfigurace DataModel a ModelMapping. U čistě importních formátů (např. bankovní výpisy) F&O API DataModel neposkytuje — stáhnout lze pouze konfiguraci samotného Formátu.',
   fnoCredentials: 'Přihlašovací údaje',
 };
 
@@ -1237,7 +1237,7 @@ const en: Translations = {
   fnoBack: '← Back',
   fnoRetry: 'Retry',
   fnoNoChildren: (name: string) => `No children under "${name}".`,
-  fnoDownloadInfo: 'Selecting a Format automatically downloads its DataModel and ModelMapping too (export topology). For purely import formats (e.g. bank statements), F&O API does not expose the DataModel XML — only the Format XML can be downloaded.',
+  fnoDownloadInfo: 'Selecting a Format automatically downloads its linked DataModel and ModelMapping configurations as well. For purely import formats (e.g. bank statements), F&O API does not expose the DataModel — only the Format configuration itself can be downloaded.',
   fnoCredentials: 'Credentials',
 };
 
