@@ -364,10 +364,10 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
   return (
     <>
       <span
-        className={isResolved ? 'clickable-path-segment' : undefined}
+        className={isResolved ? 'clickable-path-segment' : canResolve ? 'clickable-path-can-resolve' : undefined}
         style={{
           color: isResolved ? 'var(--syn-resolved)' : (colorMap[segment.kind] ?? 'var(--text-secondary)'),
-          cursor: isResolved ? 'pointer' : undefined,
+          cursor: canResolve ? 'pointer' : undefined,
           textDecoration: isResolved ? 'underline' : undefined,
           textDecorationStyle: isResolved ? 'dotted' as const : undefined,
           textUnderlineOffset: '3px',

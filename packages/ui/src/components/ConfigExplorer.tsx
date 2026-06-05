@@ -246,6 +246,8 @@ export function ConfigExplorer() {
   const removeConfiguration = useAppStore(s => s.removeConfiguration);
   const removeAllConfigurations = useAppStore(s => s.removeAllConfigurations);
   const selectNode = useAppStore(s => s.selectNode);
+  const openTab = useAppStore(s => s.openTab);
+  const openDrillDownTab = useAppStore(s => s.openDrillDownTab);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const explorerExpandCommand = useAppStore(s => s.explorerExpandCommand);
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
@@ -257,7 +259,10 @@ export function ConfigExplorer() {
   const [isDragging, setIsDragging] = useState(false);
   const [kindFilter, setKindFilter] = useState<Set<ConfigKind>>(new Set(['DataModel', 'ModelMapping', 'Format']));
   const [sortMode, setSortMode] = useState<SortMode>('loadOrder');
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<ConfigKind>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<ConfigKind>>(
+    () => new Set<ConfigKind>(['ModelMapping', 'Format']),
+  );
+  const [hierarchyView, setHierarchyView] = useState(false);
 
   const toggleKind = useCallback((kind: ConfigKind) => {
     setKindFilter(prev => {
@@ -314,6 +319,50 @@ export function ConfigExplorer() {
     setExpandMode(explorerExpandCommand.mode);
     setExpandVersion(version => version + 1);
   }, [explorerExpandCommand]);
+
+  const openNodeInConfigTab = useCallback((node: TreeNode) => {
+    if (node.configIndex == null) return;
+    const cfg = configurations[node.configIndex];
+    if (!cfg) return;
+    openTab(`cfg-${node.configIndex}`, cfg.solutionVersion.solution.name, node.configIndex);
+    selectNode(node.id);
+  }, [configurations, openTab, selectNode]);
+
+  const resolveNodeDrillExpression = useCallback((node: TreeNode): string | undefined => {
+    if (node.type === 'binding' || node.type === 'formatBinding' || node.type === 'transformation') {
+      return node.data?.expressionAsString?.trim() || undefined;
+    }
+    if (node.type === 'datasource') {
+      return node.data?.calculatedField?.expressionAsString?.trim()
+        || node.data?.userParamInfo?.expressionAsString?.trim()
+        || undefined;
+    }
+    if (node.type === 'validation') {
+      return node.data?.conditions?.[0]?.conditionExpressionAsString?.trim()
+        || node.data?.conditions?.[0]?.messageExpressionAsString?.trim()
+        || undefined;
+    }
+    return undefined;
+  }, []);
+
+  const handleExplorerDoubleClick = useCallback((node: TreeNode) => {
+    if (node.type === 'file') {
+      navigateToTreeNode(node.id);
+      return;
+    }
+
+    const expression = resolveNodeDrillExpression(node);
+    if (expression && node.configIndex != null) {
+      openDrillDownTab(expression, node.configIndex, node.name);
+      selectNode(node.id);
+      return;
+    }
+
+    if (node.configIndex != null) {
+      openNodeInConfigTab(node);
+    }
+  }, [navigateToTreeNode, openDrillDownTab, openNodeInConfigTab, resolveNodeDrillExpression, selectNode]);
+
   const filteredTreeNodes = useMemo(() => filterTreeNodes(treeNodes, filterQuery), [treeNodes, filterQuery]);
   const selectedPathIds = useMemo(() => collectAncestorIds(treeNodes, selectedNodeId), [treeNodes, selectedNodeId]);
 
@@ -349,16 +398,9 @@ export function ConfigExplorer() {
     }
 
     return (['DataModel', 'ModelMapping', 'Format'] as const)
-      .map(kind => ({ kind, nodes: sortNodes(groups.get(kind) ?? []) }))
-      .filter(group => group.nodes.length > 0);
+      .filter(kind => kindFilter.has(kind))
+      .map(kind => ({ kind, nodes: sortNodes(groups.get(kind) ?? []) }));
   }, [filteredTreeNodes, kindFilter, sortNodes]);
-
-  // Model-centric hierarchy (used when DataModel configs are loaded).
-  const hasModels = configurations.some(c => c.content.kind === 'DataModel');
-  const modelGroups = useMemo(
-    () => buildExplorerModelGroups(configurations),
-    [configurations],
-  );
   // Fast lookup: which top-level node IDs pass the search filter.
   const filteredNodeIds = useMemo(
     () => new Set(filteredTreeNodes.map(n => n.id)),
@@ -531,6 +573,14 @@ export function ConfigExplorer() {
             icon={<DocumentFilled />}
           />
           <div className="explorer-chip-actions">
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={hierarchyView ? <TextCollapseRegular /> : <TextExpandRegular />}
+              aria-label={hierarchyView ? (locale === 'cs' ? 'Přepnout na plochý seznam' : 'Switch to flat list') : (locale === 'cs' ? 'Přepnout na hierarchii' : 'Switch to hierarchy')}
+              title={hierarchyView ? (locale === 'cs' ? 'Zobrazení: Hierarchie (klikni pro plochý)' : 'View: Hierarchy (click for flat)') : (locale === 'cs' ? 'Zobrazení: Plochý seznam (klikni pro hierarchii)' : 'View: Flat list (click for hierarchy)')}
+              onClick={() => setHierarchyView(v => !v)}
+            />
             <Menu>
               <MenuTrigger disableButtonEnhancement>
                 <Button
@@ -592,130 +642,137 @@ export function ConfigExplorer() {
         <div className="explorer-empty-state">
           <p>{t.noResults}</p>
         </div>
-      ) : hasModels ? (
-        // ── Hierarchical model view ──────────────────────────────────────
-        <>
-          {modelGroups.roots.map(group => (
-            <ModelGroupSection
-              key={group.configIdx}
-              group={group}
-              depth={0}
-              configurations={configurations}
-              treeNodes={treeNodes}
-              filteredNodeIds={filteredNodeIds}
-              kindFilter={kindFilter}
-              selectedNodeId={selectedNodeId}
-              selectedPathIds={selectedPathIds}
-              showTechnicalDetails={showTechnicalDetails}
-              expandMode={expandMode}
-              expandVersion={expandVersion}
-              onSelect={selectNode}
-              onNavigate={navigateToTreeNode}
-              onRemove={removeConfiguration}
-            />
-          ))}
-          {modelGroups.orphans
-            .filter(idx => kindFilter.has(configurations[idx]?.content.kind as ConfigKind))
-            .filter(idx => filteredNodeIds.has(treeNodes[idx]?.id ?? ''))
-            .map(idx => {
-              const node = treeNodes[idx];
+      ) : hierarchyView ? (
+        <div className="explorer-sections explorer-hierarchy-view" role="tree" aria-label={t.configurations}>
+          {(() => {
+            const { roots, orphans } = buildExplorerModelGroups(configurations);
+            const sharedProps = {
+              configurations,
+              treeNodes,
+              filteredNodeIds,
+              kindFilter,
+              selectedNodeId,
+              selectedPathIds,
+              showTechnicalDetails,
+              expandMode,
+              expandVersion,
+              onSelect: selectNode,
+              onNavigate: navigateToTreeNode,
+              onDoubleClick: handleExplorerDoubleClick,
+              onRemove: removeConfiguration,
+            };
+            const hasAnyRootVisible = roots.some(r => {
+              const modelNode = treeNodes[r.configIdx];
+              if (!modelNode) return false;
+              if (kindFilter.has('DataModel') && filteredNodeIds.has(modelNode.id)) return true;
+              return r.children.some(idx => {
+                const cfg = configurations[idx];
+                return cfg && kindFilter.has(cfg.content.kind as ConfigKind) && filteredNodeIds.has(treeNodes[idx]?.id ?? '');
+              });
+            });
+            const hasOrphans = orphans.some(idx => {
               const cfg = configurations[idx];
-              return (
-                <TreeNodeRow
-                  key={node.id}
-                  node={node}
-                  depth={0}
-                  selectedId={selectedNodeId}
-                  selectedPathIds={selectedPathIds}
-                  showTechnicalDetails={showTechnicalDetails}
-                  version={getBestVersion(cfg)}
-                  onSelect={selectNode}
-                  onNavigate={navigateToTreeNode}
-                  expandMode={expandMode}
-                  expandVersion={expandVersion}
-                  onDoubleClick={n => { if (n.configIndex != null) navigateToTreeNode(n.id); }}
-                  onCloseConfiguration={n => { if (n.configIndex != null) removeConfiguration(n.configIndex); }}
-                />
-              );
-            })}
-        </>
-      ) : groupedTreeNodes.length > 0 ? groupedTreeNodes.map(group => {
-          const isCollapsed = collapsedGroups.has(group.kind);
-          return (
-            <div key={group.kind} className={`explorer-kind-group ${getExplorerGroupAccent(group.kind)} ${isCollapsed ? 'collapsed' : ''}`}>
-              <button
-                type="button"
-                className="explorer-kind-group-header explorer-kind-group-header-btn"
-                onClick={() => toggleGroup(group.kind)}
-                aria-expanded={!isCollapsed}
-              >
-                <span className="explorer-kind-group-header-left">
-                  <span className="explorer-kind-group-chevron" aria-hidden="true">
-                    {isCollapsed ? <ChevronRightRegular /> : <ChevronDownRegular />}
+              return cfg && kindFilter.has(cfg.content.kind as ConfigKind) && filteredNodeIds.has(treeNodes[idx]?.id ?? '');
+            });
+            if (!hasAnyRootVisible && !hasOrphans) {
+              return <div className="explorer-empty-state"><p>{t.noResults}</p></div>;
+            }
+            return (
+              <>
+                {roots.map(group => (
+                  <ModelGroupSection key={group.configIdx} group={group} depth={0} {...sharedProps} />
+                ))}
+                {hasOrphans && (
+                  <div className="explorer-orphan-section">
+                    <div className="explorer-orphan-header">
+                      {locale === 'cs' ? 'Nepřiřazeno' : 'Unlinked'}
+                    </div>
+                    {orphans.map(idx => {
+                      const node = treeNodes[idx];
+                      const cfg = configurations[idx];
+                      if (!node || !cfg) return null;
+                      if (!kindFilter.has(cfg.content.kind as ConfigKind)) return null;
+                      if (!filteredNodeIds.has(node.id)) return null;
+                      return (
+                        <TreeNodeRow
+                          key={node.id}
+                          node={node}
+                          depth={0}
+                          selectedId={selectedNodeId}
+                          selectedPathIds={selectedPathIds}
+                          showTechnicalDetails={showTechnicalDetails}
+                          version={getBestVersion(cfg)}
+                          onSelect={selectNode}
+                          onNavigate={navigateToTreeNode}
+                          expandMode={expandMode}
+                          expandVersion={expandVersion}
+                          onDoubleClick={handleExplorerDoubleClick}
+                          onCloseConfiguration={(n) => { if (n.configIndex != null) removeConfiguration(n.configIndex); }}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      ) : (
+        <div className="explorer-sections" role="tree" aria-label={t.configurations}>
+          {groupedTreeNodes.map(group => {
+            const isCollapsed = !isFiltering && collapsedGroups.has(group.kind);
+            return (
+              <div key={group.kind} className={`explorer-kind-group ${getExplorerGroupAccent(group.kind)} ${isCollapsed ? 'collapsed' : ''}`}>
+                <button
+                  type="button"
+                  className="explorer-kind-group-header explorer-kind-group-header-btn"
+                  onClick={() => toggleGroup(group.kind)}
+                  aria-expanded={!isCollapsed}
+                >
+                  <span className="explorer-kind-group-header-left">
+                    <span className="explorer-kind-group-chevron" aria-hidden="true">
+                      {isCollapsed ? <ChevronRightRegular /> : <ChevronDownRegular />}
+                    </span>
+                    {getExplorerGroupLabel(group.kind)}
                   </span>
-                  {getExplorerGroupLabel(group.kind)}
-                </span>
-                <span className="explorer-kind-group-count">{group.nodes.length}</span>
-              </button>
-              {!isCollapsed && (
-                <div className="explorer-kind-group-body">
-                  {group.nodes.map(node => {
-                    const cfg = node.configIndex != null ? configurations[node.configIndex] : undefined;
-                    const version = getBestVersion(cfg);
-                    return (
-                      <TreeNodeRow
-                        key={node.id}
-                        node={node}
-                        depth={0}
-                        selectedId={selectedNodeId}
-                        selectedPathIds={selectedPathIds}
-                        showTechnicalDetails={showTechnicalDetails}
-                        version={version}
-                        onSelect={selectNode}
-                        onNavigate={navigateToTreeNode}
-                        expandMode={expandMode}
-                        expandVersion={expandVersion}
-                        onDoubleClick={(n) => {
-                          if (n.configIndex != null) {
-                            navigateToTreeNode(n.id);
-                          }
-                        }}
-                        onCloseConfiguration={(n) => {
-                          if (n.configIndex != null) {
-                            removeConfiguration(n.configIndex);
-                          }
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        }) : filteredTreeNodes.map(node => (
-          <TreeNodeRow
-            key={node.id}
-            node={node}
-            depth={0}
-            selectedId={selectedNodeId}
-            selectedPathIds={selectedPathIds}
-            showTechnicalDetails={showTechnicalDetails}
-            onSelect={selectNode}
-            onNavigate={navigateToTreeNode}
-            expandMode={expandMode}
-            expandVersion={expandVersion}
-            onDoubleClick={(n) => {
-              if (n.configIndex != null) {
-                navigateToTreeNode(n.id);
-              }
-            }}
-            onCloseConfiguration={(n) => {
-              if (n.configIndex != null) {
-                removeConfiguration(n.configIndex);
-              }
-            }}
-          />
-        ))}
+                  <span className="explorer-kind-group-count">{group.nodes.length}</span>
+                </button>
+                {!isCollapsed && (
+                  <div className="explorer-kind-group-body">
+                    {group.nodes.length === 0 ? (
+                      <div className="explorer-kind-group-empty">{t.noResults}</div>
+                    ) : group.nodes.map(node => {
+                      const cfg = node.configIndex != null ? configurations[node.configIndex] : undefined;
+                      const version = getBestVersion(cfg);
+                      return (
+                        <TreeNodeRow
+                          key={node.id}
+                          node={node}
+                          depth={0}
+                          selectedId={selectedNodeId}
+                          selectedPathIds={selectedPathIds}
+                          showTechnicalDetails={showTechnicalDetails}
+                          version={version}
+                          onSelect={selectNode}
+                          onNavigate={navigateToTreeNode}
+                          expandMode={expandMode}
+                          expandVersion={expandVersion}
+                          onDoubleClick={handleExplorerDoubleClick}
+                          onCloseConfiguration={(n) => {
+                            if (n.configIndex != null) {
+                              removeConfiguration(n.configIndex);
+                            }
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -782,7 +839,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
         )}
         <span className="icon">{node.icon}</span>
         <span className="tree-node-label">{node.name}</span>
-        {version != null && version !== '' && depth === 0 && (
+        {version != null && version !== '' && node.type === 'file' && (
           <span className="tree-node-version-pill" title={`v${version}`}>v{version}</span>
         )}
         {kindLabel && <span className="tree-node-kind-pill">{kindLabel}</span>}
@@ -888,6 +945,7 @@ interface ModelGroupSectionProps {
   expandVersion: number;
   onSelect: (id: string) => void;
   onNavigate: (id: string) => void;
+  onDoubleClick: (node: TreeNode) => void;
   onRemove: (index: number) => void;
 }
 
@@ -905,6 +963,7 @@ function ModelGroupSection({
   expandVersion,
   onSelect,
   onNavigate,
+  onDoubleClick,
   onRemove,
 }: ModelGroupSectionProps) {
   const modelNode = treeNodes[group.configIdx];
@@ -936,7 +995,7 @@ function ModelGroupSection({
       onNavigate,
       expandMode,
       expandVersion,
-      onDoubleClick: (n: TreeNode) => { if (n.configIndex != null) onNavigate(n.id); },
+      onDoubleClick,
       onCloseConfiguration: (n: TreeNode) => { if (n.configIndex != null) onRemove(n.configIndex); },
     };
   };
@@ -984,6 +1043,7 @@ function ModelGroupSection({
               expandVersion={expandVersion}
               onSelect={onSelect}
               onNavigate={onNavigate}
+              onDoubleClick={onDoubleClick}
               onRemove={onRemove}
             />
           ))}

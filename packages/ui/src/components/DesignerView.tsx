@@ -8,6 +8,12 @@ import {
   type Edge,
   Position,
 } from '@xyflow/react';
+import {
+  AppsListDetailRegular,
+  ArrowEnterRegular,
+  CursorHoverRegular,
+  DataPieRegular,
+} from '@fluentui/react-icons';
 import '@xyflow/react/dist/style.css';
 import { useAppStore, resolveDeepExpression } from '../state/store';
 import type { DeepResolutionResult } from '../state/store';
@@ -37,10 +43,31 @@ export function DesignerView() {
 
   if (!activeTabId) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>📐</div>
-          <div style={{ fontSize: 14 }}>{t.openInExplorer}</div>
+      <div className="designer-empty-state">
+        <div className="designer-empty-card" role="region" aria-live="polite">
+          <div className="designer-empty-card__header">
+            <div className="designer-empty-card__icon" aria-hidden>
+              <DataPieRegular fontSize={20} />
+            </div>
+            <div className="designer-empty-card__titles">
+              <div className="designer-empty-card__eyebrow">Designer Workspace</div>
+              <h2 className="designer-empty-card__title">{t.noSelection}</h2>
+            </div>
+          </div>
+
+          <p className="designer-empty-card__text">{t.selectElementHint}</p>
+
+          <div className="designer-empty-card__steps" aria-label={t.openInExplorer}>
+            <div className="designer-empty-step">
+              <span className="designer-empty-step__icon" aria-hidden><AppsListDetailRegular fontSize={14} /></span>
+              <span className="designer-empty-step__text">{t.explorer}</span>
+            </div>
+            <span className="designer-empty-step__arrow" aria-hidden><ArrowEnterRegular fontSize={12} /></span>
+            <div className="designer-empty-step">
+              <span className="designer-empty-step__icon" aria-hidden><CursorHoverRegular fontSize={14} /></span>
+              <span className="designer-empty-step__text">{t.openInExplorer}</span>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -928,11 +955,13 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const configurations = useAppStore(s => s.configurations);
 
   const [filter, setFilter] = useState('');
-  const [view, setView] = useState<'structure' | 'bindings' | 'datasources' | 'preview'>('structure');
+  const [view, setView] = useState<'structure' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping'>('structure');
   const [density, setDensity] = useState<DensityMode>('comfortable');
   const [structureExpandMode, setStructureExpandMode] = useState<'all' | 'none'>('all');
   const [structureExpandVersion, setStructureExpandVersion] = useState(0);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [selectedEmbeddedMappingIdx, setSelectedEmbeddedMappingIdx] = useState(0);
+  const [structureBindingFilter, setStructureBindingFilter] = useState<'all' | 'bound' | 'unbound'>('all');
 
   // For import formats: find all loaded standalone ModelMapping configs that reference this format
   const linkedMappings = useMemo(() => {
@@ -1122,7 +1151,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const bindingsLabel = showTechnicalDetails ? t.bindings : t.lightBindings;
   const dataSourcesLabel = showTechnicalDetails ? t.dataSources : t.lightDataSources;
   const groupCountLabel = locale === 'cs' ? (showTechnicalDetails ? 'typů' : 'skupin') : (showTechnicalDetails ? 'types' : 'groups');
-  const currentViewLabel = view === 'structure' ? t.structure : view === 'bindings' ? bindingsLabel : view === 'preview' ? t.previewLabel : dataSourcesLabel;
+  const currentViewLabel = view === 'structure' ? t.structure : view === 'bindings' ? bindingsLabel : view === 'preview' ? t.previewLabel : view === 'embedded-mapping' ? (locale === 'cs' ? 'Mapování' : 'Mapping') : dataSourcesLabel;
   const currentFocusLabel = selectedElement?.name ?? focusNode?.name ?? fmt.name;
 
   return (
@@ -1176,6 +1205,12 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
               key={v}
               onClick={() => setView(v)}
               className={`fmt-tab-btn ${view === v ? 'active' : ''}`}
+              title={
+                v === 'structure' ? (locale === 'cs' ? 'Hierarchická struktura prvků formátu s vazbami na datový model' : 'Hierarchical structure of format elements with data model bindings')
+                : v === 'bindings' ? (locale === 'cs' ? 'Přehled všech vazeb výrazů — co z datového modelu se kam mapuje' : 'Overview of all expression bindings — what maps from data model to where')
+                : v === 'datasources' ? (locale === 'cs' ? 'Datové zdroje mapování — tabulky, výčty, třídy a vypočítaná pole' : 'Mapping data sources — tables, enums, classes and calculated fields')
+                : (locale === 'cs' ? 'Náhled generovaného výstupu ve správném formátu' : 'Preview of generated output in the correct format')
+              }
             >
               {v === 'structure' ? `${t.structure} (${stats.totalElements})` :
                v === 'bindings' ? `${bindingsLabel} (${groupedBindingsByType.length} ${groupCountLabel})` :
@@ -1183,6 +1218,16 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
                `${dataSourcesLabel} (${stats.datasources})`}
             </button>
           ))}
+          {fc.embeddedModelMappingVersions.length > 0 && (
+            <button
+              key="embedded-mapping"
+              onClick={() => setView('embedded-mapping')}
+              className={`fmt-tab-btn ${view === 'embedded-mapping' ? 'active' : ''}`}
+              title={locale === 'cs' ? 'Mapování modelu zabudované přímo v importním formátu' : 'Model mapping embedded directly in the import format'}
+            >
+              {locale === 'cs' ? 'Mapování' : 'Mapping'} ({fc.embeddedModelMappingVersions.length})
+            </button>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
           {(view === 'structure' || view === 'bindings') && (
@@ -1256,6 +1301,25 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
         </div>
       </div>
 
+      {/* ── Structure binding filter chips ── */}
+      {view === 'structure' && (
+        <div className="fmt-structure-filter-row">
+          <span className="fmt-structure-filter-label">{locale === 'cs' ? 'Zobrazit:' : 'Show:'}</span>
+          {(['all', 'bound', 'unbound'] as const).map(f => (
+            <button
+              key={f}
+              type="button"
+              className={`fmt-structure-filter-chip ${structureBindingFilter === f ? 'active' : ''}`}
+              onClick={() => setStructureBindingFilter(f)}
+            >
+              {f === 'all' ? (locale === 'cs' ? 'Vše' : 'All') :
+               f === 'bound' ? (locale === 'cs' ? 'Svázané' : 'Bound') :
+               (locale === 'cs' ? 'Nesvázané' : 'Unbound')}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── Main Content ── */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left: tree / list */}
@@ -1275,7 +1339,32 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
               resolveDatasource={resolveDatasource}
               registry={registry}
               showTechnicalDetails={showTechnicalDetails}
+              bindingFilter={structureBindingFilter}
             />
+          )}
+
+          {view === 'embedded-mapping' && fc.embeddedModelMappingVersions.length > 0 && (
+            <>
+              {fc.embeddedModelMappingVersions.length > 1 && (
+                <div style={{ display: 'flex', gap: 4, padding: '4px 8px', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
+                  {fc.embeddedModelMappingVersions.map((emv, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className={`fmt-tab-btn ${selectedEmbeddedMappingIdx === idx ? 'active' : ''}`}
+                      onClick={() => setSelectedEmbeddedMappingIdx(idx)}
+                    >
+                      {emv.mapping.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <MappingDesigner
+                mapping={fc.embeddedModelMappingVersions[selectedEmbeddedMappingIdx].mapping}
+                configIndex={configIndex}
+                focusNode={null}
+              />
+            </>
           )}
 
           {view === 'bindings' && (
@@ -2670,9 +2759,10 @@ interface FormatElementTreeProps {
   resolveDatasource: (name: string, ci: number) => any;
   registry: any;
   showTechnicalDetails: boolean;
+  bindingFilter?: 'all' | 'bound' | 'unbound';
 }
 
-function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, expandMode, expandVersion, selectedId, onSelect, resolveDatasource, registry, showTechnicalDetails }: FormatElementTreeProps) {
+function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, expandMode, expandVersion, selectedId, onSelect, resolveDatasource, registry, showTechnicalDetails, bindingFilter }: FormatElementTreeProps) {
   const [expanded, setExpanded] = useState(expandMode === 'all');
   const [hoverBinding, setHoverBinding] = useState<any | null>(null);
   const labels = useAppStore(s => s.configurations[configIndex]?.solutionVersion?.solution?.labels);
@@ -2713,8 +2803,6 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
     return check(element);
   }, [filter, element, bindingMap]);
 
-  if (filter && !matchesFilter && !descendantMatches) return null;
-
   const isSelected = selectedId === element.id;
 
   const rowRef = React.useRef<HTMLDivElement>(null);
@@ -2725,6 +2813,28 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
       rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }, [isSelected]);
+
+  if (filter && !matchesFilter && !descendantMatches) return null;
+
+  // Binding filter
+  if (bindingFilter && bindingFilter !== 'all') {
+    const hasBound = bindings.some(b => b.bindingCategory === 'data');
+    if (bindingFilter === 'bound' && !hasBound) {
+      // Still show if it has children (structural container)
+      if (!hasChildren) return null;
+      // Check if any descendant is bound
+      const descendantBound = (el: any): boolean => {
+        const elBs = bindingMap.get(el.id) ?? [];
+        if (elBs.some((b: any) => b.bindingCategory === 'data')) return true;
+        return el.children?.some(descendantBound) ?? false;
+      };
+      if (!descendantBound(element)) return null;
+    }
+    if (bindingFilter === 'unbound') {
+      const hasBoundUnbound = bindings.some(b => b.bindingCategory === 'data');
+      if (hasBoundUnbound) return null;
+    }
+  }
 
   return (
     <div>
@@ -2863,6 +2973,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
           resolveDatasource={resolveDatasource}
           registry={registry}
           showTechnicalDetails={showTechnicalDetails}
+          bindingFilter={bindingFilter}
         />
       ))}
     </div>
@@ -3340,6 +3451,7 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode }: {
 }) {
   const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const triggerWhereUsed = useAppStore(s => s.triggerWhereUsed);
   const [expanded, setExpanded] = useState(false);
   const groupByFields = ds.groupByInfo?.groupedFields ?? [];
   const aggregatedFields = ds.groupByInfo?.aggregations ?? [];
@@ -3402,6 +3514,14 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode }: {
               {ds.children.length} <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
             </span>
           )}
+          <button
+            type="button"
+            className="ds-row-where-used"
+            onClick={e => { e.stopPropagation(); triggerWhereUsed(ds.name); }}
+            title={locale === 'cs' ? 'Kde je použito' : 'Where used'}
+          >
+            🔍
+          </button>
         </div>
         {/* Line 2: target reference */}
         {targetLabel && (

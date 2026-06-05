@@ -4,7 +4,8 @@ import { ClickablePath } from './ClickablePath';
 import { ERDirection, type ERFieldType } from '@er-visualizer/core';
 import { getEnumTypeLabel } from '../utils/enum-display';
 import { resolveLabel } from '../utils/label-resolver';
-import { t } from '../i18n';
+import { t, locale } from '../i18n';
+import { AppsListDetailRegular, CursorHoverRegular } from '@fluentui/react-icons';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -61,8 +62,33 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
   if (!node) {
     return (
       <div className="property-empty property-empty-card">
+        <div className="property-empty-icon-stack" aria-hidden>
+          <AppsListDetailRegular fontSize={28} style={{ opacity: 0.3 }} />
+          <CursorHoverRegular fontSize={14} style={{ position: 'absolute', right: 6, bottom: 2, opacity: 0.5 }} />
+        </div>
         <div className="property-empty-title">{t.noSelection}</div>
-        <div>{t.selectElementHint}</div>
+        <div className="property-empty-hint">{t.selectElementHint}</div>
+        <div className="property-empty-tips">
+          <div className="property-empty-tip">
+            <span className="property-empty-tip-key">Ctrl+F</span>
+            <span className="property-empty-tip-label">{locale === 'cs' ? 'Hledat & Where-Used' : 'Search & Where-Used'}</span>
+          </div>
+          <div className="property-empty-tip">
+            <span className="property-empty-tip-key">Ctrl+B</span>
+            <span className="property-empty-tip-label">{locale === 'cs' ? 'Průzkumník konfigurací' : 'Config Explorer'}</span>
+          </div>
+          <div className="property-empty-tip">
+            <span className="property-empty-tip-key">Ctrl+K</span>
+            <span className="property-empty-tip-label">{locale === 'cs' ? 'Příkazová paleta' : 'Command Palette'}</span>
+          </div>
+          <div className="property-empty-tip" style={{ marginTop: 8, borderTop: '1px solid rgba(128,128,128,0.2)', paddingTop: 8 }}>
+            <span style={{ fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              {locale === 'cs'
+                ? '💡 Klikni na prvek ve stromě vlevo. U vazebných výrazů (model.xxx) klikni přímo na text výrazu pro drill-down analýzu datového zdroje.'
+                : '💡 Click an element in the tree on the left. For binding expressions (model.xxx) click directly on the expression text for drill-down data source analysis.'}
+            </span>
+          </div>
+        </div>
       </div>
     );
   }

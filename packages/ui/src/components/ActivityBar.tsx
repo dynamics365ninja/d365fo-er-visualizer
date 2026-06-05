@@ -1,5 +1,4 @@
 import {
-  Button,
   Tooltip,
   CounterBadge,
   makeStyles,
@@ -26,7 +25,7 @@ import { t } from '../i18n';
 interface ActivityBarProps {
   showLeft: boolean;
   showRight: boolean;
-  showSearch: boolean;
+  rightTab: 'properties' | 'search';
   onToggleLeft: () => void;
   onToggleRight: () => void;
   onToggleSearch: () => void;
@@ -42,14 +41,14 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     alignItems: 'center',
     gap: '2px',
-    width: '48px',
+    width: '56px',
     padding: '6px 0',
     backgroundColor: tokens.colorNeutralBackground3,
     borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
     flexShrink: 0,
   },
   sep: {
-    width: '28px',
+    width: '32px',
     height: '1px',
     backgroundColor: tokens.colorNeutralStroke2,
     margin: '4px 0',
@@ -64,20 +63,33 @@ const useStyles = makeStyles({
     justifyContent: 'center',
   },
   btn: {
-    minWidth: '36px',
-    height: '36px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: '44px',
+    width: '44px',
+    height: '44px',
+    padding: '4px',
     borderRadius: tokens.borderRadiusMedium,
-    transitionProperty: 'transform, background-color',
+    border: 'none',
+    backgroundColor: 'transparent',
+    color: tokens.colorNeutralForeground2,
+    cursor: 'pointer',
+    fontFamily: tokens.fontFamilyBase,
+    transitionProperty: 'transform, background-color, color',
     transitionDuration: '160ms',
     transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
     ':hover': {
-      transform: 'scale(1.08)',
+      transform: 'scale(1.06)',
+      backgroundColor: tokens.colorNeutralBackground3Hover,
+      color: tokens.colorNeutralForeground1,
     },
     ':active': {
-      transform: 'scale(0.96)',
+      transform: 'scale(0.94)',
     },
   },
   btnActive: {
+    color: tokens.colorBrandForeground1,
     backgroundColor: tokens.colorSubtleBackgroundSelected,
     position: 'relative',
     '::before': {
@@ -133,14 +145,14 @@ export function ActivityBar(props: ActivityBarProps) {
         Icon={SearchRegular}
         label={t.search}
         onClick={props.onToggleSearch}
-        active={props.showSearch}
+        active={props.showRight && props.rightTab === 'search'}
         shortcut="Ctrl+F"
       />
       <ActivityButton
         Icon={AppsListDetailRegular}
         label={t.properties}
         onClick={props.onToggleRight}
-        active={props.showRight}
+        active={props.showRight && props.rightTab === 'properties'}
         shortcut="Ctrl+J"
       />
       <ActivityButton
@@ -189,14 +201,16 @@ function ActivityButton({ Icon, label, onClick, active, shortcut, badge }: Activ
   return (
     <div className={styles.btnWrap}>
       <Tooltip content={title} relationship="label" withArrow positioning="after">
-        <Button
-          appearance="subtle"
-          icon={<Icon />}
+        <button
+          type="button"
+          title={title}
           onClick={onClick}
           aria-label={label}
           aria-pressed={active}
           className={mergeClasses(styles.btn, active && styles.btnActive)}
-        />
+        >
+          <Icon fontSize={18} />
+        </button>
       </Tooltip>
       {typeof badge === 'number' && badge > 0 && (
         <CounterBadge
