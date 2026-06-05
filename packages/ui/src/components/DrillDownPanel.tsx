@@ -53,6 +53,35 @@ interface Frame {
   label: string;           // breadcrumb label
   expression: string;      // expression being resolved
   configIndex: number;     // config index to resolve from
+  mappingExpression?: string | null;
+  mappingConfigIndex?: number | null;
+  mappingConfigName?: string | null;
+}
+
+export function getDrillDownEffectiveResolutionInput({
+  selectedExpression,
+  selectedIsModel,
+  frameConfigIndex,
+  modelBindingExpression,
+  modelBindingConfigIndex,
+}: {
+  selectedExpression: string;
+  selectedIsModel: boolean;
+  frameConfigIndex: number;
+  modelBindingExpression?: string | null;
+  modelBindingConfigIndex?: number | null;
+}): { effectiveExpr: string; effectiveCi: number } {
+  if (selectedIsModel) {
+    return {
+      effectiveExpr: modelBindingExpression ?? selectedExpression,
+      effectiveCi: modelBindingConfigIndex ?? frameConfigIndex,
+    };
+  }
+
+  return {
+    effectiveExpr: selectedExpression,
+    effectiveCi: frameConfigIndex,
+  };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -639,7 +668,6 @@ function WizardFrameView({ frame, onPush, configurations }: WizardFrameViewProps
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [selectedExpr, setSelectedExpr] = useState(frame.expression);
-  const treeItemRefs = React.useRef<Record<string, HTMLButtonElement | null>>({});
 
   React.useEffect(() => {
     setStep(1);
@@ -1107,7 +1135,6 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
         <DatasourceCard
           ds={resolvedDs}
           configIndex={effectiveCi}
-          configurations={configurations}
           onPush={onPush}
           stepNumber={showMappingStep ? 2 : 1}
         />
@@ -1125,6 +1152,10 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
     </div>
   );
 }
+
+// Keep legacy views reachable for future re-use and migration.
+const keepLegacyDrillDownViews = [ExpressionPathTree, WizardFrameView, FrameView, DatasourceCard];
+void keepLegacyDrillDownViews;
 
 function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps) {
   const resolveModelPath = useAppStore(s => s.resolveModelPath);
@@ -1155,10 +1186,7 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
       }
     }
 
-    return Array.from(unique.values()).sort((a, b) => {
-      if (a.depth !== b.depth) return a.depth - b.depth;
-      return a.label.localeCompare(b.label);
-    });
+    return Array.from(unique.values());
   }, [frame.expression, frame.label]);
 
   const selected = useMemo(
@@ -1181,18 +1209,65 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
   const cleanSelectedExpr = selectedIsModel ? extractModelPath(selected.expression) : selected.expression;
 
   const modelResult = selectedIsModel ? resolveModelPath(cleanSelectedExpr) : null;
-  const mappingExpr = modelResult?.binding?.expressionAsString ?? null;
-  const mappingCi = modelResult?.bindingConfigIndex ?? frame.configIndex;
-  const mappingConfig = modelResult ? configurations[mappingCi]?.solutionVersion?.solution?.name : null;
+  const mappingExpr = modelResult?.binding?.expressionAsString ?? frame.mappingExpression ?? null;
+  const mappingCi = modelResult?.bindingConfigIndex ?? frame.mappingConfigIndex ?? frame.configIndex;
+  const mappingConfig = modelResult
+    ? configurations[mappingCi]?.solutionVersion?.solution?.name
+    : (frame.mappingConfigName ?? (mappingExpr ? configurations[mappingCi]?.solutionVersion?.solution?.name : null));
 
-  const effectiveExpr = mappingExpr ?? selected.expression;
-  const effectiveCi = modelResult?.bindingConfigIndex ?? frame.configIndex;
+  const buildContextualFrame = React.useCallback((nextFrame: Frame): Frame => ({
+    ...nextFrame,
+    mappingExpression: mappingExpr,
+    mappingConfigIndex: mappingExpr ? mappingCi : null,
+    mappingConfigName: mappingExpr ? mappingConfig : null,
+  }), [mappingCi, mappingConfig, mappingExpr]);
+
+  const pushWithContext = React.useCallback((nextFrame: Frame) => {
+    onPush(buildContextualFrame(nextFrame));
+  }, [buildContextualFrame, onPush]);
+
+  const pushMappingToDatasource = React.useCallback((nextFrame: Frame) => {
+    const deep = resolveDeepExpression(nextFrame.expression, configurations, nextFrame.configIndex);
+    const resolvedDs = (deep?.nestedDs ?? deep?.rootDs)
+      ?? resolveDatasource(firstSegment(nextFrame.expression), nextFrame.configIndex)?.datasource
+      ?? null;
+
+    if (!resolvedDs) {
+      pushWithContext(nextFrame);
+      return;
+    }
+
+    const resolvedExpression = deep?.pathSegments?.length
+      ? deep.pathSegments.map(formatSegmentForExpression).join('.')
+      : nextFrame.expression;
+
+    pushWithContext({
+      ...nextFrame,
+      label: resolvedDs.name ?? nextFrame.label,
+      expression: resolvedExpression,
+      configIndex: deep?.rootDsConfigIndex ?? nextFrame.configIndex,
+    });
+  }, [configurations, pushWithContext, resolveDatasource]);
+
+  // Resolve datasource details from the currently selected expression.
+  // Mapping expression is shown as context, but must not override selection.
+  const { effectiveExpr, effectiveCi } = getDrillDownEffectiveResolutionInput({
+    selectedExpression: selected.expression,
+    selectedIsModel,
+    frameConfigIndex: frame.configIndex,
+    modelBindingExpression: modelResult?.binding?.expressionAsString,
+    modelBindingConfigIndex: modelResult?.bindingConfigIndex,
+  });
   const deepResult = resolveDeepExpression(effectiveExpr, configurations, effectiveCi);
   const directResult = !selectedIsModel ? resolveDatasource(firstSegment(selected.expression), frame.configIndex) : null;
   const resolvedDs = (deepResult?.nestedDs ?? deepResult?.rootDs)
     ?? modelResult?.datasource
     ?? directResult?.datasource
     ?? null;
+  const resolvedDsConfigIndex = deepResult?.rootDsConfigIndex
+    ?? modelResult?.datasourceConfigIndex
+    ?? directResult?.configIndex
+    ?? effectiveCi;
 
   const normalizeExpr = (value: string) => value.replace(/\s+/g, '').toLowerCase();
   const showMappingExpression = Boolean(mappingExpr && normalizeExpr(mappingExpr) !== normalizeExpr(selected.expression));
@@ -1219,33 +1294,57 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
     return [{ label: selected.label, expression: selected.expression }];
   }, [selected.expression, selected.label]);
 
-  const timelineItems = [
-    {
-      key: 'selected',
-      title: locale === 'cs' ? 'Vybraná část' : 'Selected part',
-      value: selected.expression,
-    },
-    ...(showMappingExpression && mappingExpr ? [{
-      key: 'mapping',
-      title: locale === 'cs' ? 'Mapování' : 'Mapping',
-      value: mappingExpr,
-    }] : []),
-    ...(resolvedDs ? [{
-      key: 'datasource',
-      title: locale === 'cs' ? 'Datový zdroj' : 'Data source',
-      value: resolvedDs.name,
-    }] : []),
-    ...(targetIsDistinct && targetName ? [{
-      key: 'target',
-      title: locale === 'cs' ? 'Cíl' : 'Target',
-      value: targetName,
-    }] : []),
-  ];
+  const datasourceDefinitionEntries = useMemo(() => {
+    if (!resolvedDs) return [] as Array<{ key: string; label: string; expression: string; kind: 'calc' | 'user-param' | 'groupby' }>;
 
-  const nextDrillExpression = resolvedDs?.calculatedField?.expressionAsString
-    ?? (showMappingExpression ? mappingExpr : null)
-    ?? null;
-  const canDive = Boolean(nextDrillExpression && normalizeExpr(nextDrillExpression) !== normalizeExpr(frame.expression));
+    const entries: Array<{ key: string; label: string; expression: string; kind: 'calc' | 'user-param' | 'groupby' }> = [];
+
+    const calcExpr = resolvedDs?.calculatedField?.expressionAsString?.trim();
+    if (calcExpr) {
+      entries.push({
+        key: 'calc-formula',
+        label: t.drillStepFormulaTitle,
+        expression: calcExpr,
+        kind: 'calc',
+      });
+    }
+
+    const userParamExpr = resolvedDs?.userParamInfo?.expressionAsString?.trim();
+    if (userParamExpr) {
+      entries.push({
+        key: 'user-param-expression',
+        label: t.drillStepUserParameterTitle,
+        expression: userParamExpr,
+        kind: 'user-param',
+      });
+    }
+
+    const groupByListExpr = resolvedDs?.groupByInfo?.listToGroup?.trim();
+    if (groupByListExpr) {
+      entries.push({
+        key: 'groupby-list',
+        label: t.drillStepGroupedListTitle,
+        expression: groupByListExpr,
+        kind: 'groupby',
+      });
+    }
+
+    if (Array.isArray(resolvedDs?.groupByInfo?.aggregations)) {
+      for (const agg of resolvedDs.groupByInfo.aggregations) {
+        const aggExpr = String(agg?.path ?? '').trim();
+        if (!aggExpr) continue;
+        const aggName = String(agg?.name ?? '').trim() || t.propValue;
+        entries.push({
+          key: `groupby-agg-${agg?.name ?? aggExpr}`,
+          label: t.drillStepAggregationTitle(aggName),
+          expression: aggExpr,
+          kind: 'groupby',
+        });
+      }
+    }
+
+    return entries;
+  }, [locale, resolvedDs]);
 
   return (
     <div className="dd-workbench">
@@ -1258,11 +1357,15 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
                 key={node.expression}
                 type="button"
                 className={`dd-workbench__tree-item${selected.expression === node.expression ? ' is-active' : ''}`}
+                data-depth={node.depth}
                 onClick={() => setSelectedExpr(node.expression)}
                 ref={(el) => {
                   treeItemRefs.current[node.expression] = el;
                 }}
-                style={{ paddingLeft: `${10 + node.depth * 14}px` }}
+                style={{
+                  paddingLeft: `${12 + node.depth * 18}px`,
+                  ['--dd-tree-depth' as string]: node.depth,
+                }}
                 title={node.expression}
               >
                 <span className="dd-workbench__tree-label">{node.label}</span>
@@ -1292,19 +1395,6 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
                 </React.Fragment>
               ))}
             </div>
-
-            <div className="dd-workbench__detail-label">{locale === 'cs' ? 'Průběh rozpadu' : 'Decomposition path'}</div>
-            <ol className="dd-workbench__timeline">
-              {timelineItems.map(item => (
-                <li key={item.key} className="dd-workbench__timeline-item">
-                  <span className="dd-workbench__timeline-dot" aria-hidden />
-                  <div className="dd-workbench__timeline-body">
-                    <div className="dd-workbench__timeline-title">{item.title}</div>
-                    <div className="dd-workbench__timeline-value">{item.value}</div>
-                  </div>
-                </li>
-              ))}
-            </ol>
           </div>
 
           {(showMappingExpression && mappingExpr || resolvedDs) && (
@@ -1315,7 +1405,7 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
                     <span>{locale === 'cs' ? 'Mapování' : 'Mapping'}</span>
                     {mappingConfig && <span className="dd-workbench__card-meta">{mappingConfig}</span>}
                   </div>
-                  <ExpressionView expr={mappingExpr} configIndex={mappingCi} onPush={onPush} currentFrameExpression={frame.expression} />
+                  <ExpressionView expr={mappingExpr} configIndex={mappingCi} onPush={pushMappingToDatasource} currentFrameExpression={selected.expression} />
                 </div>
               )}
 
@@ -1330,28 +1420,26 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
                     <div className="dd-workbench__summary-row"><span>{locale === 'cs' ? 'Typ' : 'Type'}</span><strong>{localizeDatasourceType(resolvedDs)}</strong></div>
                     {targetIsDistinct && targetName && <div className="dd-workbench__summary-row"><span>{locale === 'cs' ? 'Cíl' : 'Target'}</span><strong>{targetName}</strong></div>}
                   </div>
+                  {datasourceDefinitionEntries.map((entry) => (
+                    <div key={entry.key} className="dd-ds-formula">
+                      <div className="dd-ds-formula__label">
+                        {entry.kind === 'calc' && <CalculatorRegular fontSize={13} aria-hidden />}
+                        {entry.kind === 'user-param' && <TextQuoteRegular fontSize={13} aria-hidden />}
+                        {entry.kind === 'groupby' && <ArrowShuffleRegular fontSize={13} aria-hidden />}
+                        {entry.label}
+                      </div>
+                      <ExpressionView
+                        expr={entry.expression}
+                        configIndex={resolvedDsConfigIndex}
+                        onPush={pushWithContext}
+                        currentFrameExpression={selected.expression}
+                      />
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           )}
-
-          <div className="dd-workbench__actions">
-            <button
-              type="button"
-              className="dd-hero__btn"
-              disabled={!canDive}
-              onClick={() => {
-                if (!nextDrillExpression) return;
-                onPush({
-                  label: resolvedDs?.name ?? selected.label,
-                  expression: nextDrillExpression,
-                  configIndex: effectiveCi,
-                });
-              }}
-            >
-              {locale === 'cs' ? 'Pokračovat do hloubky' : 'Dig deeper'}
-            </button>
-          </div>
         </section>
       </div>
     </div>
@@ -1360,10 +1448,9 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
 
 // ─── Datasource Card ─────────────────────────────────────────────────────────
 
-function DatasourceCard({ ds, configIndex, configurations, onPush, stepNumber }: {
+function DatasourceCard({ ds, configIndex, onPush, stepNumber }: {
   ds: any;
   configIndex: number;
-  configurations: any[];
   onPush: (f: Frame) => void;
   stepNumber?: number;
 }) {
@@ -1812,7 +1899,13 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
       && top.label === frame.label) {
       return s;
     }
-    return [...s, frame];
+    return [...s, {
+      ...top,
+      ...frame,
+      mappingExpression: frame.mappingExpression ?? top?.mappingExpression ?? null,
+      mappingConfigIndex: frame.mappingConfigIndex ?? top?.mappingConfigIndex ?? null,
+      mappingConfigName: frame.mappingConfigName ?? top?.mappingConfigName ?? null,
+    }];
   });
   const jumpTo = (index: number) => setStack(s => s.slice(0, index + 1));
   const restart = () => setStack([initialFrame()]);
@@ -1895,19 +1988,6 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
       </header>
 
       <div className="dd-frame-content">
-        <section className="dd-rebuild__formula">
-          <div className="dd-rebuild__label">{locale === 'cs' ? 'ER výraz' : 'ER expression'}</div>
-          <div className="dd-rebuild__formula-box">
-            <ExpressionView
-              expr={currentFrame.expression}
-              configIndex={currentFrame.configIndex}
-              onPush={push}
-              currentFrameExpression={currentFrame.expression}
-            />
-          </div>
-          <div className="dd-rebuild__hint">{t.drillHintClickable}</div>
-        </section>
-
         <DrillDownRebuiltView
           frame={currentFrame}
           onPush={push}

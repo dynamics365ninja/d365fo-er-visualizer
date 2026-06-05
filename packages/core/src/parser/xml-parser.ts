@@ -10,7 +10,6 @@ import type {
   ERLabel,
   ERPrerequisites,
   ERPrerequisiteGroup,
-  ERPrerequisiteComponent,
   ERConfiguration,
   ERDataModelContent,
   ERModelMappingContent,

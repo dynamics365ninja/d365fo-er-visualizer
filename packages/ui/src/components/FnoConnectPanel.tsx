@@ -18,15 +18,11 @@ import {
   Spinner,
   Caption1,
   Caption2,
-  Title3,
   Subtitle2,
-  Body1,
   Body1Strong,
   Badge,
   Tooltip,
   Divider,
-  MessageBar,
-  MessageBarBody,
   makeStyles,
   tokens,
   shorthands,
@@ -432,8 +428,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     setSolutions, setLoadingSolutions, setSolutionFilter,
     activeSolution, solutionPath, components, loadingComponents, componentTypeFilter,
     setActiveSolution, setSolutionPath, setComponents, setLoadingComponents, setComponentTypeFilter,
-    selected, setSelected, toggleSelected,
-    rootDataModelByPath, allDataModelsSeen, dataModelChain,
+    selected, setSelected, clearSelection, toggleSelected,
+    allDataModelsSeen, dataModelChain,
     setRootDataModelByPath, setAllDataModelsSeen, setDataModelChain,
   } = useFnoSession();
 
@@ -799,8 +795,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     }
     setSelected(next);
   }, [filteredComponents, isComponentDownloadable, selected, setSelected]);
-
-  const clearSelection = useCallback(() => setSelected(new Map()), [setSelected]);
 
   const handleLoadSelected = useCallback(async () => {
     if (!activeProfile) return;

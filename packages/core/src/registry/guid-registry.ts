@@ -1,9 +1,9 @@
 // GUID Registry: Maps GUIDs to their owning components for cross-reference lookup
 import { ERComponentKind } from '../types/common.js';
 import type { ERConfiguration } from '../types/common.js';
-import type { ERDataContainerDescriptor, ERDataContainerItem } from '../types/model.js';
+import type { ERDataContainerDescriptor } from '../types/model.js';
 import type { ERDatasource, ERBinding, ERValidation } from '../types/mapping.js';
-import type { ERFormatElement, ERFormatBinding, ERFormatEnumDefinition } from '../types/format.js';
+import type { ERFormatElement, ERFormatBinding } from '../types/format.js';
 
 export interface GUIDEntry {
   guid: string;
@@ -133,7 +133,7 @@ export class GUIDRegistry {
         componentKind: ck,
       });
       for (const container of c.version.model.containers) {
-        this.indexContainer(container, fp, ck);
+        this.indexContainer(container, fp);
       }
     }
 
@@ -155,9 +155,9 @@ export class GUIDRegistry {
         sourceContext: 'Model mapping references data model',
       });
 
-      this.indexDatasources(c.version.mapping.datasources, fp, ck, c.version.mapping.name);
+      this.indexDatasources(c.version.mapping.datasources, fp);
       this.indexBindings(c.version.mapping.bindings, fp, c.version.mapping.name);
-      this.indexValidations(c.version.mapping.validations, fp, c.version.mapping.name);
+      this.indexValidations(c.version.mapping.validations, fp);
     }
 
     if (c.kind === 'Format') {
@@ -187,7 +187,7 @@ export class GUIDRegistry {
 
       this.indexFormatElement(c.formatVersion.format.rootElement, fp, ck);
       this.indexFormatBindings(c.formatMappingVersion.formatMapping.bindings, fp, c.formatVersion.format.name);
-      this.indexDatasources(c.formatMappingVersion.formatMapping.datasources, fp, ck, c.formatVersion.format.name);
+      this.indexDatasources(c.formatMappingVersion.formatMapping.datasources, fp);
 
       for (const enumDef of c.formatVersion.format.enumDefinitions) {
         this.register({
@@ -211,7 +211,7 @@ export class GUIDRegistry {
     }
   }
 
-  private indexContainer(container: ERDataContainerDescriptor, fp: string, ck: ERComponentKind): void {
+  private indexContainer(container: ERDataContainerDescriptor, fp: string): void {
     for (const item of container.items) {
       if (item.typeDescriptor) {
         this.addCrossRef({
@@ -225,7 +225,7 @@ export class GUIDRegistry {
     }
   }
 
-  private indexDatasources(datasources: ERDatasource[], fp: string, ck: ERComponentKind, parentName: string): void {
+  private indexDatasources(datasources: ERDatasource[], fp: string): void {
     for (const ds of datasources) {
       if (ds.tableInfo) {
         this.addCrossRef({
@@ -276,7 +276,7 @@ export class GUIDRegistry {
         this.indexExpressionString(ds.calculatedField.expressionAsString, fp, ds.name, 'Calculated field expression');
       }
       if (ds.children.length > 0) {
-        this.indexDatasources(ds.children, fp, ck, ds.name);
+        this.indexDatasources(ds.children, fp);
       }
     }
   }
@@ -307,7 +307,7 @@ export class GUIDRegistry {
     }
   }
 
-  private indexValidations(validations: ERValidation[], fp: string, parentName: string): void {
+  private indexValidations(validations: ERValidation[], fp: string): void {
     for (const v of validations) {
       for (const rule of v.conditions) {
         this.register({

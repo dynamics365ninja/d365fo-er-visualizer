@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAppStore } from '../state/store';
 import { ClickablePath } from './ClickablePath';
-import { ERDirection, type ERFieldType } from '@er-visualizer/core';
+import { ERDirection } from '@er-visualizer/core';
 import { getEnumTypeLabel } from '../utils/enum-display';
 import { resolveLabel } from '../utils/label-resolver';
 import { t, locale } from '../i18n';

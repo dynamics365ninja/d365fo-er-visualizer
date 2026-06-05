@@ -1,16 +1,57 @@
+import { useSyncExternalStore } from 'react';
+
 // ─── Internationalisation ───────────────────────────────────────────────────
 // Detects OS/browser locale and returns the correct translation dict.
 // Supported: cs (Czech), en (English, default)
 
 export type Locale = 'cs' | 'en';
 
+const LOCALE_STORAGE_KEY = 'er-visualizer.locale';
+
 function detectLocale(): Locale {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+      if (stored === 'cs' || stored === 'en') return stored;
+    } catch {
+      // Ignore storage failures and fall back to browser locale.
+    }
+  }
   const lang =
     (typeof navigator !== 'undefined' ? navigator.language : undefined) ?? 'en';
   return lang.toLowerCase().startsWith('cs') ? 'cs' : 'en';
 }
 
-export const locale: Locale = detectLocale();
+const listeners = new Set<() => void>();
+
+export let locale: Locale = detectLocale();
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function getLocale(): Locale {
+  return locale;
+}
+
+export function setLocale(nextLocale: Locale): void {
+  if (locale === nextLocale) return;
+  locale = nextLocale;
+  t = locale === 'cs' ? cs : en;
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale);
+    } catch {
+      // Ignore storage failures and keep in-memory state only.
+    }
+  }
+  listeners.forEach(listener => listener());
+}
+
+export function useLocale(): Locale {
+  return useSyncExternalStore(subscribe, getLocale, getLocale);
+}
 
 // ─── Translations type ────────────────────────────────────────────────────
 
@@ -18,6 +59,9 @@ export interface Translations {
   // App shell
   appName: string;
   appSubtitle: string;
+  language: string;
+  languageCzech: string;
+  languageEnglish: string;
   home: string;
   loadXml: string;
   searchPlaceholder: string;
@@ -123,6 +167,9 @@ export interface Translations {
   drillStepDatasourceTitle: string;
   drillStepDepsTitle: string;
   drillStepFormulaTitle: string;
+  drillStepUserParameterTitle: string;
+  drillStepGroupedListTitle: string;
+  drillStepAggregationTitle: (name: string) => string;
   drillStepChildrenTitle: string;
   drillRestart: string;
   drillPopOut: string;
@@ -430,6 +477,9 @@ const cs: Translations = {
   // App shell
   appName: 'ER Visualizer',
   appSubtitle: 'D365 FO · Electronic Reporting',
+  language: 'Jazyk',
+  languageCzech: 'Čeština',
+  languageEnglish: 'Angličtina',
   home: 'Domů',
   loadXml: 'Načíst XML',
   searchPlaceholder: 'Název tabulky, pole, cesty…',
@@ -462,7 +512,7 @@ const cs: Translations = {
   expand: 'Rozbalit vše',
   filter: 'Filtrovat…',
   structure: 'Struktura',
-  bindings: 'Binding',
+  bindings: 'Vazby',
   dataSources: 'Datové zdroje',
   lightBindings: 'Napojení',
   lightDataSources: 'Zdroje dat',
@@ -537,6 +587,9 @@ const cs: Translations = {
   drillStepDatasourceTitle: 'Odkud se bere hodnota',
   drillStepDepsTitle: 'Co hodnotu ovlivňuje',
   drillStepFormulaTitle: 'Výpočet hodnoty — klikni pro další rozpad',
+  drillStepUserParameterTitle: 'Výraz parametru',
+  drillStepGroupedListTitle: 'Seskupený seznam',
+  drillStepAggregationTitle: (name: string) => `Agregace: ${name}`,
   drillStepChildrenTitle: 'Související zdroje',
   drillRestart: 'Začít znovu',
   drillPopOut: 'Otevřít v okně',
@@ -575,7 +628,7 @@ const cs: Translations = {
   // Landing page
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',
   landingTitle: 'D365FO ER Visualizer',
-  landingSub: 'Přehledné pracovní místo pro konfigurace elektronického výkaznictví: modely, mapování i formáty na jednom místě. Načti soubory z disku nebo přímo z D365 F&O serveru, sleduj vazby od výrazů ke zdrojům dat, dohledej where-used vazby a přeskakuj mezi souvisejícími soubory.',
+  landingSub: 'Přehledné pracovní místo pro ER konfigurace na jednom místě.\nNačti soubory, sleduj vazby výrazů na datové zdroje a rychle dohledávej místa použití.',
   landingStatLoaded: 'Načteno',
   landingStatRecent: 'Historie',
   landingStatTypes: 'Typy souborů',
@@ -607,7 +660,7 @@ const cs: Translations = {
   landingCardMappingFeatures: [
     'Prohlížeč vazeb: ke každé cestě v modelu vidíte zdrojový výraz',
     'Strom datových zdrojů (tabulky, třídy, vypočítaná pole …)',
-    'Drill-down workbench: výraz nahoře, vlevo strom částí, vpravo naplnění a digging do hloubky',
+    'Drill-down pracovní plocha: nahoře výraz, vlevo strom částí a vpravo rozpad vybrané části',
     'Sledování závislostí — na které tabulky a třídy se konfigurace odkazuje',
   ],
   landingCardMappingHint: 'Tax declaration model mapping.xml',
@@ -628,7 +681,7 @@ const cs: Translations = {
   landingStep2Title: 'Projdi strom konfigurace',
   landingStep2Desc: 'V levém panelu Exploreru vidíš hierarchii celé konfigurace. Kliknutím vybereš prvek, dvojklikem si otevřeš jeho vizualizaci na nové záložce.',
   landingStep3Title: 'Klikni na formuli',
-  landingStep3Desc: 'V pohledu Formát nebo Mapování klikni na výraz. V drill-down workbenchi vybírej vlevo části výrazu a vpravo sleduj jejich naplnění (mapování a datový zdroj); pokračuj diggingem až na tabulku, třídu nebo enum.',
+  landingStep3Desc: 'V pohledu Formát nebo Mapování klikni na výraz. V drill-down pracovní ploše vybírej vlevo části výrazu a vpravo sleduj jejich naplnění (mapování a datový zdroj); proklikávej se dál až na tabulku, třídu nebo enum.',
   landingStep4Title: 'Místa použití',
   landingStep4Desc: 'V panelu 🔍 Hledat zadej název tabulky, třeba „TaxTrans“, a spusť „Místa použití“. Zobrazí se všechny formátové elementy, které z této tabulky čerpají data.',
   landingFooter: 'D365 FO ER Visualizer · Electronic Reporting Configuration Inspector',
@@ -848,6 +901,9 @@ const cs: Translations = {
 };
 
 const en: Translations = {
+  language: 'Language',
+  languageCzech: 'Czech',
+  languageEnglish: 'English',
   appName: 'ER Visualizer',
   appSubtitle: 'D365 FO · Electronic Reporting',
   home: 'Home',
@@ -955,6 +1011,9 @@ const en: Translations = {
   drillStepDatasourceTitle: 'Where the value comes from',
   drillStepDepsTitle: 'What affects the value',
   drillStepFormulaTitle: 'Value calculation — click to continue',
+  drillStepUserParameterTitle: 'Parameter expression',
+  drillStepGroupedListTitle: 'Grouped list',
+  drillStepAggregationTitle: (name: string) => `Aggregation: ${name}`,
   drillStepChildrenTitle: 'Related sources',
   drillRestart: 'Restart',
   drillPopOut: 'Open in dialog',
@@ -990,7 +1049,7 @@ const en: Translations = {
   // Landing page
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',
   landingTitle: 'D365FO ER Visualizer',
-  landingSub: 'A clear workspace for Electronic Reporting configurations: data models, mappings, and formats in one place. Load files from disk or directly from a D365 F&O server, trace bindings from expressions to data sources, find where-used references, and jump across related files.',
+  landingSub: 'One focused workspace for ER data models, mappings, and formats.\nLoad files, trace expression bindings to data sources, and find where-used links fast.',
   landingStatLoaded: 'Loaded',
   landingStatRecent: 'Recent',
   landingStatTypes: 'File types',
@@ -1262,4 +1321,4 @@ const en: Translations = {
   whereUsedAction: 'Where used',
 };
 
-export const t: Translations = locale === 'cs' ? cs : en;
+export let t: Translations = locale === 'cs' ? cs : en;

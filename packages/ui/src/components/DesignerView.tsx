@@ -16,7 +16,6 @@ import {
 } from '@fluentui/react-icons';
 import '@xyflow/react/dist/style.css';
 import { useAppStore, resolveDeepExpression } from '../state/store';
-import type { DeepResolutionResult } from '../state/store';
 import { ClickablePath } from './ClickablePath';
 import { DrillDownBody, DrillDownTrigger } from './DrillDownPanel';
 import { PropertyInspector } from './PropertyInspector';
@@ -26,7 +25,7 @@ import { buildFormatBindingPresentation, groupFormatBindingsByCategory } from '.
 import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/theme-colors';
 import { ERDirection, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent, type ERFormatElement, type ERLabel } from '@er-visualizer/core';
 import { resolveLabel } from '../utils/label-resolver';
-import { parseXlsxBase64, colToLetter, type XlsxWorkbook, type XlsxSheet, type XlsxCell as XlsxCellType, type XlsxMerge } from '../utils/xlsx-parser';
+import { parseXlsxBase64, colToLetter, type XlsxWorkbook, type XlsxCell as XlsxCellType, type XlsxMerge } from '../utils/xlsx-parser';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -518,7 +517,7 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
     const nodes: Node[] = [];
     const edges: Edge[] = [];
     const containerMap = new Map(dm.containers.map(c => [c.id, c]));
-    const { positions, nodeHeight } = buildModelLayout(dm.containers);
+    const { positions } = buildModelLayout(dm.containers);
 
     dm.containers.forEach(container => {
       const pos = positions.get(container.id) ?? { x: 0, y: 0 };
@@ -729,9 +728,7 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
 
 function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; configIndex: number; focusNode: any | null }) {
   const mm = mapping;
-  const selectNode = useAppStore(s => s.selectNode);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
-  const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
   const [filter, setFilter] = useState('');
   const [view, setView] = useState<'bindings' | 'datasources'>('bindings');
   const [density, setDensity] = useState<DensityMode>('comfortable');
@@ -946,7 +943,6 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const fmt = fc.formatVersion.format;
   const fmtMap = fc.formatMappingVersion.formatMapping;
   const rootElement = fmt.rootElement;
-  const selectNode = useAppStore(s => s.selectNode);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
   const registry = useAppStore(s => s.registry);
@@ -2276,7 +2272,7 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
           {/* Loose cells at sheet level */}
           {sheet.cells.length > 0 && (
             <div style={{ borderBottom: `1px solid ${excelColors.cellBorder}` }}>
-              <ExcelCellGrid cells={sheet.cells} label={null} onCellClick={setSelectedCell} selectedCell={selectedCell} />
+              <ExcelCellGrid cells={sheet.cells} onCellClick={setSelectedCell} selectedCell={selectedCell} />
             </div>
           )}
 
@@ -2369,7 +2365,7 @@ function ExcelSectionBlock({ section, onCellClick }: { section: ExcelSectionData
       }}>
         {isHeader ? '🔼' : '🔽'} {isHeader ? t.excelHeader : t.excelFooter}
       </div>
-      <ExcelCellGrid cells={section.cells} label={null} onCellClick={onCellClick} />
+      <ExcelCellGrid cells={section.cells} onCellClick={onCellClick} />
     </div>
   );
 }
@@ -2412,7 +2408,7 @@ function ExcelRangeBlock({ range, depth, onCellClick, selectedCell }: { range: E
 
       {/* Cells in this range */}
       {range.cells.length > 0 && (
-        <ExcelCellGrid cells={range.cells} label={null} onCellClick={onCellClick} selectedCell={selectedCell} />
+        <ExcelCellGrid cells={range.cells} onCellClick={onCellClick} selectedCell={selectedCell} />
       )}
 
       {/* Nested ranges */}
@@ -2423,7 +2419,7 @@ function ExcelRangeBlock({ range, depth, onCellClick, selectedCell }: { range: E
   );
 }
 
-function ExcelCellGrid({ cells, label, onCellClick, selectedCell }: { cells: ExcelCellData[]; label: string | null; onCellClick?: (cell: ExcelCellData) => void; selectedCell?: ExcelCellData | null }) {
+function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellData[]; onCellClick?: (cell: ExcelCellData) => void; selectedCell?: ExcelCellData | null }) {
   return (
     <div style={{
       display: 'grid',
@@ -2764,7 +2760,6 @@ interface FormatElementTreeProps {
 
 function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, expandMode, expandVersion, selectedId, onSelect, resolveDatasource, registry, showTechnicalDetails, bindingFilter }: FormatElementTreeProps) {
   const [expanded, setExpanded] = useState(expandMode === 'all');
-  const [hoverBinding, setHoverBinding] = useState<any | null>(null);
   const labels = useAppStore(s => s.configurations[configIndex]?.solutionVersion?.solution?.labels);
 
   useEffect(() => {
@@ -3412,6 +3407,10 @@ function FormatBindingRow({ binding, configIndex, registry, onNavigate }: {
     </div>
   );
 }
+
+// Keep legacy helpers reachable for future migration work.
+const keepLegacyFormatHelpers = [FormatBindingDetail, FormatBindingRow];
+void keepLegacyFormatHelpers;
 
 // Maps datasource type → an existing badge CSS class
 function getDsBadgeClass(type: string): string {

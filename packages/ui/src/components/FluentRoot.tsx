@@ -7,6 +7,7 @@ import {
   type Theme,
 } from '@fluentui/react-components';
 import { useAppStore } from '../state/store';
+import { useLocale } from '../i18n';
 import { App } from './App';
 
 const darkOverrides: Partial<Theme> = {
@@ -67,12 +68,19 @@ export const TOASTER_ID = 'er-visualizer-toaster';
 
 export function FluentRoot() {
   const themeMode = useAppStore(s => s.themeMode);
+  const rebuildDerivedState = useAppStore(s => s.rebuildDerivedState);
+  const currentLocale = useLocale();
   const theme = themeMode === 'dark' ? darkTheme : lightTheme;
 
   useEffect(() => {
     document.documentElement.dataset.theme = themeMode;
     document.documentElement.style.colorScheme = themeMode;
   }, [themeMode]);
+
+  useEffect(() => {
+    document.documentElement.lang = currentLocale;
+    rebuildDerivedState();
+  }, [currentLocale, rebuildDerivedState]);
 
   return (
     <FluentProvider theme={theme} style={{ width: '100%', height: '100%', background: 'transparent' }}>
