@@ -25,7 +25,7 @@ function createWindow() {
   const prefersLight = process.platform === 'win32'
     ? false // Windows: stay neutral; the renderer will repaint instantly.
     : false;
-  const initialBg = prefersLight ? '#ffffff' : '#1e1e1e';
+  const initialBg = prefersLight ? '#f8fafc' : '#181a1f';
 
   const win = new BrowserWindow({
     width: 1600,

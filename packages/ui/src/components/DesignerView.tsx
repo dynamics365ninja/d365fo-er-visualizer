@@ -2037,9 +2037,9 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
           height: '100%',
           gap: 16,
           background: isDragOver
-            ? (dragInvalid ? 'rgba(var(--error-rgb,220,38,38),0.08)' : 'rgba(var(--accent-rgb,0,120,212),0.08)')
+            ? (dragInvalid ? 'rgba(var(--error-rgb,220,38,38),0.08)' : 'rgba(var(--accent-rgb,3,131,135),0.08)')
             : 'var(--bg-secondary)',
-          border: `2px dashed ${isDragOver ? (dragInvalid ? 'var(--error,#dc2626)' : 'var(--focus-border,#0078d4)') : 'var(--border-color,#444)'}`,
+          border: `2px dashed ${isDragOver ? (dragInvalid ? 'var(--error,#dc2626)' : 'var(--focus-border,#038387)') : 'var(--border-color,#444)'}`,
           borderRadius: 8,
           margin: 16,
           transition: 'background 0.15s, border-color 0.15s',
@@ -2116,12 +2116,12 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
         <div style={{
           position: 'absolute', inset: 0, zIndex: 100,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: dragInvalid ? 'rgba(220,38,38,0.12)' : 'rgba(0,120,212,0.12)',
-          border: `3px dashed ${dragInvalid ? '#dc2626' : '#0078d4'}`,
+          background: dragInvalid ? 'rgba(220,38,38,0.12)' : 'rgba(3,131,135,0.12)',
+          border: `3px dashed ${dragInvalid ? '#dc2626' : '#038387'}`,
           pointerEvents: 'none',
           borderRadius: 4,
         }}>
-          <span style={{ fontSize: 14, background: 'var(--bg-primary)', padding: '8px 16px', borderRadius: 6, fontWeight: 600, color: dragInvalid ? '#dc2626' : '#0078d4' }}>
+          <span style={{ fontSize: 14, background: 'var(--bg-primary)', padding: '8px 16px', borderRadius: 6, fontWeight: 600, color: dragInvalid ? '#dc2626' : '#038387' }}>
             {dragInvalid ? t.excelTemplateDropInvalid : t.excelTemplateDropActive}
           </span>
         </div>
