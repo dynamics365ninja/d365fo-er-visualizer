@@ -7,6 +7,7 @@ import type {
   ERFormatContent,
 } from '@er-visualizer/core';
 import { parseERConfiguration, GUIDRegistry } from '@er-visualizer/core';
+import { locale } from '../i18n';
 import { buildFormatBindingPresentation } from '../utils/format-binding-display';
 import {
   saveFileContent,
@@ -223,6 +224,11 @@ export interface AppState {
   activeTabId: string | null;
   searchQuery: string;
   searchResults: any[];
+  searchPanelMode: 'search' | 'where-used';
+  whereUsedQuery: string;
+  whereUsedResults: WhereUsedEntry[];
+  whereUsedScope: 'all' | 'mapping' | 'format';
+  activeWhereUsedRefKey: string | null;
   showTechnicalDetails: boolean;
   themeMode: ThemeMode;
   navigationHistory: NavigationSnapshot[];
@@ -237,6 +243,7 @@ export interface AppState {
   /** Set of file paths whose XML content is currently cached in IndexedDB. */
   cachedPaths: Set<string>;
   warnings: ConfigWarning[];
+  whereUsedTrigger: { query: string; version: number } | null;
 
   /** Global F&O download progress label, empty when idle. */
   fnoIngestStatus: string;
@@ -256,6 +263,12 @@ export interface AppState {
   setThemeMode: (mode: ThemeMode) => void;
   setSearchQuery: (query: string) => void;
   executeSearch: () => void;
+  setSearchPanelMode: (mode: 'search' | 'where-used') => void;
+  setWhereUsedQuery: (query: string) => void;
+  executeWhereUsed: (query?: string) => void;
+  clearWhereUsed: () => void;
+  setWhereUsedScope: (scope: 'all' | 'mapping' | 'format') => void;
+  setActiveWhereUsedRefKey: (key: string | null) => void;
   navigateToTreeNode: (nodeId: string) => void;
   navigateBack: () => void;
   navigateForward: () => void;
@@ -331,6 +344,7 @@ export interface AppState {
    * Returns a flat list of trace links from the entity → datasource → model binding → format element.
    */
   whereUsed: (entityName: string) => WhereUsedEntry[];
+  triggerWhereUsed: (query: string) => void;
 }
 
 // ─── Where-Used types ───
@@ -571,6 +585,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeTabId: null,
   searchQuery: '',
   searchResults: [],
+  searchPanelMode: 'search',
+  whereUsedQuery: '',
+  whereUsedResults: [],
+  whereUsedScope: 'all',
+  activeWhereUsedRefKey: null,
   showTechnicalDetails: readStoredTechnicalDetails(),
   fnoIngestStatus: '',
   themeMode: readStoredThemeMode(),
@@ -585,6 +604,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   recentSessions: loadJSON<RecentSession[]>(RECENT_SESSIONS_STORAGE_KEY, []),
   cachedPaths: new Set<string>(),
   warnings: [],
+  whereUsedTrigger: null,
 
   loadXmlFile: (xml: string, filePath: string) => {
     try {
@@ -773,6 +793,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       navigationForward: [],
       canNavigateBack: false,
       canNavigateForward: false,
+      searchPanelMode: 'search',
+      whereUsedQuery: '',
+      whereUsedResults: [],
+      whereUsedScope: 'all',
+      activeWhereUsedRefKey: null,
     });
   },
 
@@ -892,6 +917,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     const results = state.registry.search(state.searchQuery);
     set({ searchResults: results });
   },
+
+  setSearchPanelMode: (mode) => set({ searchPanelMode: mode }),
+
+  setWhereUsedQuery: (query) => set({ whereUsedQuery: query }),
+
+  executeWhereUsed: (query) => {
+    const state = get();
+    const nextQuery = query ?? state.whereUsedQuery;
+    const results = nextQuery.trim() ? state.whereUsed(nextQuery) : [];
+    set({
+      whereUsedQuery: nextQuery,
+      whereUsedResults: results,
+      activeWhereUsedRefKey: null,
+    });
+  },
+
+  clearWhereUsed: () => set({
+    whereUsedQuery: '',
+    whereUsedResults: [],
+    activeWhereUsedRefKey: null,
+  }),
+
+  setWhereUsedScope: (scope) => set({ whereUsedScope: scope }),
+
+  setActiveWhereUsedRefKey: (key) => set({ activeWhereUsedRefKey: key }),
 
   navigateToTreeNode: (nodeId: string) => {
     const state = get();
@@ -1170,8 +1220,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       navigationForward: [],
       canNavigateBack: false,
       canNavigateForward: false,
+      searchPanelMode: 'search',
       searchQuery: '',
       searchResults: [],
+      whereUsedQuery: '',
+      whereUsedResults: [],
+      whereUsedScope: 'all',
+      activeWhereUsedRefKey: null,
     });
     let loaded = 0;
     for (const { file, content } of available) {
@@ -1277,12 +1332,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     for (const source of getAllMappingSources(state.configurations)) {
-      for (const tryPath of pathVariants) {
-        const binding = source.mapping.bindings.find((b: any) =>
-          b.path === tryPath || b.path.toLowerCase() === tryPath.toLowerCase()
-        );
-        if (!binding) continue;
+      const bindings = source.mapping.bindings as any[];
 
+      const materializeBindingResolution = (binding: any) => {
         const bindingTreeNodeId = get().findBindingNode(binding.path, source.configIndex);
         const dsName = binding.expressionAsString.split(/[.(]/)[0].replace(/['"]/g, '').trim();
         let datasource: any = null;
@@ -1306,6 +1358,29 @@ export const useAppStore = create<AppState>((set, get) => ({
           datasourceConfigIndex,
           datasourceTreeNodeId,
         };
+      };
+
+      for (const tryPath of pathVariants) {
+        const binding = bindings.find((b: any) =>
+          b.path === tryPath || b.path.toLowerCase() === tryPath.toLowerCase()
+        );
+        if (binding) return materializeBindingResolution(binding);
+
+        // Fallback for container paths: if "Header" is not directly bound,
+        // use the nearest descendant binding such as "Header.ToDate".
+        const normalizedTryPath = tryPath.replace(/[\\/]/g, '.').toLowerCase();
+        const descendantBinding = bindings
+          .filter((b: any) => {
+            const normalizedBindingPath = String(b.path ?? '').replace(/[\\/]/g, '.').toLowerCase();
+            return normalizedBindingPath.startsWith(`${normalizedTryPath}.`);
+          })
+          .sort((a: any, b: any) => {
+            const aLen = String(a.path ?? '').replace(/[\\/]/g, '.').split('.').length;
+            const bLen = String(b.path ?? '').replace(/[\\/]/g, '.').split('.').length;
+            return aLen - bLen;
+          })[0];
+
+        if (descendantBinding) return materializeBindingResolution(descendantBinding);
       }
     }
     return null;
@@ -1547,6 +1622,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     return structural;
   },
+
+  triggerWhereUsed: (query) => set(state => ({
+    whereUsedTrigger: { query, version: (state.whereUsedTrigger?.version ?? 0) + 1 },
+  })),
 }));
 
 // Populate the cachedPaths set from IndexedDB on startup so the landing page
@@ -2266,20 +2345,91 @@ const dsTypeIcons: Record<string, string> = {
 };
 
 const dsGroupOrder = ['Table', 'CalculatedField', 'Class', 'Enum', 'ModelEnum', 'FormatEnum', 'ImportFormat', 'UserParameter', 'GroupBy', 'Container', 'Join', 'Object'];
-const dsGroupLabels: Record<string, string> = {
-  Table: 'Tables',
-  CalculatedField: 'Calculated Fields',
-  Class: 'Classes',
-  Enum: 'Ax Enums',
-  ModelEnum: 'Data model Enums',
-  FormatEnum: 'Format enums',
-  ImportFormat: 'Import formats',
-  UserParameter: 'User Parameters',
-  GroupBy: 'Group By',
-  Container: 'Containers',
-  Join: 'Joins',
-  Object: 'Objects',
-};
+const dsGroupLabels: Record<string, string> = locale === 'cs'
+  ? {
+      Table: 'Tabulky',
+      CalculatedField: 'Výpočtová pole',
+      Class: 'Třídy',
+      Enum: 'AX výčty',
+      ModelEnum: 'Výčty datového modelu',
+      FormatEnum: 'Výčty formátu',
+      ImportFormat: 'Importní formáty',
+      UserParameter: 'Uživatelské parametry',
+      GroupBy: 'Seskupení',
+      Container: 'Kontejnery',
+      Join: 'Spojení',
+      Object: 'Objekty',
+    }
+  : {
+      Table: 'Tables',
+      CalculatedField: 'Calculated Fields',
+      Class: 'Classes',
+      Enum: 'Ax Enums',
+      ModelEnum: 'Data model Enums',
+      FormatEnum: 'Format enums',
+      ImportFormat: 'Import formats',
+      UserParameter: 'User Parameters',
+      GroupBy: 'Group By',
+      Container: 'Containers',
+      Join: 'Joins',
+      Object: 'Objects',
+    };
+
+const dataModelSectionLabels = locale === 'cs'
+  ? {
+      roots: 'Definice modelu',
+      enums: 'Výčtové typy',
+      records: 'Záznamy',
+    }
+  : {
+      roots: 'Model Definitions',
+      enums: 'Enumerations',
+      records: 'Records',
+    };
+
+const mappingSectionLabels = locale === 'cs'
+  ? {
+      title: 'Mapování',
+      dataSources: 'Datové zdroje',
+      bindings: 'Vazby',
+      validations: 'Validace',
+    }
+  : {
+      title: 'Mapping',
+      dataSources: 'Data Sources',
+      bindings: 'Bindings',
+      validations: 'Validations',
+    };
+
+const formatSectionLabels = locale === 'cs'
+  ? {
+      outputStructure: 'Výstupní struktura',
+      modelMappings: 'Mapování modelu',
+      enumerations: 'Výčty',
+      transformations: 'Transformace',
+      dataSources: 'Datové zdroje',
+      bindings: 'Vazby',
+      noBindings: 'bez vazeb',
+    }
+  : {
+      outputStructure: 'Output Structure',
+      modelMappings: 'Model Mappings',
+      enumerations: 'Enumerations',
+      transformations: 'Transformations',
+      dataSources: 'Data Sources',
+      bindings: 'Bindings',
+      noBindings: 'no bindings',
+    };
+
+const groupBySectionLabels = locale === 'cs'
+  ? {
+      groupedBy: 'Seskupeno podle',
+      aggregated: 'Agregace',
+    }
+  : {
+      groupedBy: 'Grouped By',
+      aggregated: 'Aggregated',
+    };
 
 function groupDatasourceNodes(dsNodes: TreeNode[], prefix: string): TreeNode[] {
   const groups = new Map<string, TreeNode[]>();
@@ -2386,15 +2536,15 @@ function buildMappingTree(mapping: any, prefix: string, configIndex: number, ver
 
   return {
     id: prefix,
-    name: `Mapping: ${mapping.name}${versionSuffix}`,
+    name: `${mappingSectionLabels.title}: ${mapping.name}${versionSuffix}`,
     icon: '🔗',
     type: 'mapping',
     configIndex,
     data: mapping,
     children: [
-      { id: `${prefix}-ds-section`, name: `Data Sources (${dsNodes.length})`, icon: '📂', type: 'section', children: groupDatasourceNodes(dsNodes, prefix) },
-      { id: `${prefix}-bind-section`, name: `Bindings (${bindingNodes.length})`, icon: '📂', type: 'section', children: bindingNodes },
-      { id: `${prefix}-val-section`, name: `Validations (${validationNodes.length})`, icon: '📂', type: 'section', children: validationNodes },
+      { id: `${prefix}-ds-section`, name: `${mappingSectionLabels.dataSources} (${dsNodes.length})`, icon: '📂', type: 'section', children: groupDatasourceNodes(dsNodes, prefix) },
+      { id: `${prefix}-bind-section`, name: `${mappingSectionLabels.bindings} (${bindingNodes.length})`, icon: '📂', type: 'section', children: bindingNodes },
+      { id: `${prefix}-val-section`, name: `${mappingSectionLabels.validations} (${validationNodes.length})`, icon: '📂', type: 'section', children: validationNodes },
     ],
   };
 }
@@ -2426,21 +2576,21 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
     children.push(
       {
         id: `${prefix}-model-roots`,
-        name: 'Root Containers',
+        name: dataModelSectionLabels.roots,
         icon: '📂',
         type: 'section',
         children: containerNodes.filter(c => c.data.isRoot),
       },
       {
         id: `${prefix}-model-enums`,
-        name: 'Enumerations',
+        name: dataModelSectionLabels.enums,
         icon: '📂',
         type: 'section',
         children: containerNodes.filter(c => c.data.isEnum),
       },
       {
         id: `${prefix}-model-records`,
-        name: 'Records',
+        name: dataModelSectionLabels.records,
         icon: '📂',
         type: 'section',
         children: containerNodes.filter(c => !c.data.isRoot && !c.data.isEnum),
@@ -2486,7 +2636,7 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
             const nonDataCategories = g.categories.filter(category => category.key !== 'data');
             const label = primaryDataExpr
               ? `${g.elementName}  ←  ${primaryDataExpr.substring(0, 50)}`
-              : `${g.elementName} (${nonDataCategories.map(category => `${category.label}: ${category.bindings.length}`).join(', ') || 'no bindings'})`;
+              : `${g.elementName} (${nonDataCategories.map(category => `${category.label}: ${category.bindings.length}`).join(', ') || formatSectionLabels.noBindings})`;
             return {
               id: `${prefix}-fmtbind-${typeIndex}-${bi}`,
               name: label,
@@ -2546,12 +2696,12 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
     );
 
     children.push(
-      { id: `${prefix}-fmt-structure`, name: 'Output Structure', icon: '📂', type: 'section', children: [formatTree] },
-      ...(embeddedMappingNodes.length > 0 ? [{ id: `${prefix}-fmt-embedded-mappings`, name: `Model Mappings (${embeddedMappingNodes.length})`, icon: '📂', type: 'section' as const, children: embeddedMappingNodes }] : []),
-      { id: `${prefix}-fmt-enums`, name: `Enumerations (${enumNodes.length})`, icon: '📂', type: 'section', children: enumNodes },
-      { id: `${prefix}-fmt-trans`, name: `Transformations (${transNodes.length})`, icon: '📂', type: 'section', children: transNodes },
-      { id: `${prefix}-fmt-ds`, name: `Data Sources (${fmtDsNodes.length})`, icon: '📂', type: 'section', children: groupDatasourceNodes(fmtDsNodes, `${prefix}-fmt`) },
-      { id: `${prefix}-fmt-bindings`, name: `Bindings (${fmtBindNodes.length})`, icon: '📂', type: 'section', children: fmtBindNodes },
+      { id: `${prefix}-fmt-structure`, name: formatSectionLabels.outputStructure, icon: '📂', type: 'section', children: [formatTree] },
+      ...(embeddedMappingNodes.length > 0 ? [{ id: `${prefix}-fmt-embedded-mappings`, name: `${formatSectionLabels.modelMappings} (${embeddedMappingNodes.length})`, icon: '📂', type: 'section' as const, children: embeddedMappingNodes }] : []),
+      { id: `${prefix}-fmt-enums`, name: `${formatSectionLabels.enumerations} (${enumNodes.length})`, icon: '📂', type: 'section', children: enumNodes },
+      { id: `${prefix}-fmt-trans`, name: `${formatSectionLabels.transformations} (${transNodes.length})`, icon: '📂', type: 'section', children: transNodes },
+      { id: `${prefix}-fmt-ds`, name: `${formatSectionLabels.dataSources} (${fmtDsNodes.length})`, icon: '📂', type: 'section', children: groupDatasourceNodes(fmtDsNodes, `${prefix}-fmt`) },
+      { id: `${prefix}-fmt-bindings`, name: `${formatSectionLabels.bindings} (${fmtBindNodes.length})`, icon: '📂', type: 'section', children: fmtBindNodes },
     );
   }
 
@@ -2594,7 +2744,7 @@ function buildDatasourceTree(ds: any, prefix: string, configIndex: number): Tree
         ...(groupedFieldNodes.length > 0
           ? [{
               id: `${prefix}-groupby-fields`,
-              name: `Grouped By (${groupedFieldNodes.length})`,
+              name: `${groupBySectionLabels.groupedBy} (${groupedFieldNodes.length})`,
               icon: '📂',
               type: 'section' as const,
               children: groupedFieldNodes,
@@ -2603,7 +2753,7 @@ function buildDatasourceTree(ds: any, prefix: string, configIndex: number): Tree
         ...(aggregatedFieldNodes.length > 0
           ? [{
               id: `${prefix}-aggregated-fields`,
-              name: `Aggregated (${aggregatedFieldNodes.length})`,
+              name: `${groupBySectionLabels.aggregated} (${aggregatedFieldNodes.length})`,
               icon: '📂',
               type: 'section' as const,
               children: aggregatedFieldNodes,

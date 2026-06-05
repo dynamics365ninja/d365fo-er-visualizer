@@ -19,13 +19,13 @@ Load ER XML configurations either from disk or **directly from a live F&O enviro
 | **Config Explorer** | Tree navigator with kind chips (DataModel / ModelMapping / Format), full-text filter, sort, expand/collapse, version pills, and drag-and-drop XML ingestion. |
 | **GUID Registry & Cross-References** | Every GUID in every loaded file is indexed; look up any GUID and see all references to and from it. |
 | **Where-Used Analysis** | Trace a table, enum, class, or datasource through datasources → model bindings → format elements. |
-| **Expression Drill-Down** | Step through any ER formula from format binding to model mapping to the concrete data source. |
+| **Expression Drill-Down Workbench** | Analyze ER formulas in a split workbench: expression at top, expression-part tree on the left, mapping/data-source resolution on the right, with deep-dive navigation to final sources. |
 | **Clickable Paths & Tooltips** | Identifiers in expressions resolve to their source tree node; hovering renders a contextual tooltip card. |
 | **Search Panel** | Full-text search across the GUID registry and where-used trace mode, with direct navigation to matched elements. |
 | **Command Palette** | `Ctrl/⌘+P` jump-to-anything across configurations, tabs, and panel actions. |
 | **Format Binding Categories** | Bindings are automatically classified (data / visibility / formatting / property) and grouped. |
 | **Multi-file Workspace** | Load multiple ER XML files at once; the registry merges cross-references across all configurations. |
-| **Consultant / Technical View** | Toggle between a simplified consultant view and full technical detail; preference persists in `localStorage`. |
+| **Detail Mode Preference** | Toggle simplified vs technical detail presentation where available; preference persists in `localStorage`. |
 | **Toast Notifications & Error Boundary** | Non-blocking feedback for ingestion, network, and parse failures with an app-wide error boundary. |
 | **Dark & Light Theme** | Fluent UI theme tokens with semantic surface/accent colors per component type. |
 | **i18n** | Czech (`cs`) and English (`en`) UI, auto-detected from OS locale. |
@@ -86,7 +86,7 @@ React 19 SPA built with **Vite 6** and **Fluent UI** (`@fluentui/react-component
 | `ErrorBoundary` | App-wide React error boundary. |
 | `LandingPage` | Drag-and-drop / file-open entry point and F&O server tab. Hosts the fullscreen ingest progress overlay. |
 | `FnoConnectPanel` | Connection profile management, MSAL sign-in, hierarchical ER solution browser (collapsible 2-level tree), multi-select & ingest with ingest progress tracking. |
-| `ActivityBar` | Left rail switching between explorer, search, outline, and settings panels. |
+| `ActivityBar` | Left rail for switching core workspace tools (explorer, search, and related utility panels). |
 | `Toolbar` | File open, home navigation, panel toggles. |
 | `ConfigExplorer` | Tree of loaded configurations grouped by kind, with filter, sort, version pills, drag-and-drop ingestion, and an ingest progress banner. |
 | `TabBar` | Multi-tab navigation for open designer views. |
@@ -96,7 +96,7 @@ React 19 SPA built with **Vite 6** and **Fluent UI** (`@fluentui/react-component
 | `CommandPalette` | `Ctrl/⌘+P` jump-to-anything. |
 | `ClickablePath` | ER expressions with clickable identifiers that navigate to their source. |
 | `PathTooltipCard` | Hover preview for resolved paths (datasource / model mapping / binding). |
-| `DrillDownPanel` | Step-by-step drill from a format binding expression to the concrete data source. |
+| `DrillDownPanel` | Drill-down workbench for expression analysis: select expression parts, inspect mapping/source resolution, and dig deeper through calculated fields to concrete data sources. |
 | `ToastHost` | Non-blocking toast notifications. |
 
 **State management:** Zustand 5 (`useAppStore`) with actions for XML ingestion, node selection, tab management, datasource/binding resolution, where-used analysis, and toast queue. F&O connection profiles persist in `state/fno-profiles.ts` (localStorage). F&O browsing state (solutions, components, selection) persists in `state/fno-session.ts` so it survives panel unmounts.

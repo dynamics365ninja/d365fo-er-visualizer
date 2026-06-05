@@ -76,7 +76,7 @@ D365FO ER Visualizer is a pnpm monorepo for visualizing and analyzing Dynamics 3
        ├── PropertyInspector ← selectedNode (property grid)
        ├── SearchPanel       ← registry.search() + whereUsed()
        ├── ClickablePath     ← resolveDatasource / resolveBinding
-       └── DrillDownPanel    ← resolveDeepExpression chain
+      └── DrillDownPanel    ← workbench (expression tree + resolveDeepExpression + deep-dive frames)
 ```
 
 ---
@@ -192,7 +192,11 @@ ConfigExplorer ── click ──→ selectNode ──→ PropertyInspector re-
                                 └─ non-root node → Focused detail-only tab
 
 DesignerView ─── node click ──→ selectNode
-             ─── expression click → DrillDownPanel push frame
+             ─── expression click → DrillDownPanel workbench opens frame
+
+DrillDown workbench
+            ─── select expression part (left tree) → resolve model mapping + datasource (right pane)
+            ─── dig deeper action → push next frame (typically calculated field expression)
 
 ClickablePath ── hover/click ──→ resolveDatasource / resolveModelPath
 
@@ -217,6 +221,21 @@ FnoConnectPanel ─ connect ──→ fnoSession.signIn() → listSolutions()
 Clicking a root auto-expands it (via `expandedSolutions` state) so children are immediately visible. Selection from the left panel triggers `handlePickSolution`, which fetches the full component tree from `rootSolutionName` (not the clicked name) to ensure sibling formats and mappings are included.
 
 The `promoteDmToSolutions` helper appends newly-discovered derived DataModels (found inside `listComponents` responses) to the solutions list so they appear as navigable child rows without requiring a separate API call.
+
+---
+
+### Drill-Down Workbench Flow
+
+`DrillDownPanel` now uses a split workbench layout instead of a linear wizard-like sequence.
+
+- **Top expression bar** — the currently analyzed ER expression is tokenized; datasource path segments are clickable.
+- **Left expression-part tree** — parsed path segments from the expression are listed as selectable nodes (including nested depths).
+- **Right resolution pane** — for the selected part, the UI resolves:
+  - model mapping expression (`resolveModelPath`),
+  - effective datasource (`resolveDatasource` + `resolveDeepExpression`),
+  - concrete target metadata (table / enum / class).
+- **Deep-dive navigation** — if the selected node resolves to a calculated field (or mapped expression), the user can push a next frame and continue drilling to the final concrete source.
+- **Breadcrumb and timeline context** — current branch and decomposition path stay visible to preserve orientation while drilling.
 
 ---
 
