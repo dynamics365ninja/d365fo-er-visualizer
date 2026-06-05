@@ -366,6 +366,79 @@ function tokenizeERExpr(expr: string): ERToken[] {
   return tokens;
 }
 
+// ─── ER expression pretty-printer ────────────────────────────────────────────
+// Reformats a raw ER expression string with newlines and indentation so that
+// nested function calls read vertically. Short expressions (< 80 chars) are
+// returned unchanged to keep simple bindings on a single line.
+
+function prettifyERExpr(expr: string, indentWidth = 2): string {
+  if (expr.length < 80) return expr;
+
+  let out = '';
+  let depth = 0;
+  let i = 0;
+  const n = expr.length;
+  const pad = (d: number) => ' '.repeat(d * indentWidth);
+
+  while (i < n) {
+    const ch = expr[i];
+
+    // Double-quoted string literal — copy verbatim
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < n && expr[j] !== '"') j++;
+      out += expr.slice(i, j + 1);
+      i = j + 1;
+      continue;
+    }
+
+    // Single-quoted path segment — copy verbatim
+    if (ch === "'") {
+      let j = i + 1;
+      while (j < n && expr[j] !== "'") j++;
+      out += expr.slice(i, j + 1);
+      i = j + 1;
+      continue;
+    }
+
+    if (ch === '(') {
+      depth++;
+      out += '(\n' + pad(depth);
+      i++;
+      while (i < n && (expr[i] === ' ' || expr[i] === '\t' || expr[i] === '\n' || expr[i] === '\r')) i++;
+      continue;
+    }
+
+    if (ch === ')') {
+      depth = Math.max(0, depth - 1);
+      out += '\n' + pad(depth) + ')';
+      i++;
+      continue;
+    }
+
+    if (ch === ',') {
+      out += ',\n' + pad(depth);
+      i++;
+      while (i < n && (expr[i] === ' ' || expr[i] === '\t' || expr[i] === '\n' || expr[i] === '\r')) i++;
+      continue;
+    }
+
+    // Collapse existing whitespace to a single space
+    if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
+      const last = out[out.length - 1];
+      if (out.length > 0 && last !== '\n' && last !== ' ') out += ' ';
+      i++;
+      while (i < n && (expr[i] === ' ' || expr[i] === '\t' || expr[i] === '\n' || expr[i] === '\r')) i++;
+      continue;
+    }
+
+    out += ch;
+    i++;
+  }
+
+  return out;
+}
+
 // ─── ExpressionView — interactive tokenised expression renderer ───────────────
 // Renders an ER expression with syntax colouring. DS-reference tokens are
 // clickable: clicking them pushes a new drill-down frame for that datasource.
@@ -385,7 +458,7 @@ interface ExpressionViewProps {
 }
 
 function ExpressionView({ expr, configIndex, onPush, currentFrameExpression }: ExpressionViewProps) {
-  const tokens = useMemo(() => tokenizeERExpr(expr), [expr]);
+  const tokens = useMemo(() => tokenizeERExpr(prettifyERExpr(expr)), [expr]);
   const labels = useAppStore(s => s.configurations[configIndex]?.solutionVersion?.solution?.labels);
 
   const buildSegmentExpression = (segments: string[], upto: number): string => (
@@ -603,6 +676,15 @@ function WizardFrameView({ frame, onPush, configurations }: WizardFrameViewProps
   const deepResult = resolveDeepExpression(effectiveExpr, configurations, effectiveCi);
   const directResult = !isModel ? resolveDatasource(firstSegment(selected.expression), frame.configIndex) : null;
   const resolvedDs = (deepResult?.nestedDs ?? deepResult?.rootDs) ?? modelResult?.datasource ?? directResult?.datasource ?? null;
+  const sourceNameNorm = String(resolvedDs?.name ?? '').trim().toLowerCase();
+  const tableName = resolvedDs?.tableInfo?.tableName ?? null;
+  const enumName = resolvedDs?.enumInfo
+    ? formatEnumDisplayName(resolvedDs.enumInfo.enumName, resolvedDs.enumInfo)
+    : null;
+  const className = resolvedDs?.classInfo?.className ?? null;
+  const showTableRow = Boolean(tableName && String(tableName).trim().toLowerCase() !== sourceNameNorm);
+  const showEnumRow = Boolean(enumName && String(enumName).trim().toLowerCase() !== sourceNameNorm);
+  const showClassRow = Boolean(className && String(className).trim().toLowerCase() !== sourceNameNorm);
   const calcFormula = resolvedDs?.calculatedField?.expressionAsString ?? null;
   const requestedPathNorm = stripModel(cleanModelExpr).replace(/[\\/]/g, '.').toLowerCase();
   const resolvedPathNorm = String(modelResult?.modelPath ?? '').replace(/[\\/]/g, '.').toLowerCase();
@@ -695,9 +777,9 @@ function WizardFrameView({ frame, onPush, configurations }: WizardFrameViewProps
                 <div className="dd-wizard__row"><strong>{locale === 'cs' ? 'Část výrazu:' : 'Expression part:'}</strong> {selected.label}</div>
                 <div className="dd-wizard__row"><strong>{locale === 'cs' ? 'Typ:' : 'Type:'}</strong> {localizeDatasourceType(resolvedDs)}</div>
                 <div className="dd-wizard__row"><strong>{locale === 'cs' ? 'Název zdroje:' : 'Source name:'}</strong> {resolvedDs.name}</div>
-                {resolvedDs.tableInfo?.tableName && <div className="dd-wizard__row"><strong>{locale === 'cs' ? 'Tabulka:' : 'Table:'}</strong> {resolvedDs.tableInfo.tableName}</div>}
-                {resolvedDs.enumInfo?.enumName && <div className="dd-wizard__row"><strong>{locale === 'cs' ? 'Výčet:' : 'Enum:'}</strong> {formatEnumDisplayName(resolvedDs.enumInfo.enumName, resolvedDs.enumInfo)}</div>}
-                {resolvedDs.classInfo?.className && <div className="dd-wizard__row"><strong>{locale === 'cs' ? 'Třída:' : 'Class:'}</strong> {resolvedDs.classInfo.className}</div>}
+                {showTableRow && <div className="dd-wizard__row"><strong>{locale === 'cs' ? 'Tabulka:' : 'Table:'}</strong> {tableName}</div>}
+                {showEnumRow && <div className="dd-wizard__row"><strong>{locale === 'cs' ? 'Výčet:' : 'Enum:'}</strong> {enumName}</div>}
+                {showClassRow && <div className="dd-wizard__row"><strong>{locale === 'cs' ? 'Třída:' : 'Class:'}</strong> {className}</div>}
                 <button
                   type="button"
                   className="dd-wizard__jump"
@@ -1119,6 +1201,10 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
     ?? (resolvedDs?.enumInfo ? formatEnumDisplayName(resolvedDs.enumInfo.enumName, resolvedDs.enumInfo) : null)
     ?? resolvedDs?.classInfo?.className
     ?? null;
+  const targetIsDistinct = Boolean(
+    targetName
+    && (!resolvedDs?.name || normalizeExpr(String(targetName)) !== normalizeExpr(String(resolvedDs.name)))
+  );
 
   const selectedPathSegments = useMemo(() => {
     const firstDsToken = tokenizeERExpr(selected.expression).find(
@@ -1149,7 +1235,7 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
       title: locale === 'cs' ? 'Datový zdroj' : 'Data source',
       value: resolvedDs.name,
     }] : []),
-    ...(targetName ? [{
+    ...(targetIsDistinct && targetName ? [{
       key: 'target',
       title: locale === 'cs' ? 'Cíl' : 'Target',
       value: targetName,
@@ -1190,9 +1276,6 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
           <div className="dd-workbench__panel-head">{locale === 'cs' ? 'Naplnění vybrané části' : 'Selected part resolution'}</div>
 
           <div className="dd-workbench__detail-block">
-            <div className="dd-workbench__detail-label">{locale === 'cs' ? 'Vybraný výraz' : 'Selected expression'}</div>
-            <pre className="dd-workbench__detail-code">{selected.expression}</pre>
-
             <div className="dd-workbench__detail-label">{locale === 'cs' ? 'Aktuální větev' : 'Current branch'}</div>
             <div className="dd-workbench__breadcrumb">
               {selectedPathSegments.map((segment, idx) => (
@@ -1224,38 +1307,33 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
             </ol>
           </div>
 
-          <div className="dd-workbench__detail-grid">
-            <div className="dd-workbench__detail-card">
-              <div className="dd-workbench__detail-card-head">
-                <span>{locale === 'cs' ? 'Mapování' : 'Mapping'}</span>
-                {mappingConfig && <span className="dd-workbench__card-meta">{mappingConfig}</span>}
-              </div>
-              {showMappingExpression && mappingExpr ? (
-                <ExpressionView expr={mappingExpr} configIndex={mappingCi} onPush={onPush} currentFrameExpression={frame.expression} />
-              ) : (
-                <div className="dd-workbench__empty">
-                  {selectedIsModel
-                    ? t.drillNoModelMapping
-                    : (locale === 'cs' ? 'Bez mezikroku mapování.' : 'No mapping intermediate step.')}
+          {(showMappingExpression && mappingExpr || resolvedDs) && (
+            <div className="dd-workbench__detail-grid">
+              {showMappingExpression && mappingExpr && (
+                <div className="dd-workbench__detail-card">
+                  <div className="dd-workbench__detail-card-head">
+                    <span>{locale === 'cs' ? 'Mapování' : 'Mapping'}</span>
+                    {mappingConfig && <span className="dd-workbench__card-meta">{mappingConfig}</span>}
+                  </div>
+                  <ExpressionView expr={mappingExpr} configIndex={mappingCi} onPush={onPush} currentFrameExpression={frame.expression} />
                 </div>
               )}
-            </div>
 
-            <div className="dd-workbench__detail-card">
-              <div className="dd-workbench__detail-card-head">
-                <span>{locale === 'cs' ? 'Datový zdroj' : 'Data source'}</span>
-                {resolvedDs && <span className={`badge badge-${dsTypeBadge(resolvedDs)}`}>{localizeDatasourceType(resolvedDs)}</span>}
-              </div>
-              {!resolvedDs && <div className="dd-workbench__empty">{locale === 'cs' ? 'Datový zdroj nenalezen.' : 'Data source not resolved.'}</div>}
               {resolvedDs && (
-                <div className="dd-workbench__summary">
-                  <div className="dd-workbench__summary-row"><span>{t.propName}</span><strong>{resolvedDs.name}</strong></div>
-                  <div className="dd-workbench__summary-row"><span>{locale === 'cs' ? 'Typ' : 'Type'}</span><strong>{localizeDatasourceType(resolvedDs)}</strong></div>
-                  {targetName && <div className="dd-workbench__summary-row"><span>{locale === 'cs' ? 'Cíl' : 'Target'}</span><strong>{targetName}</strong></div>}
+                <div className="dd-workbench__detail-card">
+                  <div className="dd-workbench__detail-card-head">
+                    <span>{locale === 'cs' ? 'Datový zdroj' : 'Data source'}</span>
+                    <span className={`badge badge-${dsTypeBadge(resolvedDs)}`}>{localizeDatasourceType(resolvedDs)}</span>
+                  </div>
+                  <div className="dd-workbench__summary">
+                    <div className="dd-workbench__summary-row"><span>{t.propName}</span><strong>{resolvedDs.name}</strong></div>
+                    <div className="dd-workbench__summary-row"><span>{locale === 'cs' ? 'Typ' : 'Type'}</span><strong>{localizeDatasourceType(resolvedDs)}</strong></div>
+                    {targetIsDistinct && targetName && <div className="dd-workbench__summary-row"><span>{locale === 'cs' ? 'Cíl' : 'Target'}</span><strong>{targetName}</strong></div>}
+                  </div>
                 </div>
               )}
             </div>
-          </div>
+          )}
 
           <div className="dd-workbench__actions">
             <button

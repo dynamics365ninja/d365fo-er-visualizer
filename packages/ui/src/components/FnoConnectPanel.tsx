@@ -2965,11 +2965,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       {/* ── Browser ──────────────────────────────────────────────────────── */}
       {connState.kind === 'connected' && (
         <>
-          <MessageBar intent="warning" style={{ borderRadius: tokens.borderRadiusMedium }}>
-            <MessageBarBody>
-              {t.fnoDownloadInfo}
-            </MessageBarBody>
-          </MessageBar>
           <div className={styles.columns}>
             {/* Left: DataModel navigator */}
             <div className={styles.listBox}>

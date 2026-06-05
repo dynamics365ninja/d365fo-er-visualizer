@@ -2381,6 +2381,327 @@ async function main(): Promise<void> {
   }
   console.log();
 
+  // ─── Step 13: Mapping binding paths + InvoiceBase → CustInvoiceJour drill-down ──
+  // Downloads "Asl Invoice model mapping" and inspects the actual binding paths.
+  // Verifies that model.invoiceBase bindings exist and reference CustInvoiceJour.
+  // Also checks the format bindings for model.InvoiceBase.Data.* references.
+  console.log('─── Step 13: Mapping binding paths — model.invoiceBase → CustInvoiceJour');
+  if (cfg.solutionName) {
+    try {
+      // ── 13a. Find the DM GUID (from step 6/9 discoveries) ─────────────────
+      const dmGuid13 = 'e1534820-3b67-4266-ace3-663d9ef0eb09'; // confirmed in step 9
+      const containerNames13 = [
+        'InvoiceBase', 'PostalAddress', 'Contact', 'Customer', 'TaxTrans', 'LineItem',
+        'BankAccount', 'CustomerTransaction', 'MarkupTransaction', 'LineBase',
+        'InvoiceCustomer', 'InvoiceProject',
+      ];
+
+      // ── 13b. Download mapping via each root-container descriptor ──────────
+      // F&O returns a SEPARATE mapping XML for each container descriptor.
+      // We probe InvoiceBase and InvoiceCustomer to find which one(s) reference CustInvoiceJour.
+      console.log(`  DM GUID: ${dmGuid13}`);
+      console.log(`  Probing descriptors: [${containerNames13.slice(0, 6).join(', ')}…]`);
+      console.log();
+
+      type DescriptorResult = {
+        descriptor: string;
+        success: boolean;
+        xml?: string;
+        invoiceBasePaths: string[];
+        invoiceCustomerPaths: string[];
+        custInvoiceJourPresent: boolean;
+        custTransPresent: boolean;
+        allTableNames: string[];
+        allBindingPathCount: number;
+      };
+
+      const descriptorResults: DescriptorResult[] = [];
+
+      for (const desc of containerNames13) {
+        const mmSynth13: ErConfigSummary = {
+          solutionName: cfg.solutionName,
+          configurationName: cfg.solutionName + ' mapping',
+          componentType: 'ModelMapping',
+          parentDataModelGuid: dmGuid13,
+          descriptorNameCandidates: [desc],
+          hasContent: true,
+        };
+        try {
+          const dl13 = await downloadConfigXml(transport, conn, token, mmSynth13);
+          const xml13 = dl13.xml;
+
+          // Extract binding paths (ItemPath= attribute in ER mapping XML)
+          const pathRegex = /ItemPath="([^"]+)"/gi;
+          const allPaths: string[] = [];
+          let pm: RegExpExecArray | null;
+          while ((pm = pathRegex.exec(xml13)) !== null) {
+            if (pm[1]) allPaths.push(pm[1]);
+          }
+          // Also try Path= attribute variant
+          const pathRegex2 = /\bPath="([^"]+)"/gi;
+          while ((pm = pathRegex2.exec(xml13)) !== null) {
+            if (pm[1] && !allPaths.includes(pm[1])) allPaths.push(pm[1]);
+          }
+
+          // Filter to InvoiceBase paths and InvoiceCustomer paths
+          const invoiceBasePaths = allPaths.filter(p => /\bInvoiceBase\b/i.test(p)).slice(0, 8);
+          const invoiceCustomerPaths = allPaths.filter(p => /\bInvoiceCustomer\b/i.test(p)).slice(0, 8);
+
+          // Extract table names (TableName= or Name= in datasource context)
+          const tableNames: string[] = [];
+          const tableRegex = /TableName="([^"]+)"/gi;
+          while ((pm = tableRegex.exec(xml13)) !== null) {
+            if (pm[1] && !tableNames.includes(pm[1])) tableNames.push(pm[1]);
+          }
+
+          const custInvoiceJourPresent = xml13.includes('CustInvoiceJour');
+          const custTransPresent = xml13.includes('CustTrans') || xml13.includes('custtrans');
+
+          descriptorResults.push({
+            descriptor: desc,
+            success: true,
+            xml: xml13,
+            invoiceBasePaths,
+            invoiceCustomerPaths,
+            custInvoiceJourPresent,
+            custTransPresent,
+            allTableNames: tableNames.slice(0, 10),
+            allBindingPathCount: allPaths.length,
+          });
+          console.log(`  desc="${desc.padEnd(22)}" → ✓ (${xml13.length} chars, ${allPaths.length} paths)`
+            + (custInvoiceJourPresent ? ' ← CustInvoiceJour ✓' : '')
+            + (invoiceBasePaths.length > 0 ? ` InvoiceBase paths: ${invoiceBasePaths.length}` : ''));
+        } catch {
+          descriptorResults.push({
+            descriptor: desc, success: false,
+            invoiceBasePaths: [], invoiceCustomerPaths: [],
+            custInvoiceJourPresent: false, custTransPresent: false,
+            allTableNames: [], allBindingPathCount: 0,
+          });
+          console.log(`  desc="${desc.padEnd(22)}" → ✗ empty`);
+        }
+      }
+
+      console.log();
+      const successfulDescriptors = descriptorResults.filter(r => r.success);
+      console.log(`  Successful descriptors: ${successfulDescriptors.length} / ${descriptorResults.length}`);
+      console.log();
+
+      // ── 13c. InvoiceBase binding analysis ─────────────────────────────────
+      console.log('  13c. InvoiceBase binding analysis:');
+      const withInvoiceBasePaths = successfulDescriptors.filter(r => r.invoiceBasePaths.length > 0);
+      const withCustInvoiceJour = successfulDescriptors.filter(r => r.custInvoiceJourPresent);
+      const withBothIBAndCIJ = successfulDescriptors.filter(r => r.invoiceBasePaths.length > 0 && r.custInvoiceJourPresent);
+
+      console.log(`  Descriptors with InvoiceBase binding paths: ${withInvoiceBasePaths.length}`);
+      for (const r of withInvoiceBasePaths) {
+        console.log(`    desc="${r.descriptor}": ${r.invoiceBasePaths.length} InvoiceBase paths`);
+        for (const p of r.invoiceBasePaths.slice(0, 5)) {
+          console.log(`      Path: "${p}"`);
+        }
+      }
+      console.log(`  Descriptors with CustInvoiceJour: ${withCustInvoiceJour.length}`);
+      for (const r of withCustInvoiceJour) {
+        console.log(`    desc="${r.descriptor}": tables=[${r.allTableNames.join(', ')}]`);
+      }
+
+      check(
+        'Step 13: at least one descriptor returns InvoiceBase binding paths',
+        withInvoiceBasePaths.length > 0,
+        withInvoiceBasePaths.length > 0
+          ? `descriptors: [${withInvoiceBasePaths.map(r => r.descriptor).join(', ')}]`
+          : 'NONE — InvoiceBase bindings not in Asl Invoice model mapping (base mapping needed)',
+      );
+      check(
+        'Step 13: CustInvoiceJour present in at least one mapping',
+        withCustInvoiceJour.length > 0,
+        withCustInvoiceJour.length > 0
+          ? `descriptors: [${withCustInvoiceJour.map(r => r.descriptor).join(', ')}]`
+          : 'CustInvoiceJour not referenced — base mapping needed for InvoiceBase drill-down',
+      );
+      check(
+        'Step 13: InvoiceBase paths AND CustInvoiceJour coexist in same descriptor mapping',
+        withBothIBAndCIJ.length > 0,
+        withBothIBAndCIJ.length > 0
+          ? `descriptors: [${withBothIBAndCIJ.map(r => r.descriptor).join(', ')}]`
+          : 'No single descriptor has both — drill-down on model.InvoiceBase will NOT resolve CustInvoiceJour',
+      );
+
+      // ── 13d. Format bindings referencing model.InvoiceBase.Data.* ─────────
+      console.log();
+      console.log('  13d. Format InvoiceBase bindings (from GetEffectiveFormatMappingByID):');
+      if (cfg.configName) {
+        const fmt13 = components.find(c => c.configurationName === cfg.configName && c.hasContent);
+        if (fmt13) {
+          try {
+            const fmtDl13 = await downloadConfigXml(transport, conn, token, fmt13);
+            const fmtXml = fmtDl13.xml;
+            // Extract format binding expressions containing "InvoiceBase"
+            const exprRegex = /expressionAsString="([^"]*InvoiceBase[^"]*)"/gi;
+            const ibExprs: string[] = [];
+            let em: RegExpExecArray | null;
+            while ((em = exprRegex.exec(fmtXml)) !== null) {
+              if (em[1] && !ibExprs.includes(em[1])) ibExprs.push(em[1]);
+            }
+            console.log(`  Format "${cfg.configName}" has ${ibExprs.length} bindings referencing InvoiceBase:`);
+            for (const expr of ibExprs.slice(0, 10)) {
+              console.log(`    "${expr}"`);
+            }
+            if (ibExprs.length > 10) console.log(`    … and ${ibExprs.length - 10} more`);
+
+            // Derive model paths from expressions (strip "model." and ".Data.")
+            const modelPaths13 = [...new Set(ibExprs.map(e => {
+              let p = e;
+              if (p.toLowerCase().startsWith('model.')) p = p.slice(6);
+              // Strip .Data. segments (optional multiplicity notation)
+              p = p.replace(/\.Data\./gi, '\\');
+              return p.split(/[.(]/)[0] + '...' ; // show root segment
+            }))];
+            console.log(`  Derived model path roots: [${modelPaths13.slice(0, 6).join(', ')}]`);
+
+            // For each found InvoiceBase expression, check if the mapping resolves it
+            // by finding a binding path matching the model path
+            console.log();
+            console.log('  Checking if InvoiceBase expressions can be resolved in downloaded mappings:');
+            let resolvableCount = 0;
+            let unresolvableCount = 0;
+            for (const expr of ibExprs.slice(0, 5)) {
+              // Strip model. prefix
+              let modelPath = expr;
+              if (modelPath.toLowerCase().startsWith('model.')) modelPath = modelPath.slice(6);
+              // Convert .Data. to backslash (ER path convention for optional containers)
+              modelPath = modelPath.replace(/\.Data\./gi, '\\');
+              // Extract the root container name — take the first segment regardless of separator.
+              // modelPath may be dot-separated ("InvoiceBase.CompanyInfo.Logo") when there are no
+              // .Data. segments (all multiplicities = "1" = required), while mapping ItemPath
+              // attributes use slash separator ("InvoiceBase/EInvoiceAccountCode"). Split on
+              // both backslash and dot to reliably isolate the root container name.
+              const containerPath = modelPath.split(/[\\.]/)[0];
+              // Check if any successful descriptor's mapping has this root container path
+              const resolved = successfulDescriptors.find(r =>
+                r.invoiceBasePaths.some(p => p.toLowerCase().startsWith(containerPath.toLowerCase()))
+              );
+              if (resolved) {
+                console.log(`  ✓ "${expr.slice(0, 60)}" → resolved via descriptor "${resolved.descriptor}"`);
+                resolvableCount++;
+              } else {
+                console.log(`  ✗ "${expr.slice(0, 60)}" → NOT resolved (InvoiceBase not in any downloaded mapping)`);
+                unresolvableCount++;
+              }
+            }
+            if (ibExprs.length > 5) console.log(`    (showing 5 of ${ibExprs.length})`);
+
+            check(
+              'Step 13d: format InvoiceBase bindings found in format XML',
+              ibExprs.length > 0,
+              `${ibExprs.length} InvoiceBase expression(s) found`,
+            );
+            if (ibExprs.length > 0) {
+              check(
+                'Step 13d: InvoiceBase format bindings resolvable via downloaded mapping',
+                resolvableCount > 0,
+                resolvableCount > 0
+                  ? `${resolvableCount}/${Math.min(5, ibExprs.length)} checked are resolvable`
+                  : `NONE resolvable — base "Invoice model mapping" download required for InvoiceBase drill-down`,
+              );
+            }
+          } catch (e13d) {
+            console.log(`  ⚠ Format download failed: ${e13d instanceof Error ? e13d.message.slice(0, 150) : e13d}`);
+          }
+        } else {
+          console.log(`  ⚠ Format "${cfg.configName}" not found in components`);
+        }
+      }
+
+      // ── 13e. Try base "Invoice model mapping" for InvoiceBase descriptor ──
+      console.log();
+      console.log('  13e. Base mapping probe — "Invoice model mapping" with InvoiceBase descriptor:');
+      // The base DM GUID is NOT in the derived DataModel XML (GetDataModelByIDAndRevision strips Base= info).
+      // Try to find it by calling getFormatSolutionsSubHierarchy for "Invoice model" root.
+      // We need to probe GetModelMappingByID with the BASE DM GUID + descriptor "InvoiceBase".
+      // Since the base DM GUID is unknown, we'll try a few GUIDs from the SolutionComponentsGuids
+      // seen in the step 12 response (the parent-chain GUIDs in ConfigurationLabels).
+      const parentChainGuids13 = [
+        'fe2349e2-85fd-45e3-a3d5-6d10b409e830', // from step 12: ParentSolutionLabels.SolutionComponentsGuids
+      ];
+      for (const parentGuid of parentChainGuids13) {
+        console.log(`  Trying GetDataModelByIDAndRevision with parent GUID ${parentGuid}:`);
+        const dmSynth13b: ErConfigSummary = {
+          solutionName: 'Invoice model',
+          configurationName: 'Invoice model',
+          componentType: 'DataModel',
+          configurationGuid: parentGuid,
+          hasContent: true,
+          versionNumbers: [50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+        };
+        try {
+          const baseDmDl = await downloadConfigXml(transport, conn, token, dmSynth13b);
+          const baseContainers = extractDataContainerNames(baseDmDl.xml);
+          console.log(`  ✓ Base DataModel download SUCCESS! containers: ${baseContainers.length} [${baseContainers.slice(0, 5).join(', ')}…]`);
+          check('Step 13e: base DataModel ("Invoice model") downloadable via parent GUID', true, parentGuid);
+
+          // Now probe InvoiceBase mapping on the base DM GUID
+          const baseIbMapping: ErConfigSummary = {
+            solutionName: 'Invoice model',
+            configurationName: 'Invoice model mapping',
+            componentType: 'ModelMapping',
+            parentDataModelGuid: parentGuid,
+            descriptorNameCandidates: ['InvoiceBase'],
+            hasContent: true,
+          };
+          try {
+            const baseIbDl = await downloadConfigXml(transport, conn, token, baseIbMapping);
+            const baseXml = baseIbDl.xml;
+            const hasCIJ = baseXml.includes('CustInvoiceJour');
+            const hasIBPaths = /InvoiceBase/i.test(baseXml);
+            const tableRegex13e = /TableName="([^"]+)"/gi;
+            const tables13e: string[] = [];
+            let tm: RegExpExecArray | null;
+            while ((tm = tableRegex13e.exec(baseXml)) !== null) {
+              if (tm[1] && !tables13e.includes(tm[1])) tables13e.push(tm[1]);
+            }
+            console.log(`  ✓ Base "Invoice model mapping" with InvoiceBase descriptor: ${baseXml.length} chars`);
+            console.log(`    CustInvoiceJour: ${hasCIJ ? 'YES ✓' : 'NO ✗'}`);
+            console.log(`    InvoiceBase paths in XML: ${hasIBPaths ? 'YES ✓' : 'NO ✗'}`);
+            console.log(`    Tables found: [${tables13e.slice(0, 8).join(', ')}]`);
+            check('Step 13e: base mapping with InvoiceBase descriptor → CustInvoiceJour', hasCIJ,
+              hasCIJ ? 'InvoiceBase → CustInvoiceJour confirmed in base mapping' : 'CustInvoiceJour NOT in base InvoiceBase mapping');
+          } catch {
+            console.log(`  ✗ Base mapping InvoiceBase descriptor: empty/failed`);
+            // Try empty descriptor (default) as fallback
+            const baseDefaultMapping: ErConfigSummary = {
+              solutionName: 'Invoice model',
+              configurationName: 'Invoice model mapping',
+              componentType: 'ModelMapping',
+              parentDataModelGuid: parentGuid,
+              descriptorNameCandidates: ['InvoiceBase', 'InvoiceCustomer', ''],
+              hasContent: true,
+            };
+            try {
+              const baseDfDl = await downloadConfigXml(transport, conn, token, baseDefaultMapping);
+              const baseXml = baseDfDl.xml;
+              const hasCIJ = baseXml.includes('CustInvoiceJour');
+              console.log(`  → Fallback (any descriptor): ${baseDfDl.xml.length} chars, CustInvoiceJour: ${hasCIJ ? 'YES' : 'NO'}`);
+              check('Step 13e: base mapping (any descriptor) → CustInvoiceJour', hasCIJ,
+                hasCIJ ? 'base mapping confirmed' : 'CustInvoiceJour missing');
+            } catch {
+              console.log(`  ✗ Base mapping: all descriptors empty`);
+              check('Step 13e: base mapping downloadable', false, 'all descriptors empty');
+            }
+          }
+        } catch {
+          console.log(`  ✗ Base DataModel GUID ${parentGuid}: empty/failed`);
+          check('Step 13e: base DataModel ("Invoice model") downloadable via parent GUID', false, parentGuid);
+        }
+      }
+    } catch (err13) {
+      console.log(`  ⚠ Step 13 failed: ${err13 instanceof Error ? err13.message.slice(0, 200) : err13}`);
+    }
+  } else {
+    console.log('  (skipped — solutionName not set)');
+  }
+  console.log();
+
   // ─── Summary ─────────────────────────────────────────────────────────────
   console.log();
   const bar = '═'.repeat(50);

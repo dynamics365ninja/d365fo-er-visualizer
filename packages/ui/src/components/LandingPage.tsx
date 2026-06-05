@@ -63,8 +63,8 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     alignItems: 'center',
     gap: '32px',
-    backgroundColor: tokens.colorNeutralBackground1,
-    backgroundImage: `radial-gradient(ellipse at top, ${tokens.colorBrandBackground2} 0%, transparent 55%), linear-gradient(180deg, ${tokens.colorNeutralBackground1} 0%, ${tokens.colorNeutralBackground2} 100%)`,
+    backgroundColor: 'var(--bg-primary)',
+    backgroundImage: 'radial-gradient(ellipse at top, color-mix(in srgb, var(--surface-success-fg) 12%, transparent) 0%, transparent 55%)',
     position: 'relative',
     '@media (max-width: 480px)': {
       padding: '24px 12px 48px',
@@ -220,8 +220,8 @@ const useStyles = makeStyles({
   cardDelay1: { animationDelay: '200ms' },
   cardDelay2: { animationDelay: '280ms' },
   cardIconInfo: {
-    backgroundColor: tokens.colorPaletteBlueBackground2,
-    color: tokens.colorPaletteBlueForeground2,
+    backgroundColor: 'color-mix(in srgb, var(--brand-1) 18%, transparent)',
+    color: 'var(--brand-1)',
   },
   cardIconSuccess: {
     backgroundColor: tokens.colorPaletteGreenBackground2,
@@ -529,6 +529,20 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
 
+  const landingBrandVars = {
+    '--colorBrandBackground': 'var(--brand-1)',
+    '--colorBrandBackgroundHover': 'var(--brand-2)',
+    '--colorBrandBackgroundPressed': 'var(--brand-1)',
+    '--colorBrandBackground2': 'color-mix(in srgb, var(--brand-1) 20%, transparent)',
+    '--colorBrandForeground1': 'var(--brand-1)',
+    '--colorBrandForeground2': 'var(--brand-2)',
+    '--colorBrandStroke1': 'var(--brand-1)',
+    '--colorBrandStroke2': 'color-mix(in srgb, var(--brand-1) 36%, transparent)',
+    '--colorCompoundBrandBackground': 'var(--brand-1)',
+    '--colorCompoundBrandBackgroundHover': 'var(--brand-2)',
+    '--colorCompoundBrandStroke': 'var(--brand-1)',
+  } as React.CSSProperties;
+
   const processFiles = useCallback(async (files: FileList | null) => {
     setLoading(true);
     const { loaded, errors: newErrors } = await loadBrowserFiles(files, loadXmlFile);
@@ -573,6 +587,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   return (
     <div
       className={styles.root}
+      style={landingBrandVars}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}

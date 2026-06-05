@@ -12,20 +12,32 @@
     :root {
       color-scheme: dark;
       font-family: 'Inter', 'Segoe UI', sans-serif;
-      background: #0f1419;
+      --brand-1: #038387;
+      --brand-2: #37a987;
+      --brand-3: #2f9f7f;
+      --brand-light: #a8edea;
+      background: #181a1f;
       color: #f1f5f9;
     }
 
     body {
       margin: 0;
       min-height: 100vh;
-      background: #0f1419;
+      background:
+        radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--brand-1) 10%, transparent), transparent 52%),
+        radial-gradient(circle at 82% 86%, color-mix(in srgb, var(--brand-2) 8%, transparent), transparent 50%),
+        #181a1f;
       overflow: hidden;
     }
 
     @media (prefers-color-scheme: light) {
-      :root { color-scheme: light; background: #f0f4f8; color: #0f172a; }
-      body  { background: #f0f4f8; }
+      :root { color-scheme: light; background: #f8fafc; color: #0f172a; }
+      body  {
+        background:
+          radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--brand-1) 9%, transparent), transparent 52%),
+          radial-gradient(circle at 82% 86%, color-mix(in srgb, var(--brand-2) 7%, transparent), transparent 50%),
+          #f8fafc;
+      }
     }
 
     .boot {
@@ -33,7 +45,10 @@
       inset: 0;
       display: grid;
       place-items: center;
-      background: #0f1419;
+      background:
+        radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--brand-1) 11%, transparent), transparent 52%),
+        radial-gradient(circle at 82% 86%, color-mix(in srgb, var(--brand-2) 9%, transparent), transparent 50%),
+        #181a1f;
       overflow: hidden;
       z-index: 9999;
     }
@@ -49,13 +64,13 @@
     .boot::before {
       width: 540px; height: 540px;
       top: -180px; left: -120px;
-      background: radial-gradient(circle, rgba(3, 131, 135, 0.45), transparent 70%);
+      background: radial-gradient(circle, color-mix(in srgb, var(--brand-1) 45%, transparent), transparent 70%);
       animation: boot-float-a 14s ease-in-out infinite;
     }
     .boot::after {
       width: 440px; height: 440px;
       bottom: -160px; right: -120px;
-      background: radial-gradient(circle, rgba(55, 169, 135, 0.38), transparent 70%);
+      background: radial-gradient(circle, color-mix(in srgb, var(--brand-2) 30%, transparent), transparent 70%);
       animation: boot-float-b 18s ease-in-out infinite;
     }
     @keyframes boot-float-a {
@@ -96,7 +111,7 @@
       stroke-linecap: round;
     }
     .boot__ring .track {
-      stroke: rgba(255, 255, 255, 0.08);
+      stroke: rgba(210, 228, 221, 0.16);
     }
     .boot__ring .arc {
       stroke: url(#boot-gradient);
@@ -110,7 +125,7 @@
       font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
       font-weight: 800;
       font-size: 24px;
-      background: linear-gradient(135deg, #a8edea 0%, #038387 50%, #37a987 100%);
+      background: linear-gradient(135deg, var(--brand-light) 0%, var(--brand-2) 55%, var(--brand-3) 100%);
       -webkit-background-clip: text;
               background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -132,15 +147,15 @@
       font-weight: 600;
       letter-spacing: 0.12em;
       text-transform: uppercase;
-      color: #2dcfd3;
-      background: rgba(3, 131, 135, 0.1);
-      border: 1px solid rgba(3, 131, 135, 0.28);
-      box-shadow: 0 0 24px rgba(3, 131, 135, 0.18);
+      color: var(--brand-2);
+      background: color-mix(in srgb, var(--brand-1) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--brand-1) 32%, transparent);
+      box-shadow: 0 0 24px color-mix(in srgb, var(--brand-1) 24%, transparent);
     }
     .boot__badge-dot {
       width: 6px; height: 6px; border-radius: 50%;
-      background: #05a2a7;
-      box-shadow: 0 0 8px rgba(5, 162, 167, 0.8);
+      background: var(--brand-2);
+      box-shadow: 0 0 8px color-mix(in srgb, var(--brand-2) 80%, transparent);
       animation: boot-dot 1.6s ease-in-out infinite;
     }
     @keyframes boot-dot {
@@ -159,12 +174,17 @@
       margin: 0;
       font-family: 'Inter', 'Segoe UI', sans-serif;
       font-size: 12px;
-      color: #64748b;
+      color: #7f8f89;
       max-width: 360px;
     }
     @media (prefers-color-scheme: light) {
-      .boot { background: #f0f4f8; }
-      .boot__ring .track { stroke: rgba(3, 131, 135, 0.1); }
+      .boot {
+        background:
+          radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--brand-1) 9%, transparent), transparent 52%),
+          radial-gradient(circle at 82% 86%, color-mix(in srgb, var(--brand-2) 7%, transparent), transparent 50%),
+          #f8fafc;
+      }
+      .boot__ring .track { stroke: color-mix(in srgb, var(--brand-1) 22%, transparent); }
       .boot__title { color: #0f172a; }
     }
   </style>
@@ -176,8 +196,8 @@
         <defs>
           <linearGradient id="boot-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stop-color="#a8edea" />
-            <stop offset="50%" stop-color="#038387" />
-            <stop offset="100%" stop-color="#37a987" />
+            <stop offset="50%" stop-color="#37a987" />
+            <stop offset="100%" stop-color="#2f9f7f" />
           </linearGradient>
         </defs>
       </svg>

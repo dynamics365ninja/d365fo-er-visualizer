@@ -83,7 +83,7 @@ const useAppStyles = makeStyles({
     position: 'fixed',
     inset: 0,
     overflow: 'auto',
-    backgroundColor: tokens.colorNeutralBackground1,
+    backgroundColor: 'var(--bg-primary)',
   },
   shell: {
     position: 'fixed',
