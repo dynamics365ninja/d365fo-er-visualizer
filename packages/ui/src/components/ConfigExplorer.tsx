@@ -970,7 +970,6 @@ function ModelGroupSection({
   if (!modelNode) return null;
 
   const modelVisible = kindFilter.has('DataModel') && filteredNodeIds.has(modelNode.id);
-  const modelCfg = configurations[group.configIdx];
 
   const visibleChildren = group.children.filter(idx => {
     const cfg = configurations[idx];

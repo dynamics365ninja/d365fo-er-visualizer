@@ -7,13 +7,11 @@ import {
   Button,
   Card,
   CardHeader,
-  CardPreview,
   Title3,
   Subtitle2,
   Body1,
   Body1Strong,
   Caption1,
-  Caption1Strong,
   Spinner,
   Divider,
   MessageBar,
@@ -22,20 +20,15 @@ import {
   MessageBarActions,
   Tag,
   TagGroup,
-  type TagGroupProps,
   TabList,
   Tab,
   type SelectTabEvent,
   type SelectTabData,
 } from '@fluentui/react-components';
 import {
-  ArrowUploadRegular,
   ArrowDownloadRegular,
-  ArrowSyncRegular,
   CheckmarkCircleFilled,
   CheckmarkCircleRegular,
-  CloudArrowDownFilled,
-  CloudArrowDownRegular,
   CloudRegular,
   DataBarVerticalFilled,
   DismissRegular,
@@ -599,10 +592,6 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
     e.preventDefault();
     setIsDragging(false);
   }, []);
-
-  const handleRecentDismiss: TagGroupProps['onDismiss'] = (_, data) => {
-    removeRecentFile(String(data.value));
-  };
 
   return (
     <div

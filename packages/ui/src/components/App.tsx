@@ -4,12 +4,9 @@ import {
   makeStyles,
   tokens,
   mergeClasses,
-  shorthands,
   Button,
   Tooltip,
-  Badge,
   CounterBadge,
-  Tag,
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbDivider,
@@ -21,7 +18,6 @@ import {
   Caption1Strong,
   Body1Strong,
   Subtitle2,
-  Divider,
 } from '@fluentui/react-components';
 import {
   HomeRegular,
@@ -470,7 +466,6 @@ export function App() {
   const [rightTab, setRightTab] = useState<'properties' | 'search'>('properties');
   const [rightFullscreen, setRightFullscreen] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
-  const [landingPinned, setLandingPinned] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [statusWarningsOpen, setStatusWarningsOpen] = useState(false);
   const configs = useAppStore(s => s.configurations);
@@ -517,7 +512,6 @@ export function App() {
   const isLandingVisible = showLanding || configs.length === 0 || !!fnoIngestStatus;
 
   const handleFilesLoaded = useCallback(() => {
-    setLandingPinned(false);
     setShowLanding(false);
   }, []);
 
@@ -585,7 +579,7 @@ export function App() {
   }, [navigateBack, navigateForward, toggleSearch, toggleProperties]);
 
   const paletteCommands = useMemo<CommandItem[]>(() => [
-    { id: 'home', group: t.cmdGroupNav, label: t.cmdGoHome, action: () => { setLandingPinned(true); setShowLanding(true); } },
+    { id: 'home', group: t.cmdGroupNav, label: t.cmdGoHome, action: () => { setShowLanding(true); } },
     { id: 'back', group: t.cmdGroupNav, label: t.cmdBack, hint: 'Alt+←', action: navigateBack },
     { id: 'forward', group: t.cmdGroupNav, label: t.cmdForward, hint: 'Alt+→', action: navigateForward },
     { id: 'search', group: t.cmdGroupView, label: t.cmdToggleSearch, hint: 'Ctrl+F', action: toggleSearch },
@@ -622,7 +616,7 @@ export function App() {
         onToggleLeft={() => setShowLeft(s => !s)}
         onToggleRight={toggleProperties}
         onToggleSearch={toggleSearch}
-        onGoHome={() => { setLandingPinned(true); setShowLanding(true); }}
+        onGoHome={() => { setShowLanding(true); }}
         onOpenPalette={() => setPaletteOpen(true)}
         onToggleWarnings={() => setStatusWarningsOpen(v => !v)}
         warningsOpen={statusWarningsOpen}
@@ -635,7 +629,7 @@ export function App() {
             rightTab={rightTab}
           />
           <Toolbar
-            breadcrumb={<AppBreadcrumb onOpenHome={() => { setLandingPinned(true); setShowLanding(true); }} />}
+            breadcrumb={<AppBreadcrumb onOpenHome={() => { setShowLanding(true); }} />}
           />
           <div className={styles.main}>
             {showRight && rightFullscreen ? (

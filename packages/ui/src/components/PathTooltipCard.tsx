@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { makeStyles, tokens, mergeClasses } from '@fluentui/react-components';
 import {
   DatabaseRegular,

@@ -668,7 +668,6 @@ function WizardFrameView({ frame, onPush, configurations }: WizardFrameViewProps
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [selectedExpr, setSelectedExpr] = useState(frame.expression);
-  const treeItemRefs = React.useRef<Record<string, HTMLButtonElement | null>>({});
 
   React.useEffect(() => {
     setStep(1);
@@ -1136,7 +1135,6 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
         <DatasourceCard
           ds={resolvedDs}
           configIndex={effectiveCi}
-          configurations={configurations}
           onPush={onPush}
           stepNumber={showMappingStep ? 2 : 1}
         />
@@ -1154,6 +1152,10 @@ function FrameView({ frame, onPush, configurations }: FrameViewProps) {
     </div>
   );
 }
+
+// Keep legacy views reachable for future re-use and migration.
+const keepLegacyDrillDownViews = [ExpressionPathTree, WizardFrameView, FrameView, DatasourceCard];
+void keepLegacyDrillDownViews;
 
 function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps) {
   const resolveModelPath = useAppStore(s => s.resolveModelPath);
@@ -1446,10 +1448,9 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
 
 // ─── Datasource Card ─────────────────────────────────────────────────────────
 
-function DatasourceCard({ ds, configIndex, configurations, onPush, stepNumber }: {
+function DatasourceCard({ ds, configIndex, onPush, stepNumber }: {
   ds: any;
   configIndex: number;
-  configurations: any[];
   onPush: (f: Frame) => void;
   stepNumber?: number;
 }) {

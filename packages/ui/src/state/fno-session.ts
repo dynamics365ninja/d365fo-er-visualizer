@@ -9,7 +9,6 @@ import type {
   ErComponentType,
   ErConfigSummary,
   ErSolutionSummary,
-  FnoConnection,
 } from '@er-visualizer/fno-client';
 
 export type ConnectionState =
