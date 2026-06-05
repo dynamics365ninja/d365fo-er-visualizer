@@ -1349,6 +1349,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
         }
 
+        // Do not auto-pick the "first resolvable" datasource from expression references.
+        // If the binding root is not directly mapped to a datasource identifier,
+        // keep datasource empty so unmapped nodes are surfaced correctly.
+
         return {
           modelPath: binding.path,
           binding,
@@ -1365,22 +1369,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           b.path === tryPath || b.path.toLowerCase() === tryPath.toLowerCase()
         );
         if (binding) return materializeBindingResolution(binding);
-
-        // Fallback for container paths: if "Header" is not directly bound,
-        // use the nearest descendant binding such as "Header.ToDate".
-        const normalizedTryPath = tryPath.replace(/[\\/]/g, '.').toLowerCase();
-        const descendantBinding = bindings
-          .filter((b: any) => {
-            const normalizedBindingPath = String(b.path ?? '').replace(/[\\/]/g, '.').toLowerCase();
-            return normalizedBindingPath.startsWith(`${normalizedTryPath}.`);
-          })
-          .sort((a: any, b: any) => {
-            const aLen = String(a.path ?? '').replace(/[\\/]/g, '.').split('.').length;
-            const bLen = String(b.path ?? '').replace(/[\\/]/g, '.').split('.').length;
-            return aLen - bLen;
-          })[0];
-
-        if (descendantBinding) return materializeBindingResolution(descendantBinding);
       }
     }
     return null;
@@ -2285,6 +2273,34 @@ export function resolveDeepExpression(
 
     // If we found something meaningful, return it
     if (result.rootDs) return result;
+  }
+
+  // Fallback: expression is a function call (FILTER, FIRSTORNULL, …) so parseDottedPath
+  // stopped at the opening '(' and found nothing. Extract identifiers from inside the
+  // expression and resolve the first one that maps to a datasource.
+  const innerRefs = extractExpressionReferences(expression);
+  for (const ref of innerRefs) {
+    const refSegments = parseDottedPath(ref);
+    if (refSegments.length === 0) continue;
+    for (const ci of searchOrder) {
+      const datasourcePools = configDatasources.get(ci);
+      if (!datasourcePools) continue;
+      for (const datasources of datasourcePools) {
+        const resolved = navigateDatasourcePath(datasources, refSegments);
+        if (!resolved.rootDs) continue;
+        const result: DeepResolutionResult = {
+          rootDs: resolved.rootDs,
+          rootDsConfigIndex: ci,
+          nestedDs: resolved.leafDs !== resolved.rootDs ? resolved.leafDs : null,
+          pathSegments: refSegments,
+          formula: resolved.leafDs?.calculatedField?.expressionAsString ?? null,
+          involvedDatasources: [],
+          calculatedFieldChain: [],
+        };
+        if (resolved.leafDs) traceCalculatedFieldDeps(resolved.leafDs, allDatasourcePools, new Set(), result.involvedDatasources, result.calculatedFieldChain);
+        return result;
+      }
+    }
   }
 
   return null;
