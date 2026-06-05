@@ -49,7 +49,7 @@ import {
   WeatherSunnyRegular,
 } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
-import { locale, t } from '../i18n';
+import { locale, setLocale, t, useLocale } from '../i18n';
 import { FnoConnectPanel } from './FnoConnectPanel';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 
@@ -76,6 +76,23 @@ const useStyles = makeStyles({
     top: '16px',
     right: '16px',
     zIndex: 10,
+  },
+  langToggle: {
+    position: 'absolute',
+    top: '16px',
+    left: '16px',
+    zIndex: 10,
+    display: 'flex',
+    gap: '4px',
+    padding: '2px',
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground3,
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+  },
+  langButton: {
+    minWidth: '34px',
+    paddingLeft: '8px',
+    paddingRight: '8px',
   },
   hero: {
     width: '100%',
@@ -123,6 +140,8 @@ const useStyles = makeStyles({
   heroSub: {
     color: tokens.colorNeutralForeground2,
     maxWidth: '640px',
+    lineHeight: 1.45,
+    whiteSpace: 'pre-line',
   },
   dropzone: {
     width: '100%',
@@ -509,6 +528,7 @@ type LandingAccent = 'info' | 'success' | 'purple';
 
 export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const styles = useStyles();
+  const currentLocale = useLocale();
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
   const configs = useAppStore(s => s.configurations);
   const recentFiles = useAppStore(s => s.recentFiles);
@@ -592,6 +612,29 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
+      <div className={styles.langToggle} aria-label={t.language} role="group">
+        <Button
+          appearance={currentLocale === 'cs' ? 'primary' : 'subtle'}
+          size="small"
+          className={styles.langButton}
+          onClick={() => setLocale('cs')}
+          aria-pressed={currentLocale === 'cs'}
+          title={t.languageCzech}
+        >
+          CZ
+        </Button>
+        <Button
+          appearance={currentLocale === 'en' ? 'primary' : 'subtle'}
+          size="small"
+          className={styles.langButton}
+          onClick={() => setLocale('en')}
+          aria-pressed={currentLocale === 'en'}
+          title={t.languageEnglish}
+        >
+          EN
+        </Button>
+      </div>
+
       {/* Full-page loading overlay during F&O download */}
       {fnoIngestStatus && (
         <div className={styles.ingestOverlay}>

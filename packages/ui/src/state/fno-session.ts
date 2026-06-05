@@ -48,6 +48,7 @@ export interface FnoSessionStore {
   // ── Selection & download state ──
   selected: Map<string, ErConfigSummary>;
   setSelected: (map: Map<string, ErConfigSummary>) => void;
+  clearSelection: () => void;
   toggleSelected: (key: string, comp: ErConfigSummary) => void;
 
   // ── DataModel tracking ──
@@ -107,6 +108,7 @@ export const useFnoSession = create<FnoSessionStore>((set, get) => ({
   // Selection
   selected: new Map(),
   setSelected: (map) => set({ selected: map }),
+  clearSelection: () => set({ selected: new Map() }),
   toggleSelected: (key, comp) => {
     const prev = get().selected;
     const next = new Map(prev);

@@ -13,7 +13,7 @@ import { useAppStore } from '../state/store';
 import type { TreeNode } from '../state/store';
 import type { WhereUsedEntry } from '../state/store';
 import type { GUIDEntry } from '@er-visualizer/core';
-import { locale, t } from '../i18n';
+import { locale, t, useLocale } from '../i18n';
 import { getFormatTypeThemeColor } from '../utils/theme-colors';
 
 type Mode = 'search' | 'where-used';
@@ -232,6 +232,7 @@ function ExamplePalette({
 }
 
 export function SearchPanel() {
+  const currentLocale = useLocale();
   const searchQuery = useAppStore(s => s.searchQuery);
   const setSearchQuery = useAppStore(s => s.setSearchQuery);
   const executeSearch = useAppStore(s => s.executeSearch);
@@ -270,7 +271,7 @@ export function SearchPanel() {
       { label: 'IF(', hint: t.exampleHintFunction, category: section.formula },
       { label: '{', hint: locale === 'cs' ? 'Vyhledat GUID reference' : 'Search GUID references', category: section.guid },
     ];
-  }, []);
+  }, [currentLocale]);
 
   const whereUsedExamples = useMemo<ExamplePreset[]>(() => {
     const section = locale === 'cs'
@@ -284,7 +285,7 @@ export function SearchPanel() {
       { label: 'ledgerAccount', hint: t.exampleHintIdentifier, category: section.expression },
       { label: 'CalculatedTotal', hint: t.exampleHintCalcField, category: section.expression },
     ];
-  }, []);
+  }, [currentLocale]);
 
   const handleSearch = useCallback(() => {
     executeSearch();

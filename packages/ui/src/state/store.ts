@@ -9,6 +9,7 @@ import type {
 import { parseERConfiguration, GUIDRegistry } from '@er-visualizer/core';
 import { locale } from '../i18n';
 import { buildFormatBindingPresentation } from '../utils/format-binding-display';
+import { useFnoSession } from './fno-session';
 import {
   saveFileContent,
   readFileContent,
@@ -126,6 +127,45 @@ function saveRecentSessions(sessions: RecentSession[]): RecentSession[] {
 
 function sessionFingerprint(paths: string[]): string {
   return [...paths].sort().join('\u0001');
+}
+
+function buildRecentSessionFiles(configurations: ERConfiguration[], recentFiles: RecentFile[]): RecentFile[] {
+  return configurations.map(config => {
+    const cachedFromList = recentFiles.find(entry => entry.path === config.filePath);
+    return {
+      path: config.filePath,
+      name: config.filePath.split(/[\\/]/).pop() ?? config.filePath,
+      kind: config.content.kind,
+      openedAt: cachedFromList?.openedAt ?? Date.now(),
+    };
+  });
+}
+
+export function deriveRecentSessionsAfterConfigChange(
+  previousConfigs: ERConfiguration[],
+  nextConfigs: ERConfiguration[],
+  recentSessions: RecentSession[],
+  recentFiles: RecentFile[],
+): RecentSession[] {
+  const previousSessionId = previousConfigs.length > 0
+    ? sessionFingerprint(previousConfigs.map(config => config.filePath))
+    : null;
+
+  const baseSessions = recentSessions.filter(session => session.id !== previousSessionId);
+  if (nextConfigs.length === 0) return baseSessions;
+
+  const nextSessionFiles = buildRecentSessionFiles(nextConfigs, recentFiles);
+  const nextSessionId = sessionFingerprint(nextSessionFiles.map(file => file.path));
+  const nextSessionPathSet = new Set(nextSessionFiles.map(file => file.path));
+
+  return [
+    { id: nextSessionId, openedAt: Date.now(), files: nextSessionFiles },
+    ...baseSessions.filter(session => {
+      if (session.id === nextSessionId) return false;
+      if (session.files.length >= nextSessionFiles.length) return true;
+      return !session.files.every(file => nextSessionPathSet.has(file.path));
+    }),
+  ].slice(0, MAX_RECENT_SESSIONS);
 }
 
 function readStoredTechnicalDetails(): boolean {
@@ -491,14 +531,18 @@ function collectConfigurationWarnings(configurations: ERConfiguration[]): Config
     warnings.push({
       configIndex: -1,
       severity: 'info',
-      message: 'Pro plný drill-down načti i Data Model soubor.',
+      message: locale === 'cs'
+        ? 'Pro plný drill-down načti i Data Model soubor.'
+        : 'Load a Data Model file as well for a complete drill-down.',
     });
   }
   if (hasFormat && !hasMapping && !configurations.some(c => c.content.kind === 'Format' && (c.content as ERFormatContent).embeddedModelMappingVersions?.length > 0)) {
     warnings.push({
       configIndex: -1,
       severity: 'warning',
-      message: 'Formát bez Model Mapping — výrazy nebude možné trasovat na zdrojové tabulky.',
+      message: locale === 'cs'
+        ? 'Formát bez Model Mapping — výrazy nebude možné trasovat na zdrojové tabulky.'
+        : 'Format loaded without a Model Mapping — expressions cannot be traced back to source tables.',
     });
   }
 
@@ -566,7 +610,9 @@ function collectConfigurationWarnings(configurations: ERConfiguration[]): Config
         warnings.push({
           configIndex: ci,
           severity: 'warning',
-          message: `Formát "${config.solutionVersion.solution.name}" obsahuje ${brokenRefs} výrazů odkazujících na neznámý datový zdroj.\n${detail}${brokenRefs > 30 ? `\n  … a ${brokenRefs - 30} dalších` : ''}`,
+          message: locale === 'cs'
+            ? `Formát "${config.solutionVersion.solution.name}" obsahuje ${brokenRefs} výrazů odkazujících na neznámý datový zdroj.\n${detail}${brokenRefs > 30 ? `\n  … a ${brokenRefs - 30} dalších` : ''}`
+            : `Format "${config.solutionVersion.solution.name}" contains ${brokenRefs} expressions that reference an unknown data source.\n${detail}${brokenRefs > 30 ? `\n  … and ${brokenRefs - 30} more` : ''}`,
         });
       }
     }
@@ -665,27 +711,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Build/upsert a recent session that reflects the full set of currently
       // loaded configurations. Older sessions whose file set is a strict
       // subset of the new session are removed so incremental loads collapse.
-      const sessionFiles: RecentFile[] = newConfigs.map(c => {
-        const cachedFromList = nextRecent.find(r => r.path === c.filePath);
-        return {
-          path: c.filePath,
-          name: c.filePath.split(/[\\/]/).pop() ?? c.filePath,
-          kind: c.content.kind,
-          openedAt: cachedFromList?.openedAt ?? Date.now(),
-        };
-      });
-      const newSessionId = sessionFingerprint(sessionFiles.map(f => f.path));
-      const newSessionPathSet = new Set(sessionFiles.map(f => f.path));
-      const keptSessions = state.recentSessions.filter(s => {
-        if (s.id === newSessionId) return false;
-        if (s.files.length >= sessionFiles.length) return true;
-        return !s.files.every(f => newSessionPathSet.has(f.path));
-      });
-      const candidateSessions: RecentSession[] = [
-        { id: newSessionId, openedAt: Date.now(), files: sessionFiles },
-        ...keptSessions,
-      ].slice(0, MAX_RECENT_SESSIONS);
-      const nextSessions = saveRecentSessions(candidateSessions);
+      const nextSessions = saveRecentSessions(
+        deriveRecentSessionsAfterConfigChange(
+          state.configurations,
+          newConfigs,
+          state.recentSessions,
+          nextRecent,
+        ),
+      );
 
       // Persist full XML to IndexedDB (best effort).
       void saveFileContent(filePath, xml);
@@ -729,6 +762,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     const newConfigs = state.configurations.filter((_, i) => i !== index);
     const { registry, treeNodes, warnings } = buildDerivedState(newConfigs);
+    const nextRecentSessions = saveRecentSessions(
+      deriveRecentSessionsAfterConfigChange(
+        state.configurations,
+        newConfigs,
+        state.recentSessions,
+        state.recentFiles,
+      ),
+    );
 
     const openTabs: OpenTab[] = state.openTabs
       .filter(tab => tab.configIndex !== index)
@@ -775,11 +816,21 @@ export const useAppStore = create<AppState>((set, get) => ({
       navigationForward: [],
       canNavigateBack: navigationHistory.length > 0,
       canNavigateForward: false,
+      recentSessions: nextRecentSessions,
     });
   },
 
   removeAllConfigurations: () => {
+    const state = get();
     const { registry, treeNodes, warnings } = buildDerivedState([]);
+    const nextRecentSessions = saveRecentSessions(
+      deriveRecentSessionsAfterConfigChange(
+        state.configurations,
+        [],
+        state.recentSessions,
+        state.recentFiles,
+      ),
+    );
     set({
       configurations: [],
       registry,
@@ -798,7 +849,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       whereUsedResults: [],
       whereUsedScope: 'all',
       activeWhereUsedRefKey: null,
+      recentSessions: nextRecentSessions,
     });
+    useFnoSession.getState().clearSelection();
   },
 
   selectNode: (nodeId: string | null) => {
@@ -2361,93 +2414,104 @@ const dsTypeIcons: Record<string, string> = {
 };
 
 const dsGroupOrder = ['Table', 'CalculatedField', 'Class', 'Enum', 'ModelEnum', 'FormatEnum', 'ImportFormat', 'UserParameter', 'GroupBy', 'Container', 'Join', 'Object'];
-const dsGroupLabels: Record<string, string> = locale === 'cs'
-  ? {
-      Table: 'Tabulky',
-      CalculatedField: 'Výpočtová pole',
-      Class: 'Třídy',
-      Enum: 'AX výčty',
-      ModelEnum: 'Výčty datového modelu',
-      FormatEnum: 'Výčty formátu',
-      ImportFormat: 'Importní formáty',
-      UserParameter: 'Uživatelské parametry',
-      GroupBy: 'Seskupení',
-      Container: 'Kontejnery',
-      Join: 'Spojení',
-      Object: 'Objekty',
-    }
-  : {
-      Table: 'Tables',
-      CalculatedField: 'Calculated Fields',
-      Class: 'Classes',
-      Enum: 'Ax Enums',
-      ModelEnum: 'Data model Enums',
-      FormatEnum: 'Format enums',
-      ImportFormat: 'Import formats',
-      UserParameter: 'User Parameters',
-      GroupBy: 'Group By',
-      Container: 'Containers',
-      Join: 'Joins',
-      Object: 'Objects',
-    };
+function getDsGroupLabels(): Record<string, string> {
+  return locale === 'cs'
+    ? {
+        Table: 'Tabulky',
+        CalculatedField: 'Výpočtová pole',
+        Class: 'Třídy',
+        Enum: 'AX výčty',
+        ModelEnum: 'Výčty datového modelu',
+        FormatEnum: 'Výčty formátu',
+        ImportFormat: 'Importní formáty',
+        UserParameter: 'Uživatelské parametry',
+        GroupBy: 'Seskupení',
+        Container: 'Kontejnery',
+        Join: 'Spojení',
+        Object: 'Objekty',
+      }
+    : {
+        Table: 'Tables',
+        CalculatedField: 'Calculated Fields',
+        Class: 'Classes',
+        Enum: 'Ax Enums',
+        ModelEnum: 'Data model Enums',
+        FormatEnum: 'Format enums',
+        ImportFormat: 'Import formats',
+        UserParameter: 'User Parameters',
+        GroupBy: 'Group By',
+        Container: 'Containers',
+        Join: 'Joins',
+        Object: 'Objects',
+      };
+}
 
-const dataModelSectionLabels = locale === 'cs'
-  ? {
-      roots: 'Definice modelu',
-      enums: 'Výčtové typy',
-      records: 'Záznamy',
-    }
-  : {
-      roots: 'Model Definitions',
-      enums: 'Enumerations',
-      records: 'Records',
-    };
+function getDataModelSectionLabels(): { roots: string; enums: string; records: string } {
+  return locale === 'cs'
+    ? {
+        roots: 'Definice modelu',
+        enums: 'Výčtové typy',
+        records: 'Záznamy',
+      }
+    : {
+        roots: 'Model Definitions',
+        enums: 'Enumerations',
+        records: 'Records',
+      };
+}
 
-const mappingSectionLabels = locale === 'cs'
-  ? {
-      title: 'Mapování',
-      dataSources: 'Datové zdroje',
-      bindings: 'Vazby',
-      validations: 'Validace',
-    }
-  : {
-      title: 'Mapping',
-      dataSources: 'Data Sources',
-      bindings: 'Bindings',
-      validations: 'Validations',
-    };
+function getMappingSectionLabels(): { title: string; dataSources: string; bindings: string; validations: string } {
+  return locale === 'cs'
+    ? {
+        title: 'Mapování',
+        dataSources: 'Datové zdroje',
+        bindings: 'Vazby',
+        validations: 'Validace',
+      }
+    : {
+        title: 'Mapping',
+        dataSources: 'Data Sources',
+        bindings: 'Bindings',
+        validations: 'Validations',
+      };
+}
 
-const formatSectionLabels = locale === 'cs'
-  ? {
-      outputStructure: 'Výstupní struktura',
-      modelMappings: 'Mapování modelu',
-      enumerations: 'Výčty',
-      transformations: 'Transformace',
-      dataSources: 'Datové zdroje',
-      bindings: 'Vazby',
-      noBindings: 'bez vazeb',
-    }
-  : {
-      outputStructure: 'Output Structure',
-      modelMappings: 'Model Mappings',
-      enumerations: 'Enumerations',
-      transformations: 'Transformations',
-      dataSources: 'Data Sources',
-      bindings: 'Bindings',
-      noBindings: 'no bindings',
-    };
+function getFormatSectionLabels(): { outputStructure: string; modelMappings: string; enumerations: string; transformations: string; dataSources: string; bindings: string; noBindings: string } {
+  return locale === 'cs'
+    ? {
+        outputStructure: 'Výstupní struktura',
+        modelMappings: 'Mapování modelu',
+        enumerations: 'Výčty',
+        transformations: 'Transformace',
+        dataSources: 'Datové zdroje',
+        bindings: 'Vazby',
+        noBindings: 'bez vazeb',
+      }
+    : {
+        outputStructure: 'Output Structure',
+        modelMappings: 'Model Mappings',
+        enumerations: 'Enumerations',
+        transformations: 'Transformations',
+        dataSources: 'Data Sources',
+        bindings: 'Bindings',
+        noBindings: 'no bindings',
+      };
+}
 
-const groupBySectionLabels = locale === 'cs'
-  ? {
-      groupedBy: 'Seskupeno podle',
-      aggregated: 'Agregace',
-    }
-  : {
-      groupedBy: 'Grouped By',
-      aggregated: 'Aggregated',
-    };
+function getGroupBySectionLabels(): { groupedBy: string; aggregated: string } {
+  return locale === 'cs'
+    ? {
+        groupedBy: 'Seskupeno podle',
+        aggregated: 'Agregace',
+      }
+    : {
+        groupedBy: 'Grouped By',
+        aggregated: 'Aggregated',
+      };
+}
 
 function groupDatasourceNodes(dsNodes: TreeNode[], prefix: string): TreeNode[] {
+  const dsGroupLabels = getDsGroupLabels();
   const groups = new Map<string, TreeNode[]>();
   for (const node of dsNodes) {
     const type = node.data?.type || 'Unknown';
@@ -2526,6 +2590,7 @@ function findDatasourceByNormalizedPath(datasource: any, path: string): any | nu
 }
 
 function buildMappingTree(mapping: any, prefix: string, configIndex: number, versionNumber?: number): TreeNode {
+  const mappingSectionLabels = getMappingSectionLabels();
   const dsNodes = mapping.datasources.map((ds: any, di: number) =>
     buildDatasourceTree(ds, `${prefix}-ds-${di}`, configIndex),
   );
@@ -2566,6 +2631,8 @@ function buildMappingTree(mapping: any, prefix: string, configIndex: number, ver
 }
 
 function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
+  const dataModelSectionLabels = getDataModelSectionLabels();
+  const formatSectionLabels = getFormatSectionLabels();
   const sol = config.solutionVersion.solution;
   const children: TreeNode[] = [];
   const prefix = `cfg-${index}`;
@@ -2733,6 +2800,7 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
 }
 
 function buildDatasourceTree(ds: any, prefix: string, configIndex: number): TreeNode {
+  const groupBySectionLabels = getGroupBySectionLabels();
   const regularChildren = (ds.children ?? []).filter((child: any) => {
     return getGroupBySectionKind(child.name) == null;
   });

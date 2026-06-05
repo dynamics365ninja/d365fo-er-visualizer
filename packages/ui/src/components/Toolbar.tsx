@@ -14,7 +14,7 @@ import {
   FolderOpenRegular,
 } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
-import { t } from '../i18n';
+import { setLocale, t, useLocale } from '../i18n';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 
 interface ToolbarProps {
@@ -82,6 +82,20 @@ const useStyles = makeStyles({
   hiddenInput: {
     display: 'none',
   },
+  langSwitch: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '2px',
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground3,
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+  },
+  langButton: {
+    minWidth: '34px',
+    paddingLeft: '8px',
+    paddingRight: '8px',
+  },
 });
 
 /**
@@ -90,6 +104,7 @@ const useStyles = makeStyles({
  */
 export function Toolbar({ breadcrumb }: ToolbarProps) {
   const styles = useStyles();
+  const currentLocale = useLocale();
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
   const canNavigateBack = useAppStore(s => s.canNavigateBack);
   const canNavigateForward = useAppStore(s => s.canNavigateForward);
@@ -174,6 +189,30 @@ export function Toolbar({ breadcrumb }: ToolbarProps) {
       </div>
 
       <div className={styles.rightGroup}>
+        <Tooltip content={t.language} relationship="label" withArrow>
+          <div className={styles.langSwitch} aria-label={t.language} role="group">
+            <Button
+              appearance={currentLocale === 'cs' ? 'primary' : 'subtle'}
+              size="small"
+              className={styles.langButton}
+              onClick={() => setLocale('cs')}
+              aria-pressed={currentLocale === 'cs'}
+              title={t.languageCzech}
+            >
+              CZ
+            </Button>
+            <Button
+              appearance={currentLocale === 'en' ? 'primary' : 'subtle'}
+              size="small"
+              className={styles.langButton}
+              onClick={() => setLocale('en')}
+              aria-pressed={currentLocale === 'en'}
+              title={t.languageEnglish}
+            >
+              EN
+            </Button>
+          </div>
+        </Tooltip>
         {configs.length > 0 && (
           <span className={styles.chip} title={t.statusConfigs(configs.length)}>
             {configs.length} {t.statusConfigsWord}

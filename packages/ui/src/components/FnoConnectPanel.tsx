@@ -432,7 +432,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     setSolutions, setLoadingSolutions, setSolutionFilter,
     activeSolution, solutionPath, components, loadingComponents, componentTypeFilter,
     setActiveSolution, setSolutionPath, setComponents, setLoadingComponents, setComponentTypeFilter,
-    selected, setSelected, toggleSelected,
+    selected, setSelected, clearSelection, toggleSelected,
     rootDataModelByPath, allDataModelsSeen, dataModelChain,
     setRootDataModelByPath, setAllDataModelsSeen, setDataModelChain,
   } = useFnoSession();
@@ -799,8 +799,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     }
     setSelected(next);
   }, [filteredComponents, isComponentDownloadable, selected, setSelected]);
-
-  const clearSelection = useCallback(() => setSelected(new Map()), [setSelected]);
 
   const handleLoadSelected = useCallback(async () => {
     if (!activeProfile) return;

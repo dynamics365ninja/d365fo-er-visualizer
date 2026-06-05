@@ -53,7 +53,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { ToastHost } from './ToastHost';
 import { CommandPalette, type CommandItem } from './CommandPalette';
 import { ActivityBar } from './ActivityBar';
-import { t, locale } from '../i18n';
+import { t, locale, useLocale } from '../i18n';
 import { ERDirection } from '@er-visualizer/core';
 
 // ────────────────────────── helpers ──────────────────────────
@@ -463,6 +463,7 @@ const useStatusBarStyles = makeStyles({
 // ────────────────────────── App ──────────────────────────
 
 export function App() {
+  useLocale();
   const styles = useAppStyles();
   const [showLeft, setShowLeft] = useState(true);
   const [showRight, setShowRight] = useState(false);
@@ -594,7 +595,7 @@ export function App() {
     { id: 'tech', group: t.cmdGroupView, label: t.cmdToggleTechnical, action: () => setShowTechnicalDetails(!showTechnicalDetails) },
     { id: 'collapse', group: t.cmdGroupTools, label: t.cmdCollapseAll, action: () => { collapseAll(); requestExplorerExpand('none'); } },
     { id: 'expand', group: t.cmdGroupTools, label: t.cmdExpandAll, action: () => { expandAll(); requestExplorerExpand('all'); } },
-  ], [navigateBack, navigateForward, toggleSearch, toggleProperties, setThemeMode, themeMode, setShowTechnicalDetails, showTechnicalDetails, collapseAll, expandAll, requestExplorerExpand]);
+  ], [navigateBack, navigateForward, toggleSearch, toggleProperties, setThemeMode, themeMode, setShowTechnicalDetails, showTechnicalDetails, collapseAll, expandAll, requestExplorerExpand, locale]);
 
   const activeTabLabel = useMemo(() => {
     const active = openTabs.find(tab => tab.id === activeTabId);
