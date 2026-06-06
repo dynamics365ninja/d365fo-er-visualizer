@@ -4287,6 +4287,9 @@ body {
   font-size: 12px;
   overflow: hidden;
   box-shadow: 0 1px 2px color-mix(in srgb, var(--shadow-color) 18%, transparent);
+  /* flex column so ddt-canvas flex:1 can fill the remaining space */
+  display: flex;
+  flex-direction: column;
 }
 
 .dd-panel--empty {
@@ -9791,9 +9794,9 @@ body {
 /* ─── Drill-Down Tree View (ReactFlow canvas) ──────────────────────────────── */
 
 .ddt-canvas {
-  flex: 1;
-  min-height: 0;
-  height: 100%;
+  /* flex:1 works because dd-panel is now display:flex flex-direction:column */
+  flex: 1 1 0;
+  min-height: 380px;
   position: relative;
   overflow: hidden;
   background: var(--bg-primary);
@@ -9801,11 +9804,7 @@ body {
 
 .dd-panel--tab   > .ddt-canvas,
 .dd-panel--dialog > .ddt-canvas {
-  min-height: 460px;
-}
-
-.dd-panel:not(.dd-panel--tab):not(.dd-panel--dialog) > .ddt-canvas {
-  min-height: 340px;
+  min-height: 520px;
 }
 
 /* ── Tree node card ─────────────────────────────────────────── */
