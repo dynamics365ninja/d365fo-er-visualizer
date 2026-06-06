@@ -2047,35 +2047,60 @@ function buildDsNode(
 
 // ── Layout: assign x/y to each node (top-down, centred subtrees) ────────────
 
+// LR (left-to-right) layout constants
 const TREE_NODE_W = 220;
-const TREE_NODE_H = 68;
-const TREE_H_GAP = 36;
-const TREE_V_GAP = 56;
+const TREE_NODE_H = 78;  // approximate rendered height of one node card
+const TREE_H_GAP = 72;   // horizontal gap between levels
+const TREE_V_GAP = 14;   // vertical gap between siblings at the same level
 
-interface LayoutNode { id: string; x: number; y: number; w: number }
+interface LayoutNode { id: string; x: number; y: number; w: number; subtreeH: number }
 
-function layoutTree(node: TreeExprNode, y = 0, xOffset = 0): LayoutNode[] {
-  if (node.children.length === 0) {
-    return [{ id: node.id, x: xOffset, y, w: TREE_NODE_W }];
-  }
-
-  // Recursively lay out children
-  let childLayouts: LayoutNode[][] = [];
-  let cursor = 0;
+/** Returns the total vertical span this subtree occupies (used for sibling stacking). */
+function subtreeHeight(node: TreeExprNode): number {
+  if (node.children.length === 0) return TREE_NODE_H;
+  let total = 0;
   for (const child of node.children) {
-    const sub = layoutTree(child, y + TREE_NODE_H + TREE_V_GAP, xOffset + cursor);
-    childLayouts.push(sub);
-    const subWidth = Math.max(...sub.map(n => n.x + n.w)) - Math.min(...sub.map(n => n.x));
-    cursor += subWidth + TREE_H_GAP;
+    total += subtreeHeight(child);
+  }
+  total += (node.children.length - 1) * TREE_V_GAP;
+  return Math.max(total, TREE_NODE_H);
+}
+
+/**
+ * Left-to-right tree layout.
+ * @param node  Current tree node
+ * @param x     Left edge of this column (depth * (NODE_W + H_GAP))
+ * @param yTop  Top of the vertical range allocated to this subtree
+ */
+function layoutTree(node: TreeExprNode, x = 0, yTop = 0): LayoutNode[] {
+  const sh = subtreeHeight(node);
+
+  if (node.children.length === 0) {
+    const y = yTop + (sh - TREE_NODE_H) / 2;
+    return [{ id: node.id, x, y, w: TREE_NODE_W, subtreeH: sh }];
   }
 
-  const allChildren = childLayouts.flat();
-  // Centre parent over children
-  const leftmost = Math.min(...allChildren.filter(n => node.children.some(c => c.id === n.id)).map(n => n.x));
-  const rightmost = Math.max(...allChildren.filter(n => node.children.some(c => c.id === n.id)).map(n => n.x + n.w));
-  const cx = (leftmost + rightmost) / 2 - TREE_NODE_W / 2;
+  const nextX = x + TREE_NODE_W + TREE_H_GAP;
+  const results: LayoutNode[] = [];
+  let childY = yTop;
 
-  return [{ id: node.id, x: cx, y, w: TREE_NODE_W }, ...allChildren];
+  for (const child of node.children) {
+    const childSh = subtreeHeight(child);
+    const childNodes = layoutTree(child, nextX, childY);
+    results.push(...childNodes);
+    childY += childSh + TREE_V_GAP;
+  }
+
+  // Centre this node vertically across all its immediate children
+  const directChildren = node.children
+    .map(c => results.find(r => r.id === c.id))
+    .filter((c): c is LayoutNode => c !== undefined);
+  const topY = Math.min(...directChildren.map(c => c.y));
+  const botY = Math.max(...directChildren.map(c => c.y + TREE_NODE_H));
+  const myY  = (topY + botY) / 2 - TREE_NODE_H / 2;
+
+  results.unshift({ id: node.id, x, y: myY, w: TREE_NODE_W, subtreeH: sh });
+  return results;
 }
 
 function flattenTree(node: TreeExprNode, result: TreeExprNode[] = []): TreeExprNode[] {
@@ -2133,7 +2158,7 @@ function TreeFlowNode({ data }: { data: { node: TreeExprNode; onDrill?: (n: Tree
 
   return (
     <>
-      <Handle type="target" position={Position.Top} style={{ opacity: 0, pointerEvents: 'none' }} />
+      <Handle type="target" position={Position.Left} style={{ opacity: 0, pointerEvents: 'none' }} />
       <div
         className={`ddt-node ddt-node--${node.badge}${canDrill ? ' ddt-node--clickable' : ''}`}
         style={{ '--ddt-bg': colors.bg, '--ddt-fg': colors.fg, '--ddt-border': colors.border } as React.CSSProperties}
@@ -2155,7 +2180,7 @@ function TreeFlowNode({ data }: { data: { node: TreeExprNode; onDrill?: (n: Tree
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} style={{ opacity: 0, pointerEvents: 'none' }} />
+      <Handle type="source" position={Position.Right} style={{ opacity: 0, pointerEvents: 'none' }} />
     </>
   );
 }
@@ -2244,6 +2269,7 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill }:
       markerEnd: { type: 'arrowclosed' as any, color: 'var(--accent)', width: 12, height: 12 },
       animated: false,
     }));
+
 
     return { rfNodes, rfEdges };
   }, [rootNode, configIndex, onDrill]);
