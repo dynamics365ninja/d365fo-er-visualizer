@@ -2367,21 +2367,6 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
           </span>
           <span className="dd-hero__meta">{t.drillSteps(stack.length)}</span>
           <div className="dd-hero__actions">
-            {/* View mode toggle */}
-            <div className="dd-view-toggle" role="group" aria-label={locale === 'cs' ? 'Režim zobrazení' : 'View mode'}>
-              <button
-                type="button"
-                className={`dd-view-toggle__btn${viewMode === 'workbench' ? ' is-active' : ''}`}
-                onClick={() => setViewMode('workbench')}
-                title={locale === 'cs' ? 'Pracovní plocha' : 'Workbench'}
-              ><AppsListDetailRegular fontSize={14} /></button>
-              <button
-                type="button"
-                className={`dd-view-toggle__btn${viewMode === 'tree' ? ' is-active' : ''}`}
-                onClick={() => setViewMode('tree')}
-                title={locale === 'cs' ? 'Stromová vizualizace' : 'Tree visualization'}
-              ><FlowRegular fontSize={14} /></button>
-            </div>
             {!atRoot && (
               <button
                 type="button"
@@ -2407,6 +2392,32 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
                 aria-label={t.drillPopOut}
               ><ArrowExpandRegular fontSize={13} /> {t.drillPopOut}</button>
             )}
+          </div>
+
+          {/* View-mode tab switcher — pinned to the right */}
+          <div className="dd-view-toggle" role="tablist" aria-label={locale === 'cs' ? 'Pohled' : 'View'}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'workbench'}
+              className={`dd-view-toggle__btn${viewMode === 'workbench' ? ' is-active' : ''}`}
+              onClick={() => setViewMode('workbench')}
+              title={locale === 'cs' ? 'Pracovní plocha' : 'Workbench'}
+            >
+              <AppsListDetailRegular fontSize={14} />
+              <span className="dd-view-toggle__label">{locale === 'cs' ? 'Plocha' : 'Workbench'}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'tree'}
+              className={`dd-view-toggle__btn${viewMode === 'tree' ? ' is-active' : ''}`}
+              onClick={() => setViewMode('tree')}
+              title={locale === 'cs' ? 'Stromová vizualizace' : 'Tree view'}
+            >
+              <FlowRegular fontSize={14} />
+              <span className="dd-view-toggle__label">{locale === 'cs' ? 'Strom' : 'Tree'}</span>
+            </button>
           </div>
         </div>
 

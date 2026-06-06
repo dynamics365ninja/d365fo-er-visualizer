@@ -4369,33 +4369,9 @@ body {
 }
 
 .dd-hero__actions {
-  margin-left: auto;
   display: flex;
   gap: 6px;
   align-items: center;
-}
-
-.dd-view-toggle {
-  display: inline-flex;
-  border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
-  border-radius: 8px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--bg-primary) 30%, transparent);
-}
-
-.dd-view-toggle__btn {
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 8px;
-  cursor: pointer;
-}
-
-.dd-view-toggle__btn.is-active {
-  color: var(--text-primary);
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .dd-hero__btn {
@@ -9951,30 +9927,39 @@ body {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-/* ── View toggle ────────────────────────────────────────────── */
+/* ── View toggle (tab switcher, pinned top-right of hero) ────── */
+
+/* Push the toggle to the far right of dd-hero__top */
+.dd-hero__top .dd-view-toggle {
+  margin-left: auto;
+}
 
 .dd-view-toggle {
   display: inline-flex;
   align-items: center;
   gap: 2px;
   padding: 2px;
-  border-radius: 7px;
+  border-radius: 8px;
   background: color-mix(in srgb, var(--bg-primary) 55%, transparent);
   border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  flex-shrink: 0;
 }
 
 .dd-view-toggle__btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 22px;
+  gap: 4px;
+  padding: 3px 8px;
   border: none;
-  border-radius: 5px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
 }
 
 .dd-view-toggle__btn:hover {
@@ -9985,6 +9970,11 @@ body {
 .dd-view-toggle__btn.is-active {
   background: var(--accent);
   color: #fff;
+}
+
+.dd-view-toggle__label {
+  /* hide on very small panels */
+  display: inline;
 }
 
 /* Override ReactFlow controls position inside the tree canvas */
