@@ -9811,3 +9811,185 @@ body {
   color: var(--text-secondary);
   font-size: 10px;
 }
+
+/* ─── Drill-Down Tree View (ReactFlow canvas) ──────────────────────────────── */
+
+.ddt-canvas {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.dd-panel--tab   > .ddt-canvas,
+.dd-panel--dialog > .ddt-canvas {
+  min-height: 460px;
+}
+
+.dd-panel:not(.dd-panel--tab):not(.dd-panel--dialog) > .ddt-canvas {
+  min-height: 340px;
+}
+
+/* ── Tree node card ─────────────────────────────────────────── */
+
+.ddt-node {
+  background: var(--ddt-bg, var(--bg-secondary));
+  border: 1.5px solid var(--ddt-border, var(--border-color));
+  border-radius: 10px;
+  padding: 0;
+  overflow: hidden;
+  font-family: var(--font-sans, inherit);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.12s;
+  width: 220px;
+}
+
+.ddt-node--clickable {
+  cursor: pointer;
+}
+
+.ddt-node--clickable:hover {
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--accent) 28%, transparent);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.ddt-node__head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px 4px;
+  background: color-mix(in srgb, var(--ddt-bg, var(--bg-secondary)) 78%, black 6%);
+  border-bottom: 1px solid color-mix(in srgb, var(--ddt-border, var(--border-color)) 72%, transparent);
+}
+
+.ddt-node__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ddt-fg, var(--text-primary));
+  opacity: 0.85;
+  font-size: 13px;
+}
+
+.ddt-node__badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--ddt-fg, var(--text-secondary));
+  opacity: 0.75;
+}
+
+.ddt-node__pin {
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ddt-fg, var(--text-primary));
+  opacity: 0.5;
+}
+
+.ddt-node__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ddt-fg, var(--text-primary));
+  padding: 6px 10px 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ddt-node__sub {
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: color-mix(in srgb, var(--ddt-fg, var(--text-secondary)) 72%, transparent);
+  padding: 0 10px 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ddt-node__drill-hint {
+  font-size: 9px;
+  color: var(--accent);
+  padding: 2px 10px 6px;
+  letter-spacing: 0.3px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.ddt-node--clickable:hover .ddt-node__drill-hint {
+  opacity: 1;
+}
+
+/* ── Root node accent ───────────────────────────────────────── */
+
+.ddt-node--root {
+  border-width: 2px;
+}
+
+.ddt-node--root .ddt-node__label {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 500;
+}
+
+/* ── Leaf node ──────────────────────────────────────────────── */
+
+.ddt-node--table .ddt-node__head,
+.ddt-node--leaf.ddt-node--table .ddt-node__head {
+  background: color-mix(in srgb, var(--surface-success-bg) 80%, transparent);
+}
+
+.ddt-node--enum .ddt-node__head {
+  background: color-mix(in srgb, var(--surface-warning-bg) 80%, transparent);
+}
+
+.ddt-node--class .ddt-node__head {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* ── View toggle ────────────────────────────────────────────── */
+
+.dd-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--bg-primary) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+}
+
+.dd-view-toggle__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.dd-view-toggle__btn:hover {
+  background: color-mix(in srgb, var(--bg-hover) 80%, transparent);
+  color: var(--text-primary);
+}
+
+.dd-view-toggle__btn.is-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Override ReactFlow controls position inside the tree canvas */
+.ddt-canvas .react-flow__controls {
+  bottom: 10px;
+  left: 10px;
+}
+

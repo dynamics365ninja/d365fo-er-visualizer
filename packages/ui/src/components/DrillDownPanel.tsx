@@ -9,7 +9,7 @@
  * resolved to its datasource. Clicking a formula or child datasource name
  * pushes a new frame. A breadcrumb bar lets you jump back to any prior frame.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback, useLayoutEffect, useRef } from 'react';
 import {
   Dialog,
   DialogSurface,
@@ -19,6 +19,16 @@ import {
   DialogActions,
   Button,
 } from '@fluentui/react-components';
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  Handle,
+  Position,
+  type Node,
+  type Edge,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import {
   CompassNorthwestRegular,
   TableRegular,
@@ -41,6 +51,8 @@ import {
   ArrowExpandRegular,
   DismissRegular,
   CircleRegular,
+  FlowRegular,
+  AppsListDetailRegular,
 } from '@fluentui/react-icons';
 import { useAppStore, resolveDeepExpression } from '../state/store';
 import { locale, t } from '../i18n';
@@ -1843,6 +1855,418 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
   );
 }
 
+// ─── Expression Tree Visualizer ──────────────────────────────────────────────
+// Builds and renders a top-down ReactFlow tree of the full expression breakdown:
+//   root expression → model binding → datasource → calc field refs → leaf entities
+
+interface TreeExprNode {
+  id: string;
+  kind: 'root' | 'ref' | 'mapping' | 'datasource' | 'calcfield' | 'leaf';
+  label: string;
+  sublabel?: string;           // table name, enum name, class name, formula snippet
+  badge: 'root' | 'model' | 'mapping' | 'table' | 'enum' | 'class' | 'calc' | 'ds' | 'leaf';
+  expression?: string;
+  configIndex?: number;
+  children: TreeExprNode[];
+  leafType?: 'table' | 'enum' | 'class';
+}
+
+const MAX_CALC_DEPTH = 3;
+
+function buildTreeNode(
+  id: string,
+  expression: string,
+  configIndex: number,
+  configurations: any[],
+  resolveModelPath: (p: string) => any,
+  resolveDatasource: (n: string, ci: number) => any,
+  visited: Set<string>,
+  depth = 0,
+): TreeExprNode | null {
+  const visitKey = `${configIndex}::${expression}`;
+  if (visited.has(visitKey) || depth > 6) return null;
+  visited.add(visitKey);
+
+  const isModel = expression.toLowerCase().startsWith('model.') || expression.toLowerCase().startsWith('model\\');
+
+  // ── Model path → resolve via ModelMapping ──────────────────────────────
+  if (isModel) {
+    const cleanPath = extractModelPath(expression);
+    const modelResult = resolveModelPath(cleanPath);
+    if (!modelResult) {
+      return {
+        id, kind: 'ref', label: cleanPath.split(/[.\\]/).pop() ?? cleanPath,
+        sublabel: cleanPath, badge: 'model', expression, configIndex, children: [],
+      };
+    }
+    const bindingExpr: string = modelResult.binding?.expressionAsString ?? '';
+    const bindingCi: number = modelResult.bindingConfigIndex ?? configIndex;
+    const mappingLabel = bindingExpr.length > 50 ? bindingExpr.slice(0, 47) + '…' : bindingExpr;
+
+    const mappingNode: TreeExprNode = {
+      id: `${id}-m`,
+      kind: 'mapping',
+      label: locale === 'cs' ? 'Mapování' : 'Mapping',
+      sublabel: mappingLabel,
+      badge: 'mapping',
+      expression: bindingExpr,
+      configIndex: bindingCi,
+      children: [],
+    };
+
+    // Resolve the binding expression's datasources
+    if (bindingExpr) {
+      const tokens = tokenizeERExpr(bindingExpr);
+      const dsTokens = tokens.filter(
+        (tok): tok is ERToken & { kind: 'ds'; segments: string[] } =>
+          tok.kind === 'ds' && Array.isArray(tok.segments) && tok.segments.length > 0,
+      );
+      dsTokens.forEach((tok, ti) => {
+        const fullExpr = tok.segments.map(formatSegmentForExpression).join('.');
+        const child = buildTreeNode(
+          `${id}-m-ds${ti}`, fullExpr, bindingCi,
+          configurations, resolveModelPath, resolveDatasource,
+          new Set(visited), depth + 1,
+        );
+        if (child) mappingNode.children.push(child);
+      });
+    }
+
+    return {
+      id, kind: 'ref',
+      label: cleanPath.split(/[.\\]/).pop() ?? cleanPath,
+      sublabel: cleanPath,
+      badge: 'model',
+      expression, configIndex,
+      children: [mappingNode],
+    };
+  }
+
+  // ── Direct DS reference ────────────────────────────────────────────────
+  const deep = resolveDeepExpression(expression, configurations, configIndex);
+  const resolvedDs = (deep?.nestedDs ?? deep?.rootDs) ?? null;
+
+  if (!resolvedDs) {
+    // Try simple root-name lookup
+    const rootName = firstSegment(expression);
+    const direct = rootName ? resolveDatasource(rootName, configIndex) : null;
+    if (!direct?.datasource) {
+      return {
+        id, kind: 'ref', label: expression.split(/[.(]/)[0] || expression,
+        badge: 'ds', expression, configIndex, children: [],
+      };
+    }
+    return buildDsNode(id, direct.datasource, configIndex, expression, configurations, resolveModelPath, resolveDatasource, visited, depth);
+  }
+
+  return buildDsNode(id, resolvedDs, deep?.rootDsConfigIndex ?? configIndex, expression, configurations, resolveModelPath, resolveDatasource, visited, depth);
+}
+
+function buildDsNode(
+  id: string,
+  ds: any,
+  configIndex: number,
+  expression: string,
+  configurations: any[],
+  resolveModelPath: (p: string) => any,
+  resolveDatasource: (n: string, ci: number) => any,
+  visited: Set<string>,
+  depth: number,
+): TreeExprNode {
+  const dsNode: TreeExprNode = {
+    id: `${id}-ds`,
+    kind: 'datasource',
+    label: ds.name,
+    badge: 'ds',
+    expression,
+    configIndex,
+    children: [],
+  };
+
+  if (ds.tableInfo) {
+    dsNode.badge = 'table';
+    dsNode.sublabel = ds.tableInfo.tableName !== ds.name ? ds.tableInfo.tableName : undefined;
+    dsNode.leafType = 'table';
+    dsNode.children.push({
+      id: `${id}-ds-table`,
+      kind: 'leaf', label: ds.tableInfo.tableName, badge: 'table', leafType: 'table', children: [],
+    });
+  } else if (ds.enumInfo) {
+    const enumDisplay = formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo);
+    dsNode.badge = 'enum';
+    dsNode.sublabel = enumDisplay !== ds.name ? enumDisplay : undefined;
+    dsNode.leafType = 'enum';
+    dsNode.children.push({
+      id: `${id}-ds-enum`,
+      kind: 'leaf', label: enumDisplay, badge: 'enum', leafType: 'enum', children: [],
+    });
+  } else if (ds.classInfo) {
+    dsNode.badge = 'class';
+    dsNode.sublabel = ds.classInfo.className !== ds.name ? ds.classInfo.className : undefined;
+    dsNode.leafType = 'class';
+    dsNode.children.push({
+      id: `${id}-ds-class`,
+      kind: 'leaf', label: ds.classInfo.className, badge: 'class', leafType: 'class', children: [],
+    });
+  } else if (ds.calculatedField?.expressionAsString && depth < MAX_CALC_DEPTH) {
+    const calcExpr: string = ds.calculatedField.expressionAsString;
+    const calcNode: TreeExprNode = {
+      id: `${id}-ds-calc`,
+      kind: 'calcfield',
+      label: ds.name,
+      sublabel: calcExpr.length > 45 ? calcExpr.slice(0, 42) + '…' : calcExpr,
+      badge: 'calc',
+      expression: calcExpr,
+      configIndex,
+      children: [],
+    };
+
+    // Recursively expand the formula's references
+    const calcTokens = tokenizeERExpr(calcExpr).filter(
+      (tok): tok is ERToken & { kind: 'ds'; segments: string[] } =>
+        tok.kind === 'ds' && Array.isArray(tok.segments) && tok.segments.length > 0,
+    );
+    calcTokens.forEach((tok, ti) => {
+      const refExpr = tok.segments.map(formatSegmentForExpression).join('.');
+      const child = buildTreeNode(
+        `${id}-ds-calc-ref${ti}`, refExpr, configIndex,
+        configurations, resolveModelPath, resolveDatasource,
+        new Set(visited), depth + 1,
+      );
+      if (child) calcNode.children.push(child);
+    });
+
+    dsNode.badge = 'calc';
+    dsNode.kind = 'calcfield';
+    dsNode.sublabel = calcNode.sublabel;
+    dsNode.children.push(...calcNode.children);
+  }
+
+  return dsNode;
+}
+
+// ── Layout: assign x/y to each node (top-down, centred subtrees) ────────────
+
+const TREE_NODE_W = 220;
+const TREE_NODE_H = 68;
+const TREE_H_GAP = 36;
+const TREE_V_GAP = 56;
+
+interface LayoutNode { id: string; x: number; y: number; w: number }
+
+function layoutTree(node: TreeExprNode, y = 0, xOffset = 0): LayoutNode[] {
+  if (node.children.length === 0) {
+    return [{ id: node.id, x: xOffset, y, w: TREE_NODE_W }];
+  }
+
+  // Recursively lay out children
+  let childLayouts: LayoutNode[][] = [];
+  let cursor = 0;
+  for (const child of node.children) {
+    const sub = layoutTree(child, y + TREE_NODE_H + TREE_V_GAP, xOffset + cursor);
+    childLayouts.push(sub);
+    const subWidth = Math.max(...sub.map(n => n.x + n.w)) - Math.min(...sub.map(n => n.x));
+    cursor += subWidth + TREE_H_GAP;
+  }
+
+  const allChildren = childLayouts.flat();
+  // Centre parent over children
+  const leftmost = Math.min(...allChildren.filter(n => node.children.some(c => c.id === n.id)).map(n => n.x));
+  const rightmost = Math.max(...allChildren.filter(n => node.children.some(c => c.id === n.id)).map(n => n.x + n.w));
+  const cx = (leftmost + rightmost) / 2 - TREE_NODE_W / 2;
+
+  return [{ id: node.id, x: cx, y, w: TREE_NODE_W }, ...allChildren];
+}
+
+function flattenTree(node: TreeExprNode, result: TreeExprNode[] = []): TreeExprNode[] {
+  result.push(node);
+  for (const child of node.children) flattenTree(child, result);
+  return result;
+}
+
+function collectEdges(node: TreeExprNode, edges: Array<{ source: string; target: string }> = []): Array<{ source: string; target: string }> {
+  for (const child of node.children) {
+    edges.push({ source: node.id, target: child.id });
+    collectEdges(child, edges);
+  }
+  return edges;
+}
+
+// ── ReactFlow custom node ────────────────────────────────────────────────────
+
+const BADGE_COLORS: Record<string, { bg: string; fg: string; border: string }> = {
+  root:    { bg: 'var(--brand-1)', fg: '#fff', border: 'var(--brand-1)' },
+  model:   { bg: 'var(--surface-info-bg)', fg: 'var(--surface-info-fg)', border: 'var(--surface-info-border)' },
+  mapping: { bg: 'var(--surface-warning-bg)', fg: 'var(--surface-warning-fg)', border: 'var(--surface-warning-border)' },
+  ds:      { bg: 'var(--bg-secondary)', fg: 'var(--text-primary)', border: 'var(--border-color)' },
+  table:   { bg: 'var(--surface-success-bg)', fg: 'var(--surface-success-fg)', border: 'var(--surface-success-border)' },
+  enum:    { bg: 'var(--surface-warning-bg)', fg: 'var(--surface-warning-fg)', border: 'var(--surface-warning-border)' },
+  class:   { bg: 'color-mix(in srgb,var(--accent)15%,transparent)', fg: 'var(--accent)', border: 'color-mix(in srgb,var(--accent)40%,transparent)' },
+  calc:    { bg: 'var(--bg-tertiary)', fg: 'var(--text-secondary)', border: 'var(--border-color)' },
+  leaf:    { bg: 'var(--surface-success-bg)', fg: 'var(--surface-success-fg)', border: 'var(--surface-success-border)' },
+};
+
+function badgeIcon(badge: string): React.ReactNode {
+  const s = { fontSize: 14 } as const;
+  if (badge === 'root' || badge === 'model') return <CompassNorthwestRegular {...s} />;
+  if (badge === 'mapping') return <BranchForkRegular {...s} />;
+  if (badge === 'table') return <TableRegular {...s} />;
+  if (badge === 'enum') return <TextCaseTitleRegular {...s} />;
+  if (badge === 'class') return <SettingsRegular {...s} />;
+  if (badge === 'calc') return <CalculatorRegular {...s} />;
+  if (badge === 'ds') return <PinRegular {...s} />;
+  return <CircleRegular {...s} />;
+}
+
+function badgeLabel(badge: string): string {
+  const cs: Record<string, string> = { root: 'Výraz', model: 'Model', mapping: 'Mapování', table: 'Tabulka', enum: 'Výčet', class: 'Třída', calc: 'Výpočet', ds: 'DS', leaf: 'Entita' };
+  const en: Record<string, string> = { root: 'Expression', model: 'Model', mapping: 'Mapping', table: 'Table', enum: 'Enum', class: 'Class', calc: 'Calculation', ds: 'DS', leaf: 'Entity' };
+  return (locale === 'cs' ? cs : en)[badge] ?? badge;
+}
+
+function TreeFlowNode({ data }: { data: { node: TreeExprNode; onDrill?: (n: TreeExprNode) => void } }) {
+  const { node, onDrill } = data;
+  const colors = BADGE_COLORS[node.badge] ?? BADGE_COLORS.ds;
+  const isLeaf = node.kind === 'leaf';
+  const isRoot = node.badge === 'root';
+  const canDrill = Boolean(!isLeaf && node.expression && onDrill);
+
+  return (
+    <>
+      <Handle type="target" position={Position.Top} style={{ opacity: 0, pointerEvents: 'none' }} />
+      <div
+        className={`ddt-node ddt-node--${node.badge}${canDrill ? ' ddt-node--clickable' : ''}`}
+        style={{ '--ddt-bg': colors.bg, '--ddt-fg': colors.fg, '--ddt-border': colors.border } as React.CSSProperties}
+        onClick={canDrill ? () => onDrill!(node) : undefined}
+        title={node.expression ?? node.label}
+      >
+        <div className="ddt-node__head">
+          <span className="ddt-node__icon">{badgeIcon(node.badge)}</span>
+          <span className="ddt-node__badge">{badgeLabel(node.badge)}</span>
+          {(isRoot || isLeaf) && <span className="ddt-node__pin" />}
+        </div>
+        <div className="ddt-node__label" title={node.label}>{node.label}</div>
+        {node.sublabel && (
+          <div className="ddt-node__sub" title={node.sublabel}>{node.sublabel}</div>
+        )}
+        {canDrill && !isRoot && (
+          <div className="ddt-node__drill-hint">
+            {locale === 'cs' ? 'Rozbalit →' : 'Drill into →'}
+          </div>
+        )}
+      </div>
+      <Handle type="source" position={Position.Bottom} style={{ opacity: 0, pointerEvents: 'none' }} />
+    </>
+  );
+}
+
+const TREE_NODE_TYPES = { treeNode: TreeFlowNode };
+
+function DrillDownTreeView({ expression, configIndex, configurations, onDrill }: {
+  expression: string;
+  configIndex: number;
+  configurations: any[];
+  onDrill: (expr: string, ci: number) => void;
+}) {
+  const resolveModelPath = useAppStore(s => s.resolveModelPath);
+  const resolveDatasource = useAppStore(s => s.resolveDatasource);
+
+  // Build tree data structure
+  const rootNode = useMemo<TreeExprNode>(() => {
+    const tokens = tokenizeERExpr(expression);
+    const dsTokens = tokens.filter(
+      (tok): tok is ERToken & { kind: 'ds'; segments: string[] } =>
+        tok.kind === 'ds' && Array.isArray(tok.segments) && tok.segments.length > 0,
+    );
+
+    const rootChildren: TreeExprNode[] = [];
+
+    if (dsTokens.length === 0) {
+      // No DS refs found – show single "unresolved" leaf
+      rootChildren.push({
+        id: 'unresolved', kind: 'ref',
+        label: locale === 'cs' ? 'Žádná datová reference' : 'No data reference',
+        badge: 'ds', children: [],
+      });
+    } else {
+      dsTokens.forEach((tok, ti) => {
+        const fullExpr = tok.segments.map(formatSegmentForExpression).join('.');
+        const child = buildTreeNode(
+          `ref${ti}`, fullExpr, configIndex,
+          configurations, resolveModelPath, resolveDatasource,
+          new Set(), 0,
+        );
+        if (child) rootChildren.push(child);
+      });
+    }
+
+    const exprLabel = expression.length > 40 ? expression.slice(0, 37) + '…' : expression;
+    return {
+      id: 'root',
+      kind: 'root',
+      label: exprLabel,
+      badge: 'root',
+      expression,
+      configIndex,
+      children: rootChildren,
+    };
+  }, [expression, configIndex, configurations, resolveModelPath, resolveDatasource]);
+
+  // Convert tree → ReactFlow nodes + edges
+  const { rfNodes, rfEdges } = useMemo(() => {
+    const positions = layoutTree(rootNode);
+    const posMap = new Map(positions.map(p => [p.id, p]));
+    const allNodes = flattenTree(rootNode);
+    const allEdges = collectEdges(rootNode);
+
+    const rfNodes: Node[] = allNodes.map(n => {
+      const pos = posMap.get(n.id) ?? { x: 0, y: 0 };
+      return {
+        id: n.id,
+        type: 'treeNode',
+        position: { x: pos.x, y: pos.y },
+        data: {
+          node: n,
+          onDrill: (treeNode: TreeExprNode) => {
+            if (treeNode.expression) onDrill(treeNode.expression, treeNode.configIndex ?? configIndex);
+          },
+        },
+        style: { width: TREE_NODE_W, height: 'auto' },
+      };
+    });
+
+    const rfEdges: Edge[] = allEdges.map((e, i) => ({
+      id: `e${i}-${e.source}-${e.target}`,
+      source: e.source,
+      target: e.target,
+      type: 'smoothstep',
+      style: { stroke: 'var(--accent)', strokeWidth: 1.5, strokeDasharray: '4,3', opacity: 0.65 },
+      markerEnd: { type: 'arrowclosed' as any, color: 'var(--accent)', width: 12, height: 12 },
+      animated: false,
+    }));
+
+    return { rfNodes, rfEdges };
+  }, [rootNode, configIndex, onDrill]);
+
+  return (
+    <div className="ddt-canvas">
+      <ReactFlow
+        nodes={rfNodes}
+        edges={rfEdges}
+        nodeTypes={TREE_NODE_TYPES}
+        fitView
+        fitViewOptions={{ padding: 0.2 }}
+        nodesConnectable={false}
+        nodesDraggable={false}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background color="var(--border-color)" gap={20} variant={'dots' as any} />
+        <Controls showInteractive={false} />
+      </ReactFlow>
+    </div>
+  );
+}
+
 /**
  * Legacy trigger-button variant. Kept for any existing call-sites that want a
  * discrete "Show analysis" button. Prefer `DrillDownTrigger` — wrap the formula
@@ -1876,6 +2300,8 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
 }) {
   const configurations = useAppStore(s => s.configurations);
   const trimmedExpr = expression?.trim() ?? '';
+
+  const [viewMode, setViewMode] = useState<'workbench' | 'tree'>('workbench');
 
   const initialFrame = (): Frame => ({
     label: elementName ?? (trimmedExpr.split(/[.(]/)[0] || '?'),
@@ -1941,6 +2367,21 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
           </span>
           <span className="dd-hero__meta">{t.drillSteps(stack.length)}</span>
           <div className="dd-hero__actions">
+            {/* View mode toggle */}
+            <div className="dd-view-toggle" role="group" aria-label={locale === 'cs' ? 'Režim zobrazení' : 'View mode'}>
+              <button
+                type="button"
+                className={`dd-view-toggle__btn${viewMode === 'workbench' ? ' is-active' : ''}`}
+                onClick={() => setViewMode('workbench')}
+                title={locale === 'cs' ? 'Pracovní plocha' : 'Workbench'}
+              ><AppsListDetailRegular fontSize={14} /></button>
+              <button
+                type="button"
+                className={`dd-view-toggle__btn${viewMode === 'tree' ? ' is-active' : ''}`}
+                onClick={() => setViewMode('tree')}
+                title={locale === 'cs' ? 'Stromová vizualizace' : 'Tree visualization'}
+              ><FlowRegular fontSize={14} /></button>
+            </div>
             {!atRoot && (
               <button
                 type="button"
@@ -1987,13 +2428,26 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
         </nav>
       </header>
 
-      <div className="dd-frame-content">
-        <DrillDownRebuiltView
-          frame={currentFrame}
-          onPush={push}
+      {viewMode === 'tree' ? (
+        <DrillDownTreeView
+          expression={currentFrame.expression}
+          configIndex={currentFrame.configIndex}
           configurations={configurations}
+          onDrill={(expr, ci) => push({
+            label: expr.split(/[.(]/)[0] || expr,
+            expression: expr,
+            configIndex: ci,
+          })}
         />
-      </div>
+      ) : (
+        <div className="dd-frame-content">
+          <DrillDownRebuiltView
+            frame={currentFrame}
+            onPush={push}
+            configurations={configurations}
+          />
+        </div>
+      )}
     </div>
   );
 }
