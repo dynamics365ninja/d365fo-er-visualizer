@@ -129,4 +129,7 @@ export interface ERValidationRule {
   conditionExpression?: ERExpression;
   messageExpressionAsString: string;
   messageExpression?: ERExpression;
+  action?: string;
+  severity?: string;
+  stopProcessing?: boolean;
 }

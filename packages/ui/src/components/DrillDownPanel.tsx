@@ -180,7 +180,7 @@ const ER_FUNCTIONS = new Set([
   'DATETIMEFORMAT','DATEFORMAT','ADDDAYS','DATETIMEVALUE','DATEVALUE','TODAY','NOW','SESSIONNOW','SESSIONTODAY',
   'NULLDATE','NULLDATETIME','DAYOFYEAR',
   'VALUEIN','VALUEINLARGE','CONVERTCURRENCY','ROUNDAMOUNT',
-  'GETENUMVALUEBYNAME','GUIDVALUE','NUMSEQVALUE','BASE64STRINGTOCONTAINER',
+  'GETENUMVALUEBYNAME','GUIDVALUE','NUMSEQVALUE','BASE64STRINGTOCONTAINER','NOACCESSTEXT',
   'NULLCONTAINER','ISEMPTY','ISNULL',
 ]);
 
@@ -262,6 +262,24 @@ interface ERToken {
   raw: string;            // exact text in expression
   segments?: string[];    // for 'ds': unquoted path segments (['001_System','$TaxJuristictionUIP'])
 }
+
+type UniqueDsToken = {
+  expression: string;
+  segments: string[];
+  raw: string;
+};
+
+type DrillValidationRule = {
+  id?: string;
+  conditionExpressionAsString?: string;
+  messageExpressionAsString?: string;
+  actionLabel?: string;
+};
+
+type DrillValidationContext = {
+  path: string;
+  rules: DrillValidationRule[];
+};
 
 function formatSegmentForExpression(segment: string): string {
   if (/^[A-Za-z_][A-Za-z0-9_$]*$/.test(segment)) return segment;
@@ -405,6 +423,106 @@ function tokenizeERExpr(expr: string): ERToken[] {
     tokens.push({ kind: 'other', raw: ch }); i++;
   }
   return tokens;
+}
+
+function uniqueDsTokens(tokens: ERToken[]): UniqueDsToken[] {
+  const unique = new Map<string, UniqueDsToken>();
+
+  for (const tok of tokens) {
+    if (tok.kind !== 'ds' || !Array.isArray(tok.segments) || tok.segments.length === 0) continue;
+    const expression = tok.segments.map(formatSegmentForExpression).join('.');
+    if (unique.has(expression)) continue;
+    unique.set(expression, {
+      expression,
+      segments: tok.segments,
+      raw: tok.raw,
+    });
+  }
+
+  return Array.from(unique.values());
+}
+
+function dedupeTreeChildren(nodes: TreeExprNode[]): TreeExprNode[] {
+  const unique = new Map<string, TreeExprNode>();
+
+  for (const node of nodes) {
+    const dedupedChildren = dedupeTreeChildren(node.children ?? []);
+    const normalizedNode: TreeExprNode = {
+      ...node,
+      children: dedupedChildren,
+    };
+
+    const signature = [
+      normalizedNode.kind,
+      normalizedNode.badge,
+      normalizedNode.label,
+      normalizedNode.sublabel ?? '',
+      normalizedNode.leafType ?? '',
+      String(normalizedNode.configIndex ?? ''),
+    ].join('|');
+
+    if (!unique.has(signature)) {
+      unique.set(signature, normalizedNode);
+    }
+  }
+
+  return Array.from(unique.values());
+}
+
+function getValidationActionLabel(rule: any): string | undefined {
+  const candidates = [
+    rule?.action,
+    rule?.actionType,
+    rule?.errorLevel,
+    rule?.severity,
+    rule?.reaction,
+    rule?.behavior,
+  ];
+
+  const text = candidates.find(value => typeof value === 'string' && value.trim().length > 0);
+  if (text) return text.trim();
+
+  if (rule?.stopProcessing === true) return locale === 'cs' ? 'Zastavit' : 'Stop';
+  if (rule?.isWarning === true) return locale === 'cs' ? 'Varování' : 'Warning';
+
+  return undefined;
+}
+
+function getDrillValidationContext(
+  configurations: any[],
+  configIndex: number,
+  elementName?: string,
+): DrillValidationContext | null {
+  if (!elementName) return null;
+
+  const config = configurations[configIndex];
+  if (!config) return null;
+
+  const mappings: any[] = [];
+  if (config.content?.kind === 'ModelMapping') {
+    mappings.push(config.content.version.mapping);
+  }
+  if (config.content?.kind === 'Format') {
+    for (const version of config.content.embeddedModelMappingVersions ?? []) {
+      if (version?.mapping) mappings.push(version.mapping);
+    }
+  }
+
+  for (const mapping of mappings) {
+    const validation = (mapping.validations ?? []).find((v: any) => v.path === elementName);
+    if (!validation) continue;
+
+    const rules: DrillValidationRule[] = (validation.conditions ?? []).map((rule: any) => ({
+      id: rule?.id,
+      conditionExpressionAsString: rule?.conditionExpressionAsString,
+      messageExpressionAsString: rule?.messageExpressionAsString,
+      actionLabel: getValidationActionLabel(rule),
+    }));
+
+    return { path: validation.path, rules };
+  }
+
+  return null;
 }
 
 // ─── ER expression pretty-printer ────────────────────────────────────────────
@@ -1175,6 +1293,12 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
 
   const [selectedExpr, setSelectedExpr] = useState(frame.expression);
   const treeItemRefs = React.useRef<Record<string, HTMLButtonElement | null>>({});
+  const treeListRef = React.useRef<HTMLDivElement | null>(null);
+  const [listScrollTop, setListScrollTop] = useState(0);
+  const [listViewportHeight, setListViewportHeight] = useState(420);
+
+  const TREE_ITEM_ESTIMATED_HEIGHT = 50;
+  const TREE_OVERSCAN = 8;
 
   React.useEffect(() => {
     setSelectedExpr(frame.expression);
@@ -1213,6 +1337,19 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
     }
   }, [selected]);
 
+  React.useLayoutEffect(() => {
+    const el = treeListRef.current;
+    if (!el) return;
+
+    const update = () => setListViewportHeight(el.clientHeight);
+    update();
+
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+
+    return () => observer.disconnect();
+  }, []);
+
   if (!selected) {
     return null;
   }
@@ -1237,6 +1374,74 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
   const pushWithContext = React.useCallback((nextFrame: Frame) => {
     onPush(buildContextualFrame(nextFrame));
   }, [buildContextualFrame, onPush]);
+
+  const selectedIndex = Math.max(0, treeNodes.findIndex(n => n.expression === selected.expression));
+
+  const ensureTreeIndexVisible = React.useCallback((index: number) => {
+    const listEl = treeListRef.current;
+    if (!listEl) return;
+
+    const itemTop = index * TREE_ITEM_ESTIMATED_HEIGHT;
+    const itemBottom = itemTop + TREE_ITEM_ESTIMATED_HEIGHT;
+    const viewTop = listEl.scrollTop;
+    const viewBottom = viewTop + listEl.clientHeight;
+
+    if (itemTop < viewTop) {
+      listEl.scrollTop = itemTop;
+      return;
+    }
+    if (itemBottom > viewBottom) {
+      listEl.scrollTop = itemBottom - listEl.clientHeight;
+    }
+  }, []);
+
+  const onTreeListKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (treeNodes.length === 0) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      const nextIndex = Math.min(treeNodes.length - 1, selectedIndex + 1);
+      const next = treeNodes[nextIndex];
+      setSelectedExpr(next.expression);
+      ensureTreeIndexVisible(nextIndex);
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      const nextIndex = Math.max(0, selectedIndex - 1);
+      const next = treeNodes[nextIndex];
+      setSelectedExpr(next.expression);
+      ensureTreeIndexVisible(nextIndex);
+      return;
+    }
+
+    if (event.key === 'Home') {
+      event.preventDefault();
+      const next = treeNodes[0];
+      setSelectedExpr(next.expression);
+      ensureTreeIndexVisible(0);
+      return;
+    }
+
+    if (event.key === 'End') {
+      event.preventDefault();
+      const lastIndex = treeNodes.length - 1;
+      const next = treeNodes[lastIndex];
+      setSelectedExpr(next.expression);
+      ensureTreeIndexVisible(lastIndex);
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      pushWithContext({
+        label: selected.label,
+        expression: selected.expression,
+        configIndex: frame.configIndex,
+      });
+    }
+  }, [ensureTreeIndexVisible, frame.configIndex, pushWithContext, selected.expression, selected.label, selectedIndex, treeNodes]);
 
   const pushMappingToDatasource = React.useCallback((nextFrame: Frame) => {
     const deep = resolveDeepExpression(nextFrame.expression, configurations, nextFrame.configIndex);
@@ -1358,13 +1563,36 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
     return entries;
   }, [locale, resolvedDs]);
 
+  const virtualWindow = useMemo(() => {
+    const visibleCount = Math.ceil(Math.max(1, listViewportHeight) / TREE_ITEM_ESTIMATED_HEIGHT);
+    const start = Math.max(0, Math.floor(listScrollTop / TREE_ITEM_ESTIMATED_HEIGHT) - TREE_OVERSCAN);
+    const end = Math.min(treeNodes.length, start + visibleCount + TREE_OVERSCAN * 2);
+    const items = treeNodes.slice(start, end);
+    return {
+      start,
+      end,
+      items,
+      topSpacer: start * TREE_ITEM_ESTIMATED_HEIGHT,
+      bottomSpacer: (treeNodes.length - end) * TREE_ITEM_ESTIMATED_HEIGHT,
+    };
+  }, [listScrollTop, listViewportHeight, treeNodes]);
+
   return (
     <div className="dd-workbench">
       <div className="dd-workbench__split">
         <aside className="dd-workbench__tree" aria-label={locale === 'cs' ? 'Strom výrazu' : 'Expression tree'}>
           <div className="dd-workbench__panel-head">{locale === 'cs' ? 'Části výrazu' : 'Expression parts'}</div>
-          <div className="dd-workbench__tree-list">
-            {treeNodes.map(node => (
+          <div
+            className="dd-workbench__tree-list"
+            ref={treeListRef}
+            tabIndex={0}
+            onScroll={(event) => setListScrollTop(event.currentTarget.scrollTop)}
+            onKeyDown={onTreeListKeyDown}
+          >
+            {virtualWindow.topSpacer > 0 && (
+              <div className="dd-workbench__tree-spacer" style={{ height: `${virtualWindow.topSpacer}px` }} aria-hidden />
+            )}
+            {virtualWindow.items.map(node => (
               <button
                 key={node.expression}
                 type="button"
@@ -1384,6 +1612,9 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
                 <span className="dd-workbench__tree-expr">{node.expression}</span>
               </button>
             ))}
+            {virtualWindow.bottomSpacer > 0 && (
+              <div className="dd-workbench__tree-spacer" style={{ height: `${virtualWindow.bottomSpacer}px` }} aria-hidden />
+            )}
           </div>
         </aside>
 
@@ -1787,6 +2018,17 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
   const openDrillDownTab = useAppStore(s => s.openDrillDownTab);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
+  React.useEffect(() => {
+    if (!isDialogOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsDialogOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isDialogOpen]);
+
   if (!trimmedExpr) {
     return <span className={className}>{children}</span>;
   }
@@ -1817,11 +2059,21 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
         {children}
       </span>
       <Dialog open={isDialogOpen} onOpenChange={(_, d) => setIsDialogOpen(d.open)} modalType="modal">
-        <DialogSurface className="dd-dialog-surface">
-          <DialogBody>
+        <DialogSurface
+          className="dd-dialog-surface"
+          style={{
+            width: 'min(99vw, 99dvw)',
+            maxWidth: 'min(99vw, 99dvw)',
+            height: 'min(99vh, 99dvh)',
+            maxHeight: 'min(99vh, 99dvh)',
+          }}
+        >
+          <DialogBody className="dd-dialog-body">
             <DialogTitle
+              className="dd-dialog-titlebar"
               action={
                 <Button
+                  className="dd-dialog-close"
                   appearance="subtle"
                   size="small"
                   icon={<DismissRegular />}
@@ -1871,6 +2123,8 @@ interface TreeExprNode {
   leafType?: 'table' | 'enum' | 'class';
 }
 
+type TreeLabelMode = 'compact' | 'full';
+
 const MAX_CALC_DEPTH = 3;
 
 function buildTreeNode(
@@ -1881,6 +2135,7 @@ function buildTreeNode(
   resolveModelPath: (p: string) => any,
   resolveDatasource: (n: string, ci: number) => any,
   visited: Set<string>,
+  includeUnresolvedRefs: boolean,
   depth = 0,
 ): TreeExprNode | null {
   const visitKey = `${configIndex}::${expression}`;
@@ -1901,7 +2156,7 @@ function buildTreeNode(
     }
     const bindingExpr: string = modelResult.binding?.expressionAsString ?? '';
     const bindingCi: number = modelResult.bindingConfigIndex ?? configIndex;
-    const mappingLabel = bindingExpr.length > 50 ? bindingExpr.slice(0, 47) + '…' : bindingExpr;
+    const mappingLabel = bindingExpr;
 
     const mappingNode: TreeExprNode = {
       id: `${id}-m`,
@@ -1917,19 +2172,17 @@ function buildTreeNode(
     // Resolve the binding expression's datasources
     if (bindingExpr) {
       const tokens = tokenizeERExpr(bindingExpr);
-      const dsTokens = tokens.filter(
-        (tok): tok is ERToken & { kind: 'ds'; segments: string[] } =>
-          tok.kind === 'ds' && Array.isArray(tok.segments) && tok.segments.length > 0,
-      );
+      const dsTokens = uniqueDsTokens(tokens);
       dsTokens.forEach((tok, ti) => {
-        const fullExpr = tok.segments.map(formatSegmentForExpression).join('.');
+        const fullExpr = tok.expression;
         const child = buildTreeNode(
           `${id}-m-ds${ti}`, fullExpr, bindingCi,
           configurations, resolveModelPath, resolveDatasource,
-          new Set(visited), depth + 1,
+          new Set(visited), includeUnresolvedRefs, depth + 1,
         );
         if (child) mappingNode.children.push(child);
       });
+      mappingNode.children = dedupeTreeChildren(mappingNode.children);
     }
 
     return {
@@ -1951,15 +2204,23 @@ function buildTreeNode(
     const rootName = firstSegment(expression);
     const direct = rootName ? resolveDatasource(rootName, configIndex) : null;
     if (!direct?.datasource) {
+      if (!includeUnresolvedRefs) {
+        // Filter out unresolved singleton identifiers (often constants/functions),
+        // keep only path-like expressions so the tree doesn't fill with noise.
+        const isPathLike = /[.\\]/.test(expression) || /'[^']+'/.test(expression);
+        if (!isPathLike) return null;
+      }
+
       return {
         id, kind: 'ref', label: expression.split(/[.(]/)[0] || expression,
+        sublabel: includeUnresolvedRefs ? expression : undefined,
         badge: 'ds', expression, configIndex, children: [],
       };
     }
-    return buildDsNode(id, direct.datasource, configIndex, expression, configurations, resolveModelPath, resolveDatasource, visited, depth);
+    return buildDsNode(id, direct.datasource, configIndex, expression, configurations, resolveModelPath, resolveDatasource, visited, includeUnresolvedRefs, depth);
   }
 
-  return buildDsNode(id, resolvedDs, deep?.rootDsConfigIndex ?? configIndex, expression, configurations, resolveModelPath, resolveDatasource, visited, depth);
+  return buildDsNode(id, resolvedDs, deep?.rootDsConfigIndex ?? configIndex, expression, configurations, resolveModelPath, resolveDatasource, visited, includeUnresolvedRefs, depth);
 }
 
 function buildDsNode(
@@ -1971,8 +2232,11 @@ function buildDsNode(
   resolveModelPath: (p: string) => any,
   resolveDatasource: (n: string, ci: number) => any,
   visited: Set<string>,
+  includeUnresolvedRefs: boolean,
   depth: number,
 ): TreeExprNode {
+  const sameLabel = (a?: string, b?: string): boolean => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+
   const dsNode: TreeExprNode = {
     id: `${id}-ds`,
     kind: 'datasource',
@@ -1984,37 +2248,45 @@ function buildDsNode(
   };
 
   if (ds.tableInfo) {
+    const tableName = ds.tableInfo.tableName;
     dsNode.badge = 'table';
-    dsNode.sublabel = ds.tableInfo.tableName !== ds.name ? ds.tableInfo.tableName : undefined;
+    dsNode.sublabel = !sameLabel(tableName, ds.name) ? tableName : undefined;
     dsNode.leafType = 'table';
-    dsNode.children.push({
-      id: `${id}-ds-table`,
-      kind: 'leaf', label: ds.tableInfo.tableName, badge: 'table', leafType: 'table', children: [],
-    });
+    if (!sameLabel(tableName, ds.name)) {
+      dsNode.children.push({
+        id: `${id}-ds-table`,
+        kind: 'leaf', label: tableName, badge: 'table', leafType: 'table', children: [],
+      });
+    }
   } else if (ds.enumInfo) {
     const enumDisplay = formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo);
     dsNode.badge = 'enum';
-    dsNode.sublabel = enumDisplay !== ds.name ? enumDisplay : undefined;
+    dsNode.sublabel = !sameLabel(enumDisplay, ds.name) ? enumDisplay : undefined;
     dsNode.leafType = 'enum';
-    dsNode.children.push({
-      id: `${id}-ds-enum`,
-      kind: 'leaf', label: enumDisplay, badge: 'enum', leafType: 'enum', children: [],
-    });
+    if (!sameLabel(enumDisplay, ds.name)) {
+      dsNode.children.push({
+        id: `${id}-ds-enum`,
+        kind: 'leaf', label: enumDisplay, badge: 'enum', leafType: 'enum', children: [],
+      });
+    }
   } else if (ds.classInfo) {
+    const className = ds.classInfo.className;
     dsNode.badge = 'class';
-    dsNode.sublabel = ds.classInfo.className !== ds.name ? ds.classInfo.className : undefined;
+    dsNode.sublabel = !sameLabel(className, ds.name) ? className : undefined;
     dsNode.leafType = 'class';
-    dsNode.children.push({
-      id: `${id}-ds-class`,
-      kind: 'leaf', label: ds.classInfo.className, badge: 'class', leafType: 'class', children: [],
-    });
+    if (!sameLabel(className, ds.name)) {
+      dsNode.children.push({
+        id: `${id}-ds-class`,
+        kind: 'leaf', label: className, badge: 'class', leafType: 'class', children: [],
+      });
+    }
   } else if (ds.calculatedField?.expressionAsString && depth < MAX_CALC_DEPTH) {
     const calcExpr: string = ds.calculatedField.expressionAsString;
     const calcNode: TreeExprNode = {
       id: `${id}-ds-calc`,
       kind: 'calcfield',
       label: ds.name,
-      sublabel: calcExpr.length > 45 ? calcExpr.slice(0, 42) + '…' : calcExpr,
+      sublabel: calcExpr,
       badge: 'calc',
       expression: calcExpr,
       configIndex,
@@ -2022,19 +2294,17 @@ function buildDsNode(
     };
 
     // Recursively expand the formula's references
-    const calcTokens = tokenizeERExpr(calcExpr).filter(
-      (tok): tok is ERToken & { kind: 'ds'; segments: string[] } =>
-        tok.kind === 'ds' && Array.isArray(tok.segments) && tok.segments.length > 0,
-    );
+    const calcTokens = uniqueDsTokens(tokenizeERExpr(calcExpr));
     calcTokens.forEach((tok, ti) => {
-      const refExpr = tok.segments.map(formatSegmentForExpression).join('.');
+      const refExpr = tok.expression;
       const child = buildTreeNode(
         `${id}-ds-calc-ref${ti}`, refExpr, configIndex,
         configurations, resolveModelPath, resolveDatasource,
-        new Set(visited), depth + 1,
+        new Set(visited), includeUnresolvedRefs, depth + 1,
       );
       if (child) calcNode.children.push(child);
     });
+    calcNode.children = dedupeTreeChildren(calcNode.children);
 
     dsNode.badge = 'calc';
     dsNode.kind = 'calcfield';
@@ -2045,62 +2315,115 @@ function buildDsNode(
   return dsNode;
 }
 
-// ── Layout: assign x/y to each node (top-down, centred subtrees) ────────────
+// ── Layout: assign x/y to each node (top-down, centered subtrees) ──────────
 
-// LR (left-to-right) layout constants
-const TREE_NODE_W = 220;
-const TREE_NODE_H = 78;  // approximate rendered height of one node card
-const TREE_H_GAP = 72;   // horizontal gap between levels
-const TREE_V_GAP = 14;   // vertical gap between siblings at the same level
+const TREE_NODE_W_COMPACT_MIN = 220;
+const TREE_NODE_W_COMPACT_MAX = 420;
+const TREE_NODE_W_FULL_MIN = 280;
+const TREE_NODE_W_FULL_MAX = 620;
+const TREE_H_GAP = 26; // horizontal gap between sibling subtrees
+const AUTO_COMPACT_NODE_THRESHOLD = 34;
 
-interface LayoutNode { id: string; x: number; y: number; w: number; subtreeH: number }
+interface LayoutNode { id: string; x: number; y: number; subtreeW: number; h: number }
 
-/** Returns the total vertical span this subtree occupies (used for sibling stacking). */
-function subtreeHeight(node: TreeExprNode): number {
-  if (node.children.length === 0) return TREE_NODE_H;
-  let total = 0;
-  for (const child of node.children) {
-    total += subtreeHeight(child);
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function maxLineLength(text: string | undefined): number {
+  if (!text) return 0;
+  return text
+    .split(/\r?\n/)
+    .reduce((max, line) => Math.max(max, line.length), 0);
+}
+
+function estimateTreeNodeWidth(node: TreeExprNode, labelMode: TreeLabelMode): number {
+  const compact = labelMode === 'compact';
+  const labelMax = maxLineLength(node.label);
+  const subMax = maxLineLength(node.sublabel);
+  const contentChars = clamp(Math.max(labelMax, subMax), compact ? 18 : 24, compact ? 56 : 84);
+  const charPx = compact ? 7.1 : 7.6;
+  const horizontalPadding = compact ? 30 : 34;
+  const estimated = Math.ceil(contentChars * charPx + horizontalPadding);
+  if (compact) {
+    return clamp(estimated, TREE_NODE_W_COMPACT_MIN, TREE_NODE_W_COMPACT_MAX);
   }
-  total += (node.children.length - 1) * TREE_V_GAP;
-  return Math.max(total, TREE_NODE_H);
+  return clamp(estimated, TREE_NODE_W_FULL_MIN, TREE_NODE_W_FULL_MAX);
+}
+
+function getTreeVerticalGap(labelMode: TreeLabelMode): number {
+  return labelMode === 'full' ? 132 : 122;
+}
+
+function estimateWrappedLines(text: string, charsPerLine: number): number {
+  if (!text) return 0;
+  const lines = text
+    .split(/\r?\n/)
+    .map(line => Math.max(1, Math.ceil(line.length / Math.max(8, charsPerLine))));
+  return lines.reduce((sum, value) => sum + value, 0);
+}
+
+function estimateTreeNodeHeight(node: TreeExprNode, labelMode: TreeLabelMode, width: number): number {
+  const compact = labelMode === 'compact';
+  const labelCharsPerLine = compact ? Math.floor((width - 24) / 8.2) : Math.floor((width - 24) / 7);
+  const subCharsPerLine = compact ? Math.floor((width - 24) / 7.6) : Math.floor((width - 24) / 6.4);
+  const labelLines = estimateWrappedLines(node.label, labelCharsPerLine);
+  const rawSubLines = node.sublabel ? estimateWrappedLines(node.sublabel, subCharsPerLine) : 0;
+  // Compact mode keeps cards tighter while still reserving enough vertical space.
+  const subLines = compact ? Math.min(2, rawSubLines) : rawSubLines;
+  const hasActions = node.badge !== 'root';
+
+  const head = compact ? 26 : 28;
+  const labelBlock = Math.max(1, labelLines) * (compact ? 15 : 16);
+  const subBlock = subLines > 0 ? (subLines * (compact ? 13 : 14) + 4) : 0;
+  const actionsBlock = hasActions ? (compact ? 36 : 38) : 0;
+  const padding = compact ? 20 : 24;
+
+  const estimated = head + labelBlock + subBlock + actionsBlock + padding;
+  return compact
+    ? Math.max(node.badge === 'root' ? 88 : 112, estimated)
+    : estimated;
+}
+
+/** Returns the total horizontal span this subtree occupies (used for centering parents). */
+function subtreeWidth(node: TreeExprNode, labelMode: TreeLabelMode, nodeWidths: Map<string, number>): number {
+  const width = nodeWidths.get(node.id) ?? estimateTreeNodeWidth(node, labelMode);
+  if (node.children.length === 0) return width;
+  const childrenTotal = node.children.reduce((sum, child) => sum + subtreeWidth(child, labelMode, nodeWidths), 0);
+  const gaps = (node.children.length - 1) * TREE_H_GAP;
+  return Math.max(width, childrenTotal + gaps);
 }
 
 /**
- * Left-to-right tree layout.
+ * Top-down tree layout.
  * @param node  Current tree node
- * @param x     Left edge of this column (depth * (NODE_W + H_GAP))
- * @param yTop  Top of the vertical range allocated to this subtree
+ * @param xLeft Left edge of the horizontal range allocated to this subtree
+ * @param y     Top edge for this level
  */
-function layoutTree(node: TreeExprNode, x = 0, yTop = 0): LayoutNode[] {
-  const sh = subtreeHeight(node);
+function layoutTree(node: TreeExprNode, labelMode: TreeLabelMode, nodeWidths: Map<string, number>, xLeft = 0, y = 0): LayoutNode[] {
+  const width = nodeWidths.get(node.id) ?? estimateTreeNodeWidth(node, labelMode);
+  const myH = estimateTreeNodeHeight(node, labelMode, width);
+  const sw = subtreeWidth(node, labelMode, nodeWidths);
+  const myX = xLeft + (sw - width) / 2;
+  const result: LayoutNode[] = [{ id: node.id, x: myX, y, subtreeW: sw, h: myH }];
 
-  if (node.children.length === 0) {
-    const y = yTop + (sh - TREE_NODE_H) / 2;
-    return [{ id: node.id, x, y, w: TREE_NODE_W, subtreeH: sh }];
+  if (node.children.length === 0) return result;
+
+  const childSubtreeWidths = node.children.map(child => subtreeWidth(child, labelMode, nodeWidths));
+  const childrenSpan = childSubtreeWidths.reduce((sum, value) => sum + value, 0)
+    + Math.max(0, node.children.length - 1) * TREE_H_GAP;
+  // Keep child group centered under the parent subtree.
+  let childX = xLeft + (sw - childrenSpan) / 2;
+  const childY = y + myH + getTreeVerticalGap(labelMode);
+
+  for (let i = 0; i < node.children.length; i += 1) {
+    const child = node.children[i];
+    const childW = childSubtreeWidths[i];
+    result.push(...layoutTree(child, labelMode, nodeWidths, childX, childY));
+    childX += childW + TREE_H_GAP;
   }
 
-  const nextX = x + TREE_NODE_W + TREE_H_GAP;
-  const results: LayoutNode[] = [];
-  let childY = yTop;
-
-  for (const child of node.children) {
-    const childSh = subtreeHeight(child);
-    const childNodes = layoutTree(child, nextX, childY);
-    results.push(...childNodes);
-    childY += childSh + TREE_V_GAP;
-  }
-
-  // Centre this node vertically across all its immediate children
-  const directChildren = node.children
-    .map(c => results.find(r => r.id === c.id))
-    .filter((c): c is LayoutNode => c !== undefined);
-  const topY = Math.min(...directChildren.map(c => c.y));
-  const botY = Math.max(...directChildren.map(c => c.y + TREE_NODE_H));
-  const myY  = (topY + botY) / 2 - TREE_NODE_H / 2;
-
-  results.unshift({ id: node.id, x, y: myY, w: TREE_NODE_W, subtreeH: sh });
-  return results;
+  return result;
 }
 
 function flattenTree(node: TreeExprNode, result: TreeExprNode[] = []): TreeExprNode[] {
@@ -2149,20 +2472,31 @@ function badgeLabel(badge: string): string {
   return (locale === 'cs' ? cs : en)[badge] ?? badge;
 }
 
-function TreeFlowNode({ data }: { data: { node: TreeExprNode; onDrill?: (n: TreeExprNode) => void } }) {
-  const { node, onDrill } = data;
+function TreeFlowNode({ data }: { data: {
+  node: TreeExprNode;
+  onSelect?: (n: TreeExprNode) => void;
+  onDrill?: (n: TreeExprNode) => void;
+  onCopy?: (n: TreeExprNode) => void;
+  onOpenExplorer?: (n: TreeExprNode) => void;
+  isSelected?: boolean;
+  isInPath?: boolean;
+  canOpenExplorer?: boolean;
+  labelMode: TreeLabelMode;
+} }) {
+  const { node, onSelect, onDrill, onCopy, onOpenExplorer, isSelected, isInPath, canOpenExplorer, labelMode } = data;
   const colors = BADGE_COLORS[node.badge] ?? BADGE_COLORS.ds;
   const isLeaf = node.kind === 'leaf';
   const isRoot = node.badge === 'root';
   const canDrill = Boolean(!isLeaf && node.expression && onDrill);
+  const canCopy = Boolean(node.expression && onCopy);
 
   return (
     <>
-      <Handle type="target" position={Position.Left} style={{ opacity: 0, pointerEvents: 'none' }} />
+      <Handle type="target" position={Position.Top} style={{ opacity: 0, pointerEvents: 'none' }} />
       <div
-        className={`ddt-node ddt-node--${node.badge}${canDrill ? ' ddt-node--clickable' : ''}`}
+        className={`ddt-node ddt-node--${node.badge} ddt-node--${labelMode}${canDrill ? ' ddt-node--clickable' : ''}${isSelected ? ' ddt-node--selected' : ''}${!isSelected && isInPath ? ' ddt-node--path' : ''}`}
         style={{ '--ddt-bg': colors.bg, '--ddt-fg': colors.fg, '--ddt-border': colors.border } as React.CSSProperties}
-        onClick={canDrill ? () => onDrill!(node) : undefined}
+        onClick={() => onSelect?.(node)}
         title={node.expression ?? node.label}
       >
         <div className="ddt-node__head">
@@ -2174,35 +2508,53 @@ function TreeFlowNode({ data }: { data: { node: TreeExprNode; onDrill?: (n: Tree
         {node.sublabel && (
           <div className="ddt-node__sub" title={node.sublabel}>{node.sublabel}</div>
         )}
-        {canDrill && !isRoot && (
-          <div className="ddt-node__drill-hint">
-            {locale === 'cs' ? 'Rozbalit →' : 'Drill into →'}
+        {!isRoot && (
+          <div className="ddt-node__actions" onClick={(event) => event.stopPropagation()}>
+            {canDrill && (
+              <button type="button" className="ddt-node__action" onClick={() => onDrill?.(node)}>
+                {locale === 'cs' ? 'Drill' : 'Drill'}
+              </button>
+            )}
+            {canCopy && (
+              <button type="button" className="ddt-node__action" onClick={() => onCopy?.(node)}>
+                {locale === 'cs' ? 'Kopírovat' : 'Copy'}
+              </button>
+            )}
+            {canOpenExplorer && (
+              <button type="button" className="ddt-node__action" onClick={() => onOpenExplorer?.(node)}>
+                {locale === 'cs' ? 'Explorer' : 'Explorer'}
+              </button>
+            )}
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Right} style={{ opacity: 0, pointerEvents: 'none' }} />
+      <Handle type="source" position={Position.Bottom} style={{ opacity: 0, pointerEvents: 'none' }} />
     </>
   );
 }
 
 const TREE_NODE_TYPES = { treeNode: TreeFlowNode };
 
-function DrillDownTreeView({ expression, configIndex, configurations, onDrill }: {
+function DrillDownTreeView({ expression, configIndex, configurations, onDrill, includeUnresolvedRefs = false, labelMode = 'full' }: {
   expression: string;
   configIndex: number;
   configurations: any[];
   onDrill: (expr: string, ci: number) => void;
+  includeUnresolvedRefs?: boolean;
+  labelMode?: TreeLabelMode;
 }) {
   const resolveModelPath = useAppStore(s => s.resolveModelPath);
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
+  const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
+  const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
+  const pushToast = useAppStore(s => s.pushToast);
+  const flowRef = React.useRef<any>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState('root');
 
   // Build tree data structure
   const rootNode = useMemo<TreeExprNode>(() => {
     const tokens = tokenizeERExpr(expression);
-    const dsTokens = tokens.filter(
-      (tok): tok is ERToken & { kind: 'ds'; segments: string[] } =>
-        tok.kind === 'ds' && Array.isArray(tok.segments) && tok.segments.length > 0,
-    );
+    const dsTokens = uniqueDsTokens(tokens);
 
     const rootChildren: TreeExprNode[] = [];
 
@@ -2215,17 +2567,20 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill }:
       });
     } else {
       dsTokens.forEach((tok, ti) => {
-        const fullExpr = tok.segments.map(formatSegmentForExpression).join('.');
+        const fullExpr = tok.expression;
         const child = buildTreeNode(
           `ref${ti}`, fullExpr, configIndex,
           configurations, resolveModelPath, resolveDatasource,
-          new Set(), 0,
+          new Set(), includeUnresolvedRefs, 0,
         );
         if (child) rootChildren.push(child);
       });
+      const uniqueRootChildren = dedupeTreeChildren(rootChildren);
+      rootChildren.length = 0;
+      rootChildren.push(...uniqueRootChildren);
     }
 
-    const exprLabel = expression.length > 40 ? expression.slice(0, 37) + '…' : expression;
+    const exprLabel = expression;
     return {
       id: 'root',
       kind: 'root',
@@ -2235,28 +2590,113 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill }:
       configIndex,
       children: rootChildren,
     };
-  }, [expression, configIndex, configurations, resolveModelPath, resolveDatasource]);
+  }, [expression, configIndex, configurations, includeUnresolvedRefs, resolveModelPath, resolveDatasource]);
+
+  React.useEffect(() => {
+    setSelectedNodeId('root');
+  }, [expression, configIndex]);
+
+  const allEdges = useMemo(() => collectEdges(rootNode), [rootNode]);
+  const treeNodeCount = useMemo(() => flattenTree(rootNode, []).length, [rootNode]);
+  const effectiveLabelMode: TreeLabelMode = labelMode === 'full' && treeNodeCount > AUTO_COMPACT_NODE_THRESHOLD
+    ? 'compact'
+    : labelMode;
+
+  const parentById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const edge of allEdges) {
+      map.set(edge.target, edge.source);
+    }
+    return map;
+  }, [allEdges]);
+
+  const highlightedNodeIds = useMemo(() => {
+    const ids = new Set<string>();
+    let current: string | undefined = selectedNodeId;
+    while (current) {
+      ids.add(current);
+      current = parentById.get(current);
+    }
+    return ids;
+  }, [parentById, selectedNodeId]);
+
+  const highlightedEdgeIds = useMemo(() => {
+    const ids = new Set<string>();
+    let current: string | undefined = selectedNodeId;
+    while (current) {
+      const parent = parentById.get(current);
+      if (!parent) break;
+      ids.add(`${parent}->${current}`);
+      current = parent;
+    }
+    return ids;
+  }, [parentById, selectedNodeId]);
+
+  const nodeWidths = useMemo(() => {
+    const widthMap = new Map<string, number>();
+    const allNodes = flattenTree(rootNode, []);
+    for (const node of allNodes) {
+      widthMap.set(node.id, estimateTreeNodeWidth(node, effectiveLabelMode));
+    }
+    return widthMap;
+  }, [rootNode, effectiveLabelMode]);
 
   // Convert tree → ReactFlow nodes + edges
   const { rfNodes, rfEdges } = useMemo(() => {
-    const positions = layoutTree(rootNode);
+    const positions = layoutTree(rootNode, effectiveLabelMode, nodeWidths);
     const posMap = new Map(positions.map(p => [p.id, p]));
     const allNodes = flattenTree(rootNode);
-    const allEdges = collectEdges(rootNode);
 
     const rfNodes: Node[] = allNodes.map(n => {
       const pos = posMap.get(n.id) ?? { x: 0, y: 0 };
+      const nodeConfigIndex = n.configIndex ?? configIndex;
+      const datasourceNodeId = findDatasourceNode(n.label, nodeConfigIndex);
+      const isSelected = selectedNodeId === n.id;
+      const isInPath = highlightedNodeIds.has(n.id);
       return {
         id: n.id,
         type: 'treeNode',
         position: { x: pos.x, y: pos.y },
+        className: isSelected
+          ? 'ddt-node-wrap--selected'
+          : (isInPath ? 'ddt-node-wrap--path' : 'ddt-node-wrap--dim'),
         data: {
           node: n,
+          isSelected,
+          isInPath,
+          canOpenExplorer: Boolean(datasourceNodeId),
+          labelMode: effectiveLabelMode,
+          onSelect: (treeNode: TreeExprNode) => {
+            setSelectedNodeId(treeNode.id);
+          },
           onDrill: (treeNode: TreeExprNode) => {
             if (treeNode.expression) onDrill(treeNode.expression, treeNode.configIndex ?? configIndex);
           },
+          onCopy: async (treeNode: TreeExprNode) => {
+            const value = treeNode.expression;
+            if (!value) return;
+            try {
+              await navigator.clipboard.writeText(value);
+              pushToast({
+                kind: 'success',
+                message: locale === 'cs' ? `Zkopírováno: ${value}` : `Copied: ${value}`,
+              });
+            } catch {
+              pushToast({
+                kind: 'warning',
+                message: locale === 'cs'
+                  ? 'Kopírování se nepodařilo (schránka není dostupná).'
+                  : 'Copy failed (clipboard is not available).',
+              });
+            }
+          },
+          onOpenExplorer: (treeNode: TreeExprNode) => {
+            const cfg = treeNode.configIndex ?? configIndex;
+            const id = findDatasourceNode(treeNode.label, cfg);
+            if (id) navigateToTreeNode(id);
+          },
         },
-        style: { width: TREE_NODE_W, height: 'auto' },
+        style: { width: nodeWidths.get(n.id) ?? estimateTreeNodeWidth(n, effectiveLabelMode), height: 'auto' },
       };
     });
 
@@ -2265,23 +2705,48 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill }:
       source: e.source,
       target: e.target,
       type: 'smoothstep',
-      style: { stroke: 'var(--accent)', strokeWidth: 1.5, strokeDasharray: '4,3', opacity: 0.65 },
-      markerEnd: { type: 'arrowclosed' as any, color: 'var(--accent)', width: 12, height: 12 },
+      style: highlightedEdgeIds.has(`${e.source}->${e.target}`)
+        ? { stroke: 'var(--accent)', strokeWidth: 2.2, opacity: 0.95 }
+        : { stroke: 'var(--border-color)', strokeWidth: 1.3, strokeDasharray: '4,3', opacity: 0.45 },
+      markerEnd: {
+        type: 'arrowclosed' as any,
+        color: highlightedEdgeIds.has(`${e.source}->${e.target}`) ? 'var(--accent)' : 'var(--border-color)',
+        width: highlightedEdgeIds.has(`${e.source}->${e.target}`) ? 12 : 10,
+        height: highlightedEdgeIds.has(`${e.source}->${e.target}`) ? 12 : 10,
+      },
       animated: false,
     }));
 
 
     return { rfNodes, rfEdges };
-  }, [rootNode, configIndex, onDrill]);
+  }, [allEdges, configIndex, effectiveLabelMode, findDatasourceNode, highlightedEdgeIds, highlightedNodeIds, navigateToTreeNode, nodeWidths, onDrill, pushToast, rootNode, selectedNodeId]);
+
+  React.useLayoutEffect(() => {
+    if (!flowRef.current) return;
+    requestAnimationFrame(() => {
+      flowRef.current?.fitView({ padding: 0.2, duration: 220 });
+    });
+  }, [expression, configIndex, effectiveLabelMode, rfNodes.length, rfEdges.length]);
 
   return (
     <div className="ddt-canvas">
+      {effectiveLabelMode !== labelMode && (
+        <div className="ddt-auto-compact-hint">
+          {locale === 'cs'
+            ? `Auto: kompaktní režim (${treeNodeCount} uzlů)`
+            : `Auto: compact mode (${treeNodeCount} nodes)`}
+        </div>
+      )}
       <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
         nodeTypes={TREE_NODE_TYPES}
         fitView
         fitViewOptions={{ padding: 0.2 }}
+        onInit={(instance) => {
+          flowRef.current = instance;
+          instance.fitView({ padding: 0.2 });
+        }}
         nodesConnectable={false}
         nodesDraggable={false}
         proOptions={{ hideAttribution: true }}
@@ -2326,8 +2791,39 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
 }) {
   const configurations = useAppStore(s => s.configurations);
   const trimmedExpr = expression?.trim() ?? '';
+  const DRILLDOWN_VIEW_MODE_KEY = 'er-visualizer.drilldown.viewMode';
+  const DRILLDOWN_UNRESOLVED_KEY = 'er-visualizer.drilldown.showUnresolvedRefs';
+  const DRILLDOWN_LABEL_MODE_KEY = 'er-visualizer.drilldown.treeLabelMode';
 
-  const [viewMode, setViewMode] = useState<'workbench' | 'tree'>('workbench');
+  const [viewMode, setViewMode] = useState<'workbench' | 'tree'>(() => {
+    if (typeof window === 'undefined') return 'workbench';
+    const persisted = window.localStorage.getItem(DRILLDOWN_VIEW_MODE_KEY);
+    return persisted === 'tree' ? 'tree' : 'workbench';
+  });
+  const [showUnresolvedRefs, setShowUnresolvedRefs] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(DRILLDOWN_UNRESOLVED_KEY) === '1';
+  });
+  const [treeLabelMode, setTreeLabelMode] = useState<TreeLabelMode>(() => {
+    if (typeof window === 'undefined') return 'full';
+    const persisted = window.localStorage.getItem(DRILLDOWN_LABEL_MODE_KEY);
+    return persisted === 'compact' ? 'compact' : 'full';
+  });
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(DRILLDOWN_VIEW_MODE_KEY, viewMode);
+  }, [viewMode]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(DRILLDOWN_UNRESOLVED_KEY, showUnresolvedRefs ? '1' : '0');
+  }, [showUnresolvedRefs]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(DRILLDOWN_LABEL_MODE_KEY, treeLabelMode);
+  }, [treeLabelMode]);
 
   const initialFrame = (): Frame => ({
     label: elementName ?? (trimmedExpr.split(/[.(]/)[0] || '?'),
@@ -2338,6 +2834,11 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
   const [stack, setStack] = useState<Frame[]>([initialFrame()]);
 
   const currentFrame = stack[stack.length - 1];
+
+  const validationContext = useMemo(
+    () => getDrillValidationContext(configurations, currentFrame.configIndex, currentFrame.label),
+    [configurations, currentFrame.configIndex, currentFrame.label],
+  );
 
   const push = (frame: Frame) => setStack(s => {
     // Skip pushing a frame that is identical to the current top. This happens
@@ -2445,24 +2946,102 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
               <span className="dd-view-toggle__label">{locale === 'cs' ? 'Strom' : 'Tree'}</span>
             </button>
           </div>
-        </div>
-
-        <nav className="dd-hero__crumbs" aria-label={locale === 'cs' ? 'Drobečková navigace' : 'Breadcrumb'}>
-          {stack.map((f, i) => (
-            <React.Fragment key={i}>
-              {i > 0 && <span className="dd-hero__crumb-sep" aria-hidden>›</span>}
+          {viewMode === 'tree' && (
+            <>
+              <div
+                className="dd-tree-label-toggle"
+                role="tablist"
+                aria-label={locale === 'cs' ? 'Režim popisků uzlů' : 'Node label mode'}
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={treeLabelMode === 'compact'}
+                  className={`dd-tree-label-toggle__btn${treeLabelMode === 'compact' ? ' is-active' : ''}`}
+                  onClick={() => setTreeLabelMode('compact')}
+                  title={locale === 'cs' ? 'Kompaktní režim popisků' : 'Compact label mode'}
+                >
+                  {locale === 'cs' ? 'Kompaktní' : 'Compact'}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={treeLabelMode === 'full'}
+                  className={`dd-tree-label-toggle__btn${treeLabelMode === 'full' ? ' is-active' : ''}`}
+                  onClick={() => setTreeLabelMode('full')}
+                  title={locale === 'cs' ? 'Plný režim popisků' : 'Full label mode'}
+                >
+                  {locale === 'cs' ? 'Plný' : 'Full'}
+                </button>
+              </div>
               <button
                 type="button"
-                className={`dd-hero__crumb${i === stack.length - 1 ? ' is-active' : ''}`}
-                onClick={() => i < stack.length - 1 && jumpTo(i)}
-                disabled={i === stack.length - 1}
-                title={f.expression}
+                className={`dd-tree-debug-toggle${showUnresolvedRefs ? ' is-active' : ''}`}
+                onClick={() => setShowUnresolvedRefs(v => !v)}
+                aria-pressed={showUnresolvedRefs}
+                title={locale === 'cs' ? 'Zobrazit nevyřešené reference' : 'Show unresolved references'}
               >
-                {f.label}
+                {locale === 'cs' ? 'Nevyřešené' : 'Unresolved'}
               </button>
-            </React.Fragment>
-          ))}
-        </nav>
+            </>
+          )}
+        </div>
+
+        {stack.length > 1 && (
+          <nav className="dd-hero__crumbs" aria-label={locale === 'cs' ? 'Drobečková navigace' : 'Breadcrumb'}>
+            {stack.map((f, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && <span className="dd-hero__crumb-sep" aria-hidden>›</span>}
+                <button
+                  type="button"
+                  className={`dd-hero__crumb${i === stack.length - 1 ? ' is-active' : ''}`}
+                  onClick={() => i < stack.length - 1 && jumpTo(i)}
+                  disabled={i === stack.length - 1}
+                  title={f.expression}
+                >
+                  {f.label}
+                </button>
+              </React.Fragment>
+            ))}
+          </nav>
+        )}
+
+        {validationContext && validationContext.rules.length > 0 && (
+          <section className="dd-validation-summary" aria-label={locale === 'cs' ? 'Detaily validace' : 'Validation details'}>
+            <div className="dd-validation-summary__head">
+              <span className="dd-validation-summary__title">
+                {locale === 'cs' ? 'Detaily validace' : 'Validation details'}
+              </span>
+              <span className="dd-validation-summary__meta">
+                {validationContext.path} • {validationContext.rules.length} {locale === 'cs' ? 'pravidel' : 'rules'}
+              </span>
+            </div>
+            <div className="dd-validation-summary__list">
+              {validationContext.rules.map((rule, index) => (
+                <div key={rule.id ?? `${validationContext.path}-${index}`} className="dd-validation-summary__rule">
+                  <div className="dd-validation-summary__rule-head">
+                    <span className="dd-validation-summary__rule-index">#{index + 1}</span>
+                    {rule.actionLabel && (
+                      <span className="dd-validation-summary__rule-action">{rule.actionLabel}</span>
+                    )}
+                  </div>
+                  {rule.conditionExpressionAsString && (
+                    <div className="dd-validation-summary__expr-row">
+                      <span className="dd-validation-summary__expr-label">{locale === 'cs' ? 'Podmínka' : 'Condition'}</span>
+                      <ExpressionView expr={rule.conditionExpressionAsString} configIndex={currentFrame.configIndex} onPush={push} currentFrameExpression={currentFrame.expression} />
+                    </div>
+                  )}
+                  {rule.messageExpressionAsString && (
+                    <div className="dd-validation-summary__expr-row">
+                      <span className="dd-validation-summary__expr-label">{locale === 'cs' ? 'Zpráva' : 'Message'}</span>
+                      <ExpressionView expr={rule.messageExpressionAsString} configIndex={currentFrame.configIndex} onPush={push} currentFrameExpression={currentFrame.expression} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </header>
 
       {viewMode === 'tree' ? (
@@ -2470,6 +3049,8 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
           expression={currentFrame.expression}
           configIndex={currentFrame.configIndex}
           configurations={configurations}
+          includeUnresolvedRefs={showUnresolvedRefs}
+          labelMode={treeLabelMode}
           onDrill={(expr, ci) => push({
             label: expr.split(/[.(]/)[0] || expr,
             expression: expr,

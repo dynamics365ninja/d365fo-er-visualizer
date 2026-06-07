@@ -197,6 +197,47 @@ function getExplorerGroupAccent(kind: 'DataModel' | 'ModelMapping' | 'Format'): 
       : 'explorer-kind-group-format';
 }
 
+function getExplorerNodeIcon(node: TreeNode): React.ReactNode {
+  const kind = getConfigurationKind(node);
+
+  if (kind === 'DataModel') {
+    return <DataBarVerticalFilled fontSize={14} />;
+  }
+
+  if (kind === 'ModelMapping') {
+    return <LinkFilled fontSize={14} />;
+  }
+
+  if (kind === 'Format') {
+    return <DocumentFilled fontSize={14} />;
+  }
+
+  if (node.type === 'mapping' || node.type === 'binding' || node.type === 'formatBinding') {
+    return <LinkFilled fontSize={14} />;
+  }
+
+  if (node.type === 'validation') {
+    return <CheckmarkCircleRegular fontSize={14} />;
+  }
+
+  if (node.type === 'transformation') {
+    return <ArrowSyncRegular fontSize={14} />;
+  }
+
+  if (
+    node.type === 'datasource'
+    || node.type === 'field'
+    || node.type === 'container'
+    || node.type === 'enum'
+    || node.type === 'enumValue'
+    || node.type === 'model'
+  ) {
+    return <DataBarVerticalFilled fontSize={14} />;
+  }
+
+  return <DocumentFilled fontSize={14} />;
+}
+
 function filterTreeNodes(nodes: TreeNode[], query: string): TreeNode[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return nodes;
@@ -820,13 +861,18 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
   const isSelected = node.id === selectedId;
   const isAncestor = !isSelected && selectedPathIds.has(node.id);
   const accentClass = getExplorerNodeAccentClass(node);
+  const sectionKindClass = node.type === 'section' && node.data?.sectionKind
+    ? `tree-node-section-kind-${node.data.sectionKind}`
+    : '';
+  const sectionClass = node.type === 'section' ? 'tree-node-group' : '';
+  const parentClass = hasChildren ? 'tree-node-parent' : '';
   const kindLabel = getExplorerKindLabel(node);
   const canCloseConfiguration = depth === 0 && node.configIndex != null && node.type === 'file';
 
   return (
     <>
       <div
-        className={`tree-node tree-node-${node.type} ${accentClass} ${isSelected ? 'selected' : ''} ${isAncestor ? 'ancestor' : ''}`}
+        className={`tree-node tree-node-${node.type} ${sectionClass} ${parentClass} ${sectionKindClass} ${accentClass} ${isSelected ? 'selected' : ''} ${isAncestor ? 'ancestor' : ''}`}
         data-depth={depth}
         style={{ paddingLeft: 8 + depth * 16 }}
         onClick={handleClick}
@@ -837,7 +883,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
         ) : (
           <span className="tree-chevron-placeholder" aria-hidden="true" />
         )}
-        <span className="icon">{node.icon}</span>
+        <span className="icon">{getExplorerNodeIcon(node)}</span>
         <span className="tree-node-label">{node.name}</span>
         {version != null && version !== '' && node.type === 'file' && (
           <span className="tree-node-version-pill" title={`v${version}`}>v{version}</span>
