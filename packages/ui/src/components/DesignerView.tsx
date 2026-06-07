@@ -13,6 +13,11 @@ import {
   ArrowEnterRegular,
   CursorHoverRegular,
   DataPieRegular,
+  DataBarVerticalFilled,
+  LinkFilled,
+  DocumentFilled,
+  CheckmarkCircleRegular,
+  ArrowSyncRegular,
 } from '@fluentui/react-icons';
 import '@xyflow/react/dist/style.css';
 import { useAppStore, resolveDeepExpression } from '../state/store';
@@ -31,6 +36,40 @@ function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
   if (direction === ERDirection.Export) return t.formatDirectionExport;
   return t.formatDirectionUnknown;
+}
+
+function getNodeHeaderIcon(node: any): React.ReactNode {
+  const kind = node?.data?.kind ?? node?.data?.content?.kind;
+  const nodeType = node?.type;
+
+  if (kind === 'DataModel') return <DataBarVerticalFilled fontSize={14} />;
+  if (kind === 'ModelMapping') return <LinkFilled fontSize={14} />;
+  if (kind === 'Format') return <DocumentFilled fontSize={14} />;
+
+  if (nodeType === 'mapping' || nodeType === 'binding' || nodeType === 'formatBinding') {
+    return <LinkFilled fontSize={14} />;
+  }
+
+  if (nodeType === 'validation') {
+    return <CheckmarkCircleRegular fontSize={14} />;
+  }
+
+  if (nodeType === 'transformation') {
+    return <ArrowSyncRegular fontSize={14} />;
+  }
+
+  if (
+    nodeType === 'datasource'
+    || nodeType === 'field'
+    || nodeType === 'container'
+    || nodeType === 'enum'
+    || nodeType === 'enumValue'
+    || nodeType === 'model'
+  ) {
+    return <DataBarVerticalFilled fontSize={14} />;
+  }
+
+  return <DocumentFilled fontSize={14} />;
 }
 
 export function DesignerView() {
@@ -119,7 +158,7 @@ function FocusedNodeTab({ node }: { node: any }) {
     return (
       <div className="focused-node-tab">
         <div className="focused-node-tab-header">
-          <span className="focused-node-tab-icon">{node.icon}</span>
+          <span className="focused-node-tab-icon">{getNodeHeaderIcon(node)}</span>
           <span className="focused-node-tab-title">{node.name}</span>
         </div>
         <div className="focused-node-tab-body">
@@ -166,7 +205,7 @@ function FocusedNodeTab({ node }: { node: any }) {
   return (
     <div className="focused-node-tab">
       <div className="focused-node-tab-header">
-        <span className="focused-node-tab-icon">{node.icon}</span>
+        <span className="focused-node-tab-icon">{getNodeHeaderIcon(node)}</span>
         <span className="focused-node-tab-title">{node.name}</span>
       </div>
       <div className="focused-node-tab-body">
@@ -733,6 +772,7 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
   const [view, setView] = useState<'bindings' | 'datasources'>('bindings');
   const [density, setDensity] = useState<DensityMode>('comfortable');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const isDatasourceFocusedDetail = Boolean(focusNode && focusNode.type === 'datasource');
 
   useEffect(() => {
     if (!focusNode) return;
@@ -806,6 +846,14 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
       ds.tableInfo?.tableName?.toLowerCase().includes(lower)
     );
   }, [mm.datasources, filter]);
+
+  if (isDatasourceFocusedDetail) {
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <ActiveTabNodeSummary node={focusNode} configIndex={configIndex} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -1429,9 +1477,64 @@ function extractConstantFromExpression(expr: string): string {
   return '';
 }
 
-/** Format an element's preview value: constant from binding expression or {elementName} placeholder.
+type PreviewPlaceholderMode = 'sample' | 'omit' | 'braces';
+
+type PreviewRenderOptions = {
+  placeholderMode: PreviewPlaceholderMode;
+};
+
+function hashString(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = ((hash << 5) - hash + input.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function pickByHash(values: string[], seed: string): string {
+  if (values.length === 0) return '';
+  return values[hashString(seed) % values.length];
+}
+
+function normalizeForMatch(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function sampleValueForElement(el: ERFormatElement): string {
+  const name = el.name ?? '';
+  const seed = `${el.id}|${el.name}|${el.elementType}`;
+  const lower = normalizeForMatch(name);
+  const numericLikeName = /(amount|sum|total|price|tax|base|castka|sazba|rate|percent|pct|qty|quantity|count|pocet|index|poradi|id|number|num|cislo|ref|value|hodnota|saldo|debit|credit|net|gross|subtotal)/.test(lower);
+
+  if (el.elementType === 'Numeric') {
+    return pickByHash(['0', '1', '12', '105.45', '999.99'], seed);
+  }
+  if (numericLikeName) return pickByHash(['0', '1', '12', '105.45', '999.99'], seed);
+  if (el.elementType === 'DateTime') {
+    return pickByHash(['2026-01-15', '2026-03-31', '2026-06-01T10:30:00'], seed);
+  }
+  if (/(is|has|flag|enabled|active|valid|platny|aktivni)/.test(lower)) return pickByHash(['true', 'false'], seed);
+  if (/(date|datum)/.test(lower)) return pickByHash(['2026-01-15', '2026-03-31'], seed);
+  if (/(time|cas)/.test(lower)) return pickByHash(['10:30:00', '14:05:22'], seed);
+  if (/(vat|dic)/.test(lower)) return pickByHash(['CZ699001234', 'CZ12345678'], seed);
+  if (/(ico)/.test(lower)) return pickByHash(['12345678', '27654321'], seed);
+  if (/(code|kod)/.test(lower)) return pickByHash(['A001', 'INV001', 'DOC2026'], seed);
+  if (/(name|nazev|company|firma|customer|partner)/.test(lower)) return pickByHash(['Contoso s.r.o.', 'Fabrikam a.s.', 'Adventure Works'], seed);
+  if (/(city|mesto)/.test(lower)) return pickByHash(['Praha', 'Brno', 'Ostrava'], seed);
+  if (/(street|ulice)/.test(lower)) return pickByHash(['Dlouha 15', 'Masarykova 21', 'Nova 8'], seed);
+  if (/(zip|psc|postal)/.test(lower)) return pickByHash(['11000', '60200', '70200'], seed);
+  if (/(country|stat)/.test(lower)) return pickByHash(['CZ', 'SK', 'DE'], seed);
+
+  if (el.elementType === 'String') return `Sample(${name || 'Value'})`;
+  return `Sample(${name || 'Value'})`;
+}
+
+/** Format an element's preview value: constant from binding expression or configurable unresolved fallback.
  *  el.value is always an expression path in ER format XML, never a display constant — skip it. */
-function previewValue(el: ERFormatElement, bindingMap: BindingMap): string {
+function previewValue(el: ERFormatElement, bindingMap: BindingMap, options: PreviewRenderOptions): string {
   const bindings = bindingMap.get(el.id);
   if (bindings) {
     const dataBinding = bindings.find(b => b.bindingCategory === 'data');
@@ -1440,6 +1543,8 @@ function previewValue(el: ERFormatElement, bindingMap: BindingMap): string {
       if (constant) return constant;
     }
   }
+  if (options.placeholderMode === 'omit') return '';
+  if (options.placeholderMode === 'sample') return sampleValueForElement(el);
   return `{${el.name}}`;
 }
 
@@ -1475,7 +1580,7 @@ interface ExcelCellData {
   label?: string;
 }
 
-function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLabel[]): ExcelSheetData[] {
+function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLabel[], options: PreviewRenderOptions = { placeholderMode: 'sample' }): ExcelSheetData[] {
   const sheets: ExcelSheetData[] = [];
 
   const resolveCellLabel = (el: ERFormatElement): string | undefined => {
@@ -1490,7 +1595,7 @@ function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLa
       return [{
         name: el.name,
         excelRange: el.attributes?.['ExcelRange'] ?? el.name,
-        value: previewValue(el, bm),
+        value: previewValue(el, bm, options),
         label: resolveCellLabel(el),
       }];
     }
@@ -1506,7 +1611,7 @@ function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLa
         cells: el.children.filter(c => c.elementType === 'ExcelCell').map(c => ({
           name: c.name,
           excelRange: c.attributes?.['ExcelRange'] ?? c.name,
-          value: previewValue(c, bm),
+          value: previewValue(c, bm, options),
           label: resolveCellLabel(c),
         })),
         children: el.children.filter(c => c.elementType === 'ExcelRange').flatMap(c => collectRanges(c)),
@@ -1528,7 +1633,7 @@ function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLa
         cells: bodyChildren.filter(c => c.elementType === 'ExcelCell').map(c => ({
           name: c.name,
           excelRange: c.attributes?.['ExcelRange'] ?? c.name,
-          value: previewValue(c, bm),
+          value: previewValue(c, bm, options),
           label: resolveCellLabel(c),
         })),
       });
@@ -1552,7 +1657,7 @@ function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLa
       cells: bodyChildren.filter(c => c.elementType === 'ExcelCell').map(c => ({
         name: c.name,
         excelRange: c.attributes?.['ExcelRange'] ?? c.name,
-        value: previewValue(c, bm),
+        value: previewValue(c, bm, options),
         label: resolveCellLabel(c),
       })),
     });
@@ -1577,7 +1682,7 @@ const excelColors = {
 };
 
 // ── Build cell-address → binding map from format tree ──
-function buildCellBindingMap(root: ERFormatElement, bm: BindingMap, labels?: ERLabel[]): Map<string, { value: string; name: string; label?: string; elementId: string }> {
+function buildCellBindingMap(root: ERFormatElement, bm: BindingMap, labels?: ERLabel[], options: PreviewRenderOptions = { placeholderMode: 'sample' }): Map<string, { value: string; name: string; label?: string; elementId: string }> {
   const map = new Map<string, { value: string; name: string; label?: string; elementId: string }>();
   const walk = (el: ERFormatElement) => {
     if (el.elementType === 'ExcelCell') {
@@ -1588,7 +1693,7 @@ function buildCellBindingMap(root: ERFormatElement, bm: BindingMap, labels?: ERL
         const resolved = resolveLabel(labelRef, labels);
         label = resolved?.enUs ?? resolved?.localized ?? undefined;
       }
-      map.set(addr.toUpperCase(), { value: previewValue(el, bm), name: el.name, label, elementId: el.id });
+      map.set(addr.toUpperCase(), { value: previewValue(el, bm, options), name: el.name, label, elementId: el.id });
     }
     for (const child of el.children) walk(child);
   };
@@ -1615,7 +1720,8 @@ function ExcelTemplateGrid({
   onElementClick?: (elementId: string) => void;
 }) {
   const [activeSheet, setActiveSheet] = useState(0);
-  const cellBindings = useMemo(() => buildCellBindingMap(rootElement, bindingMap, labels), [rootElement, bindingMap, labels]);
+  const previewOptions = useMemo<PreviewRenderOptions>(() => ({ placeholderMode: 'sample' }), []);
+  const cellBindings = useMemo(() => buildCellBindingMap(rootElement, bindingMap, labels, previewOptions), [rootElement, bindingMap, labels, previewOptions]);
 
   // Reverse map: cell ref (e.g. "B3") → named range (e.g. "CONTACTINFO_LABEL")
   // Needed because ExcelRange attribute stores named range names, not cell addresses.
@@ -1923,7 +2029,8 @@ function collectSheetColumns(sheet: ExcelSheetData): string[] {
 
 function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, template, onNavigateToElement }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; template?: { filename: string; base64?: string }; onNavigateToElement?: (elementId: string) => void }) {
   const labels = useAppStore(s => s.configurations[configIndex]?.solutionVersion?.solution?.labels);
-  const sheets = useMemo(() => collectExcelSheets(rootElement, bindingMap, labels), [rootElement, bindingMap, labels]);
+  const previewOptions = useMemo<PreviewRenderOptions>(() => ({ placeholderMode: 'sample' }), []);
+  const sheets = useMemo(() => collectExcelSheets(rootElement, bindingMap, labels, previewOptions), [rootElement, bindingMap, labels, previewOptions]);
   const [activeSheet, setActiveSheet] = useState(0);
   const [selectedCell, setSelectedCell] = useState<ExcelCellData | null>(null);
   // Default to template view when template is available (even filename-only — shows drop zone)
@@ -2504,6 +2611,90 @@ function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellD
   );
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function highlightXmlTag(tag: string): string {
+  const punctColor = 'var(--text-secondary)';
+  const tagColor = 'var(--accent)';
+  const attrColor = 'var(--surface-warning-fg)';
+  const valueColor = 'var(--surface-success-fg)';
+
+  const escapedTag = escapeHtml(tag);
+  const openMatch = tag.match(/^<\/?([A-Za-z_][A-Za-z0-9_.:-]*)/);
+  const closeMatch = tag.match(/^<\/?([A-Za-z_][A-Za-z0-9_.:-]*)\s*>$/);
+  const tagName = openMatch?.[1] ?? closeMatch?.[1] ?? null;
+
+  let result = escapedTag
+    .replace(/(&lt;\/?|\/?&gt;|\?&gt;|&lt;\?)/g, `<span style="color:${punctColor}">$1</span>`);
+
+  if (tagName) {
+    const escapedName = escapeHtml(tagName);
+    result = result.replace(escapedName, `<span style="color:${tagColor};font-weight:600">${escapedName}</span>`);
+  }
+
+  result = result.replace(
+    /([A-Za-z_][A-Za-z0-9_.:-]*)(\s*=\s*)(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;)/g,
+    `<span style="color:${attrColor}">$1</span>$2<span style="color:${valueColor}">$3</span>`,
+  );
+
+  return result;
+}
+
+function renderXmlHighlightedMarkup(xml: string): string {
+  const parts: string[] = [];
+  const tagRegex = /<[^>]+>/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = tagRegex.exec(xml)) !== null) {
+    const textBefore = xml.slice(lastIndex, match.index);
+    if (textBefore) parts.push(escapeHtml(textBefore));
+    parts.push(highlightXmlTag(match[0]));
+    lastIndex = match.index + match[0].length;
+  }
+
+  const tail = xml.slice(lastIndex);
+  if (tail) parts.push(escapeHtml(tail));
+  return parts.join('');
+}
+
+type DelimitedPreviewData = {
+  delimiter: string;
+  rows: string[][];
+  columnCount: number;
+};
+
+function parseDelimitedPreview(text: string): DelimitedPreviewData | null {
+  const lines = text
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) return null;
+
+  const candidates = [';', ',', '\t'];
+  const scored = candidates.map(delimiter => ({
+    delimiter,
+    score: lines.slice(0, 12).reduce((sum, line) => sum + Math.max(0, line.split(delimiter).length - 1), 0),
+  }));
+
+  const best = scored.sort((a, b) => b.score - a.score)[0];
+  if (!best || best.score <= 0) return null;
+
+  const rows = lines.map(line => line.split(best.delimiter).map(cell => cell.trim()));
+  const columnCount = rows.reduce((max, row) => Math.max(max, row.length), 0);
+  if (columnCount < 2) return null;
+
+  return { delimiter: best.delimiter, rows, columnCount };
+}
+
 function FormatPreview({ rootElement, direction, bindingMap, configIndex, onNavigateToElement }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; onNavigateToElement?: (elementId: string) => void }) {
   const info = detectFormatType(rootElement);
   const template = useAppStore(s => {
@@ -2517,48 +2708,186 @@ function FormatPreview({ rootElement, direction, bindingMap, configIndex, onNavi
     return <ExcelVisualPreview rootElement={rootElement} direction={direction} bindingMap={bindingMap} configIndex={configIndex} template={template} onNavigateToElement={onNavigateToElement} />;
   }
 
-  const preview = useMemo(() => generateFormatPreview(rootElement, bindingMap), [rootElement, bindingMap]);
+  const [placeholderMode, setPlaceholderMode] = useState<PreviewPlaceholderMode>('sample');
+  const [csvFirstRowHeader, setCsvFirstRowHeader] = useState(true);
+  const previewOptions = useMemo<PreviewRenderOptions>(() => ({ placeholderMode }), [placeholderMode]);
+  const preview = useMemo(() => generateFormatPreview(rootElement, bindingMap, previewOptions), [rootElement, bindingMap, previewOptions]);
+  const delimitedPreview = useMemo(() => parseDelimitedPreview(preview), [preview]);
+  const showDelimitedTable = (info.label === 'Text / CSV' || info.label === 'Text') && delimitedPreview !== null;
+  const tableHeaderCells = showDelimitedTable && delimitedPreview
+    ? (csvFirstRowHeader
+      ? (delimitedPreview.rows[0] ?? Array.from({ length: delimitedPreview.columnCount }, (_, i) => `C${i + 1}`))
+      : Array.from({ length: delimitedPreview.columnCount }, (_, i) => `C${i + 1}`))
+    : [];
+  const tableRows = showDelimitedTable && delimitedPreview
+    ? (csvFirstRowHeader ? delimitedPreview.rows.slice(1) : delimitedPreview.rows)
+    : [];
+  const previewBlockStyle: React.CSSProperties = {
+    fontFamily: 'var(--font-mono, "Cascadia Code", Consolas, monospace)',
+    fontSize: 12,
+    lineHeight: 1.6,
+    margin: 0,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-all',
+    color: 'var(--text-primary)',
+    background: 'var(--bg-secondary)',
+    padding: 16,
+    borderRadius: 6,
+    border: '1px solid var(--border-subtle)',
+  };
   return (
     <div style={{ padding: 16, overflow: 'auto', height: '100%' }}>
       <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
         {direction === ERDirection.Import ? `📥 ${t.excelInput}` : `📤 ${t.excelOutput}`} — {t.previewDescription}
       </div>
-      <pre style={{
-        fontFamily: 'var(--font-mono, "Cascadia Code", Consolas, monospace)',
-        fontSize: 12,
-        lineHeight: 1.6,
-        margin: 0,
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-all',
-        color: 'var(--text-primary)',
-        background: 'var(--bg-secondary)',
-        padding: 16,
-        borderRadius: 6,
-        border: '1px solid var(--border-subtle)',
-      }}>
-        {preview}
-      </pre>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{locale === 'cs' ? 'Nevyřešené hodnoty:' : 'Unresolved values:'}</span>
+        <button
+          type="button"
+          onClick={() => setPlaceholderMode('sample')}
+          style={{
+            border: placeholderMode === 'sample' ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+            background: placeholderMode === 'sample' ? 'color-mix(in srgb, var(--accent) 16%, transparent)' : 'var(--bg-secondary)',
+            color: 'var(--text-primary)',
+            fontSize: 11,
+            padding: '3px 8px',
+            borderRadius: 6,
+            cursor: 'pointer',
+          }}
+        >
+          {locale === 'cs' ? 'Vzorová data' : 'Sample data'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setPlaceholderMode('braces')}
+          style={{
+            border: placeholderMode === 'braces' ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+            background: placeholderMode === 'braces' ? 'color-mix(in srgb, var(--accent) 16%, transparent)' : 'var(--bg-secondary)',
+            color: 'var(--text-primary)',
+            fontSize: 11,
+            padding: '3px 8px',
+            borderRadius: 6,
+            cursor: 'pointer',
+          }}
+        >
+          {locale === 'cs' ? 'Ponechat {placeholder}' : 'Keep {placeholder}'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setPlaceholderMode('omit')}
+          style={{
+            border: placeholderMode === 'omit' ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+            background: placeholderMode === 'omit' ? 'color-mix(in srgb, var(--accent) 16%, transparent)' : 'var(--bg-secondary)',
+            color: 'var(--text-primary)',
+            fontSize: 11,
+            padding: '3px 8px',
+            borderRadius: 6,
+            cursor: 'pointer',
+          }}
+        >
+          {locale === 'cs' ? 'Skrýt nevyřešené' : 'Hide unresolved'}
+        </button>
+      </div>
+      {showDelimitedTable && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{locale === 'cs' ? 'CSV zobrazení:' : 'CSV view:'}</span>
+          <button
+            type="button"
+            onClick={() => setCsvFirstRowHeader(v => !v)}
+            style={{
+              border: csvFirstRowHeader ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+              background: csvFirstRowHeader ? 'color-mix(in srgb, var(--accent) 16%, transparent)' : 'var(--bg-secondary)',
+              color: 'var(--text-primary)',
+              fontSize: 11,
+              padding: '3px 8px',
+              borderRadius: 6,
+              cursor: 'pointer',
+            }}
+          >
+            {locale === 'cs' ? 'První řádek = hlavička' : 'First row = header'}
+          </button>
+        </div>
+      )}
+      {info.label === 'XML' ? (
+        <pre
+          style={previewBlockStyle}
+          dangerouslySetInnerHTML={{ __html: renderXmlHighlightedMarkup(preview) }}
+        />
+      ) : showDelimitedTable && delimitedPreview ? (
+        <div style={{ ...previewBlockStyle, overflow: 'auto', padding: 0 }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'right', width: 56, padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', fontSize: 11 }}>#</th>
+                {Array.from({ length: delimitedPreview.columnCount }, (_, i) => (
+                  <th
+                    key={i}
+                    style={{
+                      textAlign: 'left',
+                      padding: '6px 8px',
+                      borderBottom: '1px solid var(--border-subtle)',
+                      color: 'var(--text-secondary)',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {(tableHeaderCells[i] ?? `C${i + 1}`) || `C${i + 1}`}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.map((row, rowIndex) => (
+                <tr key={rowIndex}>
+                  <td style={{ textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', fontSize: 11 }}>{rowIndex + (csvFirstRowHeader ? 2 : 1)}</td>
+                  {Array.from({ length: delimitedPreview.columnCount }, (_, colIndex) => (
+                    <td
+                      key={colIndex}
+                      style={{
+                        padding: '5px 8px',
+                        borderBottom: '1px solid var(--border-subtle)',
+                        borderLeft: colIndex === 0 ? '1px solid var(--border-subtle)' : undefined,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        verticalAlign: 'top',
+                      }}
+                      title={row[colIndex] ?? ''}
+                    >
+                      {row[colIndex] ?? ''}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <pre style={previewBlockStyle}>{preview}</pre>
+      )}
     </div>
   );
 }
 
 /** Build a file preview from the ER Format element tree using binding expressions. */
-function generateFormatPreview(root: ERFormatElement, bm: BindingMap): string {
+function generateFormatPreview(root: ERFormatElement, bm: BindingMap, options: PreviewRenderOptions): string {
   const info = detectFormatType(root);
-  if (info.label === 'XML') return generateXmlPreview(root, 0, bm);
-  if (info.label === 'Text / CSV' || info.label === 'Text') return generateTextPreview(root, bm);
-  if (info.label === 'Excel') return generateExcelPreview(root, bm);
+  if (info.label === 'XML') return generateXmlPreview(root, 0, bm, options);
+  if (info.label === 'Text / CSV' || info.label === 'Text') return generateTextPreview(root, bm, options);
+  if (info.label === 'Excel') return generateExcelPreview(root, bm, options);
   // Fallback: generic tree-like view
-  return generateGenericPreview(root, 0, bm);
+  return generateGenericPreview(root, 0, bm, options);
 }
 
-function generateXmlPreview(el: ERFormatElement, depth: number, bm: BindingMap): string {
+function generateXmlPreview(el: ERFormatElement, depth: number, bm: BindingMap, options: PreviewRenderOptions): string {
   const indent = '  '.repeat(depth);
   const name = el.name || el.elementType;
 
   if (el.elementType === 'File') {
     const header = '<?xml version="1.0" encoding="UTF-8"?>\n';
-    return header + el.children.map(c => generateXmlPreview(c, 0, bm)).join('\n');
+    const body = el.children.map(c => generateXmlPreview(c, 0, bm, options)).join('\n').trim();
+    return body ? `${header}${body}` : header;
   }
 
   if (el.elementType === 'XMLAttribute') {
@@ -2566,48 +2895,55 @@ function generateXmlPreview(el: ERFormatElement, depth: number, bm: BindingMap):
   }
 
   if (el.elementType === 'XMLSequence') {
-    const inner = el.children.map(c => generateXmlPreview(c, depth, bm)).join('');
-    return `${indent}<!-- sequence: ${name} (repeating) -->\n${inner}`;
+    const inner = el.children.map(c => generateXmlPreview(c, depth, bm, options)).join('');
+    if (!inner.trim() && options.placeholderMode === 'omit') return '';
+    return inner;
   }
 
   if (el.elementType === 'XMLElement') {
     const attrs = el.children
       .filter(c => c.elementType === 'XMLAttribute')
-      .map(a => ` ${a.name}="${previewValue(a, bm)}"`)
+      .map(a => ({ name: a.name, value: previewValue(a, bm, options) }))
+      .filter(a => a.value !== '')
+      .map(a => ` ${a.name}="${a.value}"`)
       .join('');
     const nonAttrChildren = el.children.filter(c => c.elementType !== 'XMLAttribute');
 
     if (nonAttrChildren.length === 0) {
-      const val = previewValue(el, bm);
+      const val = previewValue(el, bm, options);
+      if (!attrs && !val && options.placeholderMode === 'omit') return '';
       if (attrs) return `${indent}<${name}${attrs}>${val}</${name}>\n`;
       return `${indent}<${name}>${val}</${name}>\n`;
     }
 
-    const inner = nonAttrChildren.map(c => generateXmlPreview(c, depth + 1, bm)).join('');
+    const inner = nonAttrChildren.map(c => generateXmlPreview(c, depth + 1, bm, options)).join('');
+    if (!attrs && !inner.trim() && options.placeholderMode === 'omit') return '';
     return `${indent}<${name}${attrs}>\n${inner}${indent}</${name}>\n`;
   }
 
   // String/Numeric/DateTime etc. inside XML — render as text content
   if (['String', 'Numeric', 'DateTime', 'Base64'].includes(el.elementType)) {
-    return `${indent}${previewValue(el, bm)}\n`;
+    const value = previewValue(el, bm, options);
+    if (!value && options.placeholderMode === 'omit') return '';
+    return `${indent}${value}\n`;
   }
 
   // Default
-  const inner = el.children.map(c => generateXmlPreview(c, depth + 1, bm)).join('');
-  return inner || `${indent}<!-- ${el.elementType}: ${name} -->\n`;
+  const inner = el.children.map(c => generateXmlPreview(c, depth + 1, bm, options)).join('');
+  return inner;
 }
 
-function generateTextPreview(root: ERFormatElement, bm: BindingMap): string {
+function generateTextPreview(root: ERFormatElement, bm: BindingMap, options: PreviewRenderOptions): string {
   const lines: string[] = [];
 
   const walk = (el: ERFormatElement) => {
     if (el.elementType === 'TextLine' || el.elementType === 'String') {
       const children = el.children ?? [];
       if (children.length > 0) {
-        const fields = children.map(c => previewValue(c, bm));
+        const fields = children.map(c => previewValue(c, bm, options));
         lines.push(fields.join(';'));
       } else {
-        lines.push(previewValue(el, bm));
+        lines.push(previewValue(el, bm, options));
       }
     } else if (el.elementType === 'TextSequence') {
       lines.push(`--- ${el.name} (repeating) ---`);
@@ -2618,15 +2954,15 @@ function generateTextPreview(root: ERFormatElement, bm: BindingMap): string {
     } else if (el.children.length > 0) {
       for (const child of el.children) walk(child);
     } else {
-      lines.push(previewValue(el, bm));
+      lines.push(previewValue(el, bm, options));
     }
   };
 
   walk(root);
-  return lines.join('\n');
+  return lines.filter(line => line || options.placeholderMode !== 'omit').join('\n');
 }
 
-function generateExcelPreview(root: ERFormatElement, bm: BindingMap): string {
+function generateExcelPreview(root: ERFormatElement, bm: BindingMap, options: PreviewRenderOptions): string {
   const lines: string[] = [];
   const walk = (el: ERFormatElement, depth: number) => {
     const indent = '  '.repeat(depth);
@@ -2641,7 +2977,7 @@ function generateExcelPreview(root: ERFormatElement, bm: BindingMap): string {
       lines.push(`${indent}${sectionLabel}: ${el.name}`);
       for (const child of el.children) walk(child, depth + 1);
     } else if (el.elementType === 'ExcelCell') {
-      lines.push(`${indent}📎 Cell: ${el.name} = ${previewValue(el, bm)}`);
+      lines.push(`${indent}📎 Cell: ${el.name} = ${previewValue(el, bm, options)}`);
     } else {
       lines.push(`${indent}${el.elementType}: ${el.name}`);
       for (const child of el.children) walk(child, depth + 1);
@@ -2651,13 +2987,13 @@ function generateExcelPreview(root: ERFormatElement, bm: BindingMap): string {
   return lines.join('\n');
 }
 
-function generateGenericPreview(el: ERFormatElement, depth: number, bm: BindingMap): string {
+function generateGenericPreview(el: ERFormatElement, depth: number, bm: BindingMap, options: PreviewRenderOptions): string {
   const indent = '  '.repeat(depth);
   const label = `${el.elementType}: ${el.name}`;
-  const pv = previewValue(el, bm);
+  const pv = previewValue(el, bm, options);
   const val = pv !== `{${el.name}}` ? ` = ${pv}` : '';
   const line = `${indent}${label}${val}\n`;
-  return line + el.children.map(c => generateGenericPreview(c, depth + 1, bm)).join('');
+  return line + el.children.map(c => generateGenericPreview(c, depth + 1, bm, options)).join('');
 }
 
 // ── Format type detection ──
@@ -3356,6 +3692,153 @@ function FormatElementBindingGroup({ row, configIndex, onNavigate: _onNavigate, 
 
 function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: number }) {
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const configurations = useAppStore(s => s.configurations);
+
+  const normalizeValue = (value: string | undefined) => (value ?? '').trim().toLowerCase();
+
+  const datasourceMatches = useCallback((candidate: any, selected: any) => {
+    if (!candidate || !selected) return false;
+    const sameName = normalizeValue(candidate.name) === normalizeValue(selected.name);
+    if (!sameName) return false;
+    const candidateParent = normalizeValue(candidate.parentPath);
+    const selectedParent = normalizeValue(selected.parentPath);
+    return candidateParent === selectedParent || candidateParent === '' || selectedParent === '';
+  }, []);
+
+  const relevantDatasourceBindings = useMemo(() => {
+    if (node.type !== 'datasource' || !node.data) return [] as Array<{ path: string; expression: string; source: string }>;
+
+    const cfg = configurations[configIndex];
+    if (!cfg) return [];
+
+    const sources: Array<{ sourceName: string; sourceConfigIndex: number; bindings: any[] }> = [];
+    if (cfg.content.kind === 'ModelMapping') {
+      sources.push({
+        sourceName: cfg.solutionVersion.solution.name,
+        sourceConfigIndex: configIndex,
+        bindings: cfg.content.version.mapping.bindings ?? [],
+      });
+    }
+    if (cfg.content.kind === 'Format') {
+      for (const version of cfg.content.embeddedModelMappingVersions ?? []) {
+        sources.push({
+          sourceName: `${cfg.solutionVersion.solution.name} • ${version.mapping.name}`,
+          sourceConfigIndex: configIndex,
+          bindings: version.mapping.bindings ?? [],
+        });
+      }
+    }
+
+    const out: Array<{ path: string; expression: string; source: string }> = [];
+
+    for (const source of sources) {
+      for (const binding of source.bindings) {
+        const expr = String(binding?.expressionAsString ?? '').trim();
+        if (!expr) continue;
+
+        const deep = resolveDeepExpression(expr, configurations, source.sourceConfigIndex);
+        if (!deep) continue;
+
+        const candidateDatasources = [
+          deep.rootDs,
+          deep.nestedDs,
+          ...(deep.involvedDatasources ?? []).map((d: any) => d.datasource),
+        ].filter(Boolean);
+
+        if (!candidateDatasources.some(candidate => datasourceMatches(candidate, node.data))) {
+          continue;
+        }
+
+        out.push({
+          path: String(binding?.path ?? ''),
+          expression: expr,
+          source: source.sourceName,
+        });
+      }
+    }
+
+    const seen = new Set<string>();
+    return out
+      .filter(item => {
+        const key = `${item.source}|${item.path}|${item.expression}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => {
+        const bySource = a.source.localeCompare(b.source);
+        if (bySource !== 0) return bySource;
+        return a.path.localeCompare(b.path);
+      });
+  }, [configIndex, configurations, datasourceMatches, node.data, node.type]);
+
+  if (node.type === 'datasource') {
+    const datasource = node.data ?? {};
+    const rows: Array<[string, React.ReactNode]> = [
+      [t.propName, datasource.name ?? '–'],
+      [t.propType, datasource.type ?? '–'],
+      [t.propParentPath, datasource.parentPath ?? '–'],
+    ];
+
+    if (datasource.tableInfo?.tableName) rows.push([t.drillLabelTable, datasource.tableInfo.tableName]);
+    if (datasource.enumInfo?.enumName) rows.push([t.drillLabelEnum, formatEnumDisplayName(datasource.enumInfo.enumName, datasource.enumInfo)]);
+    if (datasource.classInfo?.className) rows.push([t.drillLabelClass, datasource.classInfo.className]);
+    if (showTechnicalDetails && datasource.calculatedField?.expressionAsString) {
+      rows.push([t.expression, <ClickablePath expression={datasource.calculatedField.expressionAsString} configIndex={configIndex} mode="binding-expr" />]);
+    }
+    if (showTechnicalDetails && datasource.groupByInfo?.listToGroup) {
+      rows.push([t.propListToGroup, datasource.groupByInfo.listToGroup]);
+    }
+
+    return (
+      <div className="fmt-detail-section focused-detail-shell" style={{ borderBottom: '1px solid var(--border-color)' }}>
+        <div className="fmt-detail-section-title">{t.focusedDetail}</div>
+
+        <div className="focused-detail-card">
+          <div className="focused-detail-card__head">
+            <span className="focused-detail-card__title">{locale === 'cs' ? 'Vlastnosti datového zdroje' : 'Datasource properties'}</span>
+            <span className="focused-detail-card__badge">{datasource.type ?? 'Datasource'}</span>
+          </div>
+          <div className="focused-detail-grid">
+            {rows.map(([label, value], index) => (
+              <React.Fragment key={`${label}-${index}`}>
+                <div className="focused-detail-grid__label">{label}</div>
+                <div className="focused-detail-grid__value">{value}</div>
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+
+        <div className="focused-detail-card">
+          <div className="focused-detail-card__head">
+            <span className="focused-detail-card__title">{t.bindings}</span>
+            <span className="focused-detail-card__badge">{relevantDatasourceBindings.length}</span>
+          </div>
+          {relevantDatasourceBindings.length === 0 ? (
+            <div className="focused-detail-empty">{locale === 'cs' ? 'Žádné relevantní vazby pro vybraný zdroj.' : 'No relevant bindings for the selected datasource.'}</div>
+          ) : (
+            <div className="focused-detail-binding-list">
+              {relevantDatasourceBindings.map((binding, index) => (
+                <div key={`${binding.source}-${binding.path}-${index}`} className="focused-detail-binding-row">
+                  <div className="focused-detail-binding-row__path">
+                    <ClickablePath expression={binding.path} configIndex={configIndex} mode="model-path" />
+                  </div>
+                  <div className="focused-detail-binding-row__expr">
+                    <span className="focused-detail-binding-row__arrow">←</span>
+                    <DrillDownTrigger expression={binding.expression} configIndex={configIndex} elementName={datasource.name}>
+                      <ExpressionDetailLink expression={binding.expression} configIndex={configIndex} interactive={false} />
+                    </DrillDownTrigger>
+                  </div>
+                  <div className="focused-detail-binding-row__source">{binding.source}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const summaryRows: Array<[string, React.ReactNode]> = [[t.node, node.name]];
 
   if (showTechnicalDetails) summaryRows.push([t.propType, node.type]);

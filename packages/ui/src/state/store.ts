@@ -2373,17 +2373,17 @@ function findNodeByMatch(node: TreeNode, predicate: (n: TreeNode) => boolean): T
 // ─── Tree Building ───
 
 const kindIcons: Record<ERComponentKind, string> = {
-  DataModel: '📐',
-  ModelMapping: '🔗',
-  Format: '📄',
+  DataModel: '🧩',
+  ModelMapping: '🗺️',
+  Format: '🧾',
 };
 
 function getConfigurationIcon(config: ERConfiguration): string {
   if (config.kind !== 'Format' || config.content.kind !== 'Format') {
-    return kindIcons[config.kind] ?? '📄';
+    return kindIcons[config.kind] ?? '🧾';
   }
 
-  return config.content.direction === 'Import' ? '📥' : '📤';
+  return config.content.direction === 'Import' ? '🧾↓' : '🧾↑';
 }
 
 const fieldTypeIcons: Record<number, string> = {
@@ -2589,6 +2589,86 @@ function findDatasourceByNormalizedPath(datasource: any, path: string): any | nu
   return null;
 }
 
+function splitBindingPath(path: string | undefined): string[] {
+  const normalized = (path ?? '').trim().replace(/^[$#]/, '');
+  if (!normalized) return [];
+
+  return normalized
+    .split(/[./\\]/)
+    .map(segment => segment.trim())
+    .filter(Boolean);
+}
+
+type BindingGroupNode = {
+  children: Map<string, BindingGroupNode>;
+  bindings: TreeNode[];
+};
+
+function createBindingGroupNode(): BindingGroupNode {
+  return { children: new Map(), bindings: [] };
+}
+
+function countGroupedBindings(node: BindingGroupNode): number {
+  let total = node.bindings.length;
+  for (const child of node.children.values()) {
+    total += countGroupedBindings(child);
+  }
+  return total;
+}
+
+function buildGroupedBindingSections(node: BindingGroupNode, prefix: string, level: number): TreeNode[] {
+  const sections = Array.from(node.children.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([segment, childNode], index) => {
+      const total = countGroupedBindings(childNode);
+      const childPrefix = `${prefix}-${level}-${index}`;
+
+      return {
+        id: `${childPrefix}-section`,
+        name: `${segment} (${total})`,
+        icon: '📂',
+        type: 'section' as const,
+        data: { sectionKind: 'bindingGroup', sectionKey: segment, sectionLevel: level },
+        children: [
+          ...buildGroupedBindingSections(childNode, childPrefix, level + 1),
+          ...childNode.bindings.sort((left, right) => left.name.localeCompare(right.name)),
+        ],
+      };
+    });
+
+  return sections;
+}
+
+function groupBindingNodes(bindingNodes: TreeNode[], prefix: string): TreeNode[] {
+  if (bindingNodes.length <= 1) {
+    return bindingNodes;
+  }
+
+  const fallbackLabel = locale === 'cs' ? 'Ostatní' : 'Other';
+  const root = createBindingGroupNode();
+
+  for (const bindingNode of bindingNodes) {
+    const segments = splitBindingPath(bindingNode.data?.path ?? bindingNode.name);
+    const pathSegments = segments.length > 0 ? segments : [fallbackLabel];
+
+    let cursor = root;
+    for (const segment of pathSegments) {
+      if (!cursor.children.has(segment)) {
+        cursor.children.set(segment, createBindingGroupNode());
+      }
+      cursor = cursor.children.get(segment)!;
+    }
+
+    cursor.bindings.push(bindingNode);
+  }
+
+  if (root.children.size <= 1) {
+    return bindingNodes;
+  }
+
+  return buildGroupedBindingSections(root, `${prefix}-group`, 0);
+}
+
 function buildMappingTree(mapping: any, prefix: string, configIndex: number, versionNumber?: number): TreeNode {
   const mappingSectionLabels = getMappingSectionLabels();
   const dsNodes = mapping.datasources.map((ds: any, di: number) =>
@@ -2603,6 +2683,7 @@ function buildMappingTree(mapping: any, prefix: string, configIndex: number, ver
     data: binding,
     configIndex,
   }));
+  const groupedBindingNodes = groupBindingNodes(bindingNodes, `${prefix}-binding`);
 
   const validationNodes = mapping.validations.map((validation: any, vi: number) => ({
     id: `${prefix}-val-${vi}`,
@@ -2624,7 +2705,7 @@ function buildMappingTree(mapping: any, prefix: string, configIndex: number, ver
     data: mapping,
     children: [
       { id: `${prefix}-ds-section`, name: `${mappingSectionLabels.dataSources} (${dsNodes.length})`, icon: '📂', type: 'section', children: groupDatasourceNodes(dsNodes, prefix) },
-      { id: `${prefix}-bind-section`, name: `${mappingSectionLabels.bindings} (${bindingNodes.length})`, icon: '📂', type: 'section', children: bindingNodes },
+      { id: `${prefix}-bind-section`, name: `${mappingSectionLabels.bindings} (${bindingNodes.length})`, icon: '📂', type: 'section', children: groupedBindingNodes },
       { id: `${prefix}-val-section`, name: `${mappingSectionLabels.validations} (${validationNodes.length})`, icon: '📂', type: 'section', children: validationNodes },
     ],
   };

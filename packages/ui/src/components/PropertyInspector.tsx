@@ -5,7 +5,15 @@ import { ERDirection } from '@er-visualizer/core';
 import { getEnumTypeLabel } from '../utils/enum-display';
 import { resolveLabel } from '../utils/label-resolver';
 import { t, locale } from '../i18n';
-import { AppsListDetailRegular, CursorHoverRegular } from '@fluentui/react-icons';
+import {
+  AppsListDetailRegular,
+  CursorHoverRegular,
+  DataBarVerticalFilled,
+  LinkFilled,
+  DocumentFilled,
+  CheckmarkCircleRegular,
+  ArrowSyncRegular,
+} from '@fluentui/react-icons';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -51,6 +59,40 @@ const fieldTypeNames: Record<number, string> = {
   6: 'String', 7: 'Date', 9: 'Enum', 10: 'Container',
   11: 'RecordList', 13: 'Binary',
 };
+
+function getNodeHeaderIcon(node: any): React.ReactNode {
+  const kind = node?.data?.kind ?? node?.data?.content?.kind;
+  const nodeType = node?.type;
+
+  if (kind === 'DataModel') return <DataBarVerticalFilled fontSize={14} />;
+  if (kind === 'ModelMapping') return <LinkFilled fontSize={14} />;
+  if (kind === 'Format') return <DocumentFilled fontSize={14} />;
+
+  if (nodeType === 'mapping' || nodeType === 'binding' || nodeType === 'formatBinding') {
+    return <LinkFilled fontSize={14} />;
+  }
+
+  if (nodeType === 'validation') {
+    return <CheckmarkCircleRegular fontSize={14} />;
+  }
+
+  if (nodeType === 'transformation') {
+    return <ArrowSyncRegular fontSize={14} />;
+  }
+
+  if (
+    nodeType === 'datasource'
+    || nodeType === 'field'
+    || nodeType === 'container'
+    || nodeType === 'enum'
+    || nodeType === 'enumValue'
+    || nodeType === 'model'
+  ) {
+    return <DataBarVerticalFilled fontSize={14} />;
+  }
+
+  return <DocumentFilled fontSize={14} />;
+}
 
 export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {}) {
   const selectedNode = useAppStore(s => s.selectedNode);
@@ -98,7 +140,7 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
   return (
     <div className="property-inspector">
       <div className="property-title">
-        {node.icon} {node.name}
+        {getNodeHeaderIcon(node)} {node.name}
       </div>
       {showTechnicalDetails && (
         <div className="property-type">

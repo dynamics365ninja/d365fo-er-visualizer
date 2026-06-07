@@ -5,7 +5,7 @@
   "main": "dist/main.js",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"pnpm --filter @er-visualizer/ui dev\" \"wait-on http://localhost:5173 && pnpm run build && electron .\"",
+    "dev": "concurrently \"pnpm --filter @er-visualizer/ui exec vite --port 5173 --strictPort\" \"wait-on http://localhost:5173 && pnpm run build && electron .\"",
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.preload.json",
     "start": "electron ."
   },

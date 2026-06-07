@@ -738,6 +738,21 @@ function parseValidation(node: any): ERValidation {
       messageExpression: parseExpression(
         c['MessageHost']?.['ERExpressionStringHost']?.['Expression'],
       ),
+      action:
+        getAttr(c, 'Action')
+        ?? getAttr(c, 'ValidationAction')
+        ?? getAttr(c, 'Reaction')
+        ?? undefined,
+      severity:
+        getAttr(c, 'Severity')
+        ?? getAttr(c, 'ErrorLevel')
+        ?? getAttr(c, 'MessageLevel')
+        ?? undefined,
+      stopProcessing:
+        getAttr(c, 'StopProcessing') === '1'
+        || getAttr(c, 'StopProcessing')?.toLowerCase() === 'true'
+        || getAttr(c, 'StopExecution') === '1'
+        || getAttr(c, 'StopExecution')?.toLowerCase() === 'true',
     }),
   );
 

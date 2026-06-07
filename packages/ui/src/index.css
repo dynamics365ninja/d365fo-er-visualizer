@@ -786,6 +786,119 @@ body {
   padding: 0;
 }
 
+.focused-detail-shell {
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.focused-detail-card {
+  border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-secondary) 65%, transparent);
+  overflow: hidden;
+}
+
+.focused-detail-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-tertiary) 58%, transparent);
+}
+
+.focused-detail-card__title {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.focused-detail-card__badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.focused-detail-grid {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 1px;
+}
+
+.focused-detail-grid__label {
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-tertiary) 54%, transparent);
+}
+
+.focused-detail-grid__value {
+  padding: 6px 8px;
+  font-size: 11px;
+  background: color-mix(in srgb, var(--bg-primary) 70%, transparent);
+  word-break: break-word;
+}
+
+.focused-detail-empty {
+  padding: 10px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.focused-detail-binding-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.focused-detail-binding-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) 1fr;
+  gap: 8px;
+  padding: 7px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 64%, transparent);
+}
+
+.focused-detail-binding-row:first-child {
+  border-top: none;
+}
+
+.focused-detail-binding-row__path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.focused-detail-binding-row__expr {
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.focused-detail-binding-row__arrow {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.focused-detail-binding-row__source {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  color: var(--text-secondary);
+  opacity: 0.85;
+}
+
 .property-title {
   margin-bottom: 8px;
   font-weight: 600;
@@ -4287,6 +4400,9 @@ body {
   font-size: 12px;
   overflow: hidden;
   box-shadow: 0 1px 2px color-mix(in srgb, var(--shadow-color) 18%, transparent);
+  /* flex column so ddt-canvas flex:1 can fill the remaining space */
+  display: flex;
+  flex-direction: column;
 }
 
 .dd-panel--empty {
@@ -4369,33 +4485,9 @@ body {
 }
 
 .dd-hero__actions {
-  margin-left: auto;
   display: flex;
   gap: 6px;
   align-items: center;
-}
-
-.dd-view-toggle {
-  display: inline-flex;
-  border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
-  border-radius: 8px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--bg-primary) 30%, transparent);
-}
-
-.dd-view-toggle__btn {
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 8px;
-  cursor: pointer;
-}
-
-.dd-view-toggle__btn.is-active {
-  color: var(--text-primary);
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .dd-hero__btn {
@@ -4802,6 +4894,7 @@ body {
 /* Frame content area */
 .dd-frame-content {
   padding: 10px 12px 12px;
+  min-height: 0;
 }
 
 .dd-rebuild {
@@ -4843,8 +4936,18 @@ body {
 
 .dd-workbench__tree-list {
   display: grid;
-  max-height: 420px;
+  max-height: none;
   overflow: auto;
+}
+
+.dd-workbench__tree-list:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: -1px;
+}
+
+.dd-workbench__tree-spacer {
+  width: 100%;
+  pointer-events: none;
 }
 
 .dd-workbench__tree-item {
@@ -7598,14 +7701,55 @@ body {
 
 /* ─── Drill-down Dialog ─────────────────────────────────────────────── */
 .dd-dialog-surface {
-  max-width: min(1320px, 98vw) !important;
-  width: min(1320px, 98vw);
+  max-width: min(99vw, 99dvw) !important;
+  width: min(99vw, 99dvw);
+  max-height: min(99vh, 99dvh) !important;
+  height: min(99vh, 99dvh);
+}
+
+.dd-dialog-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 0 !important;
+  position: relative;
+}
+
+.dd-dialog-titlebar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 10px 56px 8px 16px !important;
+}
+
+.dd-dialog-close {
+  position: absolute !important;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
 }
 
 .dd-dialog-content {
   padding: 0 !important;
-  max-height: 78vh;
+  max-height: none;
+  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: auto;
+}
+
+.dd-dialog-content > .dd-panel--dialog {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.dd-dialog-surface .fui-DialogActions {
+  flex: 0 0 auto;
+  padding: 8px 16px 12px !important;
 }
 
 .dd-dialog-title {
@@ -7615,26 +7759,38 @@ body {
   color: var(--text-primary);
   min-width: 0;
   max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  white-space: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   line-height: 1.35;
 }
 
 .dd-dialog-title__name {
   color: var(--text-primary);
   font-weight: 600;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  white-space: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   flex: 1;
   min-width: 0;
 }
 
 .dd-panel--dialog {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   border: none;
   background: transparent;
   padding: 0;
+}
+
+.dd-panel--dialog .dd-frame-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .dd-panel--dialog .dd-hero {
@@ -7656,6 +7812,90 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+.dd-validation-summary {
+  margin-top: 8px;
+  border: 1px solid color-mix(in srgb, var(--ui-stroke-1, var(--border-color)) 82%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ui-surface-1, var(--bg-secondary)) 72%, transparent);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dd-validation-summary__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dd-validation-summary__title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.dd-validation-summary__meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dd-validation-summary__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dd-validation-summary__rule {
+  border: 1px solid color-mix(in srgb, var(--ui-stroke-2, var(--border-color)) 72%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ui-surface-0, var(--bg-primary)) 82%, transparent);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dd-validation-summary__rule-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dd-validation-summary__rule-index {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.dd-validation-summary__rule-action {
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+}
+
+.dd-validation-summary__expr-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dd-validation-summary__expr-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
 }
 
 /* ─── Dialog / popup backdrop blur ─── */
@@ -8886,6 +9126,84 @@ body {
   line-height: 1.2;
   color: var(--text-primary);
 }
+.explorer-tree-shell .explorer-sections {
+  gap: 8px;
+}
+.explorer-tree-shell .tree-node {
+  margin: 1px 6px;
+  min-height: 24px;
+  border-radius: 6px !important;
+  border: 1px solid transparent;
+  background: transparent;
+}
+.explorer-tree-shell .tree-node:hover {
+  background: color-mix(in srgb, var(--ui-surface-1) 92%, transparent);
+  border-color: color-mix(in srgb, var(--ui-stroke-1) 82%, transparent);
+}
+.explorer-tree-shell .tree-node.selected {
+  background: color-mix(in srgb, var(--accent) 16%, var(--ui-surface-1));
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+.explorer-tree-shell .tree-node[data-depth='0'] {
+  margin: 3px 6px;
+  min-height: 28px;
+  font-weight: 620;
+}
+.explorer-tree-shell .tree-node-section {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.explorer-tree-shell .tree-node-section .tree-node-label {
+  letter-spacing: 0.01em;
+}
+.explorer-tree-shell .tree-node-group {
+  margin: 2px 8px;
+  border-left: 2px solid color-mix(in srgb, var(--ui-stroke-1) 76%, transparent);
+  background: color-mix(in srgb, var(--ui-surface-1) 66%, transparent);
+}
+.explorer-tree-shell .tree-node-group .tree-node-label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.explorer-tree-shell .tree-node-parent:not(.tree-node-group) {
+  border-left: 1px solid color-mix(in srgb, var(--ui-stroke-2) 70%, transparent);
+}
+.explorer-tree-shell .tree-node-section-kind-bindingGroup {
+  margin: 2px 8px 2px 12px;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 56%, transparent);
+  background: color-mix(in srgb, var(--ui-surface-1) 74%, transparent);
+}
+.explorer-tree-shell .tree-node-section-kind-bindingGroup .tree-node-label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.explorer-tree-shell .tree-node-binding,
+.explorer-tree-shell .tree-node-validation {
+  margin-left: 10px;
+}
+.explorer-tree-shell .tree-node .icon {
+  width: 16px;
+  color: color-mix(in srgb, var(--text-secondary) 86%, var(--accent));
+}
+.explorer-tree-shell .tree-node-kind-pill {
+  border: 1px solid color-mix(in srgb, var(--ui-stroke-1) 76%, transparent);
+  background: color-mix(in srgb, var(--ui-surface-1) 82%, transparent);
+}
+.explorer-tree-shell .tree-node-version-pill {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+}
+.explorer-tree-shell .explorer-kind-group {
+  border-radius: 10px;
+  border-color: color-mix(in srgb, var(--ui-stroke-1) 88%, transparent);
+  background: color-mix(in srgb, var(--ui-surface-1) 68%, transparent);
+}
+.explorer-tree-shell .explorer-kind-group-header-btn {
+  border-bottom: 1px solid color-mix(in srgb, var(--ui-stroke-2) 72%, transparent);
+}
+.explorer-tree-shell .explorer-kind-group-header-btn:hover {
+  background: color-mix(in srgb, var(--accent) 7%, var(--ui-surface-1));
+}
 
 .designer-empty-card__text {
   margin: 0;
@@ -9811,3 +10129,350 @@ body {
   color: var(--text-secondary);
   font-size: 10px;
 }
+
+/* ─── Drill-Down Tree View (ReactFlow canvas) ──────────────────────────────── */
+
+.ddt-canvas {
+  /* flex:1 works because dd-panel is now display:flex flex-direction:column */
+  flex: 1 1 0;
+  min-height: 380px;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.ddt-auto-compact-hint {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 4;
+  border: 1px solid color-mix(in srgb, var(--accent) 58%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dd-panel--tab   > .ddt-canvas,
+.dd-panel--dialog > .ddt-canvas {
+  min-height: 520px;
+}
+
+/* ── Tree node card ─────────────────────────────────────────── */
+
+.ddt-node {
+  background: var(--ddt-bg, var(--bg-secondary));
+  border: 1.5px solid var(--ddt-border, var(--border-color));
+  border-radius: 10px;
+  padding: 0;
+  overflow: hidden;
+  font-family: var(--font-sans, inherit);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.12s;
+  width: 100%;
+}
+
+.react-flow__node.ddt-node-wrap--dim .ddt-node {
+  opacity: 0.58;
+}
+
+.react-flow__node.ddt-node-wrap--path .ddt-node {
+  opacity: 0.94;
+}
+
+.react-flow__node.ddt-node-wrap--selected .ddt-node,
+.ddt-node--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 6px 20px color-mix(in srgb, var(--accent) 24%, transparent);
+  opacity: 1;
+}
+
+.ddt-node--clickable {
+  cursor: pointer;
+}
+
+.ddt-node--clickable:hover {
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--accent) 28%, transparent);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.ddt-node__head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px 4px;
+  background: color-mix(in srgb, var(--ddt-bg, var(--bg-secondary)) 78%, black 6%);
+  border-bottom: 1px solid color-mix(in srgb, var(--ddt-border, var(--border-color)) 72%, transparent);
+}
+
+.ddt-node__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ddt-fg, var(--text-primary));
+  opacity: 0.85;
+  font-size: 13px;
+}
+
+.ddt-node__badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--ddt-fg, var(--text-secondary));
+  opacity: 0.75;
+}
+
+.ddt-node__pin {
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ddt-fg, var(--text-primary));
+  opacity: 0.5;
+}
+
+.ddt-node__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ddt-fg, var(--text-primary));
+  padding: 6px 10px 2px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.ddt-node__sub {
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: color-mix(in srgb, var(--ddt-fg, var(--text-secondary)) 72%, transparent);
+  padding: 0 10px 5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ddt-node--compact .ddt-node__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ddt-node--compact .ddt-node__sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ddt-node__drill-hint {
+  font-size: 9px;
+  color: var(--accent);
+  padding: 2px 10px 6px;
+  letter-spacing: 0.3px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.ddt-node--clickable:hover .ddt-node__drill-hint {
+  opacity: 1;
+}
+
+.ddt-node__actions {
+  display: flex;
+  gap: 5px;
+  flex-wrap: nowrap;
+  padding: 4px 10px 8px;
+}
+
+.ddt-node__action {
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.ddt-node__action:hover {
+  border-color: color-mix(in srgb, var(--accent) 58%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+/* ── Root node accent ───────────────────────────────────────── */
+
+.ddt-node--root {
+  border-width: 2px;
+}
+
+.ddt-node--root .ddt-node__label {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 500;
+}
+
+/* ── Leaf node ──────────────────────────────────────────────── */
+
+.ddt-node--table .ddt-node__head,
+.ddt-node--leaf.ddt-node--table .ddt-node__head {
+  background: color-mix(in srgb, var(--surface-success-bg) 80%, transparent);
+}
+
+.ddt-node--enum .ddt-node__head {
+  background: color-mix(in srgb, var(--surface-warning-bg) 80%, transparent);
+}
+
+.ddt-node--class .ddt-node__head {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* ── View toggle (tab switcher, pinned top-right of hero) ────── */
+
+/* Push the toggle to the far right of dd-hero__top */
+.dd-hero__top .dd-view-toggle {
+  margin-left: auto;
+}
+
+.dd-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-primary) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  flex-shrink: 0;
+}
+
+.dd-view-toggle__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+
+.dd-view-toggle__btn:hover {
+  background: color-mix(in srgb, var(--bg-hover) 80%, transparent);
+  color: var(--text-primary);
+}
+
+.dd-view-toggle__btn.is-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.dd-view-toggle__label {
+  /* hide on very small panels */
+  display: inline;
+}
+
+.dd-tree-debug-toggle {
+  margin-left: 8px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dd-tree-debug-toggle:hover {
+  border-color: color-mix(in srgb, var(--accent) 58%, transparent);
+  color: var(--text-primary);
+}
+
+.dd-tree-label-toggle {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+}
+
+.dd-tree-label-toggle__btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dd-tree-label-toggle__btn:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-hover) 80%, transparent);
+}
+
+.dd-tree-label-toggle__btn.is-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.dd-tree-debug-toggle.is-active {
+  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text-primary);
+}
+
+/* Override ReactFlow controls position inside the tree canvas */
+.ddt-canvas .react-flow__controls {
+  bottom: 10px;
+  left: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+  border-radius: 10px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--shadow-color) 45%, transparent);
+}
+
+.ddt-canvas .react-flow__controls-button {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 95%, transparent);
+  color: var(--text-primary);
+  fill: var(--text-primary);
+}
+
+.ddt-canvas .react-flow__controls-button:first-child {
+  border-top: none;
+}
+
+.ddt-canvas .react-flow__controls-button:hover {
+  background: color-mix(in srgb, var(--bg-hover) 90%, transparent);
+}
+
+.ddt-canvas .react-flow__controls-button:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  z-index: 1;
+}
+
+.ddt-canvas .react-flow__controls-button svg {
+  color: currentColor;
+  fill: currentColor;
+  stroke: currentColor;
+}
+
