@@ -1,5 +1,5 @@
 packages:
   - "packages/*"
 allowBuilds:
-  electron: false
-  esbuild: false
+  electron: true
+  esbuild: true

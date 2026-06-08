@@ -1357,7 +1357,10 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
   const selectedIsModel = selected.expression.toLowerCase().startsWith('model.') || selected.expression.toLowerCase().startsWith('model\\');
   const cleanSelectedExpr = selectedIsModel ? extractModelPath(selected.expression) : selected.expression;
 
-  const modelResult = selectedIsModel ? resolveModelPath(cleanSelectedExpr) : null;
+  // Some format bindings are rendered without explicit "model." prefix (e.g. Invoice.InvoiceBase...).
+  // Keep model-path resolution enabled for these so intermediate sub-expressions still resolve.
+  const modelResult = resolveModelPath(cleanSelectedExpr);
+  const shouldUseModelBinding = selectedIsModel || Boolean(modelResult);
   const mappingExpr = modelResult?.binding?.expressionAsString ?? frame.mappingExpression ?? null;
   const mappingCi = modelResult?.bindingConfigIndex ?? frame.mappingConfigIndex ?? frame.configIndex;
   const mappingConfig = modelResult
@@ -1470,13 +1473,13 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
   // Mapping expression is shown as context, but must not override selection.
   const { effectiveExpr, effectiveCi } = getDrillDownEffectiveResolutionInput({
     selectedExpression: selected.expression,
-    selectedIsModel,
+    selectedIsModel: shouldUseModelBinding,
     frameConfigIndex: frame.configIndex,
     modelBindingExpression: modelResult?.binding?.expressionAsString,
     modelBindingConfigIndex: modelResult?.bindingConfigIndex,
   });
   const deepResult = resolveDeepExpression(effectiveExpr, configurations, effectiveCi);
-  const directResult = !selectedIsModel ? resolveDatasource(firstSegment(selected.expression), frame.configIndex) : null;
+  const directResult = !shouldUseModelBinding ? resolveDatasource(firstSegment(selected.expression), frame.configIndex) : null;
   const resolvedDs = (deepResult?.nestedDs ?? deepResult?.rootDs)
     ?? modelResult?.datasource
     ?? directResult?.datasource
