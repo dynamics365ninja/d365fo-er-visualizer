@@ -512,7 +512,7 @@ function buildDerivedState(configurations: ERConfiguration[]): { registry: GUIDR
     registry.indexConfiguration(config);
   }
 
-  const treeNodes = configurations.map((config, index) => buildTreeForConfig(config, index));
+  const treeNodes = configurations.map((config, index) => buildTreeForConfig(config, index, configurations));
   const warnings = collectConfigurationWarnings(configurations);
   return { registry, treeNodes, warnings };
 }
@@ -1377,10 +1377,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     ];
 
     const pathVariants: string[] = [];
-    for (let len = segments.length; len >= 1; len--) {
-      const segs = segments.slice(0, len);
-      for (const v of buildVariants(segs)) {
-        if (!pathVariants.includes(v)) pathVariants.push(v);
+    const segmentCandidates: string[][] = [];
+    const seenSegmentCandidates = new Set<string>();
+
+    // Primary candidate: full path from the first segment.
+    // Fallback candidates: shifted paths without wrapper roots such as "Invoice.".
+    for (let start = 0; start < segments.length; start++) {
+      const candidate = segments.slice(start);
+      if (candidate.length === 0) continue;
+      const candidateKey = candidate.join('\u0001').toLowerCase();
+      if (seenSegmentCandidates.has(candidateKey)) continue;
+      seenSegmentCandidates.add(candidateKey);
+      segmentCandidates.push(candidate);
+    }
+
+    for (const candidate of segmentCandidates) {
+      for (let len = candidate.length; len >= 1; len--) {
+        const segs = candidate.slice(0, len);
+        for (const v of buildVariants(segs)) {
+          if (!pathVariants.includes(v)) pathVariants.push(v);
+        }
       }
     }
 
@@ -2669,10 +2685,10 @@ function groupBindingNodes(bindingNodes: TreeNode[], prefix: string): TreeNode[]
   return buildGroupedBindingSections(root, `${prefix}-group`, 0);
 }
 
-function buildMappingTree(mapping: any, prefix: string, configIndex: number, versionNumber?: number): TreeNode {
+function buildMappingTree(mapping: any, prefix: string, configIndex: number, versionNumber: number | undefined, allConfigurations: ERConfiguration[]): TreeNode {
   const mappingSectionLabels = getMappingSectionLabels();
   const dsNodes = mapping.datasources.map((ds: any, di: number) =>
-    buildDatasourceTree(ds, `${prefix}-ds-${di}`, configIndex),
+    buildDatasourceTree(ds, `${prefix}-ds-${di}`, configIndex, allConfigurations),
   );
 
   const bindingNodes = mapping.bindings.map((binding: any, bi: number) => ({
@@ -2711,7 +2727,7 @@ function buildMappingTree(mapping: any, prefix: string, configIndex: number, ver
   };
 }
 
-function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
+function buildTreeForConfig(config: ERConfiguration, index: number, allConfigurations: ERConfiguration[]): TreeNode {
   const dataModelSectionLabels = getDataModelSectionLabels();
   const formatSectionLabels = getFormatSectionLabels();
   const sol = config.solutionVersion.solution;
@@ -2764,7 +2780,7 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
 
   if (config.content.kind === 'ModelMapping') {
     const mm = (config.content as ERModelMappingContent).version;
-    const inner = buildMappingTree(mm.mapping, `${prefix}-mapping`, index, mm.number);
+    const inner = buildMappingTree(mm.mapping, `${prefix}-mapping`, index, mm.number, allConfigurations);
     children.push(...(inner.children ?? []));
   }
 
@@ -2853,10 +2869,10 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
     }));
 
     const fmtDsNodes = fmtMap.formatMapping.datasources.map((ds, di) =>
-      buildDatasourceTree(ds, `${prefix}-fmtds-${di}`, index),
+      buildDatasourceTree(ds, `${prefix}-fmtds-${di}`, index, allConfigurations),
     );
     const embeddedMappingNodes = fc.embeddedModelMappingVersions.map((version, embeddedIndex) =>
-      buildMappingTree(version.mapping, `${prefix}-embedded-mapping-${embeddedIndex}`, index, version.number),
+      buildMappingTree(version.mapping, `${prefix}-embedded-mapping-${embeddedIndex}`, index, version.number, allConfigurations),
     );
 
     children.push(
@@ -2880,7 +2896,54 @@ function buildTreeForConfig(config: ERConfiguration, index: number): TreeNode {
   };
 }
 
-function buildDatasourceTree(ds: any, prefix: string, configIndex: number): TreeNode {
+function normalizeEnumLookupName(name: string | undefined): string {
+  return (name ?? '').trim().replace(/[{}]/g, '').toLowerCase();
+}
+
+function collectEnumValuesFromConfigurations(enumName: string, configurations: ERConfiguration[]): string[] {
+  const normalizedName = normalizeEnumLookupName(enumName);
+  if (!normalizedName) return [];
+
+  const values: string[] = [];
+  const seen = new Set<string>();
+
+  const pushValue = (value: string | undefined) => {
+    const trimmed = (value ?? '').trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    values.push(trimmed);
+  };
+
+  for (const config of configurations) {
+    if (config.content.kind === 'DataModel') {
+      const dm = (config.content as ERDataModelContent).version;
+      for (const container of dm.model.containers) {
+        if (!container.isEnum) continue;
+        if (normalizeEnumLookupName(container.name) !== normalizedName) continue;
+        for (const item of container.items) {
+          pushValue(item.name);
+        }
+      }
+      continue;
+    }
+
+    if (config.content.kind === 'Format') {
+      const fmt = (config.content as ERFormatContent).formatVersion.format;
+      for (const definition of fmt.enumDefinitions) {
+        if (normalizeEnumLookupName(definition.name) !== normalizedName) continue;
+        for (const value of definition.values) {
+          pushValue(value.name);
+        }
+      }
+    }
+  }
+
+  return values;
+}
+
+function buildDatasourceTree(ds: any, prefix: string, configIndex: number, allConfigurations: ERConfiguration[]): TreeNode {
   const groupBySectionLabels = getGroupBySectionLabels();
   const regularChildren = (ds.children ?? []).filter((child: any) => {
     return getGroupBySectionKind(child.name) == null;
@@ -2890,7 +2953,7 @@ function buildDatasourceTree(ds: any, prefix: string, configIndex: number): Tree
     .map((field: any, index: number) => {
       const matchedDatasource = findDatasourceByNormalizedPath(ds, field.path);
       return matchedDatasource
-        ? buildDatasourceTree(matchedDatasource, `${prefix}-grouped-field-${index}`, configIndex)
+        ? buildDatasourceTree(matchedDatasource, `${prefix}-grouped-field-${index}`, configIndex, allConfigurations)
         : null;
     })
     .filter((node: TreeNode | null): node is TreeNode => node != null);
@@ -2899,7 +2962,7 @@ function buildDatasourceTree(ds: any, prefix: string, configIndex: number): Tree
     .map((field: any, index: number) => {
       const matchedDatasource = findDatasourceByNormalizedPath(ds, field.path);
       return matchedDatasource
-        ? buildDatasourceTree(matchedDatasource, `${prefix}-aggregated-field-${index}`, configIndex)
+        ? buildDatasourceTree(matchedDatasource, `${prefix}-aggregated-field-${index}`, configIndex, allConfigurations)
         : null;
     })
     .filter((node: TreeNode | null): node is TreeNode => node != null);
@@ -2925,12 +2988,23 @@ function buildDatasourceTree(ds: any, prefix: string, configIndex: number): Tree
             }]
           : []),
         ...regularChildren.map((child: any, i: number) =>
-          buildDatasourceTree(child, `${prefix}-${i}`, configIndex),
+          buildDatasourceTree(child, `${prefix}-${i}`, configIndex, allConfigurations),
         ),
       ]
     : (ds.children ?? []).map((child: any, i: number) =>
-        buildDatasourceTree(child, `${prefix}-${i}`, configIndex),
+        buildDatasourceTree(child, `${prefix}-${i}`, configIndex, allConfigurations),
       );
+
+  const enumValueNodes = ds.enumInfo?.enumName
+    ? collectEnumValuesFromConfigurations(ds.enumInfo.enumName, allConfigurations).map((valueName, valueIndex) => ({
+        id: `${prefix}-enum-value-${valueIndex}`,
+        name: valueName,
+        icon: '·',
+        type: 'enumValue' as const,
+        data: { name: valueName, enumName: ds.enumInfo?.enumName },
+        configIndex,
+      }))
+    : [];
 
   return {
     id: prefix,
@@ -2939,7 +3013,7 @@ function buildDatasourceTree(ds: any, prefix: string, configIndex: number): Tree
     type: 'datasource',
     data: ds,
     configIndex,
-    children,
+    children: enumValueNodes.length > 0 ? [...children, ...enumValueNodes] : children,
   };
 }
 

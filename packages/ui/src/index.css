@@ -7684,13 +7684,21 @@ body {
 .drilldown-tab-host {
   height: 100%;
   overflow: auto;
-  padding: 16px;
+  padding: 0;
   background: var(--bg-primary, transparent);
+  display: flex;
+  flex-direction: column;
 }
 
 .dd-panel--tab {
-  max-width: 1100px;
-  margin: 0 auto;
+  flex: 1;
+  margin: 0;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  border-bottom: none;
+  box-shadow: none;
 }
 
 .dd-panel--tab .dd-hero {

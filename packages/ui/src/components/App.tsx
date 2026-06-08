@@ -596,6 +596,15 @@ export function App() {
     return active?.label ?? null;
   }, [openTabs, activeTabId]);
 
+  useEffect(() => {
+    const active = openTabs.find(tab => tab.id === activeTabId);
+    if (active?.kind === 'drillDown') {
+      setShowLeft(false);
+      setShowRight(false);
+      setRightFullscreen(false);
+    }
+  }, [openTabs, activeTabId]);
+
   if (isLandingVisible) {
     return (
       <div className={styles.landingShell}>
