@@ -37,7 +37,6 @@ import {
   LinkFilled,
   OpenRegular,
   DeleteRegular,
-  SparkleFilled,
   WeatherMoonRegular,
   WeatherSunnyRegular,
 } from '@fluentui/react-icons';
@@ -517,6 +516,28 @@ interface LandingPageProps {
 
 type LandingAccent = 'info' | 'success' | 'purple';
 
+function ErVisualizerMark() {
+  return (
+    <svg width="42" height="42" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="landing-paper" x1="18" y1="14" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#f0fffb" />
+          <stop offset="1" stopColor="#a7ebd7" />
+        </linearGradient>
+      </defs>
+      <path d="M23 14h15l8 8v23a4 4 0 0 1-4 4H23a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4Z" fill="url(#landing-paper)" />
+      <path d="M38 14v8h8" stroke="#0a6f73" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M28 26h8m-8 6h6" stroke="#0a6f73" strokeWidth="2.4" strokeLinecap="round" />
+      <path d="M28 37.5h8.5l6.5-6.5" stroke="#0f3d3e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M28 37.5l6 6.5h9" stroke="#0f3d3e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="25" cy="37.5" r="4.5" fill="#0f3d3e" />
+      <circle cx="45" cy="29" r="4" fill="#37a987" stroke="#defdf5" strokeWidth="2" />
+      <circle cx="45" cy="44" r="4" fill="#37a987" stroke="#defdf5" strokeWidth="2" />
+      <circle cx="25" cy="37.5" r="1.7" fill="#defdf5" />
+    </svg>
+  );
+}
+
 // ────────────────────────── component ──────────────────────────
 
 export function LandingPage({ onFilesLoaded }: LandingPageProps) {
@@ -725,7 +746,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
       <div className={mergeClasses(styles.hero, 'lp-above')} style={{ position: 'relative' }}>
         <div className="lp-dot-grid" aria-hidden="true" style={{ inset: '-80px -40px -40px -40px' }} />
         <div className={styles.heroLogo} aria-hidden="true" style={{ position: 'relative', zIndex: 1 }}>
-          <SparkleFilled fontSize={36} />
+          <ErVisualizerMark />
         </div>
         <span className="lp-badge" style={{ position: 'relative', zIndex: 1 }}>
           <span className="lp-badge-dot" aria-hidden="true" />
