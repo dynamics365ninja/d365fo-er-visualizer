@@ -213,14 +213,6 @@ export function Toolbar({ breadcrumb }: ToolbarProps) {
             </Button>
           </div>
         </Tooltip>
-        {configs.length > 0 && (
-          <span className={styles.chip} title={t.statusConfigs(configs.length)}>
-            {configs.length} {t.statusConfigsWord}
-          </span>
-        )}
-        <span className={mergeClasses(styles.chip, showTechnicalDetails && styles.chipTech)}>
-          {showTechnicalDetails ? t.technicalView : t.consultantView}
-        </span>
       </div>
     </div>
   );

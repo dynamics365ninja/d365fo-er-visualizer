@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -450,6 +450,12 @@ function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): s
   return labels[type] ?? (locale === 'cs' ? '📁 Ostatní' : '📁 Other');
 }
 
+/** Returns true if ds or any of its descendants has the given name */
+function containsDatasourceName(ds: any, name: string): boolean {
+  if (ds.name === name) return true;
+  return (ds.children ?? []).some((c: any) => containsDatasourceName(c, name));
+}
+
 function getDatasourceGroupKey(type: string, showTechnicalDetails: boolean): string {
   if (showTechnicalDetails) return type;
   if (type === 'Enum' || type === 'ModelEnum' || type === 'FormatEnum') return 'Values';
@@ -549,6 +555,15 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
   useEffect(() => {
     if (focusNode?.type === 'container' && focusNode.data?.id) {
       setSelectedId(focusNode.data.id);
+    }
+    if (focusNode?.type === 'field') {
+      // Field node ID: cfg-{n}-container-{ci}-field-{fi} — extract container index
+      const m = focusNode.id.match(/-container-(\d+)-field-/);
+      if (m) {
+        const ci = parseInt(m[1], 10);
+        const container = dm.containers[ci];
+        if (container?.id) setSelectedId(container.id);
+      }
     }
   }, [focusNode]);
 
@@ -772,12 +787,28 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
   const [view, setView] = useState<'bindings' | 'datasources'>('bindings');
   const [density, setDensity] = useState<DensityMode>('comfortable');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-  const isDatasourceFocusedDetail = Boolean(focusNode && focusNode.type === 'datasource');
+
+  const focusBindingPath: string | undefined = focusNode?.type === 'binding' ? focusNode.data?.path : undefined;
+  const bindingScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!focusNode) return;
-    if (focusNode.type === 'binding' || focusNode.type === 'validation') setView('bindings');
+    if (focusNode.type === 'binding' || focusNode.type === 'validation') {
+      setView('bindings');
+      const focusPath = focusNode.data?.path as string | undefined;
+      if (focusPath) {
+        const focusGroup = focusPath.split('/')[0];
+        setCollapsedGroups(prev => { const next = new Set(prev); next.delete(focusGroup); return next; });
+      }
+    }
+    if (focusNode.type === 'datasource') setView('datasources');
   }, [focusNode]);
+
+  useEffect(() => {
+    if (!focusBindingPath) return;
+    const timer = setTimeout(() => bindingScrollRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
+    return () => clearTimeout(timer);
+  }, [focusBindingPath]);
 
   // Trivial constant detector — same logic as Format bindings
   const isTrivialExpr = (expr: string) => /^(false|true|0|1|""|'')$/i.test(expr.trim());
@@ -847,63 +878,50 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
     );
   }, [mm.datasources, filter]);
 
-  if (isDatasourceFocusedDetail) {
-    return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <ActiveTabNodeSummary node={focusNode} configIndex={configIndex} />
-      </div>
-    );
-  }
-
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {focusNode && focusNode.type !== 'file' && focusNode.type !== 'mapping' && (
-        <ActiveTabNodeSummary node={focusNode} configIndex={configIndex} />
-      )}
       {/* Header */}
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-accent)' }}>
-          🔗 {mm.name}
-        </span>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+      <div className="fmt-toolbar">
+        <div style={{ display: 'flex', gap: 4 }}>
           <button
             onClick={() => setView('bindings')}
-            style={{
-              padding: '3px 10px', fontSize: 11, borderRadius: 3, border: 'none', cursor: 'pointer',
-              background: view === 'bindings' ? 'var(--accent)' : 'var(--bg-tertiary)',
-              color: view === 'bindings' ? 'var(--button-primary-fg)' : 'var(--text-secondary)',
-            }}
+            className={`fmt-tab-btn ${view === 'bindings' ? 'active' : ''}`}
           >
             {t.bindings} ({totalShown})
           </button>
           <button
             onClick={() => setView('datasources')}
-            style={{
-              padding: '3px 10px', fontSize: 11, borderRadius: 3, border: 'none', cursor: 'pointer',
-              background: view === 'datasources' ? 'var(--accent)' : 'var(--bg-tertiary)',
-              color: view === 'datasources' ? 'var(--button-primary-fg)' : 'var(--text-secondary)',
-            }}
+            className={`fmt-tab-btn ${view === 'datasources' ? 'active' : ''}`}
           >
             {t.dataSources} ({mm.datasources.length})
           </button>
         </div>
-        <div className="panel-filter-row">
-          <input
-            type="text"
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
-            placeholder={t.filter}
-            className="fmt-filter-input panel-filter-input"
-          />
-          {filter && (
-            <button
-              onClick={() => setFilter('')}
-              className="fmt-action-btn"
-              title={t.clearFilter}
-            >
-              ✕
-            </button>
-          )}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
+          <div className="filter-field" style={{ width: 160 }}>
+            <svg className="filter-field__icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.4"/>
+              <path d="M10 10l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            <input
+              type="text"
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+              placeholder={t.filter}
+              className="filter-field__input"
+            />
+            {filter && (
+              <button
+                onClick={() => setFilter('')}
+                className="filter-field__clear"
+                title={t.clearFilter}
+                aria-label={t.clearFilter}
+              >
+                <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
       <div className="designer-context-bar">
@@ -940,9 +958,10 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
                       const slashIdx = tail.lastIndexOf('/');
                       const fieldName = slashIdx >= 0 ? tail.slice(slashIdx + 1) : tail;
                       const parentCtx = slashIdx >= 0 ? tail.slice(0, slashIdx) : null;
+                      const isFocused = b.path === focusBindingPath;
 
                       return (
-                        <div key={i} className="mm-binding-row">
+                        <div key={i} ref={isFocused ? bindingScrollRef : null} className={`mm-binding-row${isFocused ? ' search-match' : ''}`}>
                           <div className="mm-binding-field">
                             {parentCtx && (
                               <span className="mm-binding-parent">{parentCtx} /</span>
@@ -962,7 +981,7 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
         )}
 
         {view === 'datasources' && (
-          <GroupedDatasourceList datasources={filteredDatasources} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} />
+          <GroupedDatasourceList datasources={filteredDatasources} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusNode?.type === 'datasource' ? focusNode.name : undefined} />
         )}
       </div>
     </div>
@@ -1035,6 +1054,10 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
       if (focusNode.data?.componentId) {
         setSelectedElementId(focusNode.data.componentId);
       }
+      return;
+    }
+    if (focusNode.type === 'datasource') {
+      setView('datasources');
       return;
     }
   }, [focusNode]);
@@ -1316,21 +1339,28 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
               </button>
             </div>
           )}
-          <div className="panel-filter-row">
+          <div className="filter-field">
+            <svg className="filter-field__icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.4"/>
+              <path d="M10 10l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
             <input
               type="text"
               value={filter}
               onChange={e => setFilter(e.target.value)}
               placeholder={t.filter}
-              className="fmt-filter-input panel-filter-input"
+              className="filter-field__input"
             />
             {filter && (
               <button
                 onClick={() => setFilter('')}
-                className="fmt-action-btn"
+                className="filter-field__clear"
                 title={t.clearFilter}
+                aria-label={t.clearFilter}
               >
-                ✕
+                <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
               </button>
             )}
           </div>
@@ -1433,7 +1463,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
           )}
 
           {view === 'datasources' && (
-            <GroupedDatasourceList datasources={filteredDatasources} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} />
+            <GroupedDatasourceList datasources={filteredDatasources} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusNode?.type === 'datasource' ? focusNode.name : undefined} />
           )}
 
           <div style={{ display: view === 'preview' ? 'contents' : 'none' }}>
@@ -3084,6 +3114,7 @@ interface FormatElementTreeProps {
   transformationMap: Map<string, any>;
   configIndex: number;
   filter: string;
+  showAll?: boolean;
   expandMode: 'all' | 'none';
   expandVersion: number;
   selectedId: string | null;
@@ -3094,7 +3125,7 @@ interface FormatElementTreeProps {
   bindingFilter?: 'all' | 'bound' | 'unbound';
 }
 
-function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, expandMode, expandVersion, selectedId, onSelect, resolveDatasource, registry, showTechnicalDetails, bindingFilter }: FormatElementTreeProps) {
+function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, showAll, expandMode, expandVersion, selectedId, onSelect, resolveDatasource, registry, showTechnicalDetails, bindingFilter }: FormatElementTreeProps) {
   const [expanded, setExpanded] = useState(expandMode === 'all');
   const labels = useAppStore(s => s.configurations[configIndex]?.solutionVersion?.solution?.labels);
 
@@ -3113,8 +3144,6 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
   const labelRef = element.attributes?.['Label'];
   const resolvedLabel = useMemo(() => resolveLabel(labelRef, labels), [labelRef, labels]);
   const labelText = resolvedLabel?.localized ?? resolvedLabel?.enUs ?? (resolvedLabel?.id ? resolvedLabel.id : undefined);
-
-  const isExpanded = expanded;
 
   // Filter matching
   const matchesFilter = !filter || element.name.toLowerCase().includes(filter.toLowerCase()) ||
@@ -3136,16 +3165,31 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
 
   const isSelected = selectedId === element.id;
 
+  // Auto-expand when the selectedId belongs to this element's subtree (navigation from search)
+  const selectedIsDescendant = useMemo(() => {
+    if (!selectedId || selectedId === element.id) return false;
+    const check = (el: any): boolean => {
+      if (el.id === selectedId) return true;
+      return el.children?.some(check) ?? false;
+    };
+    return check(element);
+  }, [selectedId, element]);
+
+  // When a filter is active, auto-expand any node that matches or has matching descendants.
+  // showAll=true means an ancestor already matched — show everything below it.
+  // Also auto-expand when a descendant is the navigation target.
+  const isExpanded = filter ? (showAll || matchesFilter || descendantMatches) : (expanded || selectedIsDescendant);
+
   const rowRef = React.useRef<HTMLDivElement>(null);
 
   // Scroll into view when this element becomes selected (e.g. navigate from template preview)
   useEffect(() => {
     if (isSelected && rowRef.current) {
-      rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [isSelected]);
 
-  if (filter && !matchesFilter && !descendantMatches) return null;
+  if (filter && !showAll && !matchesFilter && !descendantMatches) return null;
 
   // Binding filter
   if (bindingFilter && bindingFilter !== 'all') {
@@ -3172,7 +3216,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
       {/* Element Row */}
       <div
         ref={rowRef}
-        className={`fmt-element-row ${isSelected ? 'selected' : ''} ${!mainBinding ? 'unbound' : ''}`}
+        className={`fmt-element-row ${isSelected ? 'selected' : ''} ${!mainBinding ? 'unbound' : ''} ${filter && matchesFilter ? 'search-match' : ''}`}
         style={{ paddingLeft: depth * 20 + 4 }}
         onClick={() => onSelect(element.id)}
       >
@@ -3297,6 +3341,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
           transformationMap={transformationMap}
           configIndex={configIndex}
           filter={filter}
+          showAll={showAll || matchesFilter}
           expandMode={expandMode}
           expandVersion={expandVersion}
           selectedId={selectedId}
@@ -3926,15 +3971,31 @@ function getAggregationFunctionBadgeClass(fn: string | undefined): string {
 
 // ── Datasource Row (for Data Sources tab) ──
 
-function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode }: {
+function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName }: {
   ds: any;
   configIndex: number;
   navigateToTreeNode: (nodeId: string) => void;
+  focusDsName?: string;
 }) {
   const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const triggerWhereUsed = useAppStore(s => s.triggerWhereUsed);
+  const isDirectTarget = Boolean(focusDsName && ds.name === focusDsName);
+  const isAncestor = Boolean(focusDsName && !isDirectTarget && containsDatasourceName(ds, focusDsName));
   const [expanded, setExpanded] = useState(false);
+  const rowRef = React.useRef<HTMLDivElement>(null);
+
+  // Auto-expand when this row contains the focused descendant
+  useEffect(() => {
+    if (isAncestor) setExpanded(true);
+  }, [isAncestor]);
+
+  // Scroll into view when this row IS the direct target
+  useEffect(() => {
+    if (isDirectTarget && rowRef.current) {
+      rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [isDirectTarget]);
   const groupByFields = ds.groupByInfo?.groupedFields ?? [];
   const aggregatedFields = ds.groupByInfo?.aggregations ?? [];
   const [showGroupedFields, setShowGroupedFields] = useState(groupByFields.length > 0 && groupByFields.length <= 6);
@@ -3972,7 +4033,7 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode }: {
   }
 
   return (
-    <div className="ds-row-wrap">
+    <div className={`ds-row-wrap${isDirectTarget ? ' search-match' : ''}`} ref={rowRef}>
       <div
         className="ds-row"
         onClick={() => {
@@ -4096,7 +4157,7 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode }: {
       {/* Nested children (indented) */}
       {expanded && ds.children?.map((child: any, i: number) => (
         <div key={i} style={{ paddingLeft: 12, borderLeft: '2px solid var(--border-color)', marginLeft: 8 }}>
-          <FormatDatasourceRow ds={child} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} />
+          <FormatDatasourceRow ds={child} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusDsName} />
         </div>
       ))}
     </div>
@@ -4118,10 +4179,11 @@ const dsGroupLabels: Record<string, string> = {
   Container: '📦 Containers',
 };
 
-function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode }: {
+function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode, focusDsName }: {
   datasources: any[];
   configIndex: number;
   navigateToTreeNode: (nodeId: string) => void;
+  focusDsName?: string;
 }) {
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -4142,6 +4204,15 @@ function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode }:
     return sorted;
   }, [datasources, showTechnicalDetails]);
 
+  useEffect(() => {
+    if (groups.length === 0) return;
+    const focusGroupType = focusDsName
+      ? groups.find(([, items]) => items.some((ds: any) => containsDatasourceName(ds, focusDsName)))?.[0]
+      : undefined;
+    console.log('[GroupedDatasourceList] focusDsName:', focusDsName, 'focusGroupType:', focusGroupType, 'groups:', groups.map(([t]) => t));
+    setCollapsedGroups(new Set(groups.map(([type]) => type).filter(t => t !== focusGroupType)));
+  }, [focusDsName, groups]);
+
   const toggleGroup = useCallback((type: string) => {
     setCollapsedGroups(prev => {
       const next = new Set(prev);
@@ -4156,11 +4227,6 @@ function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode }:
 
   const collapseAllGroups = useCallback(() => {
     setCollapsedGroups(new Set(groups.map(([type]) => type)));
-  }, [groups]);
-
-  useEffect(() => {
-    if (groups.length === 0) return;
-    setCollapsedGroups(prev => prev.size > 0 ? prev : new Set(groups.map(([type]) => type)));
   }, [groups]);
 
   return (
@@ -4188,7 +4254,7 @@ function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode }:
               <span className="ds-group-count">{items.length}</span>
             </div>
             {!isCollapsed && items.map((ds: any, i: number) => (
-              <FormatDatasourceRow key={i} ds={ds} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} />
+              <FormatDatasourceRow key={i} ds={ds} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusDsName} />
             ))}
           </div>
         );

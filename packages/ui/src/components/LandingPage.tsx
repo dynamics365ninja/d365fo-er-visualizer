@@ -56,7 +56,7 @@ const useStyles = makeStyles({
     alignItems: 'center',
     gap: '32px',
     backgroundColor: 'var(--bg-primary)',
-    backgroundImage: 'radial-gradient(ellipse at top, color-mix(in srgb, var(--surface-success-fg) 12%, transparent) 0%, transparent 55%)',
+    backgroundImage: 'radial-gradient(ellipse at top, color-mix(in srgb, var(--accent) 8%, transparent) 0%, transparent 60%)',
     position: 'relative',
     '@media (max-width: 480px)': {
       padding: '24px 12px 48px',

@@ -1001,7 +1001,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     const node = findNodeById(state.treeNodes, nodeId);
     if (!node) return;
 
-    const targetTabId = node.configIndex == null ? state.activeTabId : node.id;
+    // For non-file nodes (format elements, bindings, model fields, etc.) always
+    // open the root config file tab so the full designer is shown, not the
+    // FocusedNodeTab. The selectedNode drives the in-designer highlight/scroll.
+    const rootFileNode = node.type === 'file' || node.configIndex == null
+      ? node
+      : state.treeNodes[node.configIndex] ?? node;
+    const nextTabId = rootFileNode.id;
+
+    const targetTabId = node.configIndex == null ? state.activeTabId : nextTabId;
     const navigationHistory = pushNavigationHistory(state, targetTabId, nodeId);
 
     set({
@@ -1015,11 +1023,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (node.configIndex == null) return;
 
-    const nextTabId = node.id;
-
-    const targetTabLabel = node.type === 'file'
-      ? node.name
-      : `${state.configurations[node.configIndex]?.solutionVersion.solution.name ?? node.name} • ${node.name}`;
+    const targetTabLabel = rootFileNode.name;
 
     const existingTab = state.openTabs.find(t => t.id === nextTabId);
     if (existingTab) {

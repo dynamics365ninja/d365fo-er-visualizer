@@ -21,11 +21,8 @@ function resolveRendererEntry(): string {
 }
 
 function createWindow() {
-  // Respect the user's OS theme for the initial paint to avoid a dark flash in light mode.
-  const prefersLight = process.platform === 'win32'
-    ? false // Windows: stay neutral; the renderer will repaint instantly.
-    : false;
-  const initialBg = prefersLight ? '#f8fafc' : '#181a1f';
+  // Boot page is always white — match it so there's no dark flash before HTML renders
+  const initialBg = '#ffffff';
 
   const win = new BrowserWindow({
     width: 1600,

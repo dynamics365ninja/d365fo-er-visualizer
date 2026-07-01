@@ -243,13 +243,19 @@ function filterTreeNodes(nodes: TreeNode[], query: string): TreeNode[] {
   if (!needle) return nodes;
 
   const visit = (node: TreeNode): TreeNode | null => {
-    const children = node.children?.map(visit).filter((child): child is TreeNode => child != null) ?? [];
     const ownText = [node.name, node.type, node.data?.type, node.data?.elementType, node.data?.path]
       .filter(Boolean)
       .join(' ')
       .toLowerCase();
 
-    if (ownText.includes(needle) || children.length > 0) {
+    // If this node itself matches, keep it with all its original descendants intact
+    if (ownText.includes(needle)) {
+      return node;
+    }
+
+    // Otherwise propagate down — include this node only if some descendant matches
+    const children = node.children?.map(visit).filter((child): child is TreeNode => child != null) ?? [];
+    if (children.length > 0) {
       return { ...node, children };
     }
 

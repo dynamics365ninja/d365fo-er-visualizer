@@ -503,7 +503,7 @@ const cs: Translations = {
   configurations: 'Konfigurace',
   noResults: 'Nic nenalezeno.',
   noResultsFor: (q: string) => `Nic nenalezeno pro „${q}".`,
-  found: (n: number) => `Nalezeno ${n} výskyt${n === 1 ? '' : n < 5 ? 'y' : 'ů'}`,
+  found: (n: number) => `Výskyty: ${n}`,
   examples: 'Příklady:',
 
   // Designer
@@ -929,7 +929,7 @@ const en: Translations = {
   configurations: 'Configurations',
   noResults: 'Nothing found.',
   noResultsFor: (q: string) => `Nothing found for "${q}".`,
-  found: (n: number) => `Found ${n} result${n === 1 ? '' : 's'}`,
+  found: (n: number) => `Usages: ${n}`,
   examples: 'Examples:',
 
   openInExplorer: 'In Explorer, double-click the selected item to open its visualization.',
