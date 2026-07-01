@@ -118,7 +118,7 @@ export class GUIDRegistry {
         targetType: 'GUID',
         sourceConfigPath: fp,
         sourceComponent: config.solutionVersion.solution.name,
-        sourceContext: `Base model reference`,
+        sourceContext: `base derivation`,
       });
     }
 
@@ -152,7 +152,7 @@ export class GUIDRegistry {
         targetType: 'GUID',
         sourceConfigPath: fp,
         sourceComponent: c.version.mapping.name,
-        sourceContext: 'Model mapping references data model',
+        sourceContext: 'references data model',
       });
 
       this.indexDatasources(c.version.mapping.datasources, fp);
@@ -182,7 +182,7 @@ export class GUIDRegistry {
         targetType: 'GUID',
         sourceConfigPath: fp,
         sourceComponent: c.formatMappingVersion.formatMapping.name,
-        sourceContext: 'Format mapping references format definition',
+        sourceContext: 'references format definition',
       });
 
       this.indexFormatElement(c.formatVersion.format.rootElement, fp, ck);
@@ -219,7 +219,7 @@ export class GUIDRegistry {
           targetType: 'ModelPath',
           sourceConfigPath: fp,
           sourceComponent: `${container.name}.${item.name}`,
-          sourceContext: `TypeDescriptor reference in model field`,
+          sourceContext: `type descriptor`,
         });
       }
     }
@@ -233,7 +233,7 @@ export class GUIDRegistry {
           targetType: 'Table',
           sourceConfigPath: fp,
           sourceComponent: ds.name,
-          sourceContext: `Datasource "${ds.name}" uses table "${ds.tableInfo.tableName}"`,
+          sourceContext: `table datasource`,
         });
         for (const field of ds.tableInfo.selectedFields) {
           this.addCrossRef({
@@ -241,7 +241,7 @@ export class GUIDRegistry {
             targetType: 'Field',
             sourceConfigPath: fp,
             sourceComponent: ds.name,
-            sourceContext: `Selected field in datasource "${ds.name}"`,
+            sourceContext: `selected field`,
           });
         }
       }
@@ -251,7 +251,7 @@ export class GUIDRegistry {
           targetType: 'Enum',
           sourceConfigPath: fp,
           sourceComponent: ds.name,
-          sourceContext: `Datasource "${ds.name}" uses enum "${ds.enumInfo.enumName}"`,
+          sourceContext: `enum datasource`,
         });
       }
       if (ds.classInfo) {
@@ -260,7 +260,7 @@ export class GUIDRegistry {
           targetType: 'Class',
           sourceConfigPath: fp,
           sourceComponent: ds.name,
-          sourceContext: `Datasource "${ds.name}" uses class "${ds.classInfo.className}"`,
+          sourceContext: `class datasource`,
         });
       }
       if (ds.userParamInfo?.extendedDataTypeName) {
@@ -269,11 +269,11 @@ export class GUIDRegistry {
           targetType: 'EDT',
           sourceConfigPath: fp,
           sourceComponent: ds.name,
-          sourceContext: `User parameter "${ds.name}" uses EDT "${ds.userParamInfo.extendedDataTypeName}"`,
+          sourceContext: `user parameter`,
         });
       }
       if (ds.calculatedField) {
-        this.indexExpressionString(ds.calculatedField.expressionAsString, fp, ds.name, 'Calculated field expression');
+        this.indexExpressionString(ds.calculatedField.expressionAsString, fp, ds.name, 'calculated field expr');
       }
       if (ds.children.length > 0) {
         this.indexDatasources(ds.children, fp);
@@ -288,24 +288,23 @@ export class GUIDRegistry {
         targetType: 'ModelPath',
         sourceConfigPath: fp,
         sourceComponent: parentName,
-        sourceContext: `Binding: ${b.path} = ${b.expressionAsString}`,
+        sourceContext: `= ${b.expressionAsString}`,
       });
-      this.indexExpressionString(b.expressionAsString, fp, parentName, `Binding for ${b.path}`);
+      this.indexExpressionString(b.expressionAsString, fp, parentName, `binding: ${b.path}`);
     }
   }
 
   private indexFormatBindings(bindings: ERFormatBinding[], fp: string, parentName: string): void {
     for (const b of bindings) {
       const prop = (b.propertyName ?? '').trim();
-      const propSuffix = prop ? ` [${prop}]` : '';
       this.addCrossRef({
         target: b.componentId,
         targetType: 'GUID',
         sourceConfigPath: fp,
         sourceComponent: parentName,
-        sourceContext: `Format binding${propSuffix} to component: ${b.expressionAsString}`,
+        sourceContext: prop ? `${prop} = ${b.expressionAsString}` : `= ${b.expressionAsString}`,
       });
-      this.indexExpressionString(b.expressionAsString, fp, parentName, `Format binding${propSuffix} expression`);
+      this.indexExpressionString(b.expressionAsString, fp, parentName, prop ? `format binding [${prop}]` : 'format binding');
     }
   }
 

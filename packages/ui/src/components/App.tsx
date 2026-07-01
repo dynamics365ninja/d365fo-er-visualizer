@@ -214,6 +214,52 @@ const useAppStyles = makeStyles({
     overflow: 'auto',
     backgroundImage: 'none',
   },
+  resizeHandleH: {
+    height: '8px',
+    backgroundColor: 'transparent',
+    backgroundImage: `linear-gradient(90deg, transparent 0 10px, ${tokens.colorNeutralStroke2} 10px calc(100% - 10px), transparent calc(100% - 10px) 100%)`,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'center',
+    backgroundSize: '100% 2px',
+    cursor: 'row-resize',
+    transitionProperty: 'background-image, background-size',
+    transitionDuration: '160ms',
+    ':hover': {
+      backgroundImage: `linear-gradient(90deg, transparent 0 10px, ${tokens.colorBrandBackground} 10px calc(100% - 10px), transparent calc(100% - 10px) 100%)`,
+      backgroundSize: '100% 4px',
+    },
+    ':active': {
+      backgroundImage: `linear-gradient(90deg, transparent 0 10px, ${tokens.colorBrandBackgroundPressed} 10px calc(100% - 10px), transparent calc(100% - 10px) 100%)`,
+      backgroundSize: '100% 5px',
+    },
+  },
+  propertiesStrip: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  propertiesStripHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px',
+    padding: '4px 10px',
+    fontSize: '10.5px',
+    fontWeight: 700,
+    color: tokens.colorNeutralForeground3,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    backgroundColor: tokens.colorNeutralBackground2,
+    flexShrink: 0,
+  },
+  propertiesStripContent: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'auto',
+  },
   resizeHandle: {
     width: '10px',
     backgroundColor: 'transparent',
@@ -877,9 +923,27 @@ function RightPanel({
         </div>
       </div>
       {tab === 'search' || tab === 'where-used' ? (
-        <ErrorBoundary label="Search">
-          <SearchPanel />
-        </ErrorBoundary>
+        <PanelGroup direction="vertical" style={{ flex: 1, minHeight: 0 }}>
+          <Panel defaultSize={60} minSize={25}>
+            <ErrorBoundary label="Search">
+              <SearchPanel />
+            </ErrorBoundary>
+          </Panel>
+          <PanelResizeHandle className={styles.resizeHandleH} />
+          <Panel defaultSize={40} minSize={15}>
+            <div className={styles.propertiesStrip}>
+              <div className={styles.propertiesStripHeader}>
+                <AppsListDetailRegular fontSize={12} />
+                {t.properties}
+              </div>
+              <div className={styles.propertiesStripContent}>
+                <ErrorBoundary label="Inspector">
+                  <PropertyInspector />
+                </ErrorBoundary>
+              </div>
+            </div>
+          </Panel>
+        </PanelGroup>
       ) : (
         <div className={panelContentClass}>
           <ErrorBoundary label="Inspector">
