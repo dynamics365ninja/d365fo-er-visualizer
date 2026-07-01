@@ -296,14 +296,16 @@ export class GUIDRegistry {
 
   private indexFormatBindings(bindings: ERFormatBinding[], fp: string, parentName: string): void {
     for (const b of bindings) {
+      const prop = (b.propertyName ?? '').trim();
+      const propSuffix = prop ? ` [${prop}]` : '';
       this.addCrossRef({
         target: b.componentId,
         targetType: 'GUID',
         sourceConfigPath: fp,
         sourceComponent: parentName,
-        sourceContext: `Format binding to component: ${b.expressionAsString}`,
+        sourceContext: `Format binding${propSuffix} to component: ${b.expressionAsString}`,
       });
-      this.indexExpressionString(b.expressionAsString, fp, parentName, 'Format binding expression');
+      this.indexExpressionString(b.expressionAsString, fp, parentName, `Format binding${propSuffix} expression`);
     }
   }
 

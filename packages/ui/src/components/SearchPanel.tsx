@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { SearchBox, Button, TabList, Tab, Tooltip } from '@fluentui/react-components';
+import { Button, TabList, Tab, Tooltip } from '@fluentui/react-components';
 import {
   SearchRegular,
   MapRegular,
   DocumentRegular,
   ArrowRightRegular,
-  DismissRegular,
   TextExpandRegular,
   TextCollapseRegular,
 } from '@fluentui/react-icons';
@@ -257,6 +256,7 @@ export function SearchPanel() {
 
   const [searchExpandSignal, setSearchExpandSignal] = useState<{ version: number; expanded: boolean }>({ version: 0, expanded: true });
   const [whereUsedExpandSignal, setWhereUsedExpandSignal] = useState<{ version: number; expanded: boolean }>({ version: 0, expanded: true });
+  const [searchScope, setSearchScope] = useState<'all' | 'format' | 'mapping' | 'model'>('all');
 
   const searchExamples = useMemo<ExamplePreset[]>(() => {
     const section = locale === 'cs'
@@ -331,261 +331,282 @@ export function SearchPanel() {
     return () => window.clearTimeout(handle);
   }, [executeWhereUsed, mode, whereUsedQuery]);
 
-  const visibleWhereUsedResults = useMemo(() => {
-    if (whereUsedScope === 'all') return whereUsedResults;
+  const whereUsedFileGroups = useMemo(() => {
+    const refs: Reference[] = [];
+    for (const entry of whereUsedResults) {
+      const dsName = entry.datasource.name;
+      for (const m of entry.modelPaths) {
+        refs.push({
+          area: 'mapping' as const,
+          kind: 'binding' as const,
+          configIndex: m.configIndex,
+          configName: m.configName,
+          location: entry.entityType === 'TextMatch'
+            ? m.path.split(/[./]/).filter(Boolean)
+            : [dsName, ...m.path.split('.').filter(Boolean)],
+          kindLabel: m.kindLabel ?? 'binding',
+          preview: m.expr,
+          shortLocation: m.path,
+          onOpen: () => {
+            if (m.treeNodeId) { navigateToTreeNode(m.treeNodeId); return; }
+            const root = treeNodes[m.configIndex];
+            if (!root) return;
+            const node = findTreeNodeByMatch(root.children ?? [], n => n.type === 'binding' && n.data?.path === m.path);
+            if (node) navigateToTreeNode(node.id);
+          },
+        });
+      }
+      for (const f of entry.formatUsages) {
+        const loc = f.elementPath?.length ? f.elementPath : [f.elementName];
+        refs.push({
+          area: 'format' as const,
+          kind: 'formatElement' as const,
+          configIndex: f.configIndex,
+          configName: f.configName,
+          location: loc,
+          kindLabel: f.elementType,
+          preview: f.expression,
+          shortLocation: f.elementName,
+          onOpen: () => {
+            const node = findTreeNodeByMatch(treeNodes, n =>
+              n.type === 'formatElement' && n.configIndex === f.configIndex && n.data?.id === f.elementId);
+            if (node) navigateToTreeNode(node.id);
+          },
+          kindColor: getFormatTypeThemeColor(f.elementType),
+        });
+      }
+    }
+    const map = new Map<string, { configName: string; refs: Reference[] }>();
+    for (const r of refs) {
+      const key = `${r.configIndex}|${r.configName}`;
+      const bucket = map.get(key);
+      if (bucket) bucket.refs.push(r);
+      else map.set(key, { configName: r.configName, refs: [r] });
+    }
+    return Array.from(map.entries());
+  }, [whereUsedResults, treeNodes, navigateToTreeNode]);
 
-    return whereUsedResults
-      .map(entry => {
-        if (whereUsedScope === 'mapping') {
-          return {
-            ...entry,
-            formatUsages: [],
-          };
-        }
-        return {
-          ...entry,
-          modelPaths: [],
-        };
-      })
-      .filter(entry => entry.modelPaths.length > 0 || entry.formatUsages.length > 0);
-  }, [whereUsedResults, whereUsedScope]);
+  const currentQuery = mode === 'search' ? searchQuery : whereUsedQuery;
+  const trimmedCurrentQuery = currentQuery.trim();
 
-  const trimmedSearchQuery = searchQuery.trim();
-  const trimmedWhereUsedQuery = whereUsedQuery.trim();
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (mode === 'search') setSearchQuery(e.target.value);
+    else setWhereUsedQuery(e.target.value);
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      if (mode === 'search') handleSearch();
+      else executeWhereUsed(whereUsedQuery);
+    }
+  };
+
+  const handleClear = () => {
+    if (mode === 'search') setSearchQuery('');
+    else clearWhereUsed();
+  };
 
   return (
-    <div className="search-panel search-hub">
-      <TabList
-        className="search-mode-tabs search-hub__tabs"
-        selectedValue={mode}
-        onTabSelect={(_, d) => setMode(d.value as Mode)}
-        size="small"
-      >
-        <Tab value="search" icon={<SearchRegular />}>{t.search}</Tab>
-        <Tab value="where-used" icon={<MapRegular />}>{t.whereUsed}</Tab>
-      </TabList>
+    <div className="search-panel">
+      <div className="search-panel__body">
+        {/* ── Unified search input ── */}
+        <div className="filter-field search-panel__field">
+          <svg className="filter-field__icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.4"/>
+            <path d="M10 10l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+          </svg>
+          <input
+            type="text"
+            value={currentQuery}
+            onChange={handleInputChange}
+            onKeyDown={handleInputKeyDown}
+            placeholder={mode === 'search' ? t.searchPlaceholder : t.whereUsedPlaceholder}
+            className="filter-field__input"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          {currentQuery && (
+            <button
+              onClick={handleClear}
+              className="filter-field__clear"
+              title={mode === 'search' ? t.clearSearch : t.clearWhereUsedSearch}
+              aria-label={mode === 'search' ? t.clearSearch : t.clearWhereUsedSearch}
+            >
+              <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+          )}
+        </div>
 
-      {mode === 'search' && (
-        <div className="search-mode-surface search-mode-surface--search search-hub__surface">
-          <section className="search-pane search-hub__pane">
-            <div className={`search-query-card ${trimmedSearchQuery ? 'search-query-card--compact' : ''}`}>
-              <div className="search-query-card__top">
-                {!trimmedSearchQuery && <div className="search-query-card__label">{t.search}</div>}
-                {trimmedSearchQuery && (
-                  <Button
-                    appearance="subtle"
-                    size="small"
-                    icon={<DismissRegular />}
-                    onClick={() => setSearchQuery('')}
-                    aria-label={t.clearSearch}
-                    title={t.clearSearch}
-                  />
-                )}
-              </div>
-              <div className="search-input-row search-input-row--card">
-                <SearchBox
-                  value={searchQuery}
-                  onChange={(_, d) => setSearchQuery(d.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder=""
-                  className="search-input"
-                />
-                <Button appearance="primary" icon={<SearchRegular />} onClick={handleSearch} aria-label={t.search}>
-                  {t.search}
-                </Button>
-              </div>
-              {!trimmedSearchQuery && (
-                <div className="search-query-kpis">
-                  <span className="search-kpi">{registry.guidCount} GUID</span>
-                  <span className="search-kpi">{registry.crossRefCount} cross-ref</span>
+        {/* ── Search mode ── */}
+        {mode === 'search' && (
+          <>
+            {!trimmedCurrentQuery && (
+              <>
+                <div className="search-panel__kpis">
+                  <span className="search-panel__kpi">{registry.guidCount} GUID</span>
+                  <span className="search-panel__kpi">{registry.crossRefCount} cross-ref</span>
                 </div>
-              )}
-            </div>
-
-            {!trimmedSearchQuery && (
-              <ExamplePalette
-                title={t.examples}
-                examples={searchExamples}
-                onApply={applySearchExample}
-              />
+                <ExamplePalette
+                  title={t.examples}
+                  examples={searchExamples}
+                  onApply={applySearchExample}
+                />
+              </>
             )}
 
             {searchResults.length > 0 && (
-              <div className="search-results-shell search-results-shell--search">
-                <div className="search-toolbar-row search-toolbar-row--results search-results-shell__toolbar">
-                  <div className="search-meta">{t.searchResultCount(searchResults.length)}</div>
-                  <div className="search-toolbar-actions">
-                    <Tooltip content={t.expand} relationship="label" withArrow>
-                      <Button
-                        appearance="subtle"
-                        size="small"
-                        icon={<TextExpandRegular />}
-                        aria-label={t.expand}
-                        onClick={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
-                      />
-                    </Tooltip>
-                    <Tooltip content={t.collapse} relationship="label" withArrow>
-                      <Button
-                        appearance="subtle"
-                        size="small"
-                        icon={<TextCollapseRegular />}
-                        aria-label={t.collapse}
-                        onClick={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
-                      />
-                    </Tooltip>
-                  </div>
-                </div>
-                <div className="search-results-scroll">
-                  <SearchResultsGrouped
-                    results={searchResults.slice(0, 100) as SearchResultEntry[]}
-                    totalCount={searchResults.length}
-                    query={searchQuery}
-                    expandSignal={searchExpandSignal}
-                    configurations={configurations}
-                    treeNodes={treeNodes}
-                    registry={registry}
-                    navigateToTreeNode={navigateToTreeNode}
-                  />
-                </div>
-              </div>
+              <>
+                {(() => {
+                  // Deduplicate and filter to only navigable results (same logic as SearchResultGroup)
+                  const seen = new Set<string>();
+                  const navigableResults = (searchResults as SearchResultEntry[]).filter(r => {
+                    const key = `${r.target}|${r.sourceComponent}|${r.sourceContext}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return findNodeForSearchResult(r, configurations, treeNodes, registry) !== null;
+                  });
+                  // Apply scope filter
+                  const scopedResults = searchScope === 'all' ? navigableResults : navigableResults.filter(r => {
+                    const kind = (configurations.find(c => c.filePath === r.sourceConfigPath) as any)?.kind ?? '';
+                    if (searchScope === 'format') return kind === 'Format';
+                    if (searchScope === 'mapping') return kind === 'ModelMapping';
+                    if (searchScope === 'model') return kind === 'DataModel';
+                    return true;
+                  });
+                  // Apply same per-group nesting to get accurate total count
+                  const groupMap = new Map<string, SearchResultEntry[]>();
+                  for (const r of scopedResults) {
+                    const gk = `${r.sourceConfigPath}`;
+                    const bucket = groupMap.get(gk) ?? [];
+                    bucket.push(r);
+                    groupMap.set(gk, bucket);
+                  }
+                  const totalNested = Array.from(groupMap.values()).reduce((sum, grp) => sum + nestBindingResults(grp).length, 0);
+                  const capped = scopedResults.slice(0, 100);
+                  return (
+                    <>
+                      <div className="search-panel__results-bar">
+                        <span className="search-panel__results-count">{t.searchResultCount(totalNested)}</span>
+                        <div className="search-scope-toggle" role="group" aria-label={locale === 'cs' ? 'Oblast výsledků' : 'Scope'}>
+                          {(['all', 'format', 'mapping', 'model'] as const).map(s => (
+                            <button key={s} type="button"
+                              className={`search-scope-toggle__btn ${searchScope === s ? 'active' : ''}`}
+                              onClick={() => setSearchScope(s)}
+                            >
+                              {s === 'all' ? (locale === 'cs' ? 'Vše' : 'All')
+                                : s === 'format' ? (locale === 'cs' ? 'Formát' : 'Format')
+                                : s === 'mapping' ? (locale === 'cs' ? 'Mapování' : 'Mappings')
+                                : (locale === 'cs' ? 'Model' : 'Model')}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="search-panel__results-actions">
+                          <Tooltip content={t.expand} relationship="label" withArrow>
+                            <Button appearance="subtle" size="small" icon={<TextExpandRegular />} aria-label={t.expand}
+                              onClick={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: true }))} />
+                          </Tooltip>
+                          <Tooltip content={t.collapse} relationship="label" withArrow>
+                            <Button appearance="subtle" size="small" icon={<TextCollapseRegular />} aria-label={t.collapse}
+                              onClick={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: false }))} />
+                          </Tooltip>
+                        </div>
+                      </div>
+                      <div className="search-panel__results">
+                        <SearchResultsGrouped
+                          results={capped}
+                          totalCount={totalNested}
+                          query={searchQuery}
+                          expandSignal={searchExpandSignal}
+                          configurations={configurations}
+                          treeNodes={treeNodes}
+                          registry={registry}
+                          navigateToTreeNode={navigateToTreeNode}
+                        />
+                      </div>
+                    </>
+                  );
+                })()}
+              </>
             )}
 
-            {searchResults.length === 0 && trimmedSearchQuery && (
-              <div className="search-results-shell search-results-shell--search">
-                <div className="search-results-scroll">
-                  <div className="search-empty search-empty--card">{t.noResults}</div>
-                </div>
-              </div>
+            {searchResults.length === 0 && trimmedCurrentQuery && (
+              <div className="search-panel__empty">{t.noResults}</div>
             )}
-          </section>
-        </div>
-      )}
+          </>
+        )}
 
-      {mode === 'where-used' && (
-        <div className="search-mode-surface search-mode-surface--where-used search-hub__surface">
-          <section className="search-pane search-hub__pane">
-            <div className={`search-query-card ${trimmedWhereUsedQuery ? 'search-query-card--compact' : ''}`}>
-              <div className="search-query-card__top">
-                {!trimmedWhereUsedQuery && <div className="search-query-card__label">{t.whereUsed}</div>}
-              </div>
-              {!trimmedWhereUsedQuery && <div className="search-meta search-meta-tight">{t.whereUsedLabel}</div>}
-              <div className="search-input-row search-input-row--card">
-                <SearchBox
-                  value={whereUsedQuery}
-                  onChange={(_, d) => setWhereUsedQuery(d.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') executeWhereUsed(whereUsedQuery); }}
-                  placeholder=""
-                  className="search-input"
+        {/* ── Where-used mode ── */}
+        {mode === 'where-used' && (
+          <>
+            {!trimmedCurrentQuery && (
+              <>
+                <p className="search-panel__hint">{t.whereUsedLabel}</p>
+                <ExamplePalette
+                  title={t.examples}
+                  examples={whereUsedExamples}
+                  onApply={applyWhereUsedExample}
                 />
-                <Button appearance="primary" onClick={() => executeWhereUsed(whereUsedQuery)}>
-                  {t.find}
-                </Button>
-                {trimmedWhereUsedQuery && (
-                  <Button
-                    appearance="subtle"
-                    size="small"
-                    icon={<DismissRegular />}
-                    onClick={clearWhereUsed}
-                    aria-label={t.clearWhereUsedSearch}
-                    title={t.clearWhereUsedSearch}
-                    className="search-input-row__clear"
-                  />
-                )}
-              </div>
-            </div>
-
-            {!trimmedWhereUsedQuery && (
-              <ExamplePalette
-                title={t.examples}
-                examples={whereUsedExamples}
-                onApply={applyWhereUsedExample}
-              />
+              </>
             )}
 
-            {visibleWhereUsedResults.length > 0 && (
-              <div className="search-results-shell search-results-shell--where-used">
-                <div className="search-toolbar-row search-toolbar-row--results search-results-shell__toolbar">
-                  <div className="search-section-caption search-section-caption-spacious search-results-count-chip">
-                    {t.found(visibleWhereUsedResults.length)}
+            {whereUsedFileGroups.length > 0 && (() => {
+              const totalVisible = whereUsedFileGroups.reduce(
+                (n, [, g]) => n + (whereUsedScope === 'all' ? g.refs.length : g.refs.filter(r => r.area === whereUsedScope).length), 0);
+              return (
+                <>
+                  <div className="search-panel__results-bar">
+                    <span className="search-panel__results-count">{t.found(totalVisible)}</span>
+                    <div className="search-scope-toggle" role="group" aria-label={locale === 'cs' ? 'Oblast použití' : 'Scope'}>
+                      {(['all', 'mapping', 'format'] as const).map(s => (
+                        <button key={s} type="button"
+                          className={`search-scope-toggle__btn ${whereUsedScope === s ? 'active' : ''}`}
+                          onClick={() => setWhereUsedScope(s)}
+                        >
+                          {s === 'all' ? (locale === 'cs' ? 'Vše' : 'All')
+                            : s === 'mapping' ? (locale === 'cs' ? 'Mapování' : 'Mappings')
+                            : (locale === 'cs' ? 'Formát' : 'Format')}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="search-panel__results-actions">
+                      <Tooltip content={t.expand} relationship="label" withArrow>
+                        <Button appearance="subtle" size="small" icon={<TextExpandRegular />} aria-label={t.expand}
+                          onClick={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: true }))} />
+                      </Tooltip>
+                      <Tooltip content={t.collapse} relationship="label" withArrow>
+                        <Button appearance="subtle" size="small" icon={<TextCollapseRegular />} aria-label={t.collapse}
+                          onClick={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: false }))} />
+                      </Tooltip>
+                    </div>
                   </div>
-                  <div className="search-scope-toggle" role="group" aria-label={locale === 'cs' ? 'Filtrovat oblast použití' : 'Filter usage scope'}>
-                    <button
-                      type="button"
-                      className={`search-scope-toggle__btn ${whereUsedScope === 'all' ? 'active' : ''}`}
-                      onClick={() => setWhereUsedScope('all')}
-                    >
-                      {locale === 'cs' ? 'Vše' : 'All'}
-                    </button>
-                    <button
-                      type="button"
-                      className={`search-scope-toggle__btn ${whereUsedScope === 'mapping' ? 'active' : ''}`}
-                      onClick={() => setWhereUsedScope('mapping')}
-                    >
-                      {locale === 'cs' ? 'Mapování' : 'Mappings'}
-                    </button>
-                    <button
-                      type="button"
-                      className={`search-scope-toggle__btn ${whereUsedScope === 'format' ? 'active' : ''}`}
-                      onClick={() => setWhereUsedScope('format')}
-                    >
-                      {locale === 'cs' ? 'Formát' : 'Format'}
-                    </button>
+                  <div className="search-panel__results">
+                    <div className="search-results">
+                      {whereUsedFileGroups.map(([key, { configName, refs }]) => (
+                        <FileReferenceGroup
+                          key={key}
+                          configName={configName}
+                          references={refs}
+                          scope={whereUsedScope}
+                          query={whereUsedQuery}
+                          expandSignal={whereUsedExpandSignal}
+                          activeRefKey={activeWhereUsedRefKey}
+                          onReferenceOpen={setActiveWhereUsedRefKey}
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <div className="search-toolbar-actions">
-                    <Tooltip content={t.expand} relationship="label" withArrow>
-                      <Button
-                        appearance="subtle"
-                        size="small"
-                        icon={<TextExpandRegular />}
-                        aria-label={t.expand}
-                        onClick={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
-                      />
-                    </Tooltip>
-                    <Tooltip content={t.collapse} relationship="label" withArrow>
-                      <Button
-                        appearance="subtle"
-                        size="small"
-                        icon={<TextCollapseRegular />}
-                        aria-label={t.collapse}
-                        onClick={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
-                      />
-                    </Tooltip>
-                  </div>
-                </div>
-                <div className="search-results-scroll">
-                  <div className="search-results-panel">
-                    {visibleWhereUsedResults.map((entry, i) => (
-                      <WhereUsedCard
-                        key={i}
-                        entry={entry}
-                        query={whereUsedQuery}
-                        scope={whereUsedScope}
-                        expandSignal={whereUsedExpandSignal}
-                        navigateToTreeNode={navigateToTreeNode}
-                        findDatasourceNode={findDatasourceNode}
-                        treeNodes={treeNodes}
-                        activeRefKey={activeWhereUsedRefKey}
-                        onReferenceOpen={setActiveWhereUsedRefKey}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+                </>
+              );
+            })()}
 
-            {visibleWhereUsedResults.length === 0 && trimmedWhereUsedQuery && (
-              <div className="search-results-shell search-results-shell--where-used">
-                <div className="search-results-scroll">
-                  <div className="search-empty search-empty--card">
-                    {t.noResultsFor(whereUsedQuery)}
-                  </div>
-                </div>
-              </div>
+            {whereUsedFileGroups.length === 0 && trimmedCurrentQuery && (
+              <div className="search-panel__empty">{t.noResultsFor(whereUsedQuery)}</div>
             )}
-
-          </section>
-        </div>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -610,40 +631,206 @@ function SearchResultsGrouped({
   navigateToTreeNode: (nodeId: string) => void;
 }) {
   const groups = useMemo(() => {
-    const map = new Map<string, SearchResultEntry[]>();
+    // Group by config file name + kind
+    const map = new Map<string, { configPath: string; kind: string; items: SearchResultEntry[] }>();
     for (const r of results) {
-      const key = r.sourceConfigPath || '—';
-      const bucket = map.get(key);
-      if (bucket) bucket.push(r);
-      else map.set(key, [r]);
+      const configPath = r.sourceConfigPath || '—';
+      const fileName = configPath.split(/[\\/]/).pop()?.replace(/\.xml$/i, '') ?? configPath;
+      const configDef = configurations.find(c => c.filePath === configPath);
+      const kind = (configDef as any)?.kind ?? '';
+      const key = `${fileName}__${kind}`;
+      const existing = map.get(key);
+      if (existing) existing.items.push(r);
+      else map.set(key, { configPath, kind, items: [r] });
     }
-    return Array.from(map.entries()).sort((a, b) => b[1].length - a[1].length);
-  }, [results]);
+    return Array.from(map.entries()).sort((a, b) => b[1].items.length - a[1].items.length);
+  }, [results, configurations]);
 
   return (
     <div className="search-results">
-      <div className="search-section-caption">
-        {t.searchResultCount(totalCount)}{results.length < totalCount ? ` · ${results.length}` : ''}
-      </div>
-      {groups.map(([configPath, items]) => (
-        <SearchResultGroup
-          key={configPath}
-          configPath={configPath}
-          items={items}
-          query={query}
-          expandSignal={expandSignal}
-          configurations={configurations}
-          treeNodes={treeNodes}
-          registry={registry}
-          navigateToTreeNode={navigateToTreeNode}
-        />
-      ))}
+      {totalCount > results.length && (
+        <div className="search-section-caption search-section-caption--cap">
+          {locale === 'cs' ? `Zobrazeno prvních ${results.length} z ${totalCount}` : `Showing first ${results.length} of ${totalCount}`}
+        </div>
+      )}
+      {groups.map(([key, { configPath, kind, items }]) => {
+        const fileName = configPath.split(/[\\/]/).pop()?.replace(/\.xml$/i, '') ?? configPath;
+        return (
+          <SearchResultGroup
+            key={key}
+            configPath={configPath}
+            fileName={fileName}
+            configKind={kind}
+            items={items}
+            query={query}
+            expandSignal={expandSignal}
+            configurations={configurations}
+            treeNodes={treeNodes}
+            registry={registry}
+            navigateToTreeNode={navigateToTreeNode}
+          />
+        );
+      })}
     </div>
   );
 }
 
+/** Maps a format binding propertyName to a human label + CSS kind key. */
+function formatBindingLabel(prop: string, cs: boolean): { label: string; labelKind: string } {
+  const p = prop.trim().toLowerCase();
+  if (!p) return { label: cs ? 'Výraz formátu' : 'Fmt data', labelKind: 'formula' };
+  if (['enabled', 'visible', 'disabled', 'printable', 'active'].includes(p))
+    return { label: cs ? 'Viditelnost' : 'Visibility', labelKind: 'visibility' };
+  if (['format', 'encoding', 'transformation', 'locale', 'separator', 'decimalseparator', 'groupseparator', 'mask'].includes(p))
+    return { label: cs ? `Formátování` : `Formatting`, labelKind: 'formatting' };
+  return { label: prop, labelKind: 'property' };
+}
+
+type ParsedHit = {
+  /** Short tag label shown in the kind chip (e.g. "Tabulka", "Vazba", "Výraz") */
+  label: string;
+  /** CSS modifier for colour coding (reuses badge colour keys) */
+  labelKind: string;
+  /** Primary location text — the path/name of where the match lives */
+  location: string;
+  /** Optional secondary line — the expression or value that contains the query */
+  expression: string;
+  /** Designer tab where the user will land: 'structure' | 'bindings' | 'datasources' | null */
+  tab: 'structure' | 'bindings' | 'datasources' | null;
+};
+
+function parseSearchHit(
+  result: SearchResultEntry,
+  registry: { lookup: (guid: string) => GUIDEntry | undefined },
+): ParsedHit {
+  const ctx = result.sourceContext ?? '';
+  const comp = result.sourceComponent ?? '';
+  const tgt  = result.target ?? '';
+  const cs   = locale === 'cs';
+
+  // ── Datasource usages ── show the matched *value* as primary, source as secondary
+  if (/^Datasource ".+" uses table "/.test(ctx)) {
+    return { label: cs ? 'Tabulka' : 'Table', labelKind: 'table', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
+  }
+  if (/^Datasource ".+" uses enum "/.test(ctx)) {
+    return { label: cs ? 'Výčet' : 'Enum', labelKind: 'enum', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
+  }
+  if (/^Datasource ".+" uses class "/.test(ctx)) {
+    return { label: cs ? 'Třída' : 'Class', labelKind: 'class', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
+  }
+  if (/^User parameter ".+" uses EDT "/.test(ctx)) {
+    return { label: 'EDT', labelKind: 'edt', location: tgt, expression: cs ? `parametr: ${comp}` : `param: ${comp}`, tab: 'datasources' };
+  }
+  if (ctx.startsWith('Selected field in datasource "')) {
+    return { label: cs ? 'Pole' : 'Field', labelKind: 'field', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
+  }
+
+  // ── Model binding: "Binding: path = expr" ─────────────────────────
+  if (ctx.startsWith('Binding: ')) {
+    const rest = ctx.slice('Binding: '.length);
+    const eq   = rest.indexOf(' = ');
+    const path = eq >= 0 ? rest.slice(0, eq) : rest;
+    const expr = eq >= 0 ? rest.slice(eq + 3) : '';
+    return { label: cs ? 'Vazba' : 'Binding', labelKind: 'binding', location: path, expression: expr, tab: 'bindings' as const };
+  }
+
+  // ── Formula inside binding: "Binding for path: expr" ──────────────
+  if (ctx.startsWith('Binding for ')) {
+    const rest = ctx.slice('Binding for '.length);
+    const col  = rest.indexOf(':');
+    const path = col >= 0 ? rest.slice(0, col).trim() : rest;
+    const expr = col >= 0 ? rest.slice(col + 1).trim() : '';
+    return { label: cs ? 'Výraz' : 'Expression', labelKind: 'formula', location: path, expression: expr, tab: 'bindings' as const };
+  }
+
+  // ── Format binding expression (optionally with [PropName]) ────────
+  if (ctx.startsWith('Format binding') && ctx.includes('expression')) {
+    const expr = ctx.slice(ctx.indexOf('expression') + 'expression'.length).replace(/^[\s:]+/, '').trim();
+    // Extract optional property name from "Format binding [PropName] expression"
+    const propMatch = ctx.match(/Format binding \[([^\]]+)\] expression/);
+    const prop = propMatch?.[1] ?? '';
+    const { label, labelKind } = formatBindingLabel(prop, cs);
+    return { label, labelKind, location: comp, expression: expr, tab: 'bindings' as const };
+  }
+
+  // ── Format binding to GUID component (optionally with [PropName]) ─
+  if (ctx.startsWith('Format binding') && ctx.includes('to component:')) {
+    const expr     = ctx.slice(ctx.indexOf('to component:') + 'to component:'.length).trim();
+    const resolved = registry.lookup(tgt);
+    const propMatch = ctx.match(/Format binding \[([^\]]+)\] to component/);
+    const prop = propMatch?.[1] ?? '';
+    const { label, labelKind } = formatBindingLabel(prop, cs);
+    return {
+      label,
+      labelKind,
+      location: resolved?.name ?? comp,
+      expression: expr,
+      tab: 'bindings' as const,
+    };
+  }
+
+  // ── Calculated field ──────────────────────────────────────────────
+  if (ctx.startsWith('Calculated field expression:')) {
+    const expr = ctx.slice('Calculated field expression:'.length).trim();
+    return { label: cs ? 'Výpočet' : 'Calc. field', labelKind: 'formula', location: comp, expression: expr, tab: 'datasources' as const };
+  }
+
+  // ── TypeDescriptor ────────────────────────────────────────────────
+  if (ctx === 'TypeDescriptor reference in model field') {
+    return { label: cs ? 'Typ pole' : 'Field type', labelKind: 'field', location: comp, expression: tgt, tab: 'structure' as const };
+  }
+
+  // ── Structural references ─────────────────────────────────────────
+  if (ctx === 'Model mapping references data model') {
+    return { label: cs ? 'Model' : 'Model ref', labelKind: 'model', location: comp, expression: '', tab: null };
+  }
+  if (ctx === 'Base model reference') {
+    return { label: cs ? 'Základ' : 'Base ref', labelKind: 'model', location: comp, expression: '', tab: null };
+  }
+  if (ctx === 'Format mapping references format definition') {
+    return { label: cs ? 'Formát' : 'Format ref', labelKind: 'format', location: comp, expression: '', tab: null };
+  }
+
+  // ── Generic formula: "context label: expr" ────────────────────────
+  if (result.targetType === 'Formula') {
+    const col  = ctx.indexOf(':');
+    const expr = col >= 0 ? ctx.slice(col + 1).trim() : ctx;
+    return { label: cs ? 'Výraz' : 'Expression', labelKind: 'formula', location: comp, expression: expr, tab: 'datasources' as const };
+  }
+
+  // ── GUID fallback ─────────────────────────────────────────────────
+  if (result.targetType === 'GUID') {
+    const resolved = registry.lookup(tgt);
+    return {
+      label: resolved?.kind ?? 'GUID',
+      labelKind: 'guid',
+      location: resolved?.name ?? tgt,
+      expression: '',
+      tab: null,
+    };
+  }
+
+  // ── Generic fallback ──────────────────────────────────────────────
+  return {
+    label: result.targetType ?? '',
+    labelKind: (result.targetType ?? '').toLowerCase(),
+    location: comp || tgt,
+    expression: ctx.length < 120 ? ctx : '',
+    tab: null,
+  };
+}
+
+function kindLabel(kind: string): string {
+  if (kind === 'Format') return locale === 'cs' ? 'Formát' : 'Format';
+  if (kind === 'ModelMapping') return locale === 'cs' ? 'Mapování' : 'Model Mapping';
+  if (kind === 'DataModel') return locale === 'cs' ? 'Model' : 'Data Model';
+  return kind;
+}
+
 function SearchResultGroup({
   configPath,
+  fileName,
+  configKind,
   items,
   query,
   expandSignal,
@@ -653,6 +840,8 @@ function SearchResultGroup({
   navigateToTreeNode,
 }: {
   configPath: string;
+  fileName: string;
+  configKind: string;
   items: SearchResultEntry[];
   query: string;
   expandSignal: { version: number; expanded: boolean };
@@ -662,12 +851,28 @@ function SearchResultGroup({
   navigateToTreeNode: (nodeId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const fileName = configPath.split(/[\\/]/).pop() ?? configPath;
-  const nested = useMemo(() => nestBindingResults(items), [items]);
+
+  // Deduplicate and pre-filter to only navigable items
+  const deduped = useMemo(() => {
+    const seen = new Set<string>();
+    const navigable = items.filter(r => {
+      const key = `${r.target}|${r.sourceComponent}|${r.sourceContext}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      // Only keep results that can be navigated to
+      return findNodeForSearchResult(r, configurations, treeNodes, registry) !== null;
+    });
+    // Suppress "Binding for …" and "Format binding expression:" sub-hits that already
+    // have a parent "Binding: …" / "Format binding to component:" entry in the same group.
+    const nested = nestBindingResults(navigable);
+    return nested.map(n => n.entry);
+  }, [items, configurations, treeNodes, registry]);
 
   useEffect(() => {
     if (expandSignal.version > 0) setExpanded(expandSignal.expanded);
   }, [expandSignal.version, expandSignal.expanded]);
+
+  if (deduped.length === 0) return null;
 
   return (
     <div className="search-result-group">
@@ -682,15 +887,19 @@ function SearchResultGroup({
         <span className="search-result-group-name" title={configPath}>
           <Highlight text={fileName} query={query} />
         </span>
-        <span className="search-result-group-count">{items.length}</span>
+        {configKind && (
+          <span className={`badge badge-${configKind.toLowerCase()} badge-tiny`}>
+            {kindLabel(configKind)}
+          </span>
+        )}
+        <span className="search-result-group-count">{deduped.length}</span>
       </button>
       {expanded && (
         <div className="search-result-group-body">
-          {nested.map((node, i) => (
+          {deduped.map((item, i) => (
             <SearchResultCard
-              key={`${node.entry.sourceConfigPath}:${node.entry.target}:${i}`}
-              result={node.entry}
-              bindingChildren={node.children}
+              key={`${item.target}:${item.sourceComponent}:${i}`}
+              result={item}
               query={query}
               configurations={configurations}
               treeNodes={treeNodes}
@@ -706,7 +915,6 @@ function SearchResultGroup({
 
 function SearchResultCard({
   result,
-  bindingChildren = [],
   query,
   configurations,
   treeNodes,
@@ -714,7 +922,6 @@ function SearchResultCard({
   navigateToTreeNode,
 }: {
   result: SearchResultEntry;
-  bindingChildren?: SearchResultEntry[];
   query: string;
   configurations: Array<{ filePath: string }>;
   treeNodes: TreeNode[];
@@ -722,78 +929,41 @@ function SearchResultCard({
   navigateToTreeNode: (nodeId: string) => void;
 }) {
   const targetNode = findNodeForSearchResult(result, configurations, treeNodes, registry);
-  const isGuidTarget = result.targetType === 'GUID' || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result.target ?? '');
-  const resolvedEntry = isGuidTarget ? registry.lookup(result.target) : undefined;
-  const displayName = resolvedEntry?.name ?? result.target;
-  const showGuidSuffix = Boolean(resolvedEntry?.name && resolvedEntry.name !== result.target);
-  const kindBadge = resolvedEntry?.kind ?? result.targetType;
-  const resolvedContext = resolveGuidsInText(result.sourceContext, g => registry.lookup(g));
+  const hit = parseSearchHit(result, registry);
+  const shortExpr = hit.expression.length > 100 ? `${hit.expression.slice(0, 100)}…` : hit.expression;
+  const showExpr = shortExpr && shortExpr !== hit.location;
+
+  if (!targetNode) return null;
+
+  const cs = locale === 'cs';
+  const tabLabel = hit.tab === 'structure' ? (cs ? 'Struktura' : 'Structure')
+    : hit.tab === 'bindings' ? (cs ? 'Vazby' : 'Bindings')
+    : hit.tab === 'datasources' ? (cs ? 'Datové zdroje' : 'Data Sources')
+    : null;
 
   return (
-    <div className="search-result-card">
-      <div className="search-result-header">
-        <span className={`badge badge-${(kindBadge ?? '').toLowerCase()}`} title={result.targetType}>{kindBadge}</span>
-        <span className="search-result-target" title={result.target}>
-          <Highlight text={displayName} query={query} />
-          {showGuidSuffix && (
-            <span className="search-result-guid" title={result.target}>{result.target}</span>
-          )}
-        </span>
-        {targetNode && (
-          <button
-            type="button"
-            className="search-result-open-btn"
-            onClick={() => navigateToTreeNode(targetNode.id)}
-            title={t.openInExplorerAction}
-            aria-label={t.openInExplorerAction}
-          >
-            <ArrowRightRegular />
-            <span>{t.explorerActionShort}</span>
-          </button>
+    <button
+      type="button"
+      className="search-hit"
+      onClick={() => navigateToTreeNode(targetNode.id)}
+      title={result.sourceComponent || result.target}
+    >
+      <div className="search-hit__body">
+        <div className="search-hit__row1">
+          <span className={`search-hit__tag search-hit__tag--${hit.labelKind}`}>{hit.label}</span>
+          <span className="search-hit__location">
+            <Highlight text={hit.location} query={query} />
+          </span>
+          {tabLabel && <span className="search-hit__tab">{tabLabel}</span>}
+          <ArrowRightRegular className="search-hit__arrow" />
+        </div>
+        {showExpr && (
+          <div className="search-hit__expr">
+            <Highlight text={shortExpr} query={query} />
+          </div>
         )}
       </div>
-      <PreviewSnippet text={resolvedContext} query={query} className="search-result-context" />
-      <div className="search-result-source" title={result.sourceComponent}>
-        <span className="search-result-source-label">{t.searchInLabel}</span>
-        <span className="search-result-source-component">
-          <Highlight text={resolveGuidsInText(result.sourceComponent, g => registry.lookup(g))} query={query} />
-        </span>
-      </div>
-      {bindingChildren.length > 0 && (() => {
-        // Deduplicate: the indexer creates one child per regex match in the expression,
-        // so identical (target, targetType) pairs would repeat the same context text.
-        const seen = new Map<string, { child: SearchResultEntry; count: number }>();
-        for (const c of bindingChildren) {
-          const key = `${c.targetType}|${c.target}`;
-          const hit = seen.get(key);
-          if (hit) hit.count += 1;
-          else seen.set(key, { child: c, count: 1 });
-        }
-        const unique = Array.from(seen.values());
-        return (
-          <div className="search-result-children" aria-label="Nested binding references">
-            <div className="search-result-children-title">
-              {t.searchRefCount(unique.length)}
-            </div>
-            <div className="search-result-child-chips">
-              {unique.map(({ child, count }, i) => (
-                <span
-                  key={i}
-                  className="search-result-child-chip"
-                  title={`${child.targetType}: ${child.target}${count > 1 ? ` (${count}×)` : ''}`}
-                >
-                  <span className={`badge badge-${(child.targetType ?? '').toLowerCase()} badge-tiny`}>{child.targetType}</span>
-                  <span className="search-result-child-target">
-                    <Highlight text={child.target} query={query} />
-                  </span>
-                  {count > 1 && <span className="search-result-child-count">×{count}</span>}
-                </span>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-    </div>
+    </button>
   );
 }
 
@@ -887,12 +1057,11 @@ function WhereUsedCard({ entry, query, scope, expandSignal, navigateToTreeNode, 
     if (node) navigateToTreeNode(node.id);
   };
 
-  // Flatten modelPaths + formatUsages into a single list, then split by usage area.
   const references: Reference[] = useMemo(() => {
     const dsName = entry.datasource.name;
     const mp: Reference[] = entry.modelPaths.map(m => ({
-      area: 'mapping',
-      kind: 'binding',
+      area: 'mapping' as const,
+      kind: 'binding' as const,
       configIndex: m.configIndex,
       configName: m.configName,
       location: entry.entityType === 'TextMatch'
@@ -922,12 +1091,7 @@ function WhereUsedCard({ entry, query, scope, expandSignal, navigateToTreeNode, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry, treeNodes]);
 
-  const areaRefs = useMemo(() => {
-    const mapping = references.filter(ref => ref.area === 'mapping');
-    const format = references.filter(ref => ref.area === 'format');
-    return { mapping, format };
-  }, [references]);
-
+  // Group by configIndex + configName only (area shown per-row, not per-group)
   const fileGroups = useMemo(() => {
     const map = new Map<string, { configName: string; refs: Reference[] }>();
     for (const r of references) {
@@ -939,168 +1103,53 @@ function WhereUsedCard({ entry, query, scope, expandSignal, navigateToTreeNode, 
     return Array.from(map.entries());
   }, [references]);
 
-  const summary = t.whereUsedSummary(references.length, fileGroups.length);
-
+  const visibleCount = scope === 'all'
+    ? references.length
+    : references.filter(r => r.area === scope).length;
   const isTextMatch = entry.entityType === 'TextMatch';
 
   return (
-    <div className="wu-card wu-card--tool">
-      <div className="wu-card-header wu-card-header--tool" onClick={() => setExpanded(e => !e)}>
-        <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
-        <span className={`badge ${entityBadgeColor}`}>
-          {isTextMatch ? 'text' : entry.entityType}
-        </span>
-        <span className="wu-entity-name">
-          {isTextMatch ? <>&quot;<Highlight text={entry.entityName} query={query} />&quot;</> : <Highlight text={entry.entityName} query={query} />}
-        </span>
-        {!isTextMatch && (
-          <>
-            <span className="wu-arrow">→</span>
-            <span
-              className="wu-ds-name"
-              onClick={e => { e.stopPropagation(); navigateToDs(); }}
-              title={t.navigateToDatasource}
-            >
-              {locale === 'cs' ? 'Datový zdroj:' : 'Datasource:'} <Highlight text={entry.datasource.name} query={query} />
-            </span>
-          </>
-        )}
-        {isTextMatch && (
-          <span className="wu-ds-name wu-ds-name-plain" title={t.textOccurrences}>
-            {t.inExpressions}
-          </span>
-        )}
-        <div className="wu-meta-end">
-          <span className="wu-ref-summary" title={summary}>{summary}</span>
-          {!isTextMatch && (
-            <button
-              className="fmt-action-btn fmt-action-btn-compact wu-reveal-btn"
-              onClick={e => { e.stopPropagation(); navigateToDs(); }}
-              title={t.openInExplorerAction}
-            >
-              {t.openInExplorerAction}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {expanded && (
-        <div className="wu-card-body wu-card-body--tool">
-          {!isTextMatch && (
-            <button
-              type="button"
-              className="wu-ds-anchor"
-              onClick={navigateToDs}
-              title={t.openInExplorerAction}
-            >
-              <span className="wu-ds-anchor__title">
-                {locale === 'cs' ? 'Přejít na datový zdroj v mapování' : 'Open datasource in mapping'}
-              </span>
-              <span className="wu-ds-anchor__name">
-                <Highlight text={entry.datasource.name} query={query} />
-              </span>
-            </button>
-          )}
-
-          {references.length === 0 && (
-            <div className="wu-empty">
-              <strong>{t.deadDatasource}:</strong> {t.deadDatasourceDesc}
-            </div>
-          )}
-
-          {references.length > 0 && (
-            <div className="wu-areas">
-              {(scope === 'all' || scope === 'mapping') && (
-                <WhereUsedAreaPanel
-                  area="mapping"
-                  title={getAreaTitle('mapping')}
-                  references={areaRefs.mapping}
-                  query={query}
-                  expandSignal={expandSignal}
-                  activeRefKey={activeRefKey}
-                  onReferenceOpen={onReferenceOpen}
-                />
-              )}
-              {(scope === 'all' || scope === 'format') && (
-                <WhereUsedAreaPanel
-                  area="format"
-                  title={getAreaTitle('format')}
-                  references={areaRefs.format}
-                  query={query}
-                  expandSignal={expandSignal}
-                  activeRefKey={activeRefKey}
-                  onReferenceOpen={onReferenceOpen}
-                />
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function WhereUsedAreaPanel({
-  area,
-  title,
-  references,
-  query,
-  expandSignal,
-  activeRefKey,
-  onReferenceOpen,
-}: {
-  area: ReferenceArea;
-  title: string;
-  references: Reference[];
-  query: string;
-  expandSignal: { version: number; expanded: boolean };
-  activeRefKey: string | null;
-  onReferenceOpen: (key: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(true);
-
-  useEffect(() => {
-    if (expandSignal.version > 0) setExpanded(expandSignal.expanded);
-  }, [expandSignal.version, expandSignal.expanded]);
-
-  const fileGroups = useMemo(() => {
-    const map = new Map<string, { configName: string; refs: Reference[] }>();
-    for (const r of references) {
-      const key = `${r.configIndex}|${r.configName}`;
-      const bucket = map.get(key);
-      if (bucket) bucket.refs.push(r);
-      else map.set(key, { configName: r.configName, refs: [r] });
-    }
-    return Array.from(map.entries()).sort((a, b) => b[1].refs.length - a[1].refs.length);
-  }, [references]);
-
-  return (
-    <section className={`wu-area wu-area--${area}`}>
+    <div className="search-result-group wu-entity-group">
       <button
         type="button"
-        className="wu-area-header"
-        onClick={() => setExpanded(v => !v)}
+        className="search-result-group-header wu-entity-header"
+        onClick={() => setExpanded(e => !e)}
         aria-expanded={expanded}
       >
         <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
-        <span className="wu-area-title">{title}</span>
-        <span className="wu-area-count">{references.length}</span>
+        <span className={`badge ${entityBadgeColor} badge-tiny`}>
+          {isTextMatch ? 'text' : entry.entityType}
+        </span>
+        <span className="search-result-group-name">
+          {isTextMatch
+            ? <>&quot;<Highlight text={entry.entityName} query={query} />&quot;</>
+            : <Highlight text={entry.entityName} query={query} />}
+        </span>
+        {!isTextMatch && (
+          <span
+            className="wu-entity-ds-chip"
+            onClick={e => { e.stopPropagation(); navigateToDs(); }}
+            title={t.navigateToDatasource}
+          >
+            ← <Highlight text={entry.datasource.name} query={query} />
+          </span>
+        )}
+        <span className="search-result-group-count">{visibleCount}</span>
       </button>
+
       {expanded && (
-        <div className="wu-area-body">
+        <div className="search-result-group-body">
           {references.length === 0 ? (
-            <div className="wu-area-empty">
-              {locale === 'cs'
-                ? 'Žádná relevantní místa použití.'
-                : 'No relevant usages in this area.'}
+            <div className="wu-empty" style={{ padding: '6px 16px' }}>
+              <strong>{t.deadDatasource}:</strong> {t.deadDatasourceDesc}
             </div>
           ) : (
             fileGroups.map(([key, { configName, refs }]) => (
               <FileReferenceGroup
                 key={key}
-                area={area}
                 configName={configName}
                 references={refs}
+                scope={scope}
                 query={query}
                 expandSignal={expandSignal}
                 activeRefKey={activeRefKey}
@@ -1110,22 +1159,22 @@ function WhereUsedAreaPanel({
           )}
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
 function FileReferenceGroup({
-  area,
   configName,
   references,
+  scope,
   query,
   expandSignal,
   activeRefKey,
   onReferenceOpen,
 }: {
-  area: ReferenceArea;
   configName: string;
   references: Reference[];
+  scope: 'all' | 'mapping' | 'format';
   query: string;
   expandSignal: { version: number; expanded: boolean };
   activeRefKey: string | null;
@@ -1137,29 +1186,32 @@ function FileReferenceGroup({
     if (expandSignal.version > 0) setExpanded(expandSignal.expanded);
   }, [expandSignal.version, expandSignal.expanded]);
 
+  const visibleRefs = scope === 'all' ? references : references.filter(r => r.area === scope);
+  if (visibleRefs.length === 0) return null;
+
   return (
-    <div className="wu-file-group">
+    <div className="search-result-group">
       <button
         type="button"
-        className="wu-file-group-header"
+        className="search-result-group-header"
         onClick={() => setExpanded(e => !e)}
         aria-expanded={expanded}
       >
         <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
-        <DocumentRegular className="wu-file-group-icon" />
-        <span className="wu-file-group-name" title={configName}>
+        <DocumentRegular className="search-result-group-icon" />
+        <span className="search-result-group-name" title={configName}>
           <Highlight text={configName} query={query} />
         </span>
-        <span className="wu-file-group-count">{references.length}</span>
+        <span className="search-result-group-count">{visibleRefs.length}</span>
       </button>
       {expanded && (
-        <div className="wu-file-group-body">
-          {references.map((ref, i) => (
+        <div className="search-result-group-body">
+          {visibleRefs.map((ref, i) => (
             <ReferenceRow
               key={i}
               reference={ref}
               query={query}
-              referenceKey={`${area}:${configName}:${i}:${ref.shortLocation}`}
+              referenceKey={`${ref.area}:${configName}:${i}:${ref.shortLocation}`}
               activeRefKey={activeRefKey}
               onReferenceOpen={onReferenceOpen}
             />
@@ -1194,48 +1246,51 @@ function ReferenceRow({
     onOpen();
   };
 
+  const tagStyle = kindColor
+    ? { background: `color-mix(in srgb, ${kindColor} 15%, var(--bg-primary))`, color: kindColor, borderColor: `color-mix(in srgb, ${kindColor} 40%, transparent)` }
+    : undefined;
+  const tagClass = reference.kind === 'binding' ? 'search-hit__tag--binding' : 'search-hit__tag--format';
+
   return (
-    <div
-      className={`wu-ref-row wu-ref-row-multiline ${isActive ? 'wu-ref-row--active' : ''}`}
-      role="button"
-      tabIndex={0}
+    <button
+      type="button"
+      className={`search-hit ${isActive ? 'wu-ref-row--active' : ''}`}
       onClick={openReference}
-      onKeyDown={event => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          openReference();
-        }
-      }}
-      title={`${location.join(' / ')}\n${preview}`}
+      title={`${location.join(' / ')}${preview ? '\n' + preview : ''}`}
     >
-      <div className="wu-ref-line wu-ref-line-location">
-        <span
-          className="wu-ref-kind"
-          style={kindColor ? { color: kindColor, borderColor: kindColor } : undefined}
-        >
-          {localizedKind}
-        </span>
-        <span className="wu-ref-location">
-          {breadcrumb.length > 0 && (
-            <span className="wu-ref-breadcrumb">
-              {breadcrumb.map((seg, idx) => (
-                <React.Fragment key={idx}>
-                  {idx > 0 && <span className="wu-ref-bc-sep">/</span>}
-                  <span className="wu-ref-bc-seg"><Highlight text={seg} query={query} /></span>
-                </React.Fragment>
-              ))}
-              <span className="wu-ref-bc-sep">/</span>
-            </span>
-          )}
-          <span className="wu-ref-leaf" title={leaf}>
-            <Highlight text={leaf} query={query} />
+      <div className="search-hit__body">
+        <div className="search-hit__row1">
+          <span
+            className={`search-hit__tag ${tagClass}`}
+            style={tagStyle}
+          >
+            {localizedKind}
           </span>
-        </span>
+          <span className="search-hit__location">
+            {breadcrumb.length > 0 && (
+              <span className="wu-ref-breadcrumb">
+                {breadcrumb.map((seg, idx) => (
+                  <React.Fragment key={idx}>
+                    {idx > 0 && <span className="wu-ref-bc-sep">/</span>}
+                    <span className="wu-ref-bc-seg"><Highlight text={seg} query={query} /></span>
+                  </React.Fragment>
+                ))}
+                <span className="wu-ref-bc-sep">/</span>
+              </span>
+            )}
+            <span className="wu-ref-leaf">
+              <Highlight text={leaf} query={query} />
+            </span>
+          </span>
+          <ArrowRightRegular className="search-hit__arrow" />
+        </div>
+        {preview && (
+          <div className="search-hit__expr">
+            <Highlight text={preview.length > 120 ? `${preview.slice(0, 120)}…` : preview} query={query} />
+          </div>
+        )}
       </div>
-      <div className="wu-ref-line wu-ref-line-preview">
-        <PreviewSnippet text={preview} query={query} className="wu-ref-preview" />
-      </div>
-    </div>
+    </button>
   );
 }
 

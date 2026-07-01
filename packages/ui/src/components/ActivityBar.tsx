@@ -9,6 +9,7 @@ import {
   HomeRegular,
   FolderRegular,
   SearchRegular,
+  LinkRegular,
   AppsListDetailRegular,
   KeyboardRegular,
   WarningRegular,
@@ -20,15 +21,17 @@ import {
 } from '@fluentui/react-icons';
 import type { FluentIcon } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
-import { t } from '../i18n';
+import { t, locale } from '../i18n';
 
 interface ActivityBarProps {
   showLeft: boolean;
   showRight: boolean;
-  rightTab: 'properties' | 'search';
+  rightTab: 'properties' | 'search' | 'where-used';
+  whereUsedActive: boolean;
   onToggleLeft: () => void;
   onToggleRight: () => void;
   onToggleSearch: () => void;
+  onToggleWhereUsed: () => void;
   onGoHome: () => void;
   onOpenPalette: () => void;
   onToggleWarnings: () => void;
@@ -145,8 +148,15 @@ export function ActivityBar(props: ActivityBarProps) {
         Icon={SearchRegular}
         label={t.search}
         onClick={props.onToggleSearch}
-        active={props.showRight && props.rightTab === 'search'}
+        active={props.showRight && props.rightTab === 'search' && !props.whereUsedActive}
         shortcut="Ctrl+F"
+      />
+      <ActivityButton
+        Icon={LinkRegular}
+        label={locale === 'cs' ? 'Kde je použito' : 'Where Used'}
+        onClick={props.onToggleWhereUsed}
+        active={props.whereUsedActive}
+        shortcut="Ctrl+U"
       />
       <ActivityButton
         Icon={AppsListDetailRegular}

@@ -1663,7 +1663,6 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
                   </div>
                   <div className="dd-workbench__summary">
                     <div className="dd-workbench__summary-row"><span>{t.propName}</span><strong>{resolvedDs.name}</strong></div>
-                    <div className="dd-workbench__summary-row"><span>{locale === 'cs' ? 'Typ' : 'Type'}</span><strong>{localizeDatasourceType(resolvedDs)}</strong></div>
                     {targetIsDistinct && targetName && <div className="dd-workbench__summary-row"><span>{locale === 'cs' ? 'Cíl' : 'Target'}</span><strong>{targetName}</strong></div>}
                   </div>
                   {datasourceDefinitionEntries.map((entry) => (

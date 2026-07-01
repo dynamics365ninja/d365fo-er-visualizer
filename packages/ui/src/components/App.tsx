@@ -463,7 +463,7 @@ export function App() {
   const styles = useAppStyles();
   const [showLeft, setShowLeft] = useState(true);
   const [showRight, setShowRight] = useState(false);
-  const [rightTab, setRightTab] = useState<'properties' | 'search'>('properties');
+  const [rightTab, setRightTab] = useState<'properties' | 'search' | 'where-used'>('properties');
   const [rightFullscreen, setRightFullscreen] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -484,11 +484,13 @@ export function App() {
   const requestExplorerExpand = useAppStore(s => s.requestExplorerExpand);
   const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
   const whereUsedTrigger = useAppStore(s => s.whereUsedTrigger);
+  const setSearchPanelMode = useAppStore(s => s.setSearchPanelMode);
 
   useEffect(() => {
     if (!whereUsedTrigger) return;
     setShowRight(true);
-    setRightTab('search');
+    setRightTab('where-used');
+    setSearchPanelMode('where-used');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [whereUsedTrigger?.version]);
 
@@ -521,9 +523,27 @@ export function App() {
       setRightFullscreen(false);
     } else {
       setRightTab('search');
+      setSearchPanelMode('search');
       setShowRight(true);
     }
-  }, [showRight, rightTab]);
+  }, [showRight, rightTab, setSearchPanelMode]);
+
+  const toggleWhereUsed = useCallback(() => {
+    if (showRight && rightTab === 'where-used') {
+      setShowRight(false);
+      setRightFullscreen(false);
+    } else {
+      setRightTab('where-used');
+      setSearchPanelMode('where-used');
+      setShowRight(true);
+    }
+  }, [showRight, rightTab, setSearchPanelMode]);
+
+  const handleRightTabChange = useCallback((tab: 'properties' | 'search' | 'where-used') => {
+    setRightTab(tab);
+    if (tab === 'search') setSearchPanelMode('search');
+    else if (tab === 'where-used') setSearchPanelMode('where-used');
+  }, [setSearchPanelMode]);
 
   const toggleProperties = useCallback(() => {
     if (showRight && rightTab === 'properties') {
@@ -553,6 +573,11 @@ export function App() {
         toggleSearch();
         return;
       }
+      if (mod && (e.key === 'u' || e.key === 'U')) {
+        e.preventDefault();
+        toggleWhereUsed();
+        return;
+      }
       if (mod && (e.key === 'b' || e.key === 'B')) {
         e.preventDefault();
         setShowLeft(s => !s);
@@ -576,7 +601,7 @@ export function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [navigateBack, navigateForward, toggleSearch, toggleProperties]);
+  }, [navigateBack, navigateForward, toggleSearch, toggleWhereUsed, toggleProperties]);
 
   const paletteCommands = useMemo<CommandItem[]>(() => [
     { id: 'home', group: t.cmdGroupNav, label: t.cmdGoHome, action: () => { setShowLanding(true); } },
@@ -622,9 +647,11 @@ export function App() {
         showLeft={showLeft}
         showRight={showRight}
         rightTab={rightTab}
+        whereUsedActive={showRight && rightTab === 'where-used'}
         onToggleLeft={() => setShowLeft(s => !s)}
         onToggleRight={toggleProperties}
         onToggleSearch={toggleSearch}
+        onToggleWhereUsed={toggleWhereUsed}
         onGoHome={() => { setShowLanding(true); }}
         onOpenPalette={() => setPaletteOpen(true)}
         onToggleWarnings={() => setStatusWarningsOpen(v => !v)}
@@ -645,7 +672,7 @@ export function App() {
               <div className={mergeClasses(styles.sidebar, styles.sidebarRight, styles.sidebarRightFullscreen)}>
                 <RightPanel
                   tab={rightTab}
-                  onTabChange={setRightTab}
+                  onTabChange={handleRightTabChange}
                   fullscreen
                   onExpand={() => setRightFullscreen(true)}
                   onCollapse={() => setRightFullscreen(false)}
@@ -685,11 +712,11 @@ export function App() {
                 {showRight && (
                   <>
                     <PanelResizeHandle className={styles.resizeHandle} />
-                    <Panel defaultSize={22} minSize={15} maxSize={40}>
+                    <Panel defaultSize={28} minSize={20} maxSize={50}>
                       <div className={mergeClasses(styles.sidebar, styles.sidebarRight)}>
                         <RightPanel
                           tab={rightTab}
-                          onTabChange={setRightTab}
+                          onTabChange={handleRightTabChange}
                           fullscreen={false}
                           onExpand={() => setRightFullscreen(true)}
                           onCollapse={() => setRightFullscreen(false)}
@@ -727,9 +754,12 @@ function DesktopTitleBar({
 }: {
   activeLabel: string | null;
   configsCount: number;
-  rightTab: 'properties' | 'search';
+  rightTab: 'properties' | 'search' | 'where-used';
 }) {
   const styles = useAppStyles();
+  const panelLabel = rightTab === 'search' ? t.search
+    : rightTab === 'where-used' ? (locale === 'cs' ? 'Kde je použito' : 'Where Used')
+    : t.properties;
   return (
     <div className={styles.desktopTitleBar}>
       <span className={styles.winDots} aria-hidden>
@@ -743,7 +773,7 @@ function DesktopTitleBar({
       </div>
       <span className={styles.titleSpacer} />
       <span className={styles.titlePill}>{configsCount} {t.statusConfigsWord}</span>
-      <span className={styles.titlePill}>{rightTab === 'search' ? t.search : t.properties}</span>
+      <span className={styles.titlePill}>{panelLabel}</span>
     </div>
   );
 }
@@ -782,8 +812,8 @@ function RightPanel({
   onClose,
   panelContentClass,
 }: {
-  tab: 'properties' | 'search';
-  onTabChange: (tab: 'properties' | 'search') => void;
+  tab: 'properties' | 'search' | 'where-used';
+  onTabChange: (tab: 'properties' | 'search' | 'where-used') => void;
   fullscreen: boolean;
   onExpand: () => void;
   onCollapse: () => void;
@@ -814,6 +844,16 @@ function RightPanel({
           <span className={styles.rightTabIcon} aria-hidden><SearchRegular fontSize={13} /></span>
           {t.search}
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'where-used'}
+          className={mergeClasses(styles.rightTab, tab === 'where-used' && styles.rightTabActive)}
+          onClick={() => onTabChange('where-used')}
+        >
+          <span className={styles.rightTabIcon} aria-hidden><LinkRegular fontSize={13} /></span>
+          {locale === 'cs' ? 'Kde je použito' : 'Where Used'}
+        </button>
         <div className={styles.rightTabSpacer} />
         <div className={styles.rightTabActions}>
           <Tooltip content={fullscreen ? t.collapse : t.expand} relationship="label" withArrow>
@@ -836,7 +876,7 @@ function RightPanel({
           </Tooltip>
         </div>
       </div>
-      {tab === 'search' ? (
+      {tab === 'search' || tab === 'where-used' ? (
         <ErrorBoundary label="Search">
           <SearchPanel />
         </ErrorBoundary>
