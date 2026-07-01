@@ -783,6 +783,8 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
 function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; configIndex: number; focusNode: any | null }) {
   const mm = mapping;
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
+  const selectNode = useAppStore(s => s.selectNode);
+  const treeNodes = useAppStore(s => s.treeNodes);
   const [filter, setFilter] = useState('');
   const [view, setView] = useState<'bindings' | 'datasources'>('bindings');
   const [density, setDensity] = useState<DensityMode>('comfortable');
@@ -961,7 +963,15 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
                       const isFocused = b.path === focusBindingPath;
 
                       return (
-                        <div key={i} ref={isFocused ? bindingScrollRef : null} className={`mm-binding-row${isFocused ? ' search-match' : ''}`}>
+                        <div key={i} ref={isFocused ? bindingScrollRef : null} className={`mm-binding-row${isFocused ? ' search-match' : ''}`}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => {
+                            const rootNode = treeNodes[configIndex];
+                            if (!rootNode) return;
+                            const match = findTreeNodeByMatch(rootNode, n => n.type === 'binding' && n.data?.path === b.path);
+                            if (match) selectNode(match.id);
+                          }}
+                        >
                           <div className="mm-binding-field">
                             {parentCtx && (
                               <span className="mm-binding-parent">{parentCtx} /</span>
@@ -1011,6 +1021,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const fmtMap = fc.formatMappingVersion.formatMapping;
   const rootElement = fmt.rootElement;
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
+  const selectNode = useAppStore(s => s.selectNode);
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
   const registry = useAppStore(s => s.registry);
   const treeNodes = useAppStore(s => s.treeNodes);
@@ -1213,7 +1224,14 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
     // expand inline. Navigation to the element's own tree node is an explicit,
     // user-initiated action — use `revealFormatElementInExplorer` for that.
     setSelectedElementId(elementId);
-  }, []);
+    if (elementId) {
+      const rootNode = treeNodes[configIndex];
+      if (rootNode) {
+        const match = findTreeNodeByMatch(rootNode, n => n.type === 'formatElement' && n.data?.id === elementId);
+        if (match) selectNode(match.id);
+      }
+    }
+  }, [treeNodes, configIndex, selectNode]);
 
   const bindingsLabel = showTechnicalDetails ? t.bindings : t.lightBindings;
   const dataSourcesLabel = showTechnicalDetails ? t.dataSources : t.lightDataSources;

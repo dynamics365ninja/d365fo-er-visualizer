@@ -160,10 +160,6 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
       {node.type === 'enum' && data && <EnumProps data={data} showTechnicalDetails={showTechnicalDetails} />}
       {node.type === 'transformation' && data && <TransformationProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
 
-      {/* Cross-references for elements with GUIDs */}
-      {showTechnicalDetails && data?.id && typeof data.id === 'string' && data.id.startsWith('{') && (
-        <CrossRefsSection guid={data.id} registry={registry} />
-      )}
     </div>
   );
 }
@@ -187,7 +183,6 @@ function FileProps({ data, showTechnicalDetails }: { data: any; showTechnicalDet
   if (!sol) return null;
 
   const items: [string, React.ReactNode, string?][] = [
-    [t.propName, sol.name],
     [t.propDescription, sol.description ?? '–'],
     [t.propVersion, config.solutionVersion.publicVersionNumber],
     [t.propVendor, sol.vendor?.name || '–'],
@@ -213,7 +208,6 @@ function FileProps({ data, showTechnicalDetails }: { data: any; showTechnicalDet
 
 function ContainerProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
-    [t.propName, data.name],
     [t.propLabel, <LabelValue labelRef={data.label} configIndex={configIndex} />],
     [t.propDescription, <LabelValue labelRef={data.description} configIndex={configIndex} />],
     [t.propFields, `${data.items?.length ?? 0}`],
@@ -221,7 +215,7 @@ function ContainerProps({ data, configIndex, showTechnicalDetails }: { data: any
 
   if (showTechnicalDetails) {
     items.unshift(['ID', data.id, 'guid']);
-    items.splice(4, 0, [t.propIsRoot, data.isRoot ? t.propYes : t.propNo], [t.propIsEnum, data.isEnum ? t.propYes : t.propNo]);
+    items.splice(3, 0, [t.propIsRoot, data.isRoot ? t.propYes : t.propNo], [t.propIsEnum, data.isEnum ? t.propYes : t.propNo]);
   }
 
   return <PropGrid items={items} />;
@@ -229,13 +223,12 @@ function ContainerProps({ data, configIndex, showTechnicalDetails }: { data: any
 
 function FieldProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
-    [t.propName, data.name],
     [t.propLabel, <LabelValue labelRef={data.label} configIndex={configIndex} />],
     [t.propDescription, <LabelValue labelRef={data.description} configIndex={configIndex} />],
   ];
 
   if (showTechnicalDetails) {
-    items.splice(1, 0,
+    items.splice(0, 0,
       [t.propType, fieldTypeNames[data.type] ?? `Unknown (${data.type})`],
       [t.propTypeDescriptor, data.typeDescriptor ?? '–'],
       [t.propHost, data.isTypeDescriptorHost ? t.propYes : t.propNo],
@@ -247,12 +240,11 @@ function FieldProps({ data, configIndex, showTechnicalDetails }: { data: any; co
 
 function DatasourceProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
-    [t.propName, data.name],
     [t.propLabel, <LabelValue labelRef={data.label} configIndex={configIndex} />],
   ];
 
   if (showTechnicalDetails) {
-    items.splice(1, 0, [t.propType, data.type], [t.propParentPath, data.parentPath ?? '–']);
+    items.splice(0, 0, [t.propType, data.type], [t.propParentPath, data.parentPath ?? '–']);
   }
 
   if (data.tableInfo) {
@@ -332,12 +324,11 @@ function ValidationProps({ data, configIndex, showTechnicalDetails }: { data: an
 
 function FormatElementProps({ data, showTechnicalDetails }: { data: any; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
-    [t.propName, data.name],
     [t.propChildren, `${data.children?.length ?? 0}`],
   ];
   if (showTechnicalDetails) {
     items.unshift(['GUID', data.id, 'guid']);
-    items.splice(2, 0, [t.propType, data.elementType]);
+    items.splice(1, 0, [t.propType, data.elementType]);
   }
   if (showTechnicalDetails && data.encoding) items.push([t.propEncoding, data.encoding]);
   if (showTechnicalDetails && data.maximalLength) items.push([t.propMaxLen, String(data.maximalLength)]);
@@ -409,7 +400,6 @@ function MappingProps({ data, showTechnicalDetails, configIndex }: { data: any; 
     || '–';
 
   const items: [string, React.ReactNode, string?][] = [
-    [t.propName, data.name],
     [t.propMappingVersion, displayMappingVersion],
     [t.propModel, data.modelName ?? '–'],
     [t.propModelVersion, displayModelVersion],
@@ -429,7 +419,6 @@ function MappingProps({ data, showTechnicalDetails, configIndex }: { data: any; 
 
 function EnumProps({ data, showTechnicalDetails }: { data: any; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
-    [t.propName, data.name],
     [t.propValues, `${data.values?.length ?? 0}`],
   ];
   if (showTechnicalDetails) items.unshift(['GUID', data.id, 'guid']);
@@ -437,9 +426,7 @@ function EnumProps({ data, showTechnicalDetails }: { data: any; showTechnicalDet
 }
 
 function TransformationProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
-  const items: [string, React.ReactNode, string?][] = [
-    ['Name', data.name],
-  ];
+  const items: [string, React.ReactNode, string?][] = [];
   if (showTechnicalDetails) {
     items.push(['Expression', <ClickablePath expression={data.expressionAsString} configIndex={configIndex} />]);
   }
@@ -447,21 +434,3 @@ function TransformationProps({ data, configIndex, showTechnicalDetails }: { data
   return <PropGrid items={items} />;
 }
 
-function CrossRefsSection({ guid, registry }: { guid: string; registry: any }) {
-  const refs = registry.findRefsTo(guid);
-  if (refs.length === 0) return null;
-
-  return (
-    <div className="property-section">
-      <div className="property-section-title">
-        CROSS-REFERENCES ({refs.length})
-      </div>
-      {refs.slice(0, 20).map((r: any, i: number) => (
-        <div key={i} className="property-ref-item">
-          <span className={`badge badge-${r.targetType.toLowerCase()} property-ref-badge`}>{r.targetType}</span>
-          {r.sourceContext}
-        </div>
-      ))}
-    </div>
-  );
-}
