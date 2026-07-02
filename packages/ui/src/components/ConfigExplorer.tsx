@@ -21,12 +21,14 @@ import {
   DocumentFilled,
   TextExpandRegular,
   TextCollapseRegular,
+  TextBulletListTreeRegular,
+  ListRegular,
   DismissSquareMultipleRegular,
 } from '@fluentui/react-icons';
 import { locale, t } from '../i18n';
 import { useAppStore, type TreeNode } from '../state/store';
 import { ERDirection } from '@er-visualizer/core';
-import type { ERConfiguration, ERModelMappingContent } from '@er-visualizer/core';
+import type { ERConfiguration, ERModelMappingContent, ERFormatContent, ERDataModelContent } from '@er-visualizer/core';
 import { loadBrowserFiles } from '../utils/file-loading';
 import {
   ArrowSyncRegular,
@@ -76,29 +78,62 @@ interface ExplorerModelGroup {
 
 /**
  * Build a model-centric hierarchy from the loaded configurations.
- * Each DataModel acts as a container for its derived models and for
- * the ModelMappings / Formats whose `baseSolutionId` matches it.
+ * Each DataModel acts as a container for its derived models (via the
+ * solution-level `Base=` derivation) and for the ModelMappings / Formats
+ * that target it. Note two distinct GUIDs are in play here:
+ *  - `solutionVersion.solution.id` is the *solution wrapper* GUID (used only
+ *    to resolve `Base=` derivation between configs of the same kind).
+ *  - `content.version.model.id` is the DataModel *component*'s own GUID —
+ *    this is what `ModelMapping.mapping.modelId` (and, transitively, a
+ *    Format's embedded ModelMapping `modelId`) actually reference.
+ * Mixing these up is why mappings/formats used to end up "unlinked" even
+ * when their target model was loaded.
  * Returns root model groups + orphaned non-DataModel indices that
  * have no matching parent model in the loaded set.
  */
 function buildExplorerModelGroups(
   configurations: ERConfiguration[],
 ): { roots: ExplorerModelGroup[]; orphans: number[] } {
-  // Map normalized solution ID → config index (DataModels only)
+  // DataModel component GUID (`<ERDataModel ID.=>`) → config index.
   const modelIdToIdx = new Map<string, number>();
+  // Solution-wrapper GUID → config index, used only for `Base=` derivation.
+  const solutionIdToIdx = new Map<string, number>();
+
   configurations.forEach((cfg, idx) => {
-    if (cfg.content.kind !== 'DataModel') return;
-    const id = normGuid(cfg.solutionVersion.solution.id);
-    if (id) modelIdToIdx.set(id, idx);
+    const solutionId = normGuid(cfg.solutionVersion.solution.id);
+    if (solutionId) solutionIdToIdx.set(solutionId, idx);
+    if (cfg.content.kind === 'DataModel') {
+      const modelId = normGuid((cfg.content as ERDataModelContent).version.model.id);
+      if (modelId) modelIdToIdx.set(modelId, idx);
+    }
   });
+
+  /** Resolves the DataModel a given config belongs to, or undefined if none is loaded. */
+  const resolveParentModelIdx = (cfg: ERConfiguration): number | undefined => {
+    if (cfg.content.kind === 'ModelMapping') {
+      const modelId = normGuid((cfg.content as ERModelMappingContent).version.mapping.modelId);
+      return modelId ? modelIdToIdx.get(modelId) : undefined;
+    }
+    if (cfg.content.kind === 'Format') {
+      for (const embedded of (cfg.content as ERFormatContent).embeddedModelMappingVersions ?? []) {
+        const modelId = normGuid(embedded.mapping.modelId);
+        const idx = modelId ? modelIdToIdx.get(modelId) : undefined;
+        if (idx != null) return idx;
+      }
+      return undefined;
+    }
+    // DataModel → DataModel derivation uses the solution-level `Base=` reference.
+    const parentSolutionId = normGuid(cfg.solutionVersion.solution.baseSolutionId);
+    const parentIdx = parentSolutionId ? solutionIdToIdx.get(parentSolutionId) : undefined;
+    return parentIdx != null && configurations[parentIdx].content.kind === 'DataModel' ? parentIdx : undefined;
+  };
 
   const childrenOf = new Map<number, number[]>();   // modelIdx → non-DM children
   const subModelsOf = new Map<number, number[]>();  // modelIdx → derived DM children
   const orphans: number[] = [];
 
   configurations.forEach((cfg, idx) => {
-    const parentId = normGuid(cfg.solutionVersion.solution.baseSolutionId);
-    const parentIdx = parentId ? modelIdToIdx.get(parentId) : undefined;
+    const parentIdx = resolveParentModelIdx(cfg);
     if (cfg.content.kind === 'DataModel') {
       if (parentIdx != null) {
         if (!subModelsOf.has(parentIdx)) subModelsOf.set(parentIdx, []);
@@ -128,10 +163,7 @@ function buildExplorerModelGroups(
   const rootModelIdxs = configurations
     .map((cfg, idx) => ({ cfg, idx }))
     .filter(({ cfg }) => cfg.content.kind === 'DataModel')
-    .filter(({ idx }) => {
-      const parentId = normGuid(configurations[idx].solutionVersion.solution.baseSolutionId);
-      return !parentId || !modelIdToIdx.has(parentId);
-    })
+    .filter(({ cfg }) => resolveParentModelIdx(cfg) == null)
     .map(({ idx }) => idx);
 
   return {
@@ -623,7 +655,7 @@ export function ConfigExplorer() {
             <Button
               appearance="subtle"
               size="small"
-              icon={hierarchyView ? <TextCollapseRegular /> : <TextExpandRegular />}
+              icon={hierarchyView ? <TextBulletListTreeRegular /> : <ListRegular />}
               aria-label={hierarchyView ? (locale === 'cs' ? 'Přepnout na plochý seznam' : 'Switch to flat list') : (locale === 'cs' ? 'Přepnout na hierarchii' : 'Switch to hierarchy')}
               title={hierarchyView ? (locale === 'cs' ? 'Zobrazení: Hierarchie (klikni pro plochý)' : 'View: Hierarchy (click for flat)') : (locale === 'cs' ? 'Zobrazení: Plochý seznam (klikni pro hierarchii)' : 'View: Flat list (click for hierarchy)')}
               onClick={() => setHierarchyView(v => !v)}

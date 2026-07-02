@@ -1119,6 +1119,7 @@ body {
 
 .search-panel {
   flex: 1;
+  height: 100%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -2406,6 +2407,25 @@ body {
 .fmt-stat-unbound { color: var(--accent-text-warning); }
 .fmt-stat-structural { color: var(--text-secondary); opacity: 0.75; }
 
+.fmt-stat-btn {
+  border: 1px solid transparent;
+  background: none;
+  border-radius: 10px;
+  padding: 2px 8px;
+  margin: -2px -8px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.fmt-stat-btn:hover {
+  background: color-mix(in srgb, var(--bg-hover) 70%, transparent);
+}
+
+.fmt-stat-btn.active {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  border-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+
 /* Linked mappings banner (import formats) */
 .fmt-linked-mappings-bar {
   display: flex;
@@ -2509,16 +2529,6 @@ body {
 
 .explorer-toolbar-filter .fmt-filter-input {
   width: 100%;
-}
-
-.designer-context-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-color);
-  background: color-mix(in srgb, var(--bg-secondary) 90%, transparent);
-  flex-wrap: wrap;
 }
 
 .designer-context-chip {
@@ -10417,41 +10427,6 @@ body {
   0%   { background-color: transparent; }
   40%  { background-color: color-mix(in srgb, var(--accent) 20%, transparent); }
   100% { background-color: color-mix(in srgb, var(--accent) 10%, transparent); }
-}
-
-/* Structure filter row */
-.fmt-structure-filter-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border-color);
-  flex-shrink: 0;
-}
-.fmt-structure-filter-label {
-  font-size: 11px;
-  color: var(--text-secondary);
-  margin-right: 4px;
-  white-space: nowrap;
-}
-.fmt-structure-filter-chip {
-  padding: 2px 8px;
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  font-size: 11px;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
-}
-.fmt-structure-filter-chip.active {
-  background: var(--accent);
-  color: var(--button-primary-fg);
-  border-color: var(--accent);
-}
-.fmt-structure-filter-chip:hover:not(.active) {
-  background: var(--bg-hover);
-  color: var(--text-primary);
 }
 
 /* Datasource row where-used button */

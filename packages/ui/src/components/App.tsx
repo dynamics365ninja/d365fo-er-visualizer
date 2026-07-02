@@ -146,13 +146,6 @@ const useAppStyles = makeStyles({
     letterSpacing: '0.02em',
     whiteSpace: 'nowrap',
   },
-  titleMeta: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase100,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
   titleSpacer: {
     flex: 1,
   },
@@ -314,15 +307,20 @@ const useAppStyles = makeStyles({
     height: '36px',
     minHeight: '36px',
     flexShrink: 0,
+    padding: '0 6px',
+    gap: '2px',
     backgroundColor: tokens.colorNeutralBackground2,
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
   },
   rightTab: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: '5px',
+    gap: '6px',
     padding: '0 13px',
+    marginTop: '4px',
     border: 'none',
+    borderTopLeftRadius: tokens.borderRadiusMedium,
+    borderTopRightRadius: tokens.borderRadiusMedium,
     backgroundColor: 'transparent',
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
@@ -342,7 +340,11 @@ const useAppStyles = makeStyles({
   rightTabActive: {
     color: tokens.colorNeutralForeground1,
     fontWeight: 600,
+    backgroundColor: tokens.colorNeutralBackground1,
     borderBottomColor: tokens.colorBrandStroke1,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground1,
+    },
   },
   rightTabIcon: {
     display: 'inline-flex',
@@ -662,11 +664,6 @@ export function App() {
     { id: 'expand', group: t.cmdGroupTools, label: t.cmdExpandAll, action: () => { expandAll(); requestExplorerExpand('all'); } },
   ], [navigateBack, navigateForward, toggleSearch, toggleProperties, setThemeMode, themeMode, setShowTechnicalDetails, showTechnicalDetails, collapseAll, expandAll, requestExplorerExpand, locale]);
 
-  const activeTabLabel = useMemo(() => {
-    const active = openTabs.find(tab => tab.id === activeTabId);
-    return active?.label ?? null;
-  }, [openTabs, activeTabId]);
-
   useEffect(() => {
     const active = openTabs.find(tab => tab.id === activeTabId);
     if (active?.kind === 'drillDown') {
@@ -706,7 +703,6 @@ export function App() {
       <div className={styles.workarea}>
         <div className={styles.desktopFrame}>
           <DesktopTitleBar
-            activeLabel={activeTabLabel}
             configsCount={configs.length}
             rightTab={rightTab}
           />
@@ -794,11 +790,9 @@ export function App() {
 }
 
 function DesktopTitleBar({
-  activeLabel,
   configsCount,
   rightTab,
 }: {
-  activeLabel: string | null;
   configsCount: number;
   rightTab: 'properties' | 'search' | 'where-used';
 }) {
@@ -815,7 +809,6 @@ function DesktopTitleBar({
       </span>
       <div className={styles.titleBlock}>
         <span className={styles.titleText}>{t.appName}</span>
-        <span className={styles.titleMeta}>{activeLabel ?? t.selectElementHint}</span>
       </div>
       <span className={styles.titleSpacer} />
       <span className={styles.titlePill}>{configsCount} {t.statusConfigsWord}</span>
@@ -867,19 +860,10 @@ function RightPanel({
   panelContentClass: string;
 }) {
   const styles = useAppStyles();
+  const [showPropsStrip, setShowPropsStrip] = useState(true);
   return (
     <>
       <div className={styles.rightTabStrip} role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'properties'}
-          className={mergeClasses(styles.rightTab, tab === 'properties' && styles.rightTabActive)}
-          onClick={() => onTabChange('properties')}
-        >
-          <span className={styles.rightTabIcon} aria-hidden><AppsListDetailRegular fontSize={13} /></span>
-          {t.properties}
-        </button>
         <button
           type="button"
           role="tab"
@@ -923,27 +907,61 @@ function RightPanel({
         </div>
       </div>
       {tab === 'search' || tab === 'where-used' ? (
-        <PanelGroup direction="vertical" style={{ flex: 1, minHeight: 0 }}>
-          <Panel defaultSize={60} minSize={25}>
-            <ErrorBoundary label="Search">
-              <SearchPanel />
-            </ErrorBoundary>
-          </Panel>
-          <PanelResizeHandle className={styles.resizeHandleH} />
-          <Panel defaultSize={40} minSize={15}>
-            <div className={styles.propertiesStrip}>
-              <div className={styles.propertiesStripHeader}>
-                <AppsListDetailRegular fontSize={12} />
-                {t.properties}
+        showPropsStrip ? (
+          <PanelGroup direction="vertical" style={{ flex: 1, minHeight: 0 }}>
+            <Panel defaultSize={60} minSize={25}>
+              <ErrorBoundary label="Search">
+                <SearchPanel />
+              </ErrorBoundary>
+            </Panel>
+            <PanelResizeHandle className={styles.resizeHandleH} />
+            <Panel defaultSize={40} minSize={15}>
+              <div className={styles.propertiesStrip}>
+                <div className={styles.propertiesStripHeader}>
+                  <AppsListDetailRegular fontSize={12} />
+                  {t.properties}
+                  <div className={styles.rightTabSpacer} />
+                  <Tooltip content={t.hideProperties} relationship="label" withArrow>
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      icon={<DismissRegular fontSize={12} />}
+                      onClick={() => setShowPropsStrip(false)}
+                      aria-label={t.hideProperties}
+                    />
+                  </Tooltip>
+                </div>
+                <div className={styles.propertiesStripContent}>
+                  <ErrorBoundary label="Inspector">
+                    <PropertyInspector />
+                  </ErrorBoundary>
+                </div>
               </div>
-              <div className={styles.propertiesStripContent}>
-                <ErrorBoundary label="Inspector">
-                  <PropertyInspector />
-                </ErrorBoundary>
-              </div>
+            </Panel>
+          </PanelGroup>
+        ) : (
+          <div className={styles.propertiesStrip} style={{ flex: 1, minHeight: 0 }}>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <ErrorBoundary label="Search">
+                <SearchPanel />
+              </ErrorBoundary>
             </div>
-          </Panel>
-        </PanelGroup>
+            <div className={styles.propertiesStripHeader}>
+              <AppsListDetailRegular fontSize={12} />
+              {t.properties}
+              <div className={styles.rightTabSpacer} />
+              <Tooltip content={t.showProperties} relationship="label" withArrow>
+                <Button
+                  appearance="subtle"
+                  size="small"
+                  icon={<ExpandUpRightRegular fontSize={12} />}
+                  onClick={() => setShowPropsStrip(true)}
+                  aria-label={t.showProperties}
+                />
+              </Tooltip>
+            </div>
+          </div>
+        )
       ) : (
         <div className={panelContentClass}>
           <ErrorBoundary label="Inspector">
