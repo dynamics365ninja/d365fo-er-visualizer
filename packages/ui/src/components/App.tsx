@@ -867,19 +867,10 @@ function RightPanel({
   panelContentClass: string;
 }) {
   const styles = useAppStyles();
+  const [showPropsStrip, setShowPropsStrip] = useState(true);
   return (
     <>
       <div className={styles.rightTabStrip} role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'properties'}
-          className={mergeClasses(styles.rightTab, tab === 'properties' && styles.rightTabActive)}
-          onClick={() => onTabChange('properties')}
-        >
-          <span className={styles.rightTabIcon} aria-hidden><AppsListDetailRegular fontSize={13} /></span>
-          {t.properties}
-        </button>
         <button
           type="button"
           role="tab"
@@ -923,27 +914,61 @@ function RightPanel({
         </div>
       </div>
       {tab === 'search' || tab === 'where-used' ? (
-        <PanelGroup direction="vertical" style={{ flex: 1, minHeight: 0 }}>
-          <Panel defaultSize={60} minSize={25}>
-            <ErrorBoundary label="Search">
-              <SearchPanel />
-            </ErrorBoundary>
-          </Panel>
-          <PanelResizeHandle className={styles.resizeHandleH} />
-          <Panel defaultSize={40} minSize={15}>
-            <div className={styles.propertiesStrip}>
-              <div className={styles.propertiesStripHeader}>
-                <AppsListDetailRegular fontSize={12} />
-                {t.properties}
+        showPropsStrip ? (
+          <PanelGroup direction="vertical" style={{ flex: 1, minHeight: 0 }}>
+            <Panel defaultSize={60} minSize={25}>
+              <ErrorBoundary label="Search">
+                <SearchPanel />
+              </ErrorBoundary>
+            </Panel>
+            <PanelResizeHandle className={styles.resizeHandleH} />
+            <Panel defaultSize={40} minSize={15}>
+              <div className={styles.propertiesStrip}>
+                <div className={styles.propertiesStripHeader}>
+                  <AppsListDetailRegular fontSize={12} />
+                  {t.properties}
+                  <div className={styles.rightTabSpacer} />
+                  <Tooltip content={t.hideProperties} relationship="label" withArrow>
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      icon={<DismissRegular fontSize={12} />}
+                      onClick={() => setShowPropsStrip(false)}
+                      aria-label={t.hideProperties}
+                    />
+                  </Tooltip>
+                </div>
+                <div className={styles.propertiesStripContent}>
+                  <ErrorBoundary label="Inspector">
+                    <PropertyInspector />
+                  </ErrorBoundary>
+                </div>
               </div>
-              <div className={styles.propertiesStripContent}>
-                <ErrorBoundary label="Inspector">
-                  <PropertyInspector />
-                </ErrorBoundary>
-              </div>
+            </Panel>
+          </PanelGroup>
+        ) : (
+          <div className={styles.propertiesStrip} style={{ flex: 1, minHeight: 0 }}>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <ErrorBoundary label="Search">
+                <SearchPanel />
+              </ErrorBoundary>
             </div>
-          </Panel>
-        </PanelGroup>
+            <div className={styles.propertiesStripHeader}>
+              <AppsListDetailRegular fontSize={12} />
+              {t.properties}
+              <div className={styles.rightTabSpacer} />
+              <Tooltip content={t.showProperties} relationship="label" withArrow>
+                <Button
+                  appearance="subtle"
+                  size="small"
+                  icon={<ExpandUpRightRegular fontSize={12} />}
+                  onClick={() => setShowPropsStrip(true)}
+                  aria-label={t.showProperties}
+                />
+              </Tooltip>
+            </div>
+          </div>
+        )
       ) : (
         <div className={panelContentClass}>
           <ErrorBoundary label="Inspector">
