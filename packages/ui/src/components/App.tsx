@@ -314,15 +314,20 @@ const useAppStyles = makeStyles({
     height: '36px',
     minHeight: '36px',
     flexShrink: 0,
+    padding: '0 6px',
+    gap: '2px',
     backgroundColor: tokens.colorNeutralBackground2,
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
   },
   rightTab: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: '5px',
+    gap: '6px',
     padding: '0 13px',
+    marginTop: '4px',
     border: 'none',
+    borderTopLeftRadius: tokens.borderRadiusMedium,
+    borderTopRightRadius: tokens.borderRadiusMedium,
     backgroundColor: 'transparent',
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
@@ -342,7 +347,11 @@ const useAppStyles = makeStyles({
   rightTabActive: {
     color: tokens.colorNeutralForeground1,
     fontWeight: 600,
+    backgroundColor: tokens.colorNeutralBackground1,
     borderBottomColor: tokens.colorBrandStroke1,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground1,
+    },
   },
   rightTabIcon: {
     display: 'inline-flex',

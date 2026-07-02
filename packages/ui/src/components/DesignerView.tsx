@@ -1247,16 +1247,8 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
         <span className="fmt-header-title">{fmt.name}</span>
         <span className="fmt-stat">{fc.direction === ERDirection.Import ? '📥' : '📤'} {getFormatDirectionLabel(fc.direction)}</span>
         <div className="fmt-header-stats">
-          <span className="fmt-stat" title={t.statsTooltip(stats.boundElements, stats.unboundElements, stats.structuralElements)}>
-            🏷️ {stats.totalElements} {t.elements}
-          </span>
           <span className="fmt-stat fmt-stat-bound" title={`${stats.boundElements} ${t.bound}`}>✓ {stats.boundElements} {t.bound}</span>
           <span className="fmt-stat fmt-stat-unbound" title={`${stats.unboundElements} ${t.unbound}`}>○ {stats.unboundElements} {t.unbound}</span>
-          <span className="fmt-stat fmt-stat-structural" title={`${stats.structuralElements} ${t.structural}`}>⬡ {stats.structuralElements} {t.structural}</span>
-          <span className="fmt-stat">↔️ {stats.bindings} {bindingsLabel.toLowerCase()} ({groupedBindings.length} {t.elements} / {groupedBindingsByType.length} {groupCountLabel})</span>
-          <span className="fmt-stat">📊 {stats.datasources} {dataSourcesLabel.toLowerCase()}</span>
-          {stats.enums > 0 && <span className="fmt-stat">🔤 {t.statsEnums(stats.enums)}</span>}
-          {stats.transformations > 0 && <span className="fmt-stat">🔄 {stats.transformations} {t.transforms}</span>}
         </div>
       </div>
 
