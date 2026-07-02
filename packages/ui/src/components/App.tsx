@@ -146,13 +146,6 @@ const useAppStyles = makeStyles({
     letterSpacing: '0.02em',
     whiteSpace: 'nowrap',
   },
-  titleMeta: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase100,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
   titleSpacer: {
     flex: 1,
   },
@@ -671,11 +664,6 @@ export function App() {
     { id: 'expand', group: t.cmdGroupTools, label: t.cmdExpandAll, action: () => { expandAll(); requestExplorerExpand('all'); } },
   ], [navigateBack, navigateForward, toggleSearch, toggleProperties, setThemeMode, themeMode, setShowTechnicalDetails, showTechnicalDetails, collapseAll, expandAll, requestExplorerExpand, locale]);
 
-  const activeTabLabel = useMemo(() => {
-    const active = openTabs.find(tab => tab.id === activeTabId);
-    return active?.label ?? null;
-  }, [openTabs, activeTabId]);
-
   useEffect(() => {
     const active = openTabs.find(tab => tab.id === activeTabId);
     if (active?.kind === 'drillDown') {
@@ -715,7 +703,6 @@ export function App() {
       <div className={styles.workarea}>
         <div className={styles.desktopFrame}>
           <DesktopTitleBar
-            activeLabel={activeTabLabel}
             configsCount={configs.length}
             rightTab={rightTab}
           />
@@ -803,11 +790,9 @@ export function App() {
 }
 
 function DesktopTitleBar({
-  activeLabel,
   configsCount,
   rightTab,
 }: {
-  activeLabel: string | null;
   configsCount: number;
   rightTab: 'properties' | 'search' | 'where-used';
 }) {
@@ -824,7 +809,6 @@ function DesktopTitleBar({
       </span>
       <div className={styles.titleBlock}>
         <span className={styles.titleText}>{t.appName}</span>
-        <span className={styles.titleMeta}>{activeLabel ?? t.selectElementHint}</span>
       </div>
       <span className={styles.titleSpacer} />
       <span className={styles.titlePill}>{configsCount} {t.statusConfigsWord}</span>

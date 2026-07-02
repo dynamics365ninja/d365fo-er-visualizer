@@ -748,7 +748,7 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
       )}
       {/* Header bar */}
       <div className="fmt-header">
-        <span className="fmt-header-title">📐 {dm.name}</span>
+        <span className="fmt-header-title">📐 {locale === 'cs' ? 'Datový model' : 'Data Model'}</span>
         <div className="fmt-header-stats">
           <span className="fmt-stat" style={{ color: 'var(--surface-info-fg)' }}>🏠 {t.statsRoots(stats.roots)}</span>
           <span className="fmt-stat" style={{ color: 'var(--surface-success-fg)' }}>📦 {t.statsRecords(stats.records)}</span>
@@ -899,6 +899,11 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
           </button>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
+          {focusNode && <span className="designer-context-chip" title={focusNode.name}>{focusNode.name}</span>}
+          <div className="designer-density-toggle" style={{ marginLeft: 0 }}>
+            <button className={`fmt-action-btn ${density === 'comfortable' ? 'active' : ''}`} onClick={() => setDensity('comfortable')}>{t.comfortableDensity}</button>
+            <button className={`fmt-action-btn ${density === 'compact' ? 'active' : ''}`} onClick={() => setDensity('compact')}>{t.compactDensity}</button>
+          </div>
           <div className="filter-field" style={{ width: 160 }}>
             <svg className="filter-field__icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.4"/>
@@ -924,14 +929,6 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
               </button>
             )}
           </div>
-        </div>
-      </div>
-      <div className="designer-context-bar">
-        <span className="designer-context-chip">{t.viewLabel}: {view === 'bindings' ? t.bindings : t.dataSources}</span>
-        {focusNode && <span className="designer-context-chip">{focusNode.name}</span>}
-        <div className="designer-density-toggle">
-          <button className={`fmt-action-btn ${density === 'comfortable' ? 'active' : ''}`} onClick={() => setDensity('comfortable')}>{t.comfortableDensity}</button>
-          <button className={`fmt-action-btn ${density === 'compact' ? 'active' : ''}`} onClick={() => setDensity('compact')}>{t.compactDensity}</button>
         </div>
       </div>
 
@@ -1236,7 +1233,6 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const bindingsLabel = showTechnicalDetails ? t.bindings : t.lightBindings;
   const dataSourcesLabel = showTechnicalDetails ? t.dataSources : t.lightDataSources;
   const groupCountLabel = locale === 'cs' ? (showTechnicalDetails ? 'typů' : 'skupin') : (showTechnicalDetails ? 'types' : 'groups');
-  const currentViewLabel = view === 'structure' ? t.structure : view === 'bindings' ? bindingsLabel : view === 'preview' ? t.previewLabel : view === 'embedded-mapping' ? (locale === 'cs' ? 'Mapování' : 'Mapping') : dataSourcesLabel;
   const currentFocusLabel = selectedElement?.name ?? focusNode?.name ?? fmt.name;
 
   return (
@@ -1244,11 +1240,20 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
       {/* ── Header Bar ── */}
       <div className="fmt-header">
         <FormatTypeBadge rootElement={rootElement} />
-        <span className="fmt-header-title">{fmt.name}</span>
         <span className="fmt-stat">{fc.direction === ERDirection.Import ? '📥' : '📤'} {getFormatDirectionLabel(fc.direction)}</span>
         <div className="fmt-header-stats">
-          <span className="fmt-stat fmt-stat-bound" title={`${stats.boundElements} ${t.bound}`}>✓ {stats.boundElements} {t.bound}</span>
-          <span className="fmt-stat fmt-stat-unbound" title={`${stats.unboundElements} ${t.unbound}`}>○ {stats.unboundElements} {t.unbound}</span>
+          <button
+            type="button"
+            className={`fmt-stat fmt-stat-bound fmt-stat-btn ${view === 'structure' && structureBindingFilter === 'bound' ? 'active' : ''}`}
+            title={`${stats.boundElements} ${t.bound}`}
+            onClick={() => { setView('structure'); setStructureBindingFilter(f => f === 'bound' ? 'all' : 'bound'); }}
+          >✓ {stats.boundElements} {t.bound}</button>
+          <button
+            type="button"
+            className={`fmt-stat fmt-stat-unbound fmt-stat-btn ${view === 'structure' && structureBindingFilter === 'unbound' ? 'active' : ''}`}
+            title={`${stats.unboundElements} ${t.unbound}`}
+            onClick={() => { setView('structure'); setStructureBindingFilter(f => f === 'unbound' ? 'all' : 'unbound'); }}
+          >○ {stats.unboundElements} {t.unbound}</button>
         </div>
       </div>
 
@@ -1307,6 +1312,11 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
           )}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
+          <span className="designer-context-chip" title={currentFocusLabel}>{currentFocusLabel}</span>
+          <div className="designer-density-toggle" style={{ marginLeft: 0 }}>
+            <button className={`fmt-action-btn ${density === 'comfortable' ? 'active' : ''}`} onClick={() => setDensity('comfortable')}>{t.comfortableDensity}</button>
+            <button className={`fmt-action-btn ${density === 'compact' ? 'active' : ''}`} onClick={() => setDensity('compact')}>{t.compactDensity}</button>
+          </div>
           {(view === 'structure' || view === 'bindings') && (
             <div className="fmt-toolbar-iconbtns" role="group" aria-label={`${t.expand} / ${t.collapse}`}>
               <button
@@ -1376,33 +1386,6 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
           </div>
         </div>
       </div>
-      <div className="designer-context-bar">
-        <span className="designer-context-chip">{t.viewLabel}: {currentViewLabel}</span>
-        <span className="designer-context-chip">{currentFocusLabel}</span>
-        <div className="designer-density-toggle">
-          <button className={`fmt-action-btn ${density === 'comfortable' ? 'active' : ''}`} onClick={() => setDensity('comfortable')}>{t.comfortableDensity}</button>
-          <button className={`fmt-action-btn ${density === 'compact' ? 'active' : ''}`} onClick={() => setDensity('compact')}>{t.compactDensity}</button>
-        </div>
-      </div>
-
-      {/* ── Structure binding filter chips ── */}
-      {view === 'structure' && (
-        <div className="fmt-structure-filter-row">
-          <span className="fmt-structure-filter-label">{locale === 'cs' ? 'Zobrazit:' : 'Show:'}</span>
-          {(['all', 'bound', 'unbound'] as const).map(f => (
-            <button
-              key={f}
-              type="button"
-              className={`fmt-structure-filter-chip ${structureBindingFilter === f ? 'active' : ''}`}
-              onClick={() => setStructureBindingFilter(f)}
-            >
-              {f === 'all' ? (locale === 'cs' ? 'Vše' : 'All') :
-               f === 'bound' ? (locale === 'cs' ? 'Svázané' : 'Bound') :
-               (locale === 'cs' ? 'Nesvázané' : 'Unbound')}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* ── Main Content ── */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
