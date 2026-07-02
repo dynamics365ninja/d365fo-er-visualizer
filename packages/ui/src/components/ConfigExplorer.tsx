@@ -1005,6 +1005,7 @@ function ExplorerKindChip({
       aria-pressed={active}
       disabled={count === 0}
       title={label}
+      aria-label={label}
     >
       <span className="explorer-kind-chip-icon" aria-hidden="true">{icon}</span>
       <span className="explorer-kind-chip-label">{label}</span>

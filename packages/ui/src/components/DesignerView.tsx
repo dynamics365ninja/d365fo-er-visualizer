@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -389,6 +389,90 @@ function ExpressionDetailLink({ expression, configIndex, className, interactive 
 }
 
 type DensityMode = 'comfortable' | 'compact';
+
+/** Two-way sliding switch for choosing between comfortable/compact row density. */
+function DensityToggle({ density, onChange }: { density: DensityMode; onChange: (value: DensityMode) => void }) {
+  return (
+    <div className="density-slider" role="radiogroup" aria-label={locale === 'cs' ? 'Hustota zobrazení' : 'Display density'}>
+      <div className={`density-slider__thumb ${density === 'compact' ? 'density-slider__thumb--right' : ''}`} aria-hidden="true" />
+      <button
+        type="button"
+        role="radio"
+        aria-checked={density === 'comfortable'}
+        className={`density-slider__option ${density === 'comfortable' ? 'active' : ''}`}
+        onClick={() => onChange('comfortable')}
+      >
+        {t.comfortableDensity}
+      </button>
+      <button
+        type="button"
+        role="radio"
+        aria-checked={density === 'compact'}
+        className={`density-slider__option ${density === 'compact' ? 'active' : ''}`}
+        onClick={() => onChange('compact')}
+      >
+        {t.compactDensity}
+      </button>
+    </div>
+  );
+}
+
+/** Segmented tab strip with a sliding highlight that animates to the active tab's own position/width. */
+function SlidingTabs<TId extends string>({ tabs, activeId, onChange }: {
+  tabs: Array<{ id: TId; label: React.ReactNode; title?: string }>;
+  activeId: TId;
+  onChange: (id: TId) => void;
+}) {
+  const btnRefs = useRef<Map<TId, HTMLButtonElement>>(new Map());
+  const [thumbRect, setThumbRect] = useState<{ left: number; width: number } | null>(null);
+
+  // Re-measure on every render (tab labels can change width — e.g. counts, locale,
+  // technical-details toggle), but bail out of the state update when the measured
+  // rect is unchanged so this can never trigger an infinite render loop.
+  useLayoutEffect(() => {
+    const btn = btnRefs.current.get(activeId);
+    if (!btn) return;
+    const next = { left: btn.offsetLeft, width: btn.offsetWidth };
+    setThumbRect(prev => (prev && prev.left === next.left && prev.width === next.width) ? prev : next);
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      const btn = btnRefs.current.get(activeId);
+      if (!btn) return;
+      const next = { left: btn.offsetLeft, width: btn.offsetWidth };
+      setThumbRect(prev => (prev && prev.left === next.left && prev.width === next.width) ? prev : next);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [activeId]);
+
+  return (
+    <div className="fmt-sliding-tabs" role="tablist">
+      {thumbRect && (
+        <div
+          className="fmt-sliding-tabs__thumb"
+          aria-hidden="true"
+          style={{ transform: `translateX(${thumbRect.left}px)`, width: thumbRect.width }}
+        />
+      )}
+      {tabs.map(tab => (
+        <button
+          key={tab.id}
+          ref={el => { if (el) btnRefs.current.set(tab.id, el); else btnRefs.current.delete(tab.id); }}
+          type="button"
+          role="tab"
+          aria-selected={activeId === tab.id}
+          className={`fmt-sliding-tabs__btn ${activeId === tab.id ? 'active' : ''}`}
+          title={tab.title}
+          onClick={() => onChange(tab.id)}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function getConsultantFormatTypeLabel(type: string): string {
   const csLabels: Record<string, string> = {
@@ -884,26 +968,16 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div className="fmt-toolbar">
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button
-            onClick={() => setView('bindings')}
-            className={`fmt-tab-btn ${view === 'bindings' ? 'active' : ''}`}
-          >
-            {t.bindings} ({totalShown})
-          </button>
-          <button
-            onClick={() => setView('datasources')}
-            className={`fmt-tab-btn ${view === 'datasources' ? 'active' : ''}`}
-          >
-            {t.dataSources} ({mm.datasources.length})
-          </button>
-        </div>
+        <SlidingTabs
+          tabs={[
+            { id: 'bindings' as const, label: `${t.bindings} (${totalShown})` },
+            { id: 'datasources' as const, label: `${t.dataSources} (${mm.datasources.length})` },
+          ]}
+          activeId={view}
+          onChange={setView}
+        />
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
-          {focusNode && <span className="designer-context-chip" title={focusNode.name}>{focusNode.name}</span>}
-          <div className="designer-density-toggle" style={{ marginLeft: 0 }}>
-            <button className={`fmt-action-btn ${density === 'comfortable' ? 'active' : ''}`} onClick={() => setDensity('comfortable')}>{t.comfortableDensity}</button>
-            <button className={`fmt-action-btn ${density === 'compact' ? 'active' : ''}`} onClick={() => setDensity('compact')}>{t.compactDensity}</button>
-          </div>
+          <DensityToggle density={density} onChange={setDensity} />
           <div className="filter-field" style={{ width: 160 }}>
             <svg className="filter-field__icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.4"/>
@@ -1114,20 +1188,6 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
     return { totalElements, boundElements, unboundElements, structuralElements, typeCount, bindings: fmtMap.bindings.length, datasources: fmtMap.datasources.length, enums: fmt.enumDefinitions.length, transformations: fmt.transformations.length };
   }, [rootElement, bindingMap, fmtMap, fmt]);
 
-  // Selected element detail
-  const selectedElement = useMemo(() => {
-    if (!selectedElementId) return null;
-    const find = (el: any): any => {
-      if (el.id === selectedElementId) return el;
-      for (const child of el.children ?? []) {
-        const f = find(child);
-        if (f) return f;
-      }
-      return null;
-    };
-    return find(rootElement);
-  }, [selectedElementId, rootElement]);
-
   // Grouped bindings view: entries grouped by format element type first, then by concrete element
   const groupedBindings = useMemo(() => {
     const isTrivialExpr = (expr: string) => /^(false|true|0|1|""|'')$/i.test(expr.trim());
@@ -1233,7 +1293,40 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const bindingsLabel = showTechnicalDetails ? t.bindings : t.lightBindings;
   const dataSourcesLabel = showTechnicalDetails ? t.dataSources : t.lightDataSources;
   const groupCountLabel = locale === 'cs' ? (showTechnicalDetails ? 'typů' : 'skupin') : (showTechnicalDetails ? 'types' : 'groups');
-  const currentFocusLabel = selectedElement?.name ?? focusNode?.name ?? fmt.name;
+
+  type FormatViewId = 'structure' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping';
+  const formatTabs = useMemo<Array<{ id: FormatViewId; label: React.ReactNode; title: string }>>(() => {
+    const tabs: Array<{ id: FormatViewId; label: React.ReactNode; title: string }> = [
+      {
+        id: 'structure',
+        label: `${t.structure} (${stats.totalElements})`,
+        title: locale === 'cs' ? 'Hierarchická struktura prvků formátu s vazbami na datový model' : 'Hierarchical structure of format elements with data model bindings',
+      },
+      {
+        id: 'bindings',
+        label: `${bindingsLabel} (${groupedBindingsByType.length} ${groupCountLabel})`,
+        title: locale === 'cs' ? 'Přehled všech vazeb výrazů — co z datového modelu se kam mapuje' : 'Overview of all expression bindings — what maps from data model to where',
+      },
+      {
+        id: 'datasources',
+        label: `${dataSourcesLabel} (${stats.datasources})`,
+        title: locale === 'cs' ? 'Datové zdroje mapování — tabulky, výčty, třídy a vypočítaná pole' : 'Mapping data sources — tables, enums, classes and calculated fields',
+      },
+      {
+        id: 'preview',
+        label: `${fc.direction === ERDirection.Import ? '📥' : '📤'} ${t.previewLabel}`,
+        title: locale === 'cs' ? 'Náhled generovaného výstupu ve správném formátu' : 'Preview of generated output in the correct format',
+      },
+    ];
+    if (fc.embeddedModelMappingVersions.length > 0) {
+      tabs.push({
+        id: 'embedded-mapping',
+        label: `${locale === 'cs' ? 'Mapování' : 'Mapping'} (${fc.embeddedModelMappingVersions.length})`,
+        title: locale === 'cs' ? 'Mapování modelu zabudované přímo v importním formátu' : 'Model mapping embedded directly in the import format',
+      });
+    }
+    return tabs;
+  }, [stats.totalElements, stats.datasources, bindingsLabel, dataSourcesLabel, groupCountLabel, groupedBindingsByType.length, fc.direction, fc.embeddedModelMappingVersions.length]);
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -1281,42 +1374,9 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
 
       {/* ── Toolbar ── */}
       <div className="fmt-toolbar">
-        <div style={{ display: 'flex', gap: 4 }}>
-          {(['structure', 'bindings', 'datasources', 'preview'] as const).map(v => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`fmt-tab-btn ${view === v ? 'active' : ''}`}
-              title={
-                v === 'structure' ? (locale === 'cs' ? 'Hierarchická struktura prvků formátu s vazbami na datový model' : 'Hierarchical structure of format elements with data model bindings')
-                : v === 'bindings' ? (locale === 'cs' ? 'Přehled všech vazeb výrazů — co z datového modelu se kam mapuje' : 'Overview of all expression bindings — what maps from data model to where')
-                : v === 'datasources' ? (locale === 'cs' ? 'Datové zdroje mapování — tabulky, výčty, třídy a vypočítaná pole' : 'Mapping data sources — tables, enums, classes and calculated fields')
-                : (locale === 'cs' ? 'Náhled generovaného výstupu ve správném formátu' : 'Preview of generated output in the correct format')
-              }
-            >
-              {v === 'structure' ? `${t.structure} (${stats.totalElements})` :
-               v === 'bindings' ? `${bindingsLabel} (${groupedBindingsByType.length} ${groupCountLabel})` :
-               v === 'preview' ? `${fc.direction === ERDirection.Import ? '📥' : '📤'} ${t.previewLabel}` :
-               `${dataSourcesLabel} (${stats.datasources})`}
-            </button>
-          ))}
-          {fc.embeddedModelMappingVersions.length > 0 && (
-            <button
-              key="embedded-mapping"
-              onClick={() => setView('embedded-mapping')}
-              className={`fmt-tab-btn ${view === 'embedded-mapping' ? 'active' : ''}`}
-              title={locale === 'cs' ? 'Mapování modelu zabudované přímo v importním formátu' : 'Model mapping embedded directly in the import format'}
-            >
-              {locale === 'cs' ? 'Mapování' : 'Mapping'} ({fc.embeddedModelMappingVersions.length})
-            </button>
-          )}
-        </div>
+        <SlidingTabs tabs={formatTabs} activeId={view} onChange={setView} />
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
-          <span className="designer-context-chip" title={currentFocusLabel}>{currentFocusLabel}</span>
-          <div className="designer-density-toggle" style={{ marginLeft: 0 }}>
-            <button className={`fmt-action-btn ${density === 'comfortable' ? 'active' : ''}`} onClick={() => setDensity('comfortable')}>{t.comfortableDensity}</button>
-            <button className={`fmt-action-btn ${density === 'compact' ? 'active' : ''}`} onClick={() => setDensity('compact')}>{t.compactDensity}</button>
-          </div>
+          <DensityToggle density={density} onChange={setDensity} />
           {(view === 'structure' || view === 'bindings') && (
             <div className="fmt-toolbar-iconbtns" role="group" aria-label={`${t.expand} / ${t.collapse}`}>
               <button
