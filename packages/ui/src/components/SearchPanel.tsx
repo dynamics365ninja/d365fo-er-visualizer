@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, TabList, Tab, Tooltip } from '@fluentui/react-components';
 import {
   SearchRegular,
   MapRegular,
@@ -14,6 +13,7 @@ import type { WhereUsedEntry } from '../state/store';
 import type { GUIDEntry } from '@er-visualizer/core';
 import { locale, t, useLocale } from '../i18n';
 import { getFormatTypeThemeColor } from '../utils/theme-colors';
+import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 
 type Mode = 'search' | 'where-used';
 
@@ -38,6 +38,23 @@ function findTreeNodeByMatch(nodes: TreeNode[], predicate: (node: TreeNode) => b
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Stable identity for a search result row, used to collapse duplicates.
+ *
+ * Generic "Formula" hits (calculated fields, binding/format-binding expressions)
+ * are produced by scanning an expression for every `Datasource.Field`-like
+ * reference it contains — a single expression with two references yields two
+ * cross-refs that differ only by `target`. Since the rendered row shows the
+ * whole expression once (not the individual matched identifier), those must
+ * collapse into a single visible entry; `target` is excluded from their key.
+ */
+function getSearchResultDedupeKey(r: SearchResultEntry): string {
+  if (r.targetType === 'Formula') {
+    return `formula|${r.sourceConfigPath}|${r.sourceComponent}|${r.sourceContext}`;
+  }
+  return `${r.sourceConfigPath}|${r.target}|${r.sourceComponent}|${r.sourceContext}`;
 }
 
 const GUID_REGEX = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
@@ -462,7 +479,7 @@ export function SearchPanel() {
                   // Deduplicate and filter to only navigable results (same logic as SearchResultGroup)
                   const seen = new Set<string>();
                   const navigableResults = (searchResults as SearchResultEntry[]).filter(r => {
-                    const key = `${r.target}|${r.sourceComponent}|${r.sourceContext}`;
+                    const key = getSearchResultDedupeKey(r);
                     if (seen.has(key)) return false;
                     seen.add(key);
                     return findNodeForSearchResult(r, configurations, treeNodes, registry) !== null;
@@ -503,14 +520,15 @@ export function SearchPanel() {
                           ))}
                         </div>
                         <div className="search-panel__results-actions">
-                          <Tooltip content={t.expand} relationship="label" withArrow>
-                            <Button appearance="subtle" size="small" icon={<TextExpandRegular />} aria-label={t.expand}
-                              onClick={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: true }))} />
-                          </Tooltip>
-                          <Tooltip content={t.collapse} relationship="label" withArrow>
-                            <Button appearance="subtle" size="small" icon={<TextCollapseRegular />} aria-label={t.collapse}
-                              onClick={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: false }))} />
-                          </Tooltip>
+                          <ExpandCollapseSlider
+                            size="compact"
+                            expandLabel={t.expand}
+                            collapseLabel={t.collapse}
+                            expandIcon={<TextExpandRegular fontSize={16} />}
+                            collapseIcon={<TextCollapseRegular fontSize={16} />}
+                            onExpand={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
+                            onCollapse={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
+                          />
                         </div>
                       </div>
                       <div className="search-panel__results">
@@ -571,14 +589,15 @@ export function SearchPanel() {
                       ))}
                     </div>
                     <div className="search-panel__results-actions">
-                      <Tooltip content={t.expand} relationship="label" withArrow>
-                        <Button appearance="subtle" size="small" icon={<TextExpandRegular />} aria-label={t.expand}
-                          onClick={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: true }))} />
-                      </Tooltip>
-                      <Tooltip content={t.collapse} relationship="label" withArrow>
-                        <Button appearance="subtle" size="small" icon={<TextCollapseRegular />} aria-label={t.collapse}
-                          onClick={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: false }))} />
-                      </Tooltip>
+                      <ExpandCollapseSlider
+                        size="compact"
+                        expandLabel={t.expand}
+                        collapseLabel={t.collapse}
+                        expandIcon={<TextExpandRegular fontSize={16} />}
+                        collapseIcon={<TextCollapseRegular fontSize={16} />}
+                        onExpand={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
+                        onCollapse={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
+                      />
                     </div>
                   </div>
                   <div className="search-panel__results">
@@ -856,7 +875,7 @@ function SearchResultGroup({
   const deduped = useMemo(() => {
     const seen = new Set<string>();
     const navigable = items.filter(r => {
-      const key = `${r.target}|${r.sourceComponent}|${r.sourceContext}`;
+      const key = getSearchResultDedupeKey(r);
       if (seen.has(key)) return false;
       seen.add(key);
       // Only keep results that can be navigated to

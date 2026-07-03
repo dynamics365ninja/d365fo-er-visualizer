@@ -2619,6 +2619,69 @@ body {
   font-weight: 600;
 }
 
+/* ─── Expand-all / Collapse-all slider (icon-only, compact) ─── */
+.expand-slider {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 2px;
+  gap: 2px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+}
+
+.expand-slider__thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc(50% - 3px);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-hover));
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border-color));
+  opacity: 0;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.expand-slider__thumb--visible {
+  opacity: 1;
+}
+
+.expand-slider__thumb--right {
+  transform: translateX(calc(100% + 2px));
+}
+
+.expand-slider__option {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.expand-slider__option.active {
+  color: var(--accent);
+}
+
+.expand-slider--compact .expand-slider__option {
+  width: 22px;
+  height: 22px;
+}
+
+.expand-slider--compact .expand-slider__thumb {
+  border-radius: 5px;
+}
+
 .designer-scroll-pane {
   flex: 1;
   overflow: auto;
@@ -2669,6 +2732,10 @@ body {
 
 .fmt-element-row.unbound:not(.selected):not(:hover) {
   opacity: 0.7;
+}
+
+.fmt-element-row.nav-flash {
+  animation: nav-flash-pulse 1.4s ease-out;
 }
 
 .density-compact .fmt-element-row {
@@ -3146,6 +3213,24 @@ body {
   background: color-mix(in srgb, var(--color-accent-bg, #0078d40f) 60%, transparent);
   border-color: var(--color-accent, #0078d4);
   border-left-width: 3px;
+}
+.mm-binding-row.nav-flash {
+  animation: nav-flash-pulse 1.4s ease-out;
+}
+
+/* One-shot "you were just navigated here" pulse used on top of the normal
+   selected/search-match styling for rows reached via Search or Where-Used. */
+@keyframes nav-flash-pulse {
+  0% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 55%, transparent);
+    background: color-mix(in srgb, var(--accent) 30%, var(--bg-active));
+  }
+  60% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
 }
 .mm-binding-field {
   display: flex;
