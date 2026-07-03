@@ -24,6 +24,7 @@ import { useAppStore, resolveDeepExpression } from '../state/store';
 import { ClickablePath } from './ClickablePath';
 import { DrillDownBody, DrillDownTrigger } from './DrillDownPanel';
 import { PropertyInspector } from './PropertyInspector';
+import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { buildFormatBindingPresentation, groupFormatBindingsByCategory } from '../utils/format-binding-display';
@@ -389,6 +390,29 @@ function ExpressionDetailLink({ expression, configIndex, className, interactive 
 }
 
 type DensityMode = 'comfortable' | 'compact';
+
+/**
+ * Returns `true` for a brief window right after `active` flips from false → true,
+ * so callers can layer a one-shot "just navigated here" flash animation on top of
+ * their normal `.selected`/`.search-match` styling (e.g. jumping in from Search
+ * or Where-Used). Re-navigating to the same element re-triggers the flash.
+ */
+function useNavFlash(active: boolean, duration = 1400): boolean {
+  const [flash, setFlash] = useState(false);
+  const wasActive = useRef(false);
+
+  useEffect(() => {
+    if (active && !wasActive.current) {
+      setFlash(true);
+      const timer = setTimeout(() => setFlash(false), duration);
+      wasActive.current = active;
+      return () => clearTimeout(timer);
+    }
+    wasActive.current = active;
+  }, [active, duration]);
+
+  return flash;
+}
 
 /** Two-way sliding switch for choosing between comfortable/compact row density. */
 function DensityToggle({ density, onChange }: { density: DensityMode; onChange: (value: DensityMode) => void }) {
@@ -876,6 +900,7 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
 
   const focusBindingPath: string | undefined = focusNode?.type === 'binding' ? focusNode.data?.path : undefined;
   const bindingScrollRef = useRef<HTMLDivElement | null>(null);
+  const dsListRef = useRef<GroupedDatasourceListHandle>(null);
 
   useEffect(() => {
     if (!focusNode) return;
@@ -893,6 +918,16 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
   useEffect(() => {
     if (!focusBindingPath) return;
     const timer = setTimeout(() => bindingScrollRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
+    return () => clearTimeout(timer);
+  }, [focusBindingPath]);
+
+  // Briefly flash the navigated-to row (e.g. jumping in from Search/Where-Used)
+  // on top of its normal highlight, then let it settle back to the plain state.
+  const [flashBindingPath, setFlashBindingPath] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusBindingPath) return;
+    setFlashBindingPath(focusBindingPath);
+    const timer = setTimeout(() => setFlashBindingPath(null), 1400);
     return () => clearTimeout(timer);
   }, [focusBindingPath]);
 
@@ -978,6 +1013,27 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
         />
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
           <DensityToggle density={density} onChange={setDensity} />
+          {view === 'datasources' && (
+            <ExpandCollapseSlider
+              size="compact"
+              expandLabel={t.expand}
+              collapseLabel={t.collapse}
+              expandIcon={
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 6 L8 2 L12 6" />
+                  <path d="M4 10 L8 14 L12 10" />
+                </svg>
+              }
+              collapseIcon={
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 3 L8 7 L12 3" />
+                  <path d="M4 13 L8 9 L12 13" />
+                </svg>
+              }
+              onExpand={() => dsListRef.current?.expandAll()}
+              onCollapse={() => dsListRef.current?.collapseAll()}
+            />
+          )}
           <div className="filter-field" style={{ width: 160 }}>
             <svg className="filter-field__icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.4"/>
@@ -1032,9 +1088,10 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
                       const fieldName = slashIdx >= 0 ? tail.slice(slashIdx + 1) : tail;
                       const parentCtx = slashIdx >= 0 ? tail.slice(0, slashIdx) : null;
                       const isFocused = b.path === focusBindingPath;
+                      const navFlash = isFocused && flashBindingPath === b.path;
 
                       return (
-                        <div key={i} ref={isFocused ? bindingScrollRef : null} className={`mm-binding-row${isFocused ? ' search-match' : ''}`}
+                        <div key={i} ref={isFocused ? bindingScrollRef : null} className={`mm-binding-row${isFocused ? ' search-match' : ''}${navFlash ? ' nav-flash' : ''}`}
                           style={{ cursor: 'pointer' }}
                           onClick={() => {
                             const rootNode = treeNodes[configIndex];
@@ -1062,7 +1119,7 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
         )}
 
         {view === 'datasources' && (
-          <GroupedDatasourceList datasources={filteredDatasources} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusNode?.type === 'datasource' ? focusNode.name : undefined} />
+          <GroupedDatasourceList ref={dsListRef} datasources={filteredDatasources} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusNode?.type === 'datasource' ? focusNode.name : undefined} />
         )}
       </div>
     </div>
@@ -1258,6 +1315,8 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
     setCollapsedBindingTypeGroups(new Set(groupedBindingsByType.map(group => group.elementType)));
   }, [groupedBindingsByType]);
 
+  const dsListRef = useRef<GroupedDatasourceListHandle>(null);
+
   // Filter for datasources view
   const filteredDatasources = useMemo(() => {
     if (!filter) return fmtMap.datasources;
@@ -1377,47 +1436,44 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
         <SlidingTabs tabs={formatTabs} activeId={view} onChange={setView} />
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
           <DensityToggle density={density} onChange={setDensity} />
-          {(view === 'structure' || view === 'bindings') && (
-            <div className="fmt-toolbar-iconbtns" role="group" aria-label={`${t.expand} / ${t.collapse}`}>
-              <button
-                type="button"
-                className="fmt-iconbtn"
-                onClick={() => {
-                  if (view === 'structure') {
-                    setStructureExpandMode('all');
-                    setStructureExpandVersion(version => version + 1);
-                  } else {
-                    expandAllBindingTypeGroups();
-                  }
-                }}
-                title={t.expand}
-                aria-label={t.expand}
-              >
+          {(view === 'structure' || view === 'bindings' || view === 'datasources') && (
+            <ExpandCollapseSlider
+              size="compact"
+              expandLabel={t.expand}
+              collapseLabel={t.collapse}
+              expandIcon={
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M4 6 L8 2 L12 6" />
                   <path d="M4 10 L8 14 L12 10" />
                 </svg>
-              </button>
-              <button
-                type="button"
-                className="fmt-iconbtn"
-                onClick={() => {
-                  if (view === 'structure') {
-                    setStructureExpandMode('none');
-                    setStructureExpandVersion(version => version + 1);
-                  } else {
-                    collapseAllBindingTypeGroups();
-                  }
-                }}
-                title={t.collapse}
-                aria-label={t.collapse}
-              >
+              }
+              collapseIcon={
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M4 3 L8 7 L12 3" />
                   <path d="M4 13 L8 9 L12 13" />
                 </svg>
-              </button>
-            </div>
+              }
+              onExpand={() => {
+                if (view === 'structure') {
+                  setStructureExpandMode('all');
+                  setStructureExpandVersion(version => version + 1);
+                } else if (view === 'bindings') {
+                  expandAllBindingTypeGroups();
+                } else {
+                  dsListRef.current?.expandAll();
+                }
+              }}
+              onCollapse={() => {
+                if (view === 'structure') {
+                  setStructureExpandMode('none');
+                  setStructureExpandVersion(version => version + 1);
+                } else if (view === 'bindings') {
+                  collapseAllBindingTypeGroups();
+                } else {
+                  dsListRef.current?.collapseAll();
+                }
+              }}
+            />
           )}
           <div className="filter-field">
             <svg className="filter-field__icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -1516,7 +1572,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
           )}
 
           {view === 'datasources' && (
-            <GroupedDatasourceList datasources={filteredDatasources} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusNode?.type === 'datasource' ? focusNode.name : undefined} />
+            <GroupedDatasourceList ref={dsListRef} datasources={filteredDatasources} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusNode?.type === 'datasource' ? focusNode.name : undefined} />
           )}
 
           <div style={{ display: view === 'preview' ? 'contents' : 'none' }}>
@@ -3217,6 +3273,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
   }, [filter, element, bindingMap]);
 
   const isSelected = selectedId === element.id;
+  const navFlash = useNavFlash(isSelected);
 
   // Auto-expand when the selectedId belongs to this element's subtree (navigation from search)
   const selectedIsDescendant = useMemo(() => {
@@ -3269,7 +3326,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
       {/* Element Row */}
       <div
         ref={rowRef}
-        className={`fmt-element-row ${isSelected ? 'selected' : ''} ${!mainBinding ? 'unbound' : ''} ${filter && matchesFilter ? 'search-match' : ''}`}
+        className={`fmt-element-row ${isSelected ? 'selected' : ''} ${!mainBinding ? 'unbound' : ''} ${filter && matchesFilter ? 'search-match' : ''} ${navFlash ? 'nav-flash' : ''}`}
         style={{ paddingLeft: depth * 20 + 4 }}
         onClick={() => onSelect(element.id)}
       >
@@ -4232,12 +4289,17 @@ const dsGroupLabels: Record<string, string> = {
   Container: '📦 Containers',
 };
 
-function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode, focusDsName }: {
+export interface GroupedDatasourceListHandle {
+  expandAll: () => void;
+  collapseAll: () => void;
+}
+
+const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandle, {
   datasources: any[];
   configIndex: number;
   navigateToTreeNode: (nodeId: string) => void;
   focusDsName?: string;
-}) {
+}>(function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode, focusDsName }, ref) {
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
@@ -4262,7 +4324,6 @@ function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode, f
     const focusGroupType = focusDsName
       ? groups.find(([, items]) => items.some((ds: any) => containsDatasourceName(ds, focusDsName)))?.[0]
       : undefined;
-    console.log('[GroupedDatasourceList] focusDsName:', focusDsName, 'focusGroupType:', focusGroupType, 'groups:', groups.map(([t]) => t));
     setCollapsedGroups(new Set(groups.map(([type]) => type).filter(t => t !== focusGroupType)));
   }, [focusDsName, groups]);
 
@@ -4282,18 +4343,13 @@ function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode, f
     setCollapsedGroups(new Set(groups.map(([type]) => type)));
   }, [groups]);
 
+  React.useImperativeHandle(ref, () => ({
+    expandAll: expandAllGroups,
+    collapseAll: collapseAllGroups,
+  }), [expandAllGroups, collapseAllGroups]);
+
   return (
     <div>
-      {groups.length > 0 && (
-        <div className="explorer-toolbar" style={{ paddingLeft: 10, paddingRight: 10 }}>
-          <button className="fmt-action-btn" onClick={expandAllGroups} title="Expand all datasource groups">
-            Expand All
-          </button>
-          <button className="fmt-action-btn" onClick={collapseAllGroups} title="Collapse all datasource groups">
-            Collapse All
-          </button>
-        </div>
-      )}
       {groups.map(([type, items]) => {
         const isCollapsed = collapsedGroups.has(type);
         return (
@@ -4314,7 +4370,7 @@ function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode, f
       })}
     </div>
   );
-}
+});
 
 function fieldTypeLabel(type: number): string {
   const map: Record<number, string> = {

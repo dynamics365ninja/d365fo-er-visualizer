@@ -49,6 +49,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { ToastHost } from './ToastHost';
 import { CommandPalette, type CommandItem } from './CommandPalette';
 import { ActivityBar } from './ActivityBar';
+import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 import { t, locale, useLocale } from '../i18n';
 import { ERDirection } from '@er-visualizer/core';
 
@@ -986,26 +987,14 @@ function ExplorerHeader() {  const treeNodes = useAppStore(s => s.treeNodes);
       title={t.explorer}
       count={treeNodes.length}
       actions={
-        <>
-          <Tooltip content={t.cmdExpandAll} relationship="label" withArrow>
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<ExpandUpRightRegular />}
-              onClick={() => { expandAll(); requestExplorerExpand('all'); }}
-              aria-label={t.cmdExpandAll}
-            />
-          </Tooltip>
-          <Tooltip content={t.cmdCollapseAll} relationship="label" withArrow>
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<ArrowMinimizeRegular />}
-              onClick={() => { collapseAll(); requestExplorerExpand('none'); }}
-              aria-label={t.cmdCollapseAll}
-            />
-          </Tooltip>
-        </>
+        <ExpandCollapseSlider
+          expandLabel={t.cmdExpandAll}
+          collapseLabel={t.cmdCollapseAll}
+          onExpand={() => { expandAll(); requestExplorerExpand('all'); }}
+          onCollapse={() => { collapseAll(); requestExplorerExpand('none'); }}
+          expandIcon={<ExpandUpRightRegular fontSize={16} />}
+          collapseIcon={<ArrowMinimizeRegular fontSize={16} />}
+        />
       }
     />
   );
