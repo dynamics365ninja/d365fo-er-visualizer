@@ -498,6 +498,20 @@ Example — format mapping delta:
 9. **Expression + SyntaxVersion changed together** → use `parmExpressionAsString,parmExpression,parmSyntaxVersion`.
 10. **Never add Delta entries for objects defined in the derived config itself** — `ERObjectOperationDelete` and `ERObjectOperationModify` are only valid for objects that exist in the **base** configuration. Adding Delta entries for datasources/bindings introduced in the derived config causes import errors in D365FO.
 
+---
+
+#### Bumping an already-derived config to a new version (N → N+1)
+
+This is a **different task from creating a derived config from a Microsoft base** — it's incrementing an existing multi-version file you (or a previous session) already produced. Missing any one of these causes a D365FO import warning about mapping component content mismatch, even though the file is well-formed XML:
+
+1. **`ERSolutionVersion` (root element)**: bump `DateTime`, `Number`, `PublicVersionNumber`.
+2. **Every child `...Version` element** that changed (`ERFormatVersion`, `ERModelMappingVersion`, `ERFormatMappingVersion`) needs **both**:
+   - `ID.="{guid},N+1"` (the version suffix after the comma)
+   - `Number="N+1"` (a separate attribute — bumping only the `ID.` suffix and forgetting `Number`, or vice versa, is the #1 cause of the mismatch warning)
+3. **Cross-reference attributes elsewhere in the file that embed the old version number must also be bumped** — e.g. `<ERFormatMapping ... FormatVersion="{formatGUID},N">` inside `ERFormatMappingVersion` references the `ERFormatVersion`'s version number and will go stale if only `ERFormatVersion` is bumped and this cross-reference is missed.
+4. **Append new `Delta` entries after the existing ones** for the actual new changes in this version only — never touch or duplicate prior Delta history.
+5. **After generating**, grep the whole file for the OLD version number (e.g. `,N"` / `Number="N"`) to confirm no stale reference was missed, and re-parse as XML to confirm well-formedness.
+
 ### Common Datasource Types
 ```xml
 <!-- Import format reference (links mapping to format tree) -->
@@ -655,7 +669,7 @@ Only after seeing `OK:` output with a non-zero file size, confirm to the user th
 - Confirm file existence via `Test-Path` output before reporting success.
 - Verify referenced files exist via `list_dir` or `file_search` before using them.
 - ❌ Generating XML in reasoning then "summarizing" it
-- ❌ Using `read_file` on ER XML files larger than 300 lines (use `execution_subagent` instead — see below)
+- ❌ Using `read_file` on ER XML files larger than 300 lines (use a batched `run_in_terminal` PowerShell query, or delegate to `runSubagent` for multi-step investigation — see below)
 
 ### PowerShell XmlDocument — CRITICAL formatting rules
 
@@ -685,11 +699,13 @@ This guarantees zero impact on surrounding formatting — the file is otherwise 
 
 ## Handling Large XML Files (CRITICAL for ER configs)
 
-ER configuration XML files are typically **10,000–15,000 lines** long. **Never load them with `read_file`** — this exhausts your context before you can write any code.
+ER configuration XML files are typically **10,000–15,000 lines** long (some real-world configs exceed 140,000 lines / 10 MB+). **Never load them with `read_file`** — this exhausts your context before you can write any code.
 
-### Use `execution_subagent` for all large-file reads and discovery:
+### Batch discovery into a single PowerShell call
 
-Always batch multiple queries into a **single `execution_subagent` call** using a multi-command PowerShell script:
+Always batch multiple queries into a **single `run_in_terminal` call** using a multi-command PowerShell script, writing results to a temp `.txt` file and reading that back with `read_file` (this avoids terminal-output truncation on multi-line scripts against large files). For open-ended, multi-step investigation (e.g. diffing a derived config against its base across several sections), delegate the whole investigation to the `runSubagent` tool with a precise prompt describing exactly what facts to return — do not do it via many sequential small tool calls in the main thread.
+
+**Workspace-scope caveat:** `grep_search` and `file_search` only index files inside the current VS Code workspace folder. Against a file **outside** the workspace (e.g. a reference/base config the user attached from `Downloads`), they silently return empty results regardless of the query — this is not evidence the content is missing. For any external file, use the PowerShell `[System.IO.File]::ReadAllText()` + `IndexOf`/regex approach below instead.
 
 ```powershell
 # Batch example — extract multiple GUIDs in one call:
@@ -715,16 +731,16 @@ $idx = ($lines | Select-String 'Name="Sts"').LineNumber[0]; $lines[($idx-4)..($i
 ```
 
 ### Strategy for derived config creation from a large base:
-1. **One batched `execution_subagent` call** to extract all needed GUIDs (Solution, Format, Format Mapping, specific elements)
+1. **One batched PowerShell script via `run_in_terminal`** to extract all needed GUIDs (Solution, Format, Format Mapping, specific elements) — write results to a temp file and read it back if output is long
 2. **Write the complete `.ps1` script immediately** using your ER knowledge — fill in GUIDs from step 1
 3. **Execute** with `run_in_terminal` and verify
 
-**Never** use multiple sequential `run_in_terminal` calls to discover file content — always batch into `execution_subagent`.
+**Never** use many small sequential `run_in_terminal` calls to discover file content — batch all discovery queries into one script.
 
 ## Workflow
 
 ### Any generation task (format, model, mapping, derived config, full solution):
-1. **Gather minimal context** — one batched `execution_subagent` call for all file queries; `file_search`/`list_dir` to verify paths
+1. **Gather minimal context** — one batched PowerShell discovery script for all file queries; `file_search`/`list_dir` to verify paths (workspace files only — see workspace-scope caveat above for external files)
 2. **Write a `.ps1` script** to `scripts/` using `run_in_terminal` + `Set-Content` (Step 1 above)
 3. **Execute the script** using `run_in_terminal` (Step 2 above)
 4. **Report** file path + size (Step 3 above)
@@ -796,6 +812,25 @@ Datasources form a tree via `ParentPath` on `ERModelItemDefinition`:
     - `RltdPties/Cdtr` and `RltdPties/Dbtr` wrap party data in `Pty` element (`Party40Choice`, Multiplicity=`"1"`) → path: `.Cdtr.Data.Pty.Nm.Data.Str`
     - `FinInstnId/BIC` renamed to `FinInstnId/BICFI` — always check both in expressions with BICFI→BIC→Othr→"" fallback
     - Bank code expression pattern: `IF(BICFI.IsMatched, BICFI.Data.Str, IF(Othr.IsMatched, Othr.Data.Id.Str, ""))`
+14. **Isolate before diagnosing**: when the user reports a validation/import error on a config you generated or modified, always first check whether the SAME error reproduces on the unmodified base/prior version before attributing the cause to your own edit. Do not report a fix as confirmed-resolved without this check — a fix that merely "seems plausible" and doesn't reproduce your own test can be wrong even if the file re-parses fine and version checks pass.
+15. **Be cautious inserting a brand-new property binding type (e.g. a first-ever `Enabled` binding) for a pre-existing base component if there's no precedent for that exact operation in the base's own Delta/history** — prefer the smallest possible change that achieves the goal (e.g. a plain tree-level attribute edit) over introducing a new binding category.
+
+## Troubleshooting Common Validation Errors
+
+When the user reports a D365FO import/validation error (e.g. "Object reference not set to an instance of an object.", or a mapping-component content mismatch warning) on a generated or modified config, work through this checklist before proposing a fix:
+
+1. **Reproduce on the unmodified baseline first.** Ask (or check) whether the same error occurs on the original, untouched file (before your edits) and/or on the Microsoft base config it derives from. If it does, the cause is NOT your edit — stop pursuing that theory and look elsewhere (see below).
+2. **Verify Base-lineage consistency at all three levels** between the derived config and the actual Microsoft base config file (ask the user to attach it if not already provided):
+   - `ERSolution Base="{guid},N"` ↔ base file's Solution `ID.="{guid}"` + `ERSolutionVersion Number="N"`
+   - Format `Base="{guid},N"` ↔ base file's `ERFormatVersion ID.="{guid},N" Number="N"`
+   - Mapping `Base="{guid},N"` ↔ base file's `ERFormatMappingVersion ID.="{guid},N" Number="N"`
+   A mismatch here (derived config expects a base version the target D365FO environment doesn't have imported) is a common, non-obvious cause of a generic NullReferenceException during validation.
+3. **Check the version-bump checklist** (see *Bumping an already-derived config to a new version* above) if this is version N+1 of a config you previously bumped — missing a `Number` attribute or a stale cross-reference (e.g. `ERFormatMapping.FormatVersion`) causes import warnings.
+4. **Don't misread normal patterns as defects**:
+   - Duplicate `(Component GUID, PropertyName)` bindings are NORMAL in multi-root UBL-style formats (e.g. Invoice/CreditNote sharing the same format-tree component GUIDs but each root having its own binding) — compare duplicate counts against the base file before assuming corruption.
+   - A leaf element with only a static tree-level `Value=` attribute and **no** Mapping binding at all is valid (an unconditional literal) — it does not need a binding to be "complete".
+5. **Consider environment/import-sequence causes, not just file content**: derived ER configs require their full Base lineage to already be imported in the target environment at the referenced version. If steps 1–4 show the file is internally consistent, the next most likely cause is that the base configuration isn't imported yet (or is an older version) in the user's D365FO environment — recommend importing/re-importing the exact base file first, then retrying validation.
+6. **Ask for the exception's stack trace / "Show details"** if available — it names the exact class/property involved and shortcuts steps 1–5.
 
 ## Reference Files in This Workspace
 
