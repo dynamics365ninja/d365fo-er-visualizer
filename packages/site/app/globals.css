@@ -1,50 +1,30 @@
 @import 'tailwindcss';
+/* Shared brand tokens (`--er-*`) — the same file the SPA imports, so the site
+   and the app cannot drift apart. Palette changes belong there, not here. */
+@import '@er-visualizer/design-tokens/tokens.css';
 
 /* ── Theme tokens ──────────────────────────────────────────────────────────
-   Colours are plain custom properties that flip with the OS colour scheme,
-   surfaced to Tailwind through `@theme inline` so utilities such as
+   Local aliases over the shared tokens (which already flip with the OS colour
+   scheme), surfaced to Tailwind through `@theme inline` so utilities such as
    `bg-surface` or `text-muted` resolve to var() and follow the flip. */
 
 :root {
-  color-scheme: light dark;
-
-  --bg: #ffffff;
-  --bg-soft: #f4f8f8;
-  --surface: #ffffff;
-  --surface-2: #eef4f4;
-  --border: #dde7e8;
-  --border-strong: #c6d5d6;
-  --text: #0d1618;
-  --text-muted: #536569;
-  --accent: #0a6f73;
-  --accent-hover: #085c60;
-  --accent-soft: #e4f1f1;
-  --accent-contrast: #ffffff;
-  --model: #6d5ce7;
-  --mapping: #0a6f73;
-  --format: #c2681a;
-  --code-bg: #f2f6f6;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0c1012;
-    --bg-soft: #10161a;
-    --surface: #141b1f;
-    --surface-2: #1a2328;
-    --border: #253036;
-    --border-strong: #33434a;
-    --text: #e8f0f1;
-    --text-muted: #94a6ab;
-    --accent: #35b8bd;
-    --accent-hover: #52ced3;
-    --accent-soft: #0e2b2d;
-    --accent-contrast: #04191b;
-    --model: #a396ff;
-    --mapping: #35b8bd;
-    --format: #e79a4f;
-    --code-bg: #111a1e;
-  }
+  --bg: var(--er-bg);
+  --bg-soft: var(--er-bg-soft);
+  --surface: var(--er-surface);
+  --surface-2: var(--er-surface-2);
+  --border: var(--er-border);
+  --border-strong: var(--er-border-strong);
+  --text: var(--er-text);
+  --text-muted: var(--er-text-muted);
+  --accent: var(--er-accent);
+  --accent-hover: var(--er-accent-hover);
+  --accent-soft: var(--er-accent-soft);
+  --accent-contrast: var(--er-accent-contrast);
+  --model: var(--er-model);
+  --mapping: var(--er-mapping);
+  --format: var(--er-format);
+  --code-bg: var(--er-surface-2);
 }
 
 @theme inline {
@@ -64,9 +44,9 @@
   --color-mapping: var(--mapping);
   --color-format: var(--format);
 
-  --font-sans: var(--font-inter), 'Segoe UI', system-ui, sans-serif;
-  --font-display: var(--font-display), var(--font-inter), system-ui, sans-serif;
-  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+  --font-sans: var(--er-font-sans);
+  --font-display: var(--er-font-display);
+  --font-mono: var(--er-font-mono);
 }
 
 /* ── Base ─────────────────────────────────────────────────────────────────── */

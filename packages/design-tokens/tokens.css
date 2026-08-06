@@ -1,0 +1,199 @@
+/**
+ * D365FO ER Visualizer — shared brand tokens.
+ *
+ * One palette for both surfaces of the product:
+ *   • packages/site — the marketing site and documentation (Tailwind `@theme inline`)
+ *   • packages/ui   — the SPA (plain custom properties + Fluent UI theme overrides)
+ *
+ * Every token is prefixed `--er-` so it never collides with the local aliases
+ * each package layers on top (`--bg-primary`, `--color-surface`, …).
+ *
+ * Theme resolution, in precedence order:
+ *   1. `:root[data-theme='light'|'dark']`  — explicit choice (the SPA's theme switch)
+ *   2. `prefers-color-scheme`              — the OS preference (the site has no switch)
+ *   3. light                               — the default
+ */
+
+/* ── Light (default) ─────────────────────────────────────────────────────── */
+
+:root {
+  /* Neutral ramp — page → surface → sunken → hover */
+  --er-bg: #ffffff;
+  --er-bg-soft: #f4f8f8;
+  --er-surface: #ffffff;
+  --er-surface-2: #eef4f4;
+  --er-surface-3: #e4eded;
+  --er-selected: #d9ecec;
+
+  --er-border: #dde7e8;
+  --er-border-strong: #c6d5d6;
+
+  --er-text: #0d1618;
+  --er-text-muted: #536569;
+  --er-text-subtle: #7b8a8e;
+
+  /* Brand */
+  --er-accent: #0a6f73;
+  --er-accent-hover: #085c60;
+  --er-accent-active: #064c50;
+  --er-accent-soft: #e4f1f1;
+  --er-accent-border: rgba(10, 111, 115, 0.35);
+  --er-accent-contrast: #ffffff;
+
+  /* ER component types — the same three hues everywhere they appear */
+  --er-model: #6d5ce7;
+  --er-model-soft: #ece9fd;
+  --er-mapping: #0a6f73;
+  --er-mapping-soft: #e4f1f1;
+  --er-format: #c2681a;
+  --er-format-soft: #fbeee0;
+
+  /* Semantic */
+  --er-success: #206b37;
+  --er-success-soft: #e3f3e9;
+  --er-success-border: #a8d2b6;
+  --er-warning: #7a5d00;
+  --er-warning-soft: #f9f0de;
+  --er-warning-border: #e0c793;
+  --er-danger: #a1260d;
+  --er-danger-soft: #f9e4e4;
+  --er-danger-border: #e5b2b2;
+  --er-info: #0c6a64;
+  --er-info-soft: #e2f3ee;
+  --er-info-border: #a8d7cc;
+
+  /* Elevation */
+  --er-shadow-color: rgba(13, 22, 24, 0.12);
+  --er-shadow-1: 0 1px 2px rgba(13, 22, 24, 0.06);
+  --er-shadow-2: 0 4px 12px rgba(13, 22, 24, 0.08);
+  --er-shadow-3: 0 12px 32px rgba(13, 22, 24, 0.12);
+
+  color-scheme: light;
+}
+
+/* ── Dark ────────────────────────────────────────────────────────────────── */
+
+/* Shared by both dark entry points below. Keep the two selector lists in sync. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --er-bg: #0c1012;
+    --er-bg-soft: #10161a;
+    --er-surface: #141b1f;
+    --er-surface-2: #1a2328;
+    --er-surface-3: #212c32;
+    --er-selected: #16343a;
+
+    --er-border: #253036;
+    --er-border-strong: #33434a;
+
+    --er-text: #e8f0f1;
+    --er-text-muted: #94a6ab;
+    --er-text-subtle: #6f8288;
+
+    --er-accent: #35b8bd;
+    --er-accent-hover: #52ced3;
+    --er-accent-active: #2aa1a6;
+    --er-accent-soft: #0e2b2d;
+    --er-accent-border: rgba(53, 184, 189, 0.38);
+    --er-accent-contrast: #04191b;
+
+    --er-model: #a396ff;
+    --er-model-soft: #241f3d;
+    --er-mapping: #35b8bd;
+    --er-mapping-soft: #0e2b2d;
+    --er-format: #e79a4f;
+    --er-format-soft: #33260f;
+
+    --er-success: #7fcf9b;
+    --er-success-soft: #1e3127;
+    --er-success-border: #355948;
+    --er-warning: #dec688;
+    --er-warning-soft: #3a311e;
+    --er-warning-border: #625233;
+    --er-danger: #f29d8f;
+    --er-danger-soft: #3d262b;
+    --er-danger-border: #6d434a;
+    --er-info: #8fd4c8;
+    --er-info-soft: #1f3834;
+    --er-info-border: #3f6e63;
+
+    --er-shadow-color: rgba(0, 0, 0, 0.5);
+    --er-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --er-shadow-2: 0 4px 14px rgba(0, 0, 0, 0.45);
+    --er-shadow-3: 0 14px 36px rgba(0, 0, 0, 0.55);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --er-bg: #0c1012;
+  --er-bg-soft: #10161a;
+  --er-surface: #141b1f;
+  --er-surface-2: #1a2328;
+  --er-surface-3: #212c32;
+  --er-selected: #16343a;
+
+  --er-border: #253036;
+  --er-border-strong: #33434a;
+
+  --er-text: #e8f0f1;
+  --er-text-muted: #94a6ab;
+  --er-text-subtle: #6f8288;
+
+  --er-accent: #35b8bd;
+  --er-accent-hover: #52ced3;
+  --er-accent-active: #2aa1a6;
+  --er-accent-soft: #0e2b2d;
+  --er-accent-border: rgba(53, 184, 189, 0.38);
+  --er-accent-contrast: #04191b;
+
+  --er-model: #a396ff;
+  --er-model-soft: #241f3d;
+  --er-mapping: #35b8bd;
+  --er-mapping-soft: #0e2b2d;
+  --er-format: #e79a4f;
+  --er-format-soft: #33260f;
+
+  --er-success: #7fcf9b;
+  --er-success-soft: #1e3127;
+  --er-success-border: #355948;
+  --er-warning: #dec688;
+  --er-warning-soft: #3a311e;
+  --er-warning-border: #625233;
+  --er-danger: #f29d8f;
+  --er-danger-soft: #3d262b;
+  --er-danger-border: #6d434a;
+  --er-info: #8fd4c8;
+  --er-info-soft: #1f3834;
+  --er-info-border: #3f6e63;
+
+  --er-shadow-color: rgba(0, 0, 0, 0.5);
+  --er-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --er-shadow-2: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --er-shadow-3: 0 14px 36px rgba(0, 0, 0, 0.55);
+
+  color-scheme: dark;
+}
+
+/* ── Typography, radii, motion — theme-independent ───────────────────────── */
+
+:root {
+  /* The face variables are what a font loader (next/font) fills in; the string
+     fallback is the locally preloaded family the SPA ships. Never name these
+     `--font-sans` / `--font-display` / `--font-mono` — Tailwind's `@theme`
+     owns those names and a same-name reference would be circular. */
+  --er-font-sans: var(--font-inter, 'Inter'), 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  --er-font-display: var(--font-space-grotesk, 'Space Grotesk'), var(--er-font-sans);
+  --er-font-mono: var(--font-jetbrains-mono, 'JetBrains Mono'), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --er-radius-sm: 4px;
+  --er-radius-md: 6px;
+  --er-radius-lg: 10px;
+  --er-radius-xl: 14px;
+  --er-radius-pill: 999px;
+
+  --er-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --er-duration-fast: 120ms;
+  --er-duration: 180ms;
+}

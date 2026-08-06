@@ -2196,9 +2196,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         }
       }
     }
-    for (const dm of dmGuidIndex.values()) {
-      if (dmGuidsWithResolvedBranch.has(dm.guid)) continue;
-      if (!loadedDmGuids.has(dm.guid)) continue;
+    /** Queue the "default mapping for this DataModel" probe. */
+    const pushDefaultProbe = (dm: DmSynthCandidate, reason: string): void => {
       // Use "<solutionName> mapping" as configurationName so buildDownloadAttempts
       // adds it to descriptorCandidates. GetModelMappingByID resolves by exact
       // mapping name; container names do not work as descriptors.
@@ -2214,9 +2213,36 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           hasContent: true,
         },
         dmGuid: dm.guid,
-        label: `default mapping for ${dm.name}`,
+        label: `default mapping for ${dm.name} (${reason})`,
       });
+    };
+
+    for (const dm of dmGuidIndex.values()) {
+      if (dmGuidsWithResolvedBranch.has(dm.guid)) continue;
+      if (!loadedDmGuids.has(dm.guid)) continue;
+      pushDefaultProbe(dm, 'owned');
     }
+
+    // `loadedDmGuids` deliberately narrows the probes to DataModels of this load
+    // (so a derived config doesn't drag in its ancestors' mappings). When it
+    // matches nothing — the common case for "select a single Format", where the
+    // model is only known from GUIDs inside the format XML — that narrowing left
+    // the queue empty and the whole mapping phase was skipped in silence.
+    // Fall back to every DataModel GUID we know about.
+    if (synthQueue.length === 0 && dmGuidIndex.size > 0) {
+      for (const dm of dmGuidIndex.values()) {
+        if (dmGuidsWithResolvedBranch.has(dm.guid)) continue;
+        pushDefaultProbe(dm, 'fallback: no owned DataModel matched');
+      }
+    }
+
+    console.info('[fno-ui] model-mapping phase inputs', {
+      knownDataModelGuids: dmGuidIndex.size,
+      ownedDataModelGuids: loadedDmGuids.size,
+      pendingMappingBranches: pendingMappingBranchesByDmName.size,
+      listedMappings: mappingsToLoad.size,
+      queuedProbes: synthQueue.length,
+    });
 
     // Helper: merge newly discovered DataModel GUIDs from a mapping
     // download into `lateModelFollowUps` so the late pass can download them.
@@ -2267,6 +2293,36 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // NOTE: no within-batch DM-GUID dedup — concurrent requests for the
       // same DM are fine because the store deduplicates by solution GUID.
       const downloadedMappingDmGuids = new Set<string>();
+      /**
+       * Successful mapping downloads, counted independently of
+       * `downloadedMappingDmGuids`: entries coming from `mappingsToLoad` carry
+       * no `dmGuid`, so the GUID set stays empty even when a mapping *did*
+       * load. Gating the retry pass and the "no mapping" warning on the GUID
+       * set alone re-ran the whole retry pass and warned about mappings that
+       * were already in the workspace.
+       */
+      let mappingSuccessCount = 0;
+      /** Per-attempt outcome, logged as one table when the phase ends. */
+      const mappingAttemptLog: Array<{
+        label: string;
+        dmGuid: string;
+        mapping: string;
+        outcome: 'ok' | 'empty' | 'error';
+        detail?: string;
+      }> = [];
+      const recordAttempt = (
+        item: { synth: ErConfigSummary; label: string; dmGuid?: string },
+        outcome: 'ok' | 'empty' | 'error',
+        detail?: string,
+      ): void => {
+        mappingAttemptLog.push({
+          label: item.label,
+          dmGuid: item.dmGuid ?? item.synth.parentDataModelGuid ?? '(none)',
+          mapping: item.synth.configurationGuid ?? '(by descriptor)',
+          outcome,
+          detail,
+        });
+      };
       const MAPPING_BATCH_SIZE = 2;
       for (let batch = 0; batch < allMappingDownloads.length; batch += MAPPING_BATCH_SIZE) {
         const slice = allMappingDownloads.slice(batch, batch + MAPPING_BATCH_SIZE);
@@ -2281,10 +2337,13 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             return { item, download };
           }),
         );
-        for (const result of results) {
+        results.forEach((result, i) => {
+          const item = pending[i];
           if (result.status === 'fulfilled') {
             loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
             ok += 1;
+            mappingSuccessCount += 1;
+            recordAttempt(item, 'ok');
             // Mark DM as resolved so subsequent branches for the same DM are skipped.
             if (result.value.item.dmGuid) downloadedMappingDmGuids.add(result.value.item.dmGuid);
             collectLateRefs(result.value.download);
@@ -2292,11 +2351,13 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             const reason = result.reason;
             if (reason instanceof FnoEmptyContentError) {
               // empty — try next branch for same DM
+              recordAttempt(item, 'empty', reason.message);
             } else {
-              console.warn('[fno-ui] mapping fetch failed', reason);
+              recordAttempt(item, 'error', reason instanceof Error ? reason.message : String(reason));
+              console.warn('[fno-ui] mapping fetch failed', { label: item.label, reason });
             }
           }
-        }
+        });
       }
       // ── Retry pass: probe unresolved DataModel names when no mapping was found ──
       // Triggered only when ALL initial download attempts failed (downloadedMappingDmGuids
@@ -2304,7 +2365,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // registered in F&O under a different GUID than the one we discovered via GUID-scout.
       // For export formats the initial pass usually SUCCEEDS → no retry needed.
       // For import-only formats the initial pass returns empty → retry fires here.
-      if (downloadedMappingDmGuids.size === 0) {
+      if (mappingSuccessCount === 0) {
         const retryDownloads: { synth: ErConfigSummary; label: string; dmGuid: string }[] = [];
         for (const [dmName, branches] of pendingMappingBranchesByDmName) {
           if (branches.length === 0) continue;
@@ -2560,29 +2621,48 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 return { item, dl };
               }),
             );
-            for (const result of results) {
+            results.forEach((result, i) => {
+              const item = pending[i];
               if (result.status === 'fulfilled') {
                 loadXmlFile(result.value.dl.xml, result.value.dl.syntheticPath);
                 ok += 1;
+                mappingSuccessCount += 1;
+                recordAttempt(item, 'ok');
                 downloadedMappingDmGuids.add(result.value.item.dmGuid);
                 collectLateRefs(result.value.dl);
               } else {
                 const reason = result.reason;
                 if (reason instanceof FnoEmptyContentError) {
                   // empty — mapping not found for this DM GUID, retry with next
+                  recordAttempt(item, 'empty', reason.message);
                 } else {
-                  console.warn('[fno-ui] synth-retry mapping fetch failed', reason);
+                  recordAttempt(item, 'error', reason instanceof Error ? reason.message : String(reason));
+                  console.warn('[fno-ui] synth-retry mapping fetch failed', { label: item.label, reason });
                 }
               }
-            }
+            });
           }
         }
       }
       // All mapping download attempts (including retries) exhausted.
-      // Warn the user if no mapping was downloaded but mappings were expected.
-      if (downloadedMappingDmGuids.size === 0 && pendingMappingBranchesByDmName.size > 0) {
-        const failedNames = [...pendingMappingBranchesByDmName.keys()];
-        pushToast({ kind: 'warning', message: t.fnoMappingNotAvailable(failedNames) });
+      // One structured log of every attempt — this is what to send when a
+      // mapping does not arrive for a selected format.
+      console.info(
+        `[fno-ui] model-mapping phase: ${mappingSuccessCount}/${mappingAttemptLog.length} attempt(s) returned XML`,
+      );
+      if (mappingAttemptLog.length > 0) console.table(mappingAttemptLog);
+
+      // Warn whenever nothing came back, regardless of how the mappings were
+      // discovered. The old condition required `pendingMappingBranchesByDmName`
+      // to be non-empty — but the listing service cannot enumerate mappings, so
+      // selecting only a Format left that map empty and the failure silent.
+      if (mappingSuccessCount === 0) {
+        const failedNames = pendingMappingBranchesByDmName.size > 0
+          ? [...pendingMappingBranchesByDmName.keys()]
+          : [...new Set(allMappingDownloads.map(m => m.synth.solutionName || m.synth.configurationName))];
+        if (failedNames.length > 0) {
+          pushToast({ kind: 'warning', message: t.fnoMappingNotAvailable(failedNames) });
+        }
       }
     }
 

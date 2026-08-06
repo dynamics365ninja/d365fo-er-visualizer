@@ -61,8 +61,3 @@ export function getElectronApi(): ElectronAPI | null {
   if (typeof window === 'undefined') return null;
   return window.electronAPI ?? null;
 }
-
-export function isElectronHost(): boolean {
-  const api = getElectronApi();
-  return Boolean(api?.fnoRequest && api?.fnoAuth);
-}

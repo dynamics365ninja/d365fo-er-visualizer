@@ -41,25 +41,25 @@ async function ensureToken(conn: FnoConnection, signal?: AbortSignal): Promise<A
   if (cached && cached.expiresAt > Date.now() + TOKEN_MIN_LIFETIME_MS) {
     return cached;
   }
-  const fresh = await getAuthProvider().acquireToken(conn, signal);
+  const fresh = await (await getAuthProvider()).acquireToken(conn, signal);
   tokenCache.set(conn.id, fresh);
   return fresh;
 }
 
 export const fnoSession = {
   async signIn(conn: FnoConnection, signal?: AbortSignal): Promise<AuthResult> {
-    const result = await getAuthProvider().acquireToken(conn, signal);
+    const result = await (await getAuthProvider()).acquireToken(conn, signal);
     tokenCache.set(conn.id, result);
     return result;
   },
 
   async signOut(conn: FnoConnection): Promise<void> {
     tokenCache.delete(conn.id);
-    await getAuthProvider().signOut(conn);
+    await (await getAuthProvider()).signOut(conn);
   },
 
   async getAccount(conn: FnoConnection) {
-    return getAuthProvider().getAccount(conn);
+    return (await getAuthProvider()).getAccount(conn);
   },
 
   async listSolutions(

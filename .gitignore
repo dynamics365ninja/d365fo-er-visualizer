@@ -16,3 +16,9 @@ packages/site/public/app/
 
 # Integration test — connection secrets (never commit)
 scripts/.fno-integration.json
+
+# Local-only ER XML samples used for manual UI testing
+packages/ui/public/dev-samples/
+
+# Machine-local Claude Code settings (permission allowlist etc.)
+.claude/settings.local.json

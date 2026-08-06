@@ -20,7 +20,6 @@ import {
 
 const TECHNICAL_DETAILS_STORAGE_KEY = 'er-visualizer.showTechnicalDetails';
 const THEME_MODE_STORAGE_KEY = 'er-visualizer.themeMode';
-const EXPANDED_IDS_STORAGE_KEY = 'er-visualizer.expandedIds';
 const RECENT_FILES_STORAGE_KEY = 'er-visualizer.recentFiles.v1';
 const RECENT_SESSIONS_STORAGE_KEY = 'er-visualizer.recentSessions.v1';
 const MAX_RECENT_FILES = 12;
@@ -276,7 +275,6 @@ export interface AppState {
   canNavigateBack: boolean;
   canNavigateForward: boolean;
   toasts: Toast[];
-  expandedIds: Set<string>;
   explorerExpandCommand: { mode: 'default' | 'all' | 'none'; version: number };
   recentFiles: RecentFile[];
   recentSessions: RecentSession[];
@@ -319,11 +317,6 @@ export interface AppState {
   clearToasts: () => void;
 
   // Tree expansion (global, persisted)
-  isNodeExpanded: (nodeId: string) => boolean;
-  toggleNodeExpanded: (nodeId: string, defaultExpanded?: boolean) => void;
-  setNodeExpanded: (nodeId: string, expanded: boolean) => void;
-  expandAll: (rootNodeIds?: string[]) => void;
-  collapseAll: () => void;
   /** Broadcast an expand/collapse command to the explorer tree (non-persistent UX signal). */
   requestExplorerExpand: (mode: 'all' | 'none' | 'default') => void;
 
@@ -644,7 +637,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   canNavigateBack: false,
   canNavigateForward: false,
   toasts: [],
-  expandedIds: new Set<string>(loadJSON<string[]>(EXPANDED_IDS_STORAGE_KEY, [])),
   explorerExpandCommand: { mode: 'default', version: 0 },
   recentFiles: loadJSON<RecentFile[]>(RECENT_FILES_STORAGE_KEY, []),
   recentSessions: loadJSON<RecentSession[]>(RECENT_SESSIONS_STORAGE_KEY, []),
@@ -1151,42 +1143,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearToasts: () => set({ toasts: [] }),
 
   // ─── Tree expansion ───
-  isNodeExpanded: (nodeId: string) => get().expandedIds.has(nodeId),
-  toggleNodeExpanded: (nodeId: string, defaultExpanded = false) => {
-    const current = get().expandedIds;
-    const next = new Set(current);
-    const isExpanded = current.has(nodeId) ? true : defaultExpanded;
-    if (isExpanded) next.delete(nodeId); else next.add(nodeId);
-    saveJSON(EXPANDED_IDS_STORAGE_KEY, Array.from(next));
-    set({ expandedIds: next });
-  },
-  setNodeExpanded: (nodeId: string, expanded: boolean) => {
-    const next = new Set(get().expandedIds);
-    if (expanded) next.add(nodeId); else next.delete(nodeId);
-    saveJSON(EXPANDED_IDS_STORAGE_KEY, Array.from(next));
-    set({ expandedIds: next });
-  },
-  expandAll: (rootNodeIds?: string[]) => {
-    const next = new Set(get().expandedIds);
-    const roots = rootNodeIds ?? get().treeNodes.map(n => n.id);
-    const walk = (nodes: TreeNode[]) => {
-      for (const n of nodes) {
-        next.add(n.id);
-        if (n.children) walk(n.children);
-      }
-    };
-    const byId = (id: string) => findNodeById(get().treeNodes, id);
-    for (const id of roots) {
-      const root = byId(id);
-      if (root) walk([root]);
-    }
-    saveJSON(EXPANDED_IDS_STORAGE_KEY, Array.from(next));
-    set({ expandedIds: next });
-  },
-  collapseAll: () => {
-    saveJSON(EXPANDED_IDS_STORAGE_KEY, []);
-    set({ expandedIds: new Set<string>() });
-  },
   requestExplorerExpand: (mode) => {
     const current = get().explorerExpandCommand;
     set({ explorerExpandCommand: { mode, version: current.version + 1 } });

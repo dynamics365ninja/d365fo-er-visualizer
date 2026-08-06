@@ -10,59 +10,51 @@ import { useAppStore } from '../state/store';
 import { useLocale } from '../i18n';
 import { App } from './App';
 
-const darkOverrides: Partial<Theme> = {
-  colorNeutralBackground1: '#181a1f',
-  colorNeutralBackground1Hover: '#202329',
-  colorNeutralBackground2: '#202329',
-  colorNeutralBackground3: '#252931',
-  colorNeutralBackground4: '#2a2f39',
-  colorNeutralStroke1: '#323844',
-  colorNeutralStroke2: '#323844',
-  colorBrandBackground: '#3f98ff',
-  colorBrandBackgroundHover: '#57a7ff',
-  colorBrandBackgroundPressed: '#307fd3',
-  colorBrandBackground2: 'rgba(63, 152, 255, 0.2)',
-  colorBrandForeground1: '#75beff',
-  colorBrandForeground2: '#9dcfff',
-  colorBrandStroke1: '#3f98ff',
-  colorBrandStroke2: 'rgba(117, 190, 255, 0.42)',
-  colorCompoundBrandBackground: '#3f98ff',
-  colorCompoundBrandBackgroundHover: '#57a7ff',
-  colorCompoundBrandStroke: '#3f98ff',
-  fontFamilyBase: '"Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif',
-  fontFamilyMonospace: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-  borderRadiusSmall: '4px',
-  borderRadiusMedium: '6px',
-  borderRadiusLarge: '8px',
+/**
+ * Fluent reads these as raw CSS values, so pointing them at the shared
+ * `--er-*` custom properties keeps one palette for Fluent components, our own
+ * CSS, and the marketing site — and makes them flip with `data-theme` for free.
+ * The previous overrides drifted apart (teal in light, blue in dark); don't
+ * reintroduce literal hexes here.
+ */
+const sharedOverrides: Partial<Theme> = {
+  colorNeutralBackground1: 'var(--er-surface)',
+  colorNeutralBackground1Hover: 'var(--er-surface-3)',
+  colorNeutralBackground1Pressed: 'var(--er-selected)',
+  colorNeutralBackground2: 'var(--er-bg-soft)',
+  colorNeutralBackground2Hover: 'var(--er-surface-3)',
+  colorNeutralBackground3: 'var(--er-surface-2)',
+  colorNeutralBackground3Hover: 'var(--er-surface-3)',
+  colorNeutralBackground4: 'var(--er-surface-3)',
+  colorNeutralStroke1: 'var(--er-border-strong)',
+  colorNeutralStroke2: 'var(--er-border)',
+  colorNeutralStroke3: 'var(--er-border)',
+  colorNeutralForeground1: 'var(--er-text)',
+  colorNeutralForeground2: 'var(--er-text-muted)',
+  colorNeutralForeground3: 'var(--er-text-subtle)',
+  colorSubtleBackgroundSelected: 'var(--er-selected)',
+  colorBrandBackground: 'var(--er-accent)',
+  colorBrandBackgroundHover: 'var(--er-accent-hover)',
+  colorBrandBackgroundPressed: 'var(--er-accent-active)',
+  colorBrandBackground2: 'var(--er-accent-soft)',
+  colorBrandForeground1: 'var(--er-accent)',
+  colorBrandForeground2: 'var(--er-accent-hover)',
+  colorBrandStroke1: 'var(--er-accent)',
+  colorBrandStroke2: 'var(--er-accent-border)',
+  colorCompoundBrandBackground: 'var(--er-accent)',
+  colorCompoundBrandBackgroundHover: 'var(--er-accent-hover)',
+  colorCompoundBrandStroke: 'var(--er-accent)',
+  colorNeutralForegroundOnBrand: 'var(--er-accent-contrast)',
+  fontFamilyBase: 'var(--er-font-sans)',
+  fontFamilyMonospace: 'var(--er-font-mono)',
+  borderRadiusSmall: 'var(--er-radius-sm)',
+  borderRadiusMedium: 'var(--er-radius-md)',
+  borderRadiusLarge: 'var(--er-radius-lg)',
+  borderRadiusXLarge: 'var(--er-radius-xl)',
 };
 
-const lightOverrides: Partial<Theme> = {
-  colorNeutralBackground1: '#f8fafc',
-  colorNeutralBackground2: '#f1f4f9',
-  colorNeutralBackground3: '#e9edf4',
-  colorNeutralBackground4: '#e1e7f1',
-  colorNeutralStroke1: '#cdd5e3',
-  colorNeutralStroke2: '#cdd5e3',
-  colorBrandBackground: '#038387',
-  colorBrandBackgroundHover: '#37a987',
-  colorBrandBackgroundPressed: '#027578',
-  colorBrandBackground2: 'rgba(3, 131, 135, 0.12)',
-  colorBrandForeground1: '#038387',
-  colorBrandForeground2: '#37a987',
-  colorBrandStroke1: '#038387',
-  colorBrandStroke2: 'rgba(3, 131, 135, 0.35)',
-  colorCompoundBrandBackground: '#038387',
-  colorCompoundBrandBackgroundHover: '#37a987',
-  colorCompoundBrandStroke: '#038387',
-  fontFamilyBase: '"Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif',
-  fontFamilyMonospace: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-  borderRadiusSmall: '4px',
-  borderRadiusMedium: '6px',
-  borderRadiusLarge: '8px',
-};
-
-const darkTheme: Theme = { ...webDarkTheme, ...darkOverrides };
-const lightTheme: Theme = { ...webLightTheme, ...lightOverrides };
+const darkTheme: Theme = { ...webDarkTheme, ...sharedOverrides };
+const lightTheme: Theme = { ...webLightTheme, ...sharedOverrides };
 
 export const TOASTER_ID = 'er-visualizer-toaster';
 

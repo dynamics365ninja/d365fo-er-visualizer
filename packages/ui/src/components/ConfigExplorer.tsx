@@ -7,6 +7,7 @@ import {
   MenuPopover,
   MenuList,
   MenuItem,
+  MenuDivider,
 } from '@fluentui/react-components';
 import {
   DismissRegular,
@@ -24,6 +25,7 @@ import {
   TextBulletListTreeRegular,
   ListRegular,
   DismissSquareMultipleRegular,
+  FolderRegular,
 } from '@fluentui/react-icons';
 import { locale, t } from '../i18n';
 import { useAppStore, type TreeNode } from '../state/store';
@@ -202,6 +204,18 @@ function getExplorerKindLabel(node: TreeNode): string | null {
   if (kind === 'ModelMapping' || node.type === 'mapping') return labels.ModelMapping;
   if (kind === 'Format' || node.type === 'format') return labels.Format;
 
+  return null;
+}
+
+/**
+ * Pill text for rows that already sit under a kind group header — repeating
+ * "Model" under "Data models" is noise. Formats still carry their direction,
+ * which the group header does not say.
+ */
+function getExplorerKindPillInGroup(node: TreeNode): string | null {
+  if (getConfigurationKind(node) === 'Format' && node.data?.content?.kind === 'Format') {
+    return getFormatDirectionLabel(node.data.content.direction);
+  }
   return null;
 }
 
@@ -609,6 +623,66 @@ export function ConfigExplorer() {
         </div>
       )}
 
+      <div className="explorer-panel-header">
+        <span className="explorer-panel-title">
+          <FolderRegular fontSize={15} />
+          {t.explorer}
+        </span>
+        <span className="explorer-panel-count">{treeNodes.length}</span>
+        <span className="explorer-panel-spacer" />
+        <Button
+          appearance="subtle"
+          size="small"
+          icon={<TextExpandRegular />}
+          aria-label={t.cmdExpandAll}
+          title={t.cmdExpandAll}
+          onClick={() => { setExpandMode('all'); setExpandVersion(v => v + 1); }}
+        />
+        <Button
+          appearance="subtle"
+          size="small"
+          icon={<TextCollapseRegular />}
+          aria-label={t.cmdCollapseAll}
+          title={t.cmdCollapseAll}
+          onClick={() => { setExpandMode('none'); setExpandVersion(v => v + 1); }}
+        />
+        <Menu>
+          <MenuTrigger disableButtonEnhancement>
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<MoreVerticalRegular />}
+              aria-label={t.explorerMoreActions}
+              title={t.explorerMoreActions}
+            />
+          </MenuTrigger>
+          <MenuPopover>
+            <MenuList>
+              <MenuItem
+                icon={hierarchyView ? <ListRegular /> : <TextBulletListTreeRegular />}
+                onClick={() => setHierarchyView(v => !v)}
+              >
+                {hierarchyView ? t.explorerViewFlat : t.explorerViewHierarchy}
+              </MenuItem>
+              <MenuDivider />
+              <MenuItem icon={<ArrowSortRegular />} onClick={() => setSortMode('loadOrder')} disabled={sortMode === 'loadOrder'}>
+                {t.explorerSortLoadOrder}
+              </MenuItem>
+              <MenuItem icon={<ArrowSortRegular />} onClick={() => setSortMode('nameAsc')} disabled={sortMode === 'nameAsc'}>
+                {t.explorerSortNameAsc}
+              </MenuItem>
+              <MenuItem icon={<ArrowSortRegular />} onClick={() => setSortMode('nameDesc')} disabled={sortMode === 'nameDesc'}>
+                {t.explorerSortNameDesc}
+              </MenuItem>
+              <MenuDivider />
+              <MenuItem icon={<DismissSquareMultipleRegular />} onClick={removeAllConfigurations}>
+                {t.closeAllConfigurations}
+              </MenuItem>
+            </MenuList>
+          </MenuPopover>
+        </Menu>
+      </div>
+
       <div className="explorer-toolbar config-explorer-toolbar">
         <div className="panel-filter-row explorer-toolbar-filter">
           <Input
@@ -651,64 +725,6 @@ export function ConfigExplorer() {
             onToggle={() => toggleKind('Format')}
             icon={<DocumentFilled />}
           />
-          <div className="explorer-chip-actions">
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={hierarchyView ? <TextBulletListTreeRegular /> : <ListRegular />}
-              aria-label={hierarchyView ? (locale === 'cs' ? 'Přepnout na plochý seznam' : 'Switch to flat list') : (locale === 'cs' ? 'Přepnout na hierarchii' : 'Switch to hierarchy')}
-              title={hierarchyView ? (locale === 'cs' ? 'Zobrazení: Hierarchie (klikni pro plochý)' : 'View: Hierarchy (click for flat)') : (locale === 'cs' ? 'Zobrazení: Plochý seznam (klikni pro hierarchii)' : 'View: Flat list (click for hierarchy)')}
-              onClick={() => setHierarchyView(v => !v)}
-            />
-            <Menu>
-              <MenuTrigger disableButtonEnhancement>
-                <Button
-                  appearance="subtle"
-                  size="small"
-                  icon={<ArrowSortRegular />}
-                  aria-label={t.explorerSort}
-                  title={t.explorerSort}
-                />
-              </MenuTrigger>
-              <MenuPopover>
-                <MenuList>
-                  <MenuItem onClick={() => setSortMode('loadOrder')} disabled={sortMode === 'loadOrder'}>
-                    {t.explorerSortLoadOrder}
-                  </MenuItem>
-                  <MenuItem onClick={() => setSortMode('nameAsc')} disabled={sortMode === 'nameAsc'}>
-                    {t.explorerSortNameAsc}
-                  </MenuItem>
-                  <MenuItem onClick={() => setSortMode('nameDesc')} disabled={sortMode === 'nameDesc'}>
-                    {t.explorerSortNameDesc}
-                  </MenuItem>
-                </MenuList>
-              </MenuPopover>
-            </Menu>
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<TextExpandRegular />}
-              aria-label={t.expand}
-              title={t.expand}
-              onClick={() => { setExpandMode('all'); setExpandVersion(v => v + 1); }}
-            />
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<TextCollapseRegular />}
-              aria-label={t.collapse}
-              title={t.collapse}
-              onClick={() => { setExpandMode('none'); setExpandVersion(v => v + 1); }}
-            />
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<DismissSquareMultipleRegular />}
-              aria-label={t.closeAllConfigurations}
-              title={t.closeAllConfigurations}
-              onClick={removeAllConfigurations}
-            />
-          </div>
         </div>
 
         {isFiltering && (
@@ -837,6 +853,7 @@ export function ConfigExplorer() {
                           expandMode={expandMode}
                           expandVersion={expandVersion}
                           onDoubleClick={handleExplorerDoubleClick}
+                          inKindGroup
                           onCloseConfiguration={(n) => {
                             if (n.configIndex != null) {
                               removeConfiguration(n.configIndex);
@@ -869,9 +886,11 @@ interface TreeNodeRowProps {
   expandVersion: number;
   onDoubleClick: (node: TreeNode) => void;
   onCloseConfiguration: (node: TreeNode) => void;
+  /** Row sits under a kind group header, which already names the kind. */
+  inKindGroup?: boolean;
 }
 
-function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDetails, version, onSelect, onNavigate, expandMode, expandVersion, onDoubleClick, onCloseConfiguration }: TreeNodeRowProps) {
+function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDetails, version, onSelect, onNavigate, expandMode, expandVersion, onDoubleClick, onCloseConfiguration, inKindGroup }: TreeNodeRowProps) {
   const [expanded, setExpanded] = useState(depth === 0);
   const hasChildren = node.children && node.children.length > 0;
 
@@ -904,7 +923,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
     : '';
   const sectionClass = node.type === 'section' ? 'tree-node-group' : '';
   const parentClass = hasChildren ? 'tree-node-parent' : '';
-  const kindLabel = getExplorerKindLabel(node);
+  const kindLabel = inKindGroup ? getExplorerKindPillInGroup(node) : getExplorerKindLabel(node);
   const canCloseConfiguration = depth === 0 && node.configIndex != null && node.type === 'file';
 
   return (

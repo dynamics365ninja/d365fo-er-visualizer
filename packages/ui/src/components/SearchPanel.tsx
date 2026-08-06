@@ -874,17 +874,23 @@ function SearchResultGroup({
   // Deduplicate and pre-filter to only navigable items
   const deduped = useMemo(() => {
     const seen = new Set<string>();
+    // Resolving a result to its tree node walks the whole tree. Do it once here
+    // and hand the node to the row — the row used to repeat the same walk on
+    // every render, so a 500-hit result set scanned the tree 1000+ times.
+    const nodeByResult = new Map<SearchResultEntry, TreeNode>();
     const navigable = items.filter(r => {
       const key = getSearchResultDedupeKey(r);
       if (seen.has(key)) return false;
       seen.add(key);
-      // Only keep results that can be navigated to
-      return findNodeForSearchResult(r, configurations, treeNodes, registry) !== null;
+      const node = findNodeForSearchResult(r, configurations, treeNodes, registry);
+      if (!node) return false;
+      nodeByResult.set(r, node);
+      return true;
     });
     // Suppress "Binding for …" and "Format binding expression:" sub-hits that already
     // have a parent "Binding: …" / "Format binding to component:" entry in the same group.
     const nested = nestBindingResults(navigable);
-    return nested.map(n => n.entry);
+    return nested.map(n => ({ entry: n.entry, node: nodeByResult.get(n.entry)! }));
   }, [items, configurations, treeNodes, registry]);
 
   useEffect(() => {
@@ -915,13 +921,12 @@ function SearchResultGroup({
       </button>
       {expanded && (
         <div className="search-result-group-body">
-          {deduped.map((item, i) => (
+          {deduped.map(({ entry, node }, i) => (
             <SearchResultCard
-              key={`${item.target}:${item.sourceComponent}:${i}`}
-              result={item}
+              key={`${entry.target}:${entry.sourceComponent}:${i}`}
+              result={entry}
+              targetNode={node}
               query={query}
-              configurations={configurations}
-              treeNodes={treeNodes}
               registry={registry}
               navigateToTreeNode={navigateToTreeNode}
             />
@@ -934,20 +939,18 @@ function SearchResultGroup({
 
 function SearchResultCard({
   result,
+  targetNode,
   query,
-  configurations,
-  treeNodes,
   registry,
   navigateToTreeNode,
 }: {
   result: SearchResultEntry;
+  /** Resolved by the group memo — do not re-walk the tree per row. */
+  targetNode: TreeNode;
   query: string;
-  configurations: Array<{ filePath: string }>;
-  treeNodes: TreeNode[];
   registry: { lookup: (guid: string) => GUIDEntry | undefined };
   navigateToTreeNode: (nodeId: string) => void;
 }) {
-  const targetNode = findNodeForSearchResult(result, configurations, treeNodes, registry);
   const hit = parseSearchHit(result, registry);
   const shortExpr = hit.expression.length > 100 ? `${hit.expression.slice(0, 100)}…` : hit.expression;
   const showExpr = shortExpr && shortExpr !== hit.location;
@@ -969,10 +972,10 @@ function SearchResultCard({
     >
       <div className="search-hit__body">
         <div className="search-hit__row1">
-          <span className={`search-hit__tag search-hit__tag--${hit.labelKind}`}>{hit.label}</span>
           <span className="search-hit__location">
             <Highlight text={hit.location} query={query} />
           </span>
+          <span className={`search-hit__tag search-hit__tag--${hit.labelKind}`}>{hit.label}</span>
           {tabLabel && <span className="search-hit__tab">{tabLabel}</span>}
           <ArrowRightRegular className="search-hit__arrow" />
         </div>
@@ -1277,32 +1280,31 @@ function ReferenceRow({
       onClick={openReference}
       title={`${location.join(' / ')}${preview ? '\n' + preview : ''}`}
     >
+      {/* Leaf first: in a narrow side panel the element you searched for has to
+          survive truncation, so the ancestor path moves to its own muted line. */}
       <div className="search-hit__body">
         <div className="search-hit__row1">
+          <span className="wu-ref-leaf">
+            <Highlight text={leaf} query={query} />
+          </span>
           <span
             className={`search-hit__tag ${tagClass}`}
             style={tagStyle}
           >
             {localizedKind}
           </span>
-          <span className="search-hit__location">
-            {breadcrumb.length > 0 && (
-              <span className="wu-ref-breadcrumb">
-                {breadcrumb.map((seg, idx) => (
-                  <React.Fragment key={idx}>
-                    {idx > 0 && <span className="wu-ref-bc-sep">/</span>}
-                    <span className="wu-ref-bc-seg"><Highlight text={seg} query={query} /></span>
-                  </React.Fragment>
-                ))}
-                <span className="wu-ref-bc-sep">/</span>
-              </span>
-            )}
-            <span className="wu-ref-leaf">
-              <Highlight text={leaf} query={query} />
-            </span>
-          </span>
           <ArrowRightRegular className="search-hit__arrow" />
         </div>
+        {breadcrumb.length > 0 && (
+          <div className="wu-ref-breadcrumb">
+            {breadcrumb.map((seg, idx) => (
+              <React.Fragment key={idx}>
+                {idx > 0 && <span className="wu-ref-bc-sep">/</span>}
+                <span className="wu-ref-bc-seg"><Highlight text={seg} query={query} /></span>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
         {preview && (
           <div className="search-hit__expr">
             <Highlight text={preview.length > 120 ? `${preview.slice(0, 120)}…` : preview} query={query} />

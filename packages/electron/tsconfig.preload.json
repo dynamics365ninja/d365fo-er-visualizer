@@ -3,6 +3,11 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
+    /* A sandboxed Electron preload must be CommonJS. This package is
+       `"type": "module"`, so a plain `.js` emit would be parsed as ESM and the
+       preload would throw on `require` before it could expose `electronAPI`.
+       The `.cts` source emits `preload.cjs`, which Node always treats as
+       CommonJS regardless of the package type. */
     "module": "CommonJS",
     "moduleResolution": "Node",
     "lib": ["ES2022", "DOM"],
@@ -11,5 +16,5 @@
     "declarationMap": false,
     "sourceMap": true
   },
-  "include": ["src/preload.ts"]
+  "include": ["src/preload.cts"]
 }

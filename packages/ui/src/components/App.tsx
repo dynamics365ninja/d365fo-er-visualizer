@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import {
   makeStyles,
+  shorthands,
   tokens,
   mergeClasses,
   Button,
@@ -17,7 +18,7 @@ import {
   Caption1,
   Caption1Strong,
   Body1Strong,
-  Subtitle2,
+  Spinner,
 } from '@fluentui/react-components';
 import {
   HomeRegular,
@@ -26,10 +27,6 @@ import {
   ArrowMinimizeRegular,
   ArrowSyncRegular,
   DismissRegular,
-  DocumentRegular,
-  DocumentArrowDownRegular,
-  DocumentArrowUpRegular,
-  DataBarVerticalRegular,
   LinkRegular,
   WarningRegular,
   CheckmarkCircleRegular,
@@ -42,36 +39,25 @@ import { ConfigExplorer } from './ConfigExplorer';
 import { PropertyInspector } from './PropertyInspector';
 import { Toolbar } from './Toolbar';
 import { TabBar } from './TabBar';
-import { DesignerView } from './DesignerView';
-import { SearchPanel } from './SearchPanel';
+
+/**
+ * Split at the workspace boundary: the designer pulls React Flow, JSZip and the
+ * drill-down canvas, and the search panel is equally unused until a
+ * configuration is open. Neither belongs in the bundle that renders the
+ * landing page.
+ */
+const DesignerView = React.lazy(() =>
+  import('./DesignerView').then(m => ({ default: m.DesignerView })),
+);
+const SearchPanel = React.lazy(() =>
+  import('./SearchPanel').then(m => ({ default: m.SearchPanel })),
+);
 import { LandingPage } from './LandingPage';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ToastHost } from './ToastHost';
 import { CommandPalette, type CommandItem } from './CommandPalette';
 import { ActivityBar } from './ActivityBar';
-import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 import { t, locale, useLocale } from '../i18n';
-import { ERDirection } from '@er-visualizer/core';
-
-// ────────────────────────── helpers ──────────────────────────
-
-function getConfigIcon(config: any): React.ReactElement {
-  if (config.kind === 'DataModel') return <DataBarVerticalRegular />;
-  if (config.kind === 'ModelMapping') return <LinkRegular />;
-  if (config.content?.kind === 'Format') {
-    return config.content.direction === ERDirection.Import
-      ? <DocumentArrowDownRegular />
-      : <DocumentArrowUpRegular />;
-  }
-  return <DocumentRegular />;
-}
-
-function getConfigDirectionLabel(config: any): string {
-  if (config.content?.kind !== 'Format') return '';
-  return config.content.direction === ERDirection.Import
-    ? t.formatDirectionImport
-    : t.formatDirectionExport;
-}
 
 // ────────────────────────── styles ──────────────────────────
 
@@ -87,102 +73,36 @@ const useAppStyles = makeStyles({
     inset: 0,
     display: 'flex',
     overflow: 'hidden',
-    backgroundImage: `linear-gradient(180deg, ${tokens.colorNeutralBackground1} 0%, ${tokens.colorNeutralBackground3} 100%)`,
-    backgroundColor: tokens.colorNeutralBackground3,
-    color: tokens.colorNeutralForeground1,
+    backgroundColor: 'var(--er-bg-soft)',
+    color: 'var(--er-text)',
     fontFamily: tokens.fontFamilyBase,
   },
   workarea: {
     flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    minWidth: 0,
-    minHeight: 0,
-    padding: '8px 10px 10px 8px',
-  },
-  desktopFrame: {
-    flex: 1,
     minWidth: 0,
     minHeight: 0,
     display: 'flex',
     flexDirection: 'column',
-    borderRadius: '10px',
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground1,
-    boxShadow: tokens.shadow16,
     overflow: 'hidden',
-  },
-  desktopTitleBar: {
-    height: '36px',
-    minHeight: '36px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '0 10px',
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundImage: `linear-gradient(180deg, ${tokens.colorNeutralBackground3} 0%, ${tokens.colorNeutralBackground2} 100%)`,
-    userSelect: 'none',
-  },
-  winDots: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '5px',
-    marginRight: '4px',
-  },
-  winDot: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    border: '1px solid rgba(0,0,0,0.22)',
-  },
-  titleBlock: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
-    minWidth: 0,
-  },
-  titleText: {
-    fontSize: tokens.fontSizeBase200,
-    fontWeight: 600,
-    letterSpacing: '0.02em',
-    whiteSpace: 'nowrap',
-  },
-  titleSpacer: {
-    flex: 1,
-  },
-  titlePill: {
-    padding: '2px 8px',
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground4,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    color: tokens.colorNeutralForeground2,
-    fontSize: tokens.fontSizeBase100,
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '4px',
   },
   main: {
     flex: 1,
     display: 'flex',
     minHeight: 0,
-    backgroundColor: tokens.colorNeutralBackground1,
-    padding: '0',
-    gap: '0',
+    backgroundColor: 'var(--er-bg-soft)',
   },
   sidebar: {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
     minHeight: 0,
-    backgroundColor: 'var(--bg-secondary)',
-    borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: '0',
-    boxShadow: 'none',
+    backgroundColor: 'var(--er-surface)',
+    borderRight: '1px solid var(--er-border)',
     overflow: 'hidden',
   },
   sidebarRight: {
     borderRight: 'none',
-    borderLeft: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderLeft: '1px solid var(--er-border)',
   },
   sidebarRightFullscreen: {
     height: '100%',
@@ -196,36 +116,22 @@ const useAppStyles = makeStyles({
     height: '100%',
     minHeight: 0,
     minWidth: 0,
-    backgroundColor: 'var(--bg-primary)',
-    borderRadius: '0',
-    border: 'none',
-    boxShadow: 'none',
+    backgroundColor: 'var(--er-bg-soft)',
     overflow: 'hidden',
   },
   panelContent: {
     flex: 1,
     minHeight: 0,
     overflow: 'auto',
-    backgroundImage: 'none',
   },
   resizeHandleH: {
-    height: '8px',
-    backgroundColor: 'transparent',
-    backgroundImage: `linear-gradient(90deg, transparent 0 10px, ${tokens.colorNeutralStroke2} 10px calc(100% - 10px), transparent calc(100% - 10px) 100%)`,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'center',
-    backgroundSize: '100% 2px',
+    height: '5px',
+    backgroundColor: 'var(--er-border)',
     cursor: 'row-resize',
-    transitionProperty: 'background-image, background-size',
-    transitionDuration: '160ms',
-    ':hover': {
-      backgroundImage: `linear-gradient(90deg, transparent 0 10px, ${tokens.colorBrandBackground} 10px calc(100% - 10px), transparent calc(100% - 10px) 100%)`,
-      backgroundSize: '100% 4px',
-    },
-    ':active': {
-      backgroundImage: `linear-gradient(90deg, transparent 0 10px, ${tokens.colorBrandBackgroundPressed} 10px calc(100% - 10px), transparent calc(100% - 10px) 100%)`,
-      backgroundSize: '100% 5px',
-    },
+    transitionProperty: 'background-color',
+    transitionDuration: '140ms',
+    ':hover': { backgroundColor: 'var(--er-accent)' },
+    ':active': { backgroundColor: 'var(--er-accent-hover)' },
   },
   propertiesStrip: {
     display: 'flex',
@@ -237,16 +143,16 @@ const useAppStyles = makeStyles({
   propertiesStripHeader: {
     display: 'flex',
     alignItems: 'center',
-    gap: '5px',
-    padding: '4px 10px',
-    fontSize: '10.5px',
-    fontWeight: 700,
-    color: tokens.colorNeutralForeground3,
+    gap: '6px',
+    padding: '7px 12px',
+    fontSize: '10px',
+    fontWeight: 600,
+    color: 'var(--er-text-muted)',
     textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground2,
+    letterSpacing: '0.08em',
+    borderTop: '1px solid var(--er-border)',
+    borderBottom: '1px solid var(--er-border)',
+    backgroundColor: 'var(--er-surface-2)',
     flexShrink: 0,
   },
   propertiesStripContent: {
@@ -255,38 +161,25 @@ const useAppStyles = makeStyles({
     overflow: 'auto',
   },
   resizeHandle: {
-    width: '10px',
-    backgroundColor: 'transparent',
-    backgroundImage: `linear-gradient(180deg, transparent 0 10px, ${tokens.colorNeutralStroke2} 10px calc(100% - 10px), transparent calc(100% - 10px) 100%)`,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'center',
-    backgroundSize: '2px 100%',
-    position: 'relative',
+    width: '5px',
+    backgroundColor: 'var(--er-border)',
     cursor: 'col-resize',
-    transitionProperty: 'background-image, background-size',
-    transitionDuration: '160ms',
-    borderRadius: '999px',
-    ':hover': {
-      backgroundImage: `linear-gradient(180deg, transparent 0 10px, ${tokens.colorBrandBackground} 10px calc(100% - 10px), transparent calc(100% - 10px) 100%)`,
-      backgroundSize: '4px 100%',
-    },
-    ':active': {
-      backgroundImage: `linear-gradient(180deg, transparent 0 10px, ${tokens.colorBrandBackgroundPressed} 10px calc(100% - 10px), transparent calc(100% - 10px) 100%)`,
-      backgroundSize: '5px 100%',
-    },
+    transitionProperty: 'background-color',
+    transitionDuration: '140ms',
+    ':hover': { backgroundColor: 'var(--er-accent)' },
+    ':active': { backgroundColor: 'var(--er-accent-hover)' },
   },
   panelHeader: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: '8px',
-    padding: '0 12px',
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground2,
-    height: '42px',
-    minHeight: '42px',
+    padding: '0 8px 0 14px',
+    borderBottom: '1px solid var(--er-border)',
+    backgroundColor: 'var(--er-surface)',
+    height: '40px',
+    minHeight: '40px',
     flexShrink: 0,
-    boxShadow: 'none',
   },
   panelHeaderTitle: {
     display: 'flex',
@@ -294,57 +187,55 @@ const useAppStyles = makeStyles({
     gap: '8px',
     minWidth: 0,
     flex: 1,
-    letterSpacing: '0.03em',
+    fontFamily: 'var(--er-font-display)',
+    fontSize: '13px',
+    fontWeight: 600,
   },
   panelHeaderActions: {
     display: 'flex',
     alignItems: 'center',
     gap: '2px',
   },
-  // Right panel tab strip
+  // Right panel tab strip — segmented control, as on the site
   rightTabStrip: {
     display: 'flex',
-    alignItems: 'stretch',
-    height: '36px',
-    minHeight: '36px',
+    alignItems: 'center',
+    minHeight: '44px',
     flexShrink: 0,
-    padding: '0 6px',
-    gap: '2px',
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    padding: '0 8px 0 10px',
+    gap: '4px',
+    backgroundColor: 'var(--er-surface)',
+    borderBottom: '1px solid var(--er-border)',
   },
   rightTab: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '6px',
-    padding: '0 13px',
-    marginTop: '4px',
-    border: 'none',
-    borderTopLeftRadius: tokens.borderRadiusMedium,
-    borderTopRightRadius: tokens.borderRadiusMedium,
+    height: '28px',
+    padding: '0 11px',
+    border: '1px solid transparent',
+    borderRadius: 'var(--er-radius-md)',
     backgroundColor: 'transparent',
-    color: tokens.colorNeutralForeground3,
+    color: 'var(--er-text-muted)',
     fontSize: tokens.fontSizeBase200,
     fontFamily: tokens.fontFamilyBase,
-    fontWeight: 400,
+    fontWeight: 500,
     cursor: 'pointer',
-    borderBottomWidth: '2px',
-    borderBottomStyle: 'solid',
-    borderBottomColor: 'transparent',
-    transitionProperty: 'color, border-bottom-color, background-color',
+    transitionProperty: 'color, background-color, border-color',
     transitionDuration: '140ms',
     ':hover': {
-      color: tokens.colorNeutralForeground1,
-      backgroundColor: tokens.colorNeutralBackground3,
+      color: 'var(--er-text)',
+      backgroundColor: 'var(--er-surface-2)',
     },
   },
   rightTabActive: {
-    color: tokens.colorNeutralForeground1,
+    color: 'var(--er-accent)',
     fontWeight: 600,
-    backgroundColor: tokens.colorNeutralBackground1,
-    borderBottomColor: tokens.colorBrandStroke1,
+    backgroundColor: 'var(--er-accent-soft)',
+    ...shorthands.borderColor('var(--er-accent-border)'),
     ':hover': {
-      backgroundColor: tokens.colorNeutralBackground1,
+      backgroundColor: 'var(--er-accent-soft)',
+      color: 'var(--er-accent)',
     },
   },
   rightTabIcon: {
@@ -374,97 +265,51 @@ const useStatusBarStyles = makeStyles({
     position: 'relative',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: '10px',
     padding: '0 12px',
     height: '30px',
     minHeight: '30px',
-    backgroundColor: tokens.colorBrandBackground,
-    color: tokens.colorNeutralForegroundOnBrand,
+    backgroundColor: 'var(--er-surface)',
+    color: 'var(--er-text-muted)',
     fontSize: tokens.fontSizeBase100,
     fontFamily: tokens.fontFamilyBase,
-    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderTop: '1px solid var(--er-border)',
     flexShrink: 0,
-    boxShadow: 'none',
-  },
-  homeBtn: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '4px',
-    backgroundColor: 'transparent',
-    color: tokens.colorNeutralForegroundOnBrand,
-    border: 'none',
-    padding: '3px 7px',
-    height: '24px',
-    borderRadius: tokens.borderRadiusSmall,
-    cursor: 'pointer',
-    transitionProperty: 'background-color',
-    transitionDuration: '120ms',
-    ':hover': {
-      backgroundColor: 'rgba(255,255,255,0.15)',
-    },
-  },
-  homeBtnIcon: {
-    width: '16px',
-    height: '16px',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    lineHeight: 1,
-    flexShrink: 0,
-  },
-  homeBtnLabel: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    lineHeight: 1,
   },
   info: {
     display: 'inline-flex',
     alignItems: 'center',
-    opacity: 0.92,
   },
   chip: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: '4px',
-    padding: '1px 6px 1px 8px',
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    border: '1px solid rgba(255,255,255,0.2)',
+    gap: '5px',
+    padding: '2px 8px',
+    borderRadius: 'var(--er-radius-md)',
+    backgroundColor: 'var(--er-surface-2)',
+    border: '1px solid var(--er-border)',
+    color: 'var(--er-text-muted)',
     fontSize: tokens.fontSizeBase100,
-    maxWidth: '240px',
+    maxWidth: '260px',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    transitionProperty: 'background-color',
-    transitionDuration: '120ms',
-    ':hover': {
-      backgroundColor: 'rgba(255,255,255,0.22)',
-    },
-  },
-  chipClose: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '16px',
-    height: '16px',
-    backgroundColor: 'transparent',
-    color: 'inherit',
-    border: 'none',
-    borderRadius: tokens.borderRadiusSmall,
-    cursor: 'pointer',
-    padding: 0,
-    ':hover': {
-      backgroundColor: 'rgba(255,255,255,0.25)',
-    },
   },
   spacer: { marginLeft: 'auto' },
   warnBtn: {
     cursor: 'pointer',
+    transitionProperty: 'background-color, border-color',
+    transitionDuration: '120ms',
   },
-  warnOk: {},
+  warnOk: {
+    color: 'var(--er-success)',
+    ...shorthands.borderColor('var(--er-success-border)'),
+    backgroundColor: 'var(--er-success-soft)',
+  },
   warnIssues: {
-    backgroundColor: tokens.colorPaletteRedBackground3,
-    color: tokens.colorNeutralForegroundOnBrand,
+    color: 'var(--er-danger)',
+    ...shorthands.borderColor('var(--er-danger-border)'),
+    backgroundColor: 'var(--er-danger-soft)',
   },
   popover: {
     minWidth: '320px',
@@ -527,8 +372,6 @@ export function App() {
   const setShowTechnicalDetails = useAppStore(s => s.setShowTechnicalDetails);
   const navigateBack = useAppStore(s => s.navigateBack);
   const navigateForward = useAppStore(s => s.navigateForward);
-  const collapseAll = useAppStore(s => s.collapseAll);
-  const expandAll = useAppStore(s => s.expandAll);
   const rebuildDerivedState = useAppStore(s => s.rebuildDerivedState);
   const requestExplorerExpand = useAppStore(s => s.requestExplorerExpand);
   const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
@@ -661,9 +504,9 @@ export function App() {
     { id: 'props', group: t.cmdGroupView, label: t.cmdToggleProperties, hint: 'Ctrl+J', action: toggleProperties },
     { id: 'theme', group: t.cmdGroupView, label: t.cmdToggleTheme, action: () => setThemeMode(themeMode === 'dark' ? 'light' : 'dark') },
     { id: 'tech', group: t.cmdGroupView, label: t.cmdToggleTechnical, action: () => setShowTechnicalDetails(!showTechnicalDetails) },
-    { id: 'collapse', group: t.cmdGroupTools, label: t.cmdCollapseAll, action: () => { collapseAll(); requestExplorerExpand('none'); } },
-    { id: 'expand', group: t.cmdGroupTools, label: t.cmdExpandAll, action: () => { expandAll(); requestExplorerExpand('all'); } },
-  ], [navigateBack, navigateForward, toggleSearch, toggleProperties, setThemeMode, themeMode, setShowTechnicalDetails, showTechnicalDetails, collapseAll, expandAll, requestExplorerExpand, locale]);
+    { id: 'collapse', group: t.cmdGroupTools, label: t.cmdCollapseAll, action: () => requestExplorerExpand('none') },
+    { id: 'expand', group: t.cmdGroupTools, label: t.cmdExpandAll, action: () => requestExplorerExpand('all') },
+  ], [navigateBack, navigateForward, toggleSearch, toggleProperties, setThemeMode, themeMode, setShowTechnicalDetails, showTechnicalDetails, requestExplorerExpand, locale]);
 
   useEffect(() => {
     const active = openTabs.find(tab => tab.id === activeTabId);
@@ -698,15 +541,8 @@ export function App() {
         onToggleWhereUsed={toggleWhereUsed}
         onGoHome={() => { setShowLanding(true); }}
         onOpenPalette={() => setPaletteOpen(true)}
-        onToggleWarnings={() => setStatusWarningsOpen(v => !v)}
-        warningsOpen={statusWarningsOpen}
       />
       <div className={styles.workarea}>
-        <div className={styles.desktopFrame}>
-          <DesktopTitleBar
-            configsCount={configs.length}
-            rightTab={rightTab}
-          />
           <Toolbar
             breadcrumb={<AppBreadcrumb onOpenHome={() => { setShowLanding(true); }} />}
           />
@@ -729,12 +565,9 @@ export function App() {
                   <>
                     <Panel defaultSize={22} minSize={15} maxSize={40}>
                       <div className={styles.sidebar}>
-                        <ExplorerHeader />
-                        <div className={styles.panelContent}>
-                          <ErrorBoundary label="Explorer">
-                            <ConfigExplorer />
-                          </ErrorBoundary>
-                        </div>
+                        <ErrorBoundary label="Explorer">
+                          <ConfigExplorer />
+                        </ErrorBoundary>
                       </div>
                     </Panel>
                     <PanelResizeHandle className={styles.resizeHandle} />
@@ -746,7 +579,9 @@ export function App() {
                     <TabBar />
                     <div className={styles.panelContent}>
                       <ErrorBoundary label="Designer">
-                        <DesignerView />
+                        <React.Suspense fallback={<PanelLoading />}>
+                          <DesignerView />
+                        </React.Suspense>
                       </ErrorBoundary>
                     </div>
                   </div>
@@ -774,11 +609,9 @@ export function App() {
             )}
           </div>
           <StatusBar
-            onOpenLanding={() => setShowLanding(true)}
             warningsOpen={statusWarningsOpen}
             setWarningsOpen={setStatusWarningsOpen}
           />
-        </div>
       </div>
       <ToastHost />
       <CommandPalette
@@ -790,53 +623,20 @@ export function App() {
   );
 }
 
-function DesktopTitleBar({
-  configsCount,
-  rightTab,
-}: {
-  configsCount: number;
-  rightTab: 'properties' | 'search' | 'where-used';
-}) {
-  const styles = useAppStyles();
-  const panelLabel = rightTab === 'search' ? t.search
-    : rightTab === 'where-used' ? (locale === 'cs' ? 'Kde je použito' : 'Where Used')
-    : t.properties;
+/** Neutral placeholder while a lazily loaded panel arrives. */
+function PanelLoading() {
   return (
-    <div className={styles.desktopTitleBar}>
-      <span className={styles.winDots} aria-hidden>
-        <span className={styles.winDot} style={{ backgroundColor: '#ff5f57' }} />
-        <span className={styles.winDot} style={{ backgroundColor: '#febc2e' }} />
-        <span className={styles.winDot} style={{ backgroundColor: '#28c840' }} />
-      </span>
-      <div className={styles.titleBlock}>
-        <span className={styles.titleText}>{t.appName}</span>
-      </div>
-      <span className={styles.titleSpacer} />
-      <span className={styles.titlePill}>{configsCount} {t.statusConfigsWord}</span>
-      <span className={styles.titlePill}>{panelLabel}</span>
-    </div>
-  );
-}
-
-// ────────────────────────── PanelHeader ──────────────────────────
-
-function PanelHeader({ icon, title, count, actions }: {
-  icon?: React.ReactNode;
-  title: string;
-  count?: number;
-  actions?: React.ReactNode;
-}) {
-  const styles = useAppStyles();
-  return (
-    <div className={styles.panelHeader}>
-      <div className={styles.panelHeaderTitle}>
-        {icon && <span aria-hidden="true" style={{ display: 'inline-flex' }}>{icon}</span>}
-        <Subtitle2>{title}</Subtitle2>
-        {typeof count === 'number' && count > 0 && (
-          <CounterBadge count={count} size="small" appearance="filled" color="informative" />
-        )}
-      </div>
-      {actions && <div className={styles.panelHeaderActions}>{actions}</div>}
+    <div
+      role="status"
+      style={{
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+      }}
+    >
+      <Spinner size="small" label={t.landingLoading} />
     </div>
   );
 }
@@ -865,6 +665,18 @@ function RightPanel({
   return (
     <>
       <div className={styles.rightTabStrip} role="tablist">
+        {/* Properties belongs here too: the ActivityBar can switch to it, so
+            without this tab the strip showed no selection at all. */}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'properties'}
+          className={mergeClasses(styles.rightTab, tab === 'properties' && styles.rightTabActive)}
+          onClick={() => onTabChange('properties')}
+        >
+          <span className={styles.rightTabIcon} aria-hidden><AppsListDetailRegular fontSize={13} /></span>
+          {t.properties}
+        </button>
         <button
           type="button"
           role="tab"
@@ -912,7 +724,9 @@ function RightPanel({
           <PanelGroup direction="vertical" style={{ flex: 1, minHeight: 0 }}>
             <Panel defaultSize={60} minSize={25}>
               <ErrorBoundary label="Search">
-                <SearchPanel />
+                <React.Suspense fallback={<PanelLoading />}>
+                  <SearchPanel />
+                </React.Suspense>
               </ErrorBoundary>
             </Panel>
             <PanelResizeHandle className={styles.resizeHandleH} />
@@ -944,7 +758,9 @@ function RightPanel({
           <div className={styles.propertiesStrip} style={{ flex: 1, minHeight: 0 }}>
             <div style={{ flex: 1, minHeight: 0 }}>
               <ErrorBoundary label="Search">
-                <SearchPanel />
+                <React.Suspense fallback={<PanelLoading />}>
+                  <SearchPanel />
+                </React.Suspense>
               </ErrorBoundary>
             </div>
             <div className={styles.propertiesStripHeader}>
@@ -971,32 +787,6 @@ function RightPanel({
         </div>
       )}
     </>
-  );
-}
-
-// ────────────────────────── ExplorerHeader ──────────────────────────
-
-function ExplorerHeader() {  const treeNodes = useAppStore(s => s.treeNodes);
-  const requestExplorerExpand = useAppStore(s => s.requestExplorerExpand);
-  const expandAll = useAppStore(s => s.expandAll);
-  const collapseAll = useAppStore(s => s.collapseAll);
-
-  return (
-    <PanelHeader
-      icon={<FolderRegular />}
-      title={t.explorer}
-      count={treeNodes.length}
-      actions={
-        <ExpandCollapseSlider
-          expandLabel={t.cmdExpandAll}
-          collapseLabel={t.cmdCollapseAll}
-          onExpand={() => { expandAll(); requestExplorerExpand('all'); }}
-          onCollapse={() => { collapseAll(); requestExplorerExpand('none'); }}
-          expandIcon={<ExpandUpRightRegular fontSize={16} />}
-          collapseIcon={<ArrowMinimizeRegular fontSize={16} />}
-        />
-      }
-    />
   );
 }
 
@@ -1036,8 +826,13 @@ function AppBreadcrumb({ onOpenHome }: { onOpenHome: () => void }) {
 
 // ────────────────────────── StatusBar ──────────────────────────
 
-function StatusBar({ onOpenLanding, warningsOpen, setWarningsOpen }: {
-  onOpenLanding: () => void;
+/**
+ * Slim footer: what is loaded, what the active tab derives from, validator
+ * state and the current view mode. Navigation (Home) and per-configuration
+ * actions live in the ActivityBar and the Explorer — the status bar used to
+ * repeat both.
+ */
+function StatusBar({ warningsOpen, setWarningsOpen }: {
   warningsOpen: boolean;
   setWarningsOpen: (v: boolean | ((prev: boolean) => boolean)) => void;
 }) {
@@ -1046,7 +841,6 @@ function StatusBar({ onOpenLanding, warningsOpen, setWarningsOpen }: {
   const registry = useAppStore(s => s.registry);
   const warnings = useAppStore(s => s.warnings);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
-  const removeConfiguration = useAppStore(s => s.removeConfiguration);
   const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
   const openTabs = useAppStore(s => s.openTabs);
   const activeTabId = useAppStore(s => s.activeTabId);
@@ -1071,20 +865,8 @@ function StatusBar({ onOpenLanding, warningsOpen, setWarningsOpen }: {
 
   return (
     <div className={mergeClasses(styles.root, 'app-statusbar')} role="status">
-      <button type="button" className={styles.homeBtn} onClick={onOpenLanding} title={t.home}>
-        <span className={styles.homeBtnIcon} aria-hidden>
-          <HomeRegular fontSize={14} />
-        </span>
-        <span className={styles.homeBtnLabel}>{t.home}</span>
-      </button>
-
       {fnoIngestStatus ? (
-        <span className={styles.chip} style={{
-          fontStyle: 'italic',
-          background: 'rgba(255,255,255,0.25)',
-          animation: 'statusbar-pulse 1.6s ease-in-out infinite',
-          fontWeight: 600,
-        }} title={fnoIngestStatus}>
+        <span className={styles.chip} title={fnoIngestStatus}>
           <ArrowSyncRegular fontSize={12} style={{ animation: 'spin 1.2s linear infinite' }} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 320 }}>{fnoIngestStatus}</span>
         </span>
@@ -1095,46 +877,17 @@ function StatusBar({ onOpenLanding, warningsOpen, setWarningsOpen }: {
       {activeRelationship && (
         <span
           className={styles.chip}
-          style={{ backgroundColor: 'rgba(255,255,255,0.10)', gap: 4 }}
           title={locale === 'cs'
             ? `Aktivní konfigurace je ${activeRelationship.kind === 'Format' ? 'formát' : 'mapování'} odvozený z modelu "${activeRelationship.parentName}"`
             : `Active config is a ${activeRelationship.kind} derived from model "${activeRelationship.parentName}"`
           }
         >
           <LinkRegular fontSize={12} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
-            {locale === 'cs' ? '→ model: ' : '→ model: '}{activeRelationship.parentName.slice(0, 28)}
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
+            {locale === 'cs' ? 'model: ' : 'model: '}{activeRelationship.parentName}
           </span>
         </span>
       )}
-
-      {configs.map((c, i) => {
-        const dir = getConfigDirectionLabel(c);
-        const version = c.solutionVersion.publicVersionNumber;
-        const versionSuffix = version ? ` v${version}` : '';
-        return (
-          <span
-            key={i}
-            className={styles.chip}
-            title={`${c.solutionVersion.solution.name}${versionSuffix}${dir ? ` • ${dir}` : ''}`}
-          >
-            <span aria-hidden="true" style={{ display: 'inline-flex' }}>{getConfigIcon(c)}</span>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {c.solutionVersion.solution.name.slice(0, 22)}{versionSuffix}
-              {dir ? ` • ${dir}` : ''}
-            </span>
-            <button
-              type="button"
-              className={styles.chipClose}
-              title={t.closeConfiguration}
-              aria-label={t.closeConfiguration}
-              onClick={event => { event.stopPropagation(); removeConfiguration(i); }}
-            >
-              <DismissRegular fontSize={12} />
-            </button>
-          </span>
-        );
-      })}
 
       <div className={styles.spacer} />
 

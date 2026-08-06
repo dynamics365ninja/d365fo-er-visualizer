@@ -94,10 +94,50 @@ function getNodeHeaderIcon(node: any): React.ReactNode {
   return <DocumentFilled fontSize={14} />;
 }
 
+/** Node kind rendered as a coloured pill — the same three hues as everywhere else. */
+function getNodeKindBadge(node: any): { label: string; tone: 'model' | 'mapping' | 'format' | 'neutral' } {
+  const kind = node?.data?.kind ?? node?.data?.content?.kind;
+  if (kind === 'DataModel') return { label: locale === 'cs' ? 'Datový model' : 'Data model', tone: 'model' };
+  if (kind === 'ModelMapping') return { label: locale === 'cs' ? 'Mapování modelu' : 'Model mapping', tone: 'mapping' };
+  if (kind === 'Format') return { label: locale === 'cs' ? 'Formát' : 'Format', tone: 'format' };
+
+  const byType: Record<string, { label: string; tone: 'model' | 'mapping' | 'format' | 'neutral' }> = {
+    container: { label: locale === 'cs' ? 'Kontejner' : 'Container', tone: 'model' },
+    field: { label: locale === 'cs' ? 'Pole' : 'Field', tone: 'model' },
+    enum: { label: locale === 'cs' ? 'Výčet' : 'Enumeration', tone: 'model' },
+    enumValue: { label: locale === 'cs' ? 'Hodnota výčtu' : 'Enum value', tone: 'model' },
+    datasource: { label: locale === 'cs' ? 'Datový zdroj' : 'Data source', tone: 'mapping' },
+    binding: { label: locale === 'cs' ? 'Vazba' : 'Binding', tone: 'mapping' },
+    mapping: { label: locale === 'cs' ? 'Mapování' : 'Mapping', tone: 'mapping' },
+    validation: { label: locale === 'cs' ? 'Validace' : 'Validation', tone: 'mapping' },
+    formatElement: { label: locale === 'cs' ? 'Prvek formátu' : 'Format element', tone: 'format' },
+    formatBinding: { label: locale === 'cs' ? 'Vazba formátu' : 'Format binding', tone: 'format' },
+    transformation: { label: locale === 'cs' ? 'Transformace' : 'Transformation', tone: 'format' },
+  };
+  return byType[node?.type] ?? { label: node?.type ?? '', tone: 'neutral' };
+}
+
+/**
+ * The name to trace with "where used". For a table datasource the interesting
+ * entity is the table itself, not the alias the mapping gave it.
+ */
+function whereUsedQueryFor(node: any): string | null {
+  const data = node?.data;
+  const candidate =
+    data?.tableInfo?.tableName ??
+    data?.enumInfo?.enumName ??
+    data?.classInfo?.className ??
+    node?.name;
+  return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null;
+}
+
 export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {}) {
   const selectedNode = useAppStore(s => s.selectedNode);
   const registry = useAppStore(s => s.registry);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const configurations = useAppStore(s => s.configurations);
+  const triggerWhereUsed = useAppStore(s => s.triggerWhereUsed);
+  const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const node = nodeOverride ?? selectedNode;
   const configIndex = node?.configIndex ?? 0;
 
@@ -105,30 +145,23 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
     return (
       <div className="property-empty property-empty-card">
         <div className="property-empty-icon-stack" aria-hidden>
-          <AppsListDetailRegular fontSize={28} style={{ opacity: 0.3 }} />
-          <CursorHoverRegular fontSize={14} style={{ position: 'absolute', right: 6, bottom: 2, opacity: 0.5 }} />
+          <AppsListDetailRegular fontSize={26} />
+          <CursorHoverRegular fontSize={13} style={{ position: 'absolute', right: 4, bottom: 0 }} />
         </div>
         <div className="property-empty-title">{t.noSelection}</div>
         <div className="property-empty-hint">{t.selectElementHint}</div>
         <div className="property-empty-tips">
           <div className="property-empty-tip">
             <span className="property-empty-tip-key">Ctrl+F</span>
-            <span className="property-empty-tip-label">{locale === 'cs' ? 'Hledat & Where-Used' : 'Search & Where-Used'}</span>
+            <span className="property-empty-tip-label">{t.search}</span>
           </div>
           <div className="property-empty-tip">
             <span className="property-empty-tip-key">Ctrl+B</span>
-            <span className="property-empty-tip-label">{locale === 'cs' ? 'Průzkumník konfigurací' : 'Config Explorer'}</span>
+            <span className="property-empty-tip-label">{t.explorer}</span>
           </div>
           <div className="property-empty-tip">
             <span className="property-empty-tip-key">Ctrl+K</span>
-            <span className="property-empty-tip-label">{locale === 'cs' ? 'Příkazová paleta' : 'Command Palette'}</span>
-          </div>
-          <div className="property-empty-tip" style={{ marginTop: 8, borderTop: '1px solid rgba(128,128,128,0.2)', paddingTop: 8 }}>
-            <span style={{ fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              {locale === 'cs'
-                ? '💡 Klikni na prvek ve stromě vlevo. U vazebných výrazů (model.xxx) klikni přímo na text výrazu pro drill-down analýzu datového zdroje.'
-                : '💡 Click an element in the tree on the left. For binding expressions (model.xxx) click directly on the expression text for drill-down data source analysis.'}
-            </span>
+            <span className="property-empty-tip-label">{t.commandPalette}</span>
           </div>
         </div>
       </div>
@@ -136,17 +169,48 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
   }
 
   const data = node.data;
+  const badge = getNodeKindBadge(node);
+  const ownerConfig = configurations[configIndex];
+  const ownerName = ownerConfig?.solutionVersion?.solution?.name;
+  const whereUsedQuery = whereUsedQueryFor(node);
 
   return (
     <div className="property-inspector">
-      <div className="property-title">
-        {getNodeHeaderIcon(node)} {node.name}
-      </div>
-      {showTechnicalDetails && (
-        <div className="property-type">
-          {t.propType}: {node.type}
+      <header className="prop-head">
+        <div className="prop-head__meta">
+          <span className={`prop-head__kind prop-head__kind--${badge.tone}`}>
+            {getNodeHeaderIcon(node)}
+            {badge.label}
+          </span>
+          {showTechnicalDetails && <span className="prop-head__type">{node.type}</span>}
         </div>
-      )}
+        <h2 className="prop-head__name" title={node.name}>{node.name}</h2>
+        {ownerName && node.type !== 'file' && (
+          <p className="prop-head__owner" title={ownerName}>{ownerName}</p>
+        )}
+        <div className="prop-head__actions">
+          {whereUsedQuery && (
+            <button
+              type="button"
+              className="prop-head__action"
+              onClick={() => triggerWhereUsed(whereUsedQuery)}
+              title={`${t.whereUsed}: ${whereUsedQuery}`}
+            >
+              <LinkFilled fontSize={13} />
+              {t.whereUsed}
+            </button>
+          )}
+          <button
+            type="button"
+            className="prop-head__action"
+            onClick={() => navigateToTreeNode(node.id)}
+            title={t.propRevealInExplorer}
+          >
+            <AppsListDetailRegular fontSize={13} />
+            {t.propRevealInExplorer}
+          </button>
+        </div>
+      </header>
 
       {node.type === 'file' && data && <FileProps data={data} showTechnicalDetails={showTechnicalDetails} />}
       {node.type === 'container' && data && <ContainerProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}

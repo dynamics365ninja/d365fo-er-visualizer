@@ -32,13 +32,25 @@ function createWindow() {
     title: 'D365FO ER Visualizer',
     backgroundColor: initialBg,
     webPreferences: {
-      preload: path.join(import.meta.dirname, 'preload.js'),
+      preload: path.join(import.meta.dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
       allowRunningInsecureContent: false,
     },
+  });
+
+  // Mark the renderer as *our* shell. The UI used to sniff "Electron" out of the
+  // user agent, which also matches any Electron-based browser (VS Code's Simple
+  // Browser, Claude's browser pane, …) and made those refuse the browser sign-in
+  // flow. This token only ever appears in this window.
+  win.webContents.setUserAgent(`${win.webContents.getUserAgent()} ERVisualizerShell/1.0`);
+
+  // A preload that throws leaves `window.electronAPI` undefined and the renderer
+  // only reports "auth bridge unavailable" much later. Surface the real cause.
+  win.webContents.on('preload-error', (_event, preloadPath, error) => {
+    console.error(`[electron] preload failed to load: ${preloadPath}`, error);
   });
 
   // Strict Content-Security-Policy for packaged renderer. Dev uses Vite HMR so we relax slightly.

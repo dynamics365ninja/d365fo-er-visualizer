@@ -1,11 +1,13 @@
 /**
  * Browser-side auth adapter wrapping MSAL Browser. Used when running the UI
- * as a plain SPA (not in Electron). Uses popup-first, falls back to redirect.
+ * as a plain SPA (not in Electron). Popup first, redirect as a fallback.
  */
 
 import {
   PublicClientApplication,
   InteractionRequiredAuthError,
+  BrowserAuthError,
+  LogLevel,
   type Configuration,
   type AccountInfo,
   type AuthenticationResult,
@@ -21,6 +23,9 @@ import {
 } from '@er-visualizer/fno-client';
 
 const pool = new Map<string, PublicClientApplication>();
+
+/** Set while an interactive redirect is pending, so the caller can stay quiet. */
+const REDIRECT_PENDING_KEY = 'er-visualizer.fnoRedirectPending';
 
 function appKey(conn: FnoConnection): string {
   return `${conn.tenantId}::${conn.clientId}`;
@@ -41,9 +46,31 @@ async function getOrCreate(conn: FnoConnection): Promise<PublicClientApplication
       cacheLocation: 'sessionStorage',
       storeAuthStateInCookie: false,
     },
+    system: {
+      loggerOptions: {
+        // Verbose in dev only: this is what tells you whether the popup was
+        // ever navigated ("Navigating popup window to: …") or died earlier.
+        logLevel: import.meta.env.DEV ? LogLevel.Verbose : LogLevel.Error,
+        piiLoggingEnabled: false,
+        loggerCallback: (level, message) => {
+          if (level === LogLevel.Error) console.error('[msal]', message);
+          else if (import.meta.env.DEV) console.debug('[msal]', message);
+        },
+      },
+    },
   };
   const app = new PublicClientApplication(config);
   await app.initialize();
+  // Completes a sign-in that finished via the redirect fallback below.
+  try {
+    const redirectResult = await app.handleRedirectPromise();
+    if (redirectResult) {
+      sessionStorage.removeItem(REDIRECT_PENDING_KEY);
+      console.info('[BrowserAuthProvider] completed sign-in via redirect');
+    }
+  } catch (err) {
+    console.error('[BrowserAuthProvider] handleRedirectPromise failed', err);
+  }
   pool.set(key, app);
   return app;
 }
@@ -64,6 +91,23 @@ function accountToDomain(a: AccountInfo): AuthAccount {
     homeAccountId: a.homeAccountId,
     name: a.name,
   };
+}
+
+/**
+ * Popup failures that mean "this browser/page will not let a popup complete the
+ * flow" — as opposed to the user cancelling or the server rejecting the request.
+ * These are worth retrying as a full-page redirect.
+ */
+function isPopupUnusable(err: unknown): boolean {
+  if (err instanceof BrowserAuthError) {
+    return (
+      err.errorCode === 'popup_window_error' ||
+      err.errorCode === 'empty_window_error' ||
+      err.errorCode === 'monitor_window_timeout' ||
+      err.errorCode === 'block_iframe_reload'
+    );
+  }
+  return /popup|blocked|timed out/i.test(err instanceof Error ? err.message : '');
 }
 
 function buildSignInErrorMessage(err: unknown): string {
@@ -118,8 +162,18 @@ export class BrowserAuthProvider implements AuthProvider {
       const popup = await app.acquireTokenPopup({ scopes, prompt: 'select_account' });
       return resultToAuth(popup, conn.envUrl);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[BrowserAuthProvider] acquireTokenPopup failed', err);
+      if (isPopupUnusable(err)) {
+        // The popup could not carry the flow (blocked, never navigated away
+        // from about:blank, or timed out waiting for the response). Redirect
+        // the whole tab instead — it works wherever a popup does not, and
+        // `handleRedirectPromise` above finishes the sign-in on the way back.
+        console.warn('[BrowserAuthProvider] popup unusable, falling back to redirect');
+        sessionStorage.setItem(REDIRECT_PENDING_KEY, conn.id);
+        await app.acquireTokenRedirect({ scopes, prompt: 'select_account' });
+        // acquireTokenRedirect navigates away; this never resolves normally.
+        return new Promise<AuthResult>(() => {});
+      }
       throw new FnoAuthError(buildSignInErrorMessage(err), err);
     }
   }
