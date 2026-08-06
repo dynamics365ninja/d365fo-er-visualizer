@@ -9,5 +9,5 @@
     "types": ["node"]
   },
   "include": ["src"],
-  "exclude": ["src/preload.ts"]
+  "exclude": ["src/preload.cts"]
 }

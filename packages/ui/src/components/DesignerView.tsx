@@ -17,7 +17,12 @@ import {
   LinkFilled,
   DocumentFilled,
   CheckmarkCircleRegular,
+  CircleRegular,
   ArrowSyncRegular,
+  ArrowUploadRegular,
+  ArrowDownloadRegular,
+  TextAlignJustifyRegular,
+  TextBulletListSquareRegular,
 } from '@fluentui/react-icons';
 import '@xyflow/react/dist/style.css';
 import { useAppStore, resolveDeepExpression } from '../state/store';
@@ -414,30 +419,26 @@ function useNavFlash(active: boolean, duration = 1400): boolean {
   return flash;
 }
 
-/** Two-way sliding switch for choosing between comfortable/compact row density. */
+/**
+ * Row-density switch. Icon-only: two labelled options used to eat ~200px of
+ * every designer toolbar for a preference that is toggled rarely.
+ */
 function DensityToggle({ density, onChange }: { density: DensityMode; onChange: (value: DensityMode) => void }) {
+  const compact = density === 'compact';
+  const label = compact ? t.comfortableDensity : t.compactDensity;
   return (
-    <div className="density-slider" role="radiogroup" aria-label={locale === 'cs' ? 'Hustota zobrazení' : 'Display density'}>
-      <div className={`density-slider__thumb ${density === 'compact' ? 'density-slider__thumb--right' : ''}`} aria-hidden="true" />
-      <button
-        type="button"
-        role="radio"
-        aria-checked={density === 'comfortable'}
-        className={`density-slider__option ${density === 'comfortable' ? 'active' : ''}`}
-        onClick={() => onChange('comfortable')}
-      >
-        {t.comfortableDensity}
-      </button>
-      <button
-        type="button"
-        role="radio"
-        aria-checked={density === 'compact'}
-        className={`density-slider__option ${density === 'compact' ? 'active' : ''}`}
-        onClick={() => onChange('compact')}
-      >
-        {t.compactDensity}
-      </button>
-    </div>
+    <button
+      type="button"
+      className="fmt-icon-btn"
+      aria-pressed={compact}
+      title={`${locale === 'cs' ? 'Hustota zobrazení' : 'Display density'} — ${label}`}
+      aria-label={label}
+      onClick={() => onChange(compact ? 'comfortable' : 'compact')}
+    >
+      {compact
+        ? <TextBulletListSquareRegular fontSize={15} />
+        : <TextAlignJustifyRegular fontSize={15} />}
+    </button>
   );
 }
 
@@ -679,7 +680,7 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
     const nodes: Node[] = [];
     const edges: Edge[] = [];
     const containerMap = new Map(dm.containers.map(c => [c.id, c]));
-    const { positions } = buildModelLayout(dm.containers);
+    const { positions, nodeHeight } = buildModelLayout(dm.containers);
 
     dm.containers.forEach(container => {
       const pos = positions.get(container.id) ?? { x: 0, y: 0 };
@@ -687,22 +688,15 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
 
       // Color scheme per container kind
       const headerBg = container.isRoot
-        ? 'var(--surface-info-bg)'
+        ? 'var(--er-model-soft)'
         : container.isEnum
-          ? 'var(--surface-warning-bg)'
-          : 'var(--surface-success-bg)';
+          ? 'var(--er-format-soft)'
+          : 'var(--er-surface-2)';
       const headerColor = container.isRoot
-        ? 'var(--surface-info-fg)'
+        ? 'var(--er-model)'
         : container.isEnum
-          ? 'var(--surface-warning-fg)'
-          : 'var(--surface-success-fg)';
-      const borderColor = isSelected
-        ? 'var(--accent)'
-        : container.isRoot
-          ? 'var(--surface-info-border)'
-          : container.isEnum
-            ? 'var(--surface-warning-border)'
-            : 'var(--surface-success-border)';
+          ? 'var(--er-format)'
+          : 'var(--er-text-muted)';
 
       nodes.push({
         id: container.id,
@@ -802,13 +796,18 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
           ),
         },
         type: 'default',
+        // Explicit width/height (not just `style`): React Flow's MiniMap skips
+        // any node without dimensions on the node object itself, which is why
+        // the minimap used to render an empty frame.
+        width: NODE_W,
+        height: nodeHeight(container),
         style: {
-          background: 'transparent',
-          border: `2px solid ${borderColor}`,
-          borderRadius: 6,
+          background: 'var(--er-surface)',
+          border: `1px solid ${isSelected ? 'var(--er-accent)' : 'var(--er-border)'}`,
+          borderRadius: 'var(--er-radius-lg)',
           padding: 0,
           width: NODE_W,
-          boxShadow: isSelected ? `0 0 12px ${borderColor}` : 'none',
+          boxShadow: isSelected ? '0 0 0 2px var(--er-accent-border)' : 'var(--er-shadow-1)',
         },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
@@ -856,28 +855,34 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
       )}
       {/* Header bar */}
       <div className="fmt-header">
-        <span className="fmt-header-title">📐 {locale === 'cs' ? 'Datový model' : 'Data Model'}</span>
+        <span className="fmt-header-title">
+          <DataBarVerticalFilled fontSize={15} />
+          {locale === 'cs' ? 'Datový model' : 'Data Model'}
+        </span>
         <div className="fmt-header-stats">
-          <span className="fmt-stat" style={{ color: 'var(--surface-info-fg)' }}>🏠 {t.statsRoots(stats.roots)}</span>
-          <span className="fmt-stat" style={{ color: 'var(--surface-success-fg)' }}>📦 {t.statsRecords(stats.records)}</span>
-          <span className="fmt-stat" style={{ color: 'var(--surface-warning-fg)' }}>🔤 {t.statsEnums(stats.enums)}</span>
-          <span className="fmt-stat">📝 {t.statsFields(stats.fields)}</span>
-          <span className="fmt-stat">🔗 {t.statsRelations(stats.edges)}</span>
+          <span className="fmt-stat" style={{ color: 'var(--er-model)' }}>{t.statsRoots(stats.roots)}</span>
+          <span className="fmt-stat">{t.statsRecords(stats.records)}</span>
+          <span className="fmt-stat" style={{ color: 'var(--er-format)' }}>{t.statsEnums(stats.enums)}</span>
+          <span className="fmt-stat">{t.statsFields(stats.fields)}</span>
+          <span className="fmt-stat">{t.statsRelations(stats.edges)}</span>
         </div>
-        <div style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-secondary)' }}>
-          {t.modelHierarchyHint}
-        </div>
+        <div className="fmt-header-hint">{t.modelHierarchyHint}</div>
       </div>
       <div style={{ flex: 1 }}>
         <ReactFlow nodes={nodes} edges={edges} fitView nodesConnectable={false} nodesDraggable>
-          <Background color="var(--border-color)" gap={20} variant={'dots' as any} />
+          <Background color="var(--er-border)" gap={20} variant={'dots' as any} />
           <Controls />
           <MiniMap
-            style={{ background: 'var(--minimap-bg)' }}
+            pannable
+            zoomable
+            className="er-minimap"
+            maskColor="color-mix(in srgb, var(--er-bg-soft) 72%, transparent)"
+            /* Full-strength kind hues: the soft surface tints used before were
+               within a shade of the minimap background, so it read as empty. */
             nodeColor={(n) => {
               const c = dm.containers.find(c => c.id === n.id);
-              if (!c) return 'var(--minimap-node)';
-              return c.isRoot ? 'var(--surface-info-bg)' : c.isEnum ? 'var(--surface-warning-bg)' : 'var(--surface-success-bg)';
+              if (!c) return 'var(--er-border-strong)';
+              return c.isRoot ? 'var(--er-model)' : c.isEnum ? 'var(--er-format)' : 'var(--er-mapping)';
             }}
           />
         </ReactFlow>
@@ -1315,6 +1320,52 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
     setCollapsedBindingTypeGroups(new Set(groupedBindingsByType.map(group => group.elementType)));
   }, [groupedBindingsByType]);
 
+  // One pass over the element tree answers the filter / binding / ancestry
+  // questions for every row; see FormatTreeIndex.
+  const treeIndex = useMemo<FormatTreeIndex>(() => {
+    const needle = filter.trim().toLowerCase();
+    const selfMatch = new Set<string>();
+    const subtreeMatch = new Set<string>();
+    const subtreeBound = new Set<string>();
+    const parentOf = new Map<string, string>();
+
+    const walk = (el: any, parentId?: string): void => {
+      if (parentId) parentOf.set(el.id, parentId);
+      const bs = bindingMap.get(el.id) ?? [];
+      const isMatch =
+        !needle ||
+        el.name?.toLowerCase().includes(needle) ||
+        el.elementType?.toLowerCase().includes(needle) ||
+        bs.some((b: any) => b.expressionAsString?.toLowerCase().includes(needle));
+      if (isMatch) selfMatch.add(el.id);
+      const isBound = bs.some((b: any) => b.bindingCategory === 'data');
+
+      let childMatch = false;
+      let childBound = false;
+      for (const child of el.children ?? []) {
+        walk(child, el.id);
+        if (subtreeMatch.has(child.id)) childMatch = true;
+        if (subtreeBound.has(child.id)) childBound = true;
+      }
+      if (isMatch || childMatch) subtreeMatch.add(el.id);
+      if (isBound || childBound) subtreeBound.add(el.id);
+    };
+    walk(rootElement);
+    return { selfMatch, subtreeMatch, subtreeBound, parentOf };
+  }, [rootElement, bindingMap, filter]);
+
+  /** Walk up from the selection — O(depth) instead of a subtree scan per row. */
+  const selectedAncestors = useMemo(() => {
+    const set = new Set<string>();
+    let current = selectedElementId ? treeIndex.parentOf.get(selectedElementId) : undefined;
+    while (current) {
+      if (set.has(current)) break;
+      set.add(current);
+      current = treeIndex.parentOf.get(current);
+    }
+    return set;
+  }, [selectedElementId, treeIndex]);
+
   const dsListRef = useRef<GroupedDatasourceListHandle>(null);
 
   // Filter for datasources view
@@ -1373,7 +1424,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
       },
       {
         id: 'preview',
-        label: `${fc.direction === ERDirection.Import ? '📥' : '📤'} ${t.previewLabel}`,
+        label: t.previewLabel,
         title: locale === 'cs' ? 'Náhled generovaného výstupu ve správném formátu' : 'Preview of generated output in the correct format',
       },
     ];
@@ -1392,27 +1443,33 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
       {/* ── Header Bar ── */}
       <div className="fmt-header">
         <FormatTypeBadge rootElement={rootElement} />
-        <span className="fmt-stat">{fc.direction === ERDirection.Import ? '📥' : '📤'} {getFormatDirectionLabel(fc.direction)}</span>
+        <span className="fmt-stat fmt-stat-direction">
+          {fc.direction === ERDirection.Import ? <ArrowDownloadRegular fontSize={13} /> : <ArrowUploadRegular fontSize={13} />}
+          {getFormatDirectionLabel(fc.direction)}
+        </span>
         <div className="fmt-header-stats">
           <button
             type="button"
             className={`fmt-stat fmt-stat-bound fmt-stat-btn ${view === 'structure' && structureBindingFilter === 'bound' ? 'active' : ''}`}
             title={`${stats.boundElements} ${t.bound}`}
             onClick={() => { setView('structure'); setStructureBindingFilter(f => f === 'bound' ? 'all' : 'bound'); }}
-          >✓ {stats.boundElements} {t.bound}</button>
+          ><CheckmarkCircleRegular fontSize={13} /> {stats.boundElements} {t.bound}</button>
           <button
             type="button"
             className={`fmt-stat fmt-stat-unbound fmt-stat-btn ${view === 'structure' && structureBindingFilter === 'unbound' ? 'active' : ''}`}
             title={`${stats.unboundElements} ${t.unbound}`}
             onClick={() => { setView('structure'); setStructureBindingFilter(f => f === 'unbound' ? 'all' : 'unbound'); }}
-          >○ {stats.unboundElements} {t.unbound}</button>
+          ><CircleRegular fontSize={13} /> {stats.unboundElements} {t.unbound}</button>
         </div>
       </div>
 
       {/* ── Linked Mappings banner (import formats only) ── */}
       {fc.direction === ERDirection.Import && (
         <div className="fmt-linked-mappings-bar">
-          <span className="fmt-linked-mappings-label">📥 {t.importLinkedMappingsLabel}:</span>
+          <span className="fmt-linked-mappings-label">
+            <ArrowDownloadRegular fontSize={13} />
+            {t.importLinkedMappingsLabel}
+          </span>
           {linkedMappings.length === 0
             ? <span className="fmt-linked-mappings-empty">{t.importNoLinkedMappings}</span>
             : linkedMappings.map(lm => (
@@ -1523,6 +1580,8 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
               registry={registry}
               showTechnicalDetails={showTechnicalDetails}
               bindingFilter={structureBindingFilter}
+              treeIndex={treeIndex}
+              selectedAncestors={selectedAncestors}
             />
           )}
 
@@ -3216,6 +3275,22 @@ const formatTypeIcons: Record<string, string> = {
 
 // ── Recursive Format Element Tree ──
 
+/**
+ * Precomputed answers to the three questions every row used to answer by
+ * walking its own subtree — which made rendering the tree O(n²) in the number
+ * of elements on every keystroke and every selection change.
+ */
+interface FormatTreeIndex {
+  /** Elements matching the current filter themselves. */
+  selfMatch: Set<string>;
+  /** Elements that match, or have a descendant that matches. */
+  subtreeMatch: Set<string>;
+  /** Elements that carry a data binding, or have a descendant that does. */
+  subtreeBound: Set<string>;
+  /** child id → parent id, for walking up to the selected element. */
+  parentOf: Map<string, string>;
+}
+
 interface FormatElementTreeProps {
   element: any;
   depth: number;
@@ -3232,9 +3307,12 @@ interface FormatElementTreeProps {
   registry: any;
   showTechnicalDetails: boolean;
   bindingFilter?: 'all' | 'bound' | 'unbound';
+  treeIndex: FormatTreeIndex;
+  /** Ancestors of the selected element — those rows auto-expand. */
+  selectedAncestors: Set<string>;
 }
 
-function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, showAll, expandMode, expandVersion, selectedId, onSelect, resolveDatasource, registry, showTechnicalDetails, bindingFilter }: FormatElementTreeProps) {
+function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, showAll, expandMode, expandVersion, selectedId, onSelect, resolveDatasource, registry, showTechnicalDetails, bindingFilter, treeIndex, selectedAncestors }: FormatElementTreeProps) {
   const [expanded, setExpanded] = useState(expandMode === 'all');
   const labels = useAppStore(s => s.configurations[configIndex]?.solutionVersion?.solution?.labels);
 
@@ -3254,36 +3332,14 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
   const resolvedLabel = useMemo(() => resolveLabel(labelRef, labels), [labelRef, labels]);
   const labelText = resolvedLabel?.localized ?? resolvedLabel?.enUs ?? (resolvedLabel?.id ? resolvedLabel.id : undefined);
 
-  // Filter matching
-  const matchesFilter = !filter || element.name.toLowerCase().includes(filter.toLowerCase()) ||
-    element.elementType.toLowerCase().includes(filter.toLowerCase()) ||
-    bindings.some((b: any) => b.expressionAsString.toLowerCase().includes(filter.toLowerCase()));
-
-  // Check if any descendant matches
-  const descendantMatches = useMemo(() => {
-    if (!filter) return true;
-    const check = (el: any): boolean => {
-      if (el.name.toLowerCase().includes(filter.toLowerCase())) return true;
-      if (el.elementType.toLowerCase().includes(filter.toLowerCase())) return true;
-      const elBindings = bindingMap.get(el.id) ?? [];
-      if (elBindings.some((b: any) => b.expressionAsString.toLowerCase().includes(filter.toLowerCase()))) return true;
-      return el.children?.some(check) ?? false;
-    };
-    return check(element);
-  }, [filter, element, bindingMap]);
+  const matchesFilter = !filter || treeIndex.selfMatch.has(element.id);
+  const descendantMatches = !filter || treeIndex.subtreeMatch.has(element.id);
 
   const isSelected = selectedId === element.id;
   const navFlash = useNavFlash(isSelected);
 
-  // Auto-expand when the selectedId belongs to this element's subtree (navigation from search)
-  const selectedIsDescendant = useMemo(() => {
-    if (!selectedId || selectedId === element.id) return false;
-    const check = (el: any): boolean => {
-      if (el.id === selectedId) return true;
-      return el.children?.some(check) ?? false;
-    };
-    return check(element);
-  }, [selectedId, element]);
+  // Auto-expand when the selection lives somewhere below this element.
+  const selectedIsDescendant = selectedAncestors.has(element.id);
 
   // When a filter is active, auto-expand any node that matches or has matching descendants.
   // showAll=true means an ancestor already matched — show everything below it.
@@ -3305,15 +3361,9 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
   if (bindingFilter && bindingFilter !== 'all') {
     const hasBound = bindings.some(b => b.bindingCategory === 'data');
     if (bindingFilter === 'bound' && !hasBound) {
-      // Still show if it has children (structural container)
+      // Still show if it has children (structural container) that lead to a binding.
       if (!hasChildren) return null;
-      // Check if any descendant is bound
-      const descendantBound = (el: any): boolean => {
-        const elBs = bindingMap.get(el.id) ?? [];
-        if (elBs.some((b: any) => b.bindingCategory === 'data')) return true;
-        return el.children?.some(descendantBound) ?? false;
-      };
-      if (!descendantBound(element)) return null;
+      if (!treeIndex.subtreeBound.has(element.id)) return null;
     }
     if (bindingFilter === 'unbound') {
       const hasBoundUnbound = bindings.some(b => b.bindingCategory === 'data');
@@ -3460,309 +3510,10 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
           registry={registry}
           showTechnicalDetails={showTechnicalDetails}
           bindingFilter={bindingFilter}
+          treeIndex={treeIndex}
+          selectedAncestors={selectedAncestors}
         />
       ))}
-    </div>
-  );
-}
-
-// ── Inline Datasource Resolution for Bindings ──
-
-function FormatBindingDetail({ expression, configIndex, resolveDatasource }: {
-  expression: string;
-  configIndex: number;
-  resolveDatasource: (name: string, ci: number) => any;
-}) {
-  const [expanded, setExpanded] = useState(true);
-  const resolveModelPath = useAppStore(s => s.resolveModelPath);
-  const configurations = useAppStore(s => s.configurations);
-
-  // Check if this is a model reference (e.g. "model.CompanyInformation.Name")
-  const isModelRef = expression.toLowerCase().startsWith('model.') || expression.toLowerCase().startsWith('model\\');
-
-  // Does ANY loaded config provide a ModelMapping?
-  const hasModelMapping = useMemo(
-    () => configurations.some(c => c.content.kind === 'ModelMapping' || (c.content.kind === 'Format' && c.content.embeddedModelMappingVersions.length > 0)),
-    [configurations]
-  );
-
-  const modelResult = useMemo(
-    () => (isModelRef ? resolveModelPath(expression) : null),
-    [isModelRef, expression, resolveModelPath]
-  );
-
-  // Extract root datasource name for direct DS resolution
-  const dsName = expression.split(/[.\\/]/)[0].split('(')[0].replace(/['"]/g, '').trim();
-  const directResult = (!isModelRef && dsName && dsName !== 'model')
-    ? resolveDatasource(dsName, configIndex)
-    : null;
-
-  // Deep resolution: trace the full expression through nested DS and calculated fields
-  const deepResult = useMemo(() => {
-    // For direct (non-model) references, try the full expression immediately
-    if (!isModelRef) {
-      const result = resolveDeepExpression(expression, configurations, configIndex);
-      if (result && (result.involvedDatasources.length > 0 || result.calculatedFieldChain.length > 0)) {
-        return result;
-      }
-    }
-    // If this is a model ref and a ModelMapping resolved it, deep-resolve the mapping expression
-    if (modelResult?.binding?.expressionAsString) {
-      const bindingExpr = modelResult.binding.expressionAsString;
-      const bindingCi = modelResult.bindingConfigIndex;
-      const r = resolveDeepExpression(bindingExpr, configurations, bindingCi);
-      if (r && (r.involvedDatasources.length > 0 || r.calculatedFieldChain.length > 0)) {
-        return r;
-      }
-    }
-    return null;
-  }, [isModelRef, expression, configurations, configIndex, modelResult]);
-
-  const hasMappingInfo = modelResult != null;
-  const hasDirectDs = directResult != null;
-  const hasDeepInfo = deepResult != null && (deepResult.involvedDatasources.length > 0 || deepResult.calculatedFieldChain.length > 0);
-
-  // Collect actual binding paths from loaded ModelMappings (for debug when not found)
-  const mappingDebugInfo = useMemo(() => {
-    if (!isModelRef || !hasModelMapping) return null;
-    const info: { configName: string; samplePaths: string[]; totalBindings: number }[] = [];
-    for (const cfg of configurations) {
-      if (cfg.content.kind === 'ModelMapping') {
-        const mm = (cfg.content as any).version.mapping;
-        info.push({
-          configName: cfg.solutionVersion.solution.name,
-          totalBindings: mm.bindings.length,
-          samplePaths: mm.bindings.slice(0, 12).map((b: any) => b.path).filter(Boolean),
-        });
-      }
-      if (cfg.content.kind === 'Format') {
-        for (const version of cfg.content.embeddedModelMappingVersions) {
-          info.push({
-            configName: `${cfg.solutionVersion.solution.name} • ${version.mapping.name}`,
-            totalBindings: version.mapping.bindings.length,
-            samplePaths: version.mapping.bindings.slice(0, 12).map((b: any) => b.path).filter(Boolean),
-          });
-        }
-      }
-    }
-    return info;
-  }, [isModelRef, hasModelMapping, configurations]);
-
-  // ── Model ref but no ModelMapping loaded ──
-  if (isModelRef && !hasModelMapping) {
-    return (
-      <div className="fmt-drill-hint">
-        📋 Toto je odkaz na model (<code>model.*</code>). Pro drill-down načti soubor{' '}
-        <strong>ModelMapping</strong> (.xml) odpovídající tomuto formátu.
-      </div>
-    );
-  }
-
-  // ── Model ref + ModelMapping loaded but path not found ──
-  if (isModelRef && hasModelMapping && !hasMappingInfo) {
-    const cleanPath = expression.startsWith('model.') ? expression.slice(6) : expression.slice(6);
-    return (
-      <div className="fmt-drill-hint fmt-drill-hint-warn">
-        <div style={{ marginBottom: 4 }}>
-          ⚠️ Cesta <code>{cleanPath}</code> nebyla nalezena v ModelMapping.
-        </div>
-        {mappingDebugInfo?.map((info, i) => (
-          <div key={i} className="fmt-debug-paths">
-            <div className="fmt-debug-paths-title">
-              {info.configName} — {info.totalBindings} binding{info.totalBindings !== 1 ? 's' : ''}
-              {info.totalBindings > 12 ? ' (prvních 12)' : ''}:
-            </div>
-            {info.samplePaths.length === 0
-              ? <div className="fmt-debug-path-empty">žádné binding paths</div>
-              : info.samplePaths.map((p, j) => <div key={j} className="fmt-debug-path-item">{p}</div>)
-            }
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (!hasMappingInfo && !hasDirectDs && !hasDeepInfo) return null;
-
-  const summaryParts: string[] = [];
-  if (hasMappingInfo) {
-    summaryParts.push(`📋 ${modelResult!.binding.expressionAsString}`);
-    if (modelResult!.datasource) {
-      const ds = modelResult!.datasource;
-      if (ds.tableInfo) summaryParts.push(`→ 🗃️ ${ds.tableInfo.tableName}`);
-      else if (ds.enumInfo) summaryParts.push(`→ 🔤 ${formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo)}`);
-      else if (ds.classInfo) summaryParts.push(`→ ⚙️ ${ds.classInfo.className}`);
-      else if (ds.calculatedField) summaryParts.push(`→ 🧮 calc`);
-      else summaryParts.push(`→ 📊 ${ds.name}`);
-    }
-  } else if (hasDirectDs) {
-    const ds = directResult!.datasource;
-    summaryParts.push(`📊 ${dsName}`);
-    if (ds.tableInfo) summaryParts.push(`→ 🗃️ ${ds.tableInfo.tableName}`);
-    else if (ds.enumInfo) summaryParts.push(`→ 🔤 ${formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo)}`);
-    else if (ds.classInfo) summaryParts.push(`→ ⚙️ ${ds.classInfo.className}`);
-  }
-  if (hasDeepInfo) {
-    const tables = deepResult!.involvedDatasources.filter(d => d.tableName);
-    const classes = deepResult!.involvedDatasources.filter(d => d.className);
-    const enums = deepResult!.involvedDatasources.filter(d => d.enumName);
-    if (tables.length > 0) summaryParts.push(`🗃️ ${tables.length} table${tables.length > 1 ? 's' : ''}`);
-    if (classes.length > 0) summaryParts.push(`⚙️ ${classes.length} class${classes.length > 1 ? 'es' : ''}`);
-    if (enums.length > 0) summaryParts.push(`🔤 ${enums.length} enum${enums.length > 1 ? 's' : ''}`);
-    if (deepResult!.calculatedFieldChain.length > 0) summaryParts.push(`🧮 ${deepResult!.calculatedFieldChain.length} calc field${deepResult!.calculatedFieldChain.length > 1 ? 's' : ''}`);
-  }
-
-  return (
-    <div className="fmt-ds-resolved">
-      <span
-        className="fmt-ds-toggle"
-        onClick={e => { e.stopPropagation(); setExpanded(!expanded); }}
-        title="Show datasource details"
-      >
-        {summaryParts.join(' ')} <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
-      </span>
-      {expanded && (
-        <div className="fmt-ds-details">
-          {hasMappingInfo && (
-            <>
-              <div><span className="fmt-ds-label">Model path:</span> {modelResult!.modelPath}</div>
-              <div><span className="fmt-ds-label">Mapping expr:</span> <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{modelResult!.binding.expressionAsString}</span></div>
-              {modelResult!.datasource && (() => {
-                const ds = modelResult!.datasource;
-                return (
-                  <>
-                    <div><span className="fmt-ds-label">DS Name:</span> {ds.name}</div>
-                    <div><span className="fmt-ds-label">DS Type:</span> {ds.type}</div>
-                    {ds.tableInfo && (
-                      <>
-                        <div><span className="fmt-ds-label">Table:</span> <strong>{ds.tableInfo.tableName}</strong></div>
-                        {ds.tableInfo.isCrossCompany && <div><span className="fmt-ds-label">Cross-Company:</span> Yes</div>}
-                        {ds.tableInfo.selectedFields?.length > 0 && <div><span className="fmt-ds-label">Fields:</span> {ds.tableInfo.selectedFields.join(', ')}</div>}
-                      </>
-                    )}
-                    {ds.enumInfo && (
-                      <div><span className="fmt-ds-label">Enum:</span> <strong>{formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo)}</strong></div>
-                    )}
-                    {ds.classInfo && (
-                      <div><span className="fmt-ds-label">Class:</span> <strong>{ds.classInfo.className}</strong></div>
-                    )}
-                    {ds.calculatedField?.expressionAsString && (
-                      <div>
-                        <span className="fmt-ds-label">Formula:</span>
-                        <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--syn-calc)' }}>
-                          {ds.calculatedField.expressionAsString}
-                        </span>
-                      </div>
-                    )}
-                    {ds.children?.length > 0 && (
-                      <div><span className="fmt-ds-label">Nested DS:</span> {ds.children.map((c: any) => c.name).join(', ')}</div>
-                    )}
-                  </>
-                );
-              })()}
-            </>
-          )}
-          {!hasMappingInfo && hasDirectDs && (() => {
-            const ds = directResult!.datasource;
-            return (
-              <>
-                <div><span className="fmt-ds-label">Name:</span> {ds.name}</div>
-                <div><span className="fmt-ds-label">Type:</span> {ds.type}</div>
-                {ds.tableInfo && (
-                  <>
-                    <div><span className="fmt-ds-label">Table:</span> <strong>{ds.tableInfo.tableName}</strong></div>
-                    {ds.tableInfo.isCrossCompany && <div><span className="fmt-ds-label">Cross-Company:</span> Yes</div>}
-                  </>
-                )}
-                {ds.enumInfo && <div><span className="fmt-ds-label">Enum:</span> <strong>{formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo)}</strong></div>}
-                {ds.classInfo && <div><span className="fmt-ds-label">Class:</span> <strong>{ds.classInfo.className}</strong></div>}
-                {ds.calculatedField?.expressionAsString && (
-                  <div>
-                    <span className="fmt-ds-label">Formula:</span>
-                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--syn-calc)' }}>
-                      {ds.calculatedField.expressionAsString}
-                    </span>
-                  </div>
-                )}
-              </>
-            );
-          })()}
-
-          {/* ── Deep Dependency Analysis ── */}
-          {hasDeepInfo && (
-            <div className="fmt-deep-deps">
-              <div className="fmt-deep-deps-title">🔍 Dependency Analysis</div>
-
-              {/* Calculated Field Chain */}
-              {deepResult!.calculatedFieldChain.length > 0 && (
-                <div className="fmt-deep-section">
-                  <div className="fmt-deep-section-title">🧮 Calculated Field Chain</div>
-                  {deepResult!.calculatedFieldChain.map((cf, i) => (
-                    <div key={i} className="fmt-deep-calc-item">
-                      <span className="fmt-deep-calc-name">{cf.name}</span>
-                      <span className="fmt-deep-calc-formula">{cf.formula}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Involved Tables */}
-              {(() => {
-                const tables = deepResult!.involvedDatasources.filter(d => d.tableName);
-                if (tables.length === 0) return null;
-                return (
-                  <div className="fmt-deep-section">
-                    <div className="fmt-deep-section-title">🗃️ Tables ({tables.length})</div>
-                    {tables.map((d, i) => (
-                      <div key={i} className="fmt-deep-dep-item">
-                        <span className="badge badge-table">{d.type}</span>
-                        <span className="fmt-deep-dep-name">{d.name}</span>
-                        <span className="fmt-deep-dep-target">→ {d.tableName}</span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-
-              {/* Involved Classes */}
-              {(() => {
-                const classes = deepResult!.involvedDatasources.filter(d => d.className);
-                if (classes.length === 0) return null;
-                return (
-                  <div className="fmt-deep-section">
-                    <div className="fmt-deep-section-title">⚙️ Classes ({classes.length})</div>
-                    {classes.map((d, i) => (
-                      <div key={i} className="fmt-deep-dep-item">
-                        <span className="badge badge-class">{d.type}</span>
-                        <span className="fmt-deep-dep-name">{d.name}</span>
-                        <span className="fmt-deep-dep-target">→ {d.className}</span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-
-              {/* Involved Enums */}
-              {(() => {
-                const enums = deepResult!.involvedDatasources.filter(d => d.enumName);
-                if (enums.length === 0) return null;
-                return (
-                  <div className="fmt-deep-section">
-                    <div className="fmt-deep-section-title">🔤 Enumerations ({enums.length})</div>
-                    {enums.map((d, i) => (
-                      <div key={i} className="fmt-deep-dep-item">
-                        <span className="badge badge-enum">{d.type}</span>
-                        <span className="fmt-deep-dep-name">{d.name}</span>
-                        <span className="fmt-deep-dep-target">→ {formatEnumDisplayName(d.enumName!, d)}</span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -4021,35 +3772,7 @@ function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: n
   );
 }
 
-// ── (legacy, kept for ModelMapping bindings tab) ──
-
-function FormatBindingRow({ binding, configIndex, registry, onNavigate }: {
-  binding: any;
-  configIndex: number;
-  registry: any;
-  onNavigate: (elementId: string) => void;
-}) {
-  // Look up the format element name by componentId
-  const elementName = registry.lookup(binding.componentId)?.name ?? binding.componentId.substring(0, 8);
-
-  return (
-    <div className="mapping-row mapping-row-clickable" onClick={() => onNavigate(binding.componentId)}>
-      <div className="mapping-row-path" style={{ minWidth: 150 }}>
-        <span style={{ color: 'var(--syn-resolved)', fontWeight: 600 }}>{elementName}</span>
-        {binding.propertyName && <span className="badge badge-prop" style={{ marginLeft: 4 }}>{binding.propertyName}</span>}
-      </div>
-      <div className="mapping-row-arrow">←</div>
-      <div className="mapping-row-expr">
-        <ExpressionDetailLink expression={binding.expressionAsString} configIndex={configIndex} />
-      </div>
-    </div>
-  );
-}
-
 // Keep legacy helpers reachable for future migration work.
-const keepLegacyFormatHelpers = [FormatBindingDetail, FormatBindingRow];
-void keepLegacyFormatHelpers;
-
 // Maps datasource type → an existing badge CSS class
 function getDsBadgeClass(type: string): string {
   const map: Record<string, string> = {

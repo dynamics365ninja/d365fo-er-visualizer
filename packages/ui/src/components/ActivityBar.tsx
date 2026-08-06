@@ -2,6 +2,7 @@ import {
   Tooltip,
   CounterBadge,
   makeStyles,
+  shorthands,
   tokens,
   mergeClasses,
 } from '@fluentui/react-components';
@@ -12,8 +13,6 @@ import {
   LinkRegular,
   AppsListDetailRegular,
   KeyboardRegular,
-  WarningRegular,
-  CheckmarkCircleRegular,
   EyeRegular,
   CodeRegular,
   WeatherSunnyRegular,
@@ -34,8 +33,6 @@ interface ActivityBarProps {
   onToggleWhereUsed: () => void;
   onGoHome: () => void;
   onOpenPalette: () => void;
-  onToggleWarnings: () => void;
-  warningsOpen: boolean;
 }
 
 const useStyles = makeStyles({
@@ -44,17 +41,17 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     alignItems: 'center',
     gap: '2px',
-    width: '56px',
-    padding: '6px 0',
-    backgroundColor: tokens.colorNeutralBackground3,
-    borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
+    width: '52px',
+    padding: '8px 0',
+    backgroundColor: 'var(--er-surface)',
+    borderRight: '1px solid var(--er-border)',
     flexShrink: 0,
   },
   sep: {
-    width: '32px',
+    width: '24px',
     height: '1px',
-    backgroundColor: tokens.colorNeutralStroke2,
-    margin: '4px 0',
+    backgroundColor: 'var(--er-border)',
+    margin: '6px 0',
   },
   spacer: {
     flex: 1,
@@ -69,48 +66,36 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: '44px',
-    width: '44px',
-    height: '44px',
-    padding: '4px',
-    borderRadius: tokens.borderRadiusMedium,
-    border: 'none',
+    minWidth: '36px',
+    width: '36px',
+    height: '36px',
+    padding: 0,
+    borderRadius: 'var(--er-radius-lg)',
+    border: '1px solid transparent',
     backgroundColor: 'transparent',
-    color: tokens.colorNeutralForeground2,
+    color: 'var(--er-text-muted)',
     cursor: 'pointer',
     fontFamily: tokens.fontFamilyBase,
-    transitionProperty: 'transform, background-color, color',
-    transitionDuration: '160ms',
-    transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+    transitionProperty: 'background-color, color, border-color',
+    transitionDuration: '140ms',
     ':hover': {
-      transform: 'scale(1.06)',
-      backgroundColor: tokens.colorNeutralBackground3Hover,
-      color: tokens.colorNeutralForeground1,
-    },
-    ':active': {
-      transform: 'scale(0.94)',
+      backgroundColor: 'var(--er-surface-2)',
+      color: 'var(--er-text)',
     },
   },
   btnActive: {
-    color: tokens.colorBrandForeground1,
-    backgroundColor: tokens.colorSubtleBackgroundSelected,
-    position: 'relative',
-    '::before': {
-      content: '""',
-      position: 'absolute',
-      left: 0,
-      top: '8px',
-      bottom: '8px',
-      width: '3px',
-      borderRadius: '0 2px 2px 0',
-      backgroundImage: 'linear-gradient(180deg, #038387 0%, #37a987 100%)',
-      boxShadow: '0 0 8px rgba(3, 131, 135, 0.6)',
+    color: 'var(--er-accent)',
+    backgroundColor: 'var(--er-accent-soft)',
+    ...shorthands.borderColor('var(--er-accent-border)'),
+    ':hover': {
+      backgroundColor: 'var(--er-accent-soft)',
+      color: 'var(--er-accent)',
     },
   },
   badge: {
     position: 'absolute',
-    top: '2px',
-    right: '4px',
+    top: 0,
+    right: '6px',
     pointerEvents: 'none',
   },
 });
@@ -125,7 +110,6 @@ export function ActivityBar(props: ActivityBarProps) {
   const setThemeMode = useAppStore(s => s.setThemeMode);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const setShowTechnicalDetails = useAppStore(s => s.setShowTechnicalDetails);
-  const warnings = useAppStore(s => s.warnings);
 
   return (
     <nav className={styles.root} aria-label="Activity Bar">
@@ -170,13 +154,6 @@ export function ActivityBar(props: ActivityBarProps) {
         label={t.commandPalette}
         onClick={props.onOpenPalette}
         shortcut="Ctrl+K"
-      />
-      <ActivityButton
-        Icon={warnings.length > 0 ? WarningRegular : CheckmarkCircleRegular}
-        label={warnings.length === 0 ? t.validatorOk : t.validatorIssues(warnings.length)}
-        onClick={props.onToggleWarnings}
-        active={props.warningsOpen}
-        badge={warnings.length > 0 ? warnings.length : undefined}
       />
 
       <div className={styles.spacer} />

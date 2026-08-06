@@ -13,6 +13,7 @@
     "build:all": "pnpm run build:app && pnpm run stage:app && pnpm run build"
   },
   "dependencies": {
+    "@er-visualizer/design-tokens": "workspace:*",
     "next": "^15.4.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

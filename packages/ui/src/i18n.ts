@@ -67,6 +67,7 @@ export interface Translations {
   searchPlaceholder: string;
   search: string;
   whereUsed: string;
+  propRevealInExplorer: string;
   whereUsedPlaceholder: string;
   whereUsedLabel: string;
   find: string;
@@ -117,6 +118,8 @@ export interface Translations {
   explorerFilterPlaceholder: string;
   explorerFilterByKind: string;
   explorerSort: string;
+  explorerViewFlat: string;
+  explorerViewHierarchy: string;
   explorerSortLoadOrder: string;
   explorerSortNameAsc: string;
   explorerSortNameDesc: string;
@@ -206,9 +209,8 @@ export interface Translations {
   landingBadge: string;
   landingTitle: string;
   landingSub: string;
-  landingStatLoaded: string;
-  landingStatRecent: string;
-  landingStatTypes: string;
+  landingDocsLink: string;
+  landingSourceLabel: string;
   // Landing page – drop zone
   landingDropPrimary: string;
   landingDropRelease: string;
@@ -223,32 +225,6 @@ export interface Translations {
   landingDismiss: string;
   landingLoaded: (n: number) => string;
   landingOpen: string;
-  // Landing page – cards
-  landingCardModelTitle: string;
-  landingCardModelSubtitle: string;
-  landingCardModelDesc: string;
-  landingCardModelFeatures: string[];
-  landingCardModelHint: string;
-  landingCardMappingTitle: string;
-  landingCardMappingSubtitle: string;
-  landingCardMappingDesc: string;
-  landingCardMappingFeatures: string[];
-  landingCardMappingHint: string;
-  landingCardFormatTitle: string;
-  landingCardFormatSubtitle: string;
-  landingCardFormatDesc: string;
-  landingCardFormatFeatures: string[];
-  landingCardFormatHint: string;
-  // Landing page – how it works
-  landingHowTitle: string;
-  landingStep1Title: string;
-  landingStep1Desc: string;
-  landingStep2Title: string;
-  landingStep2Desc: string;
-  landingStep3Title: string;
-  landingStep3Desc: string;
-  landingStep4Title: string;
-  landingStep4Desc: string;
   // Landing page – footer
   landingFooter: string;
 
@@ -336,6 +312,7 @@ export interface Translations {
   fnoDownloadFailed: (name: string, msg: string) => string;
   fnoLoadedCount: (n: number) => string;
   fnoMappingNotAvailable: (names: string[]) => string;
+  fnoMappingNoDataModel: string;
 
   // Property inspector labels
   propDescription: string;
@@ -485,6 +462,7 @@ const cs: Translations = {
   searchPlaceholder: 'Název tabulky, pole, cesty…',
   search: 'Hledat',
   whereUsed: 'Místa použití',
+  propRevealInExplorer: 'Zobrazit v Exploreru',
   whereUsedPlaceholder: 'např. TaxTrans, CustTable, MyCalcField…',
   whereUsedLabel: 'Zadej název tabulky, výčtu, třídy nebo datasource:',
   find: 'Najít',
@@ -536,6 +514,8 @@ const cs: Translations = {
   explorerFilterPlaceholder: 'Filtrovat explorer…',
   explorerFilterByKind: 'Filtrovat podle druhu',
   explorerSort: 'Řazení',
+  explorerViewFlat: 'Zobrazit plochý seznam',
+  explorerViewHierarchy: 'Zobrazit hierarchii modelů',
   explorerSortLoadOrder: 'Pořadí načtení',
   explorerSortNameAsc: 'Název vzestupně (A–Z)',
   explorerSortNameDesc: 'Název sestupně (Z–A)',
@@ -628,62 +608,21 @@ const cs: Translations = {
   // Landing page
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',
   landingTitle: 'D365FO ER Visualizer',
-  landingSub: 'Přehledné pracovní místo pro ER konfigurace na jednom místě.\nNačti soubory, sleduj vazby výrazů na datové zdroje a rychle dohledávej místa použití.',
-  landingStatLoaded: 'Načteno',
-  landingStatRecent: 'Historie',
-  landingStatTypes: 'Typy souborů',
+  landingSub: 'Načti ER konfigurace z disku nebo přímo z prostředí Finance & Operations a začni trasovat vazby formátů přes mapování až ke zdrojové tabulce, třídě nebo výčtu.',
+  landingDocsLink: 'Dokumentace',
+  landingSourceLabel: 'Zdroj konfigurací',
   landingDropPrimary: 'Přetáhni ER XML soubory sem',
   landingDropRelease: 'Pusť soubory',
   landingDropSecondary: 'nebo klikni pro výběr · můžeš načíst více souborů najednou',
   landingLoading: 'Načítání souborů…',
   landingDropAriaLabel: 'Přetáhni XML soubory sem',
-  landingPillModel: '📐 Model',
-  landingPillMapping: '🔗 Mapování',
-  landingPillFormat: '📄 Formát',
-  landingErrors: '⚠️ Chyby načítání',
+  landingPillModel: 'Datový model',
+  landingPillMapping: 'Mapování modelu',
+  landingPillFormat: 'Formát',
+  landingErrors: 'Chyby načítání',
   landingDismiss: 'Zavřít',
-  landingLoaded: (n: number) => `✅ ${n} konfigurac${n === 1 ? 'e načtena' : 'e načteny'}`,
-  landingOpen: 'Přejít do návrháře →',
-  landingCardModelTitle: 'Data Model',
-  landingCardModelSubtitle: 'Datový model konfigurované agendy',
-  landingCardModelDesc: 'Definuje, jaká data konfigurace zpracovává — záznamy, seznamy, výčtové hodnoty a jejich pole. Slouží jako společný základ, na který se napojuje mapování i formát.',
-  landingCardModelFeatures: [
-    'Vizualizace jako hierarchický strom',
-    'Přehled polí a datových typů každého záznamu',
-    'Navigace po odkazech mezi záznamy (vnořené záznamy, seznamy)',
-    'Barevné rozlišení kořenových prvků, záznamů a výčtů',
-  ],
-  landingCardModelHint: 'Tax declaration model.xml',
-  landingCardMappingTitle: 'Model Mapping',
-  landingCardMappingSubtitle: 'Napojení modelu na data v D365 FO',
-  landingCardMappingDesc: 'Určuje, odkud se data pro model berou — z tabulek, pohledů, tříd, výčtů nebo vypočítaných polí v Dynamics 365 Finance & Operations.',
-  landingCardMappingFeatures: [
-    'Prohlížeč vazeb: ke každé cestě v modelu vidíte zdrojový výraz',
-    'Strom datových zdrojů (tabulky, třídy, vypočítaná pole …)',
-    'Drill-down pracovní plocha: nahoře výraz, vlevo strom částí a vpravo rozpad vybrané části',
-    'Sledování závislostí — na které tabulky a třídy se konfigurace odkazuje',
-  ],
-  landingCardMappingHint: 'Tax declaration model mapping.xml',
-  landingCardFormatTitle: 'Format',
-  landingCardFormatSubtitle: 'Šablona výstupního nebo vstupního souboru',
-  landingCardFormatDesc: 'Popisuje strukturu generovaného (nebo čteného) souboru — XML, Excel, Word, PDF, CSV či prostý text. Každý prvek může obsahovat formuli napojující data z mapování.',
-  landingCardFormatFeatures: [
-    'Rozpoznání typu souboru (XML / Excel / Word / PDF / Text)',
-    'Stromový náhled všech prvků včetně vložených formulí',
-    'Proklik z formule přes datový zdroj až ke zdrojové tabulce',
-    'Náhled Excel šablony s původním formátováním — kliknutím na buňku přejdeš na svázaný prvek formátu',
-    'Přehled transformací a výčtových hodnot definovaných ve formátu',
-  ],
-  landingCardFormatHint: 'VAT declaration XML (CZ).xml',
-  landingHowTitle: 'Jak to funguje',
-  landingStep1Title: 'Načti soubory',
-  landingStep1Desc: 'Přetáhni XML soubory z disku, nebo se připoj přímo k D365 F&O serveru a stáhni konfigurace online. Nejlepší výsledky dostaneš při načtení všech tří typů (Model + Mapování + Formát), protože trasování vazeb je pak nejúplnější.',
-  landingStep2Title: 'Projdi strom konfigurace',
-  landingStep2Desc: 'V levém panelu Exploreru vidíš hierarchii celé konfigurace. Kliknutím vybereš prvek, dvojklikem si otevřeš jeho vizualizaci na nové záložce.',
-  landingStep3Title: 'Klikni na formuli',
-  landingStep3Desc: 'V pohledu Formát nebo Mapování klikni na výraz. V drill-down pracovní ploše vybírej vlevo části výrazu a vpravo sleduj jejich naplnění (mapování a datový zdroj); proklikávej se dál až na tabulku, třídu nebo enum.',
-  landingStep4Title: 'Místa použití',
-  landingStep4Desc: 'V panelu 🔍 Hledat zadej název tabulky, třeba „TaxTrans“, a spusť „Místa použití“. Zobrazí se všechny formátové elementy, které z této tabulky čerpají data.',
+  landingLoaded: (n: number) => `${n} konfigurac${n === 1 ? 'e načtena' : 'e načteny'}`,
+  landingOpen: 'Otevřít návrhář',
   landingFooter: 'D365 FO ER Visualizer · Electronic Reporting Configuration Inspector',
 
   recentFiles: 'Nedávné soubory',
@@ -765,6 +704,7 @@ const cs: Translations = {
   fnoDownloadFailed: (name: string, msg: string) => `Stažení „${name}" selhalo: ${msg}`,
   fnoLoadedCount: (n: number) => `Načteno ${n} konfigurací z F&O.`,
   fnoMappingNotAvailable: (names: string[]) => `ModelMapping nelze stáhnout pro: ${names.join(', ')}. Vazby formátových elementů jsou i přesto dostupné přes FormatMapping.`,
+  fnoMappingNoDataModel: 'ModelMapping se nestahoval — ve staženém formátu nebyl nalezen žádný GUID datového modelu, takže není podle čeho mapování dohledat. Vyber navíc příslušný datový model (nebo jeho mapování) ve stromu.',
 
   // Property inspector labels
   propDescription: 'Popis',
@@ -911,6 +851,7 @@ const en: Translations = {
   searchPlaceholder: 'Table name, field, path…',
   search: 'Search',
   whereUsed: 'Where used',
+  propRevealInExplorer: 'Reveal in Explorer',
   whereUsedPlaceholder: 'e.g. TaxTrans, CustTable, MyCalcField…',
   whereUsedLabel: 'Enter table, enum, class or datasource name:',
   find: 'Find',
@@ -961,6 +902,8 @@ const en: Translations = {
   explorerFilterPlaceholder: 'Filter explorer…',
   explorerFilterByKind: 'Filter by kind',
   explorerSort: 'Sort',
+  explorerViewFlat: 'Show flat list',
+  explorerViewHierarchy: 'Show model hierarchy',
   explorerSortLoadOrder: 'Load order',
   explorerSortNameAsc: 'Name ascending (A–Z)',
   explorerSortNameDesc: 'Name descending (Z–A)',
@@ -1049,62 +992,21 @@ const en: Translations = {
   // Landing page
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',
   landingTitle: 'D365FO ER Visualizer',
-  landingSub: 'One focused workspace for ER data models, mappings, and formats.\nLoad files, trace expression bindings to data sources, and find where-used links fast.',
-  landingStatLoaded: 'Loaded',
-  landingStatRecent: 'Recent',
-  landingStatTypes: 'File types',
+  landingSub: 'Load ER configurations from disk or straight from a Finance & Operations environment, then trace format bindings through the model mapping down to the source table, class, or enum.',
+  landingDocsLink: 'Documentation',
+  landingSourceLabel: 'Configuration source',
   landingDropPrimary: 'Drop ER XML files here',
   landingDropRelease: 'Release files',
   landingDropSecondary: 'or click to browse · you can load multiple files at once',
   landingLoading: 'Loading files…',
   landingDropAriaLabel: 'Drop XML files here',
-  landingPillModel: '📐 Model',
-  landingPillMapping: '🔗 Mapping',
-  landingPillFormat: '📄 Format',
-  landingErrors: '⚠️ Load errors',
+  landingPillModel: 'Data model',
+  landingPillMapping: 'Model mapping',
+  landingPillFormat: 'Format',
+  landingErrors: 'Load errors',
   landingDismiss: 'Dismiss',
-  landingLoaded: (n: number) => `✅ ${n} configuration${n === 1 ? '' : 's'} loaded`,
-  landingOpen: 'Open designer →',
-  landingCardModelTitle: 'Data Model',
-  landingCardModelSubtitle: 'Data model of the configured agenda',
-  landingCardModelDesc: 'Defines what data the configuration processes — records, lists, enumeration values and their fields. Serves as the common foundation that mapping and format connect to.',
-  landingCardModelFeatures: [
-    'Visualize as a hierarchical tree',
-    'Overview of fields and data types for each record',
-    'Navigate references between records (nested records, lists)',
-    'Color-coded root elements, records, and enumerations',
-  ],
-  landingCardModelHint: 'Tax declaration model.xml',
-  landingCardMappingTitle: 'Model Mapping',
-  landingCardMappingSubtitle: 'Connects the model to D365 FO data',
-  landingCardMappingDesc: 'Determines where the model data comes from — tables, views, classes, enums, or calculated fields in Dynamics 365 Finance & Operations.',
-  landingCardMappingFeatures: [
-    'Binding browser: see the source expression for every model path',
-    'Data-source tree (tables, classes, calculated fields …)',
-    'Drill-down workbench: expression on top, part tree on the left, resolution pane and deep digging on the right',
-    'Dependency tracking — which tables and classes the configuration references',
-  ],
-  landingCardMappingHint: 'Tax declaration model mapping.xml',
-  landingCardFormatTitle: 'Format',
-  landingCardFormatSubtitle: 'Output or input file template',
-  landingCardFormatDesc: 'Describes the structure of the generated (or consumed) file — XML, Excel, Word, PDF, CSV or plain text. Every element can contain a formula linked to mapping data.',
-  landingCardFormatFeatures: [
-    'Detect file type (XML / Excel / Word / PDF / Text)',
-    'Tree view of all elements including embedded formulas',
-    'Click through from formula via data source to source table',
-    'Excel template preview with original formatting — click a bound cell to navigate to the format element',
-    'Overview of transformations and enumeration values defined in the format',
-  ],
-  landingCardFormatHint: 'VAT declaration XML (CZ).xml',
-  landingHowTitle: 'How it works',
-  landingStep1Title: 'Load files',
-  landingStep1Desc: 'Drag-and-drop XML files from disk, or connect directly to a D365 F&O server to download configurations online. For the most complete traceability, load all three types (Model + Mapping + Format).',
-  landingStep2Title: 'Browse the configuration tree',
-  landingStep2Desc: 'The Explorer panel on the left shows the full configuration hierarchy. Click to select an element, double-click to open its visualization in a new tab.',
-  landingStep3Title: 'Click a formula',
-  landingStep3Desc: 'In the Format or Mapping view, click an expression. In the drill-down workbench, select expression parts on the left and inspect their resolution on the right, then dig deeper until you reach the final table, class, or enum source.',
-  landingStep4Title: 'Where used',
-  landingStep4Desc: 'In the 🔍 Search panel, enter a table name such as “TaxTrans” and run “Where used”. All format elements that consume data from that table will be shown.',
+  landingLoaded: (n: number) => `${n} configuration${n === 1 ? '' : 's'} loaded`,
+  landingOpen: 'Open designer',
   landingFooter: 'D365 FO ER Visualizer · Electronic Reporting Configuration Inspector',
 
   recentFiles: 'Recent files',
@@ -1186,6 +1088,7 @@ const en: Translations = {
   fnoDownloadFailed: (name: string, msg: string) => `Download of "${name}" failed: ${msg}`,
   fnoLoadedCount: (n: number) => `Loaded ${n} configuration${n === 1 ? '' : 's'} from F&O.`,
   fnoMappingNotAvailable: (names: string[]) => `ModelMapping could not be downloaded for: ${names.join(', ')}. Format element bindings are still available via FormatMapping.`,
+  fnoMappingNoDataModel: 'No ModelMapping was attempted — the downloaded format carries no data model GUID, so there is nothing to resolve a mapping against. Select the data model (or its mapping) in the tree as well.',
 
   // Property inspector labels
   propDescription: 'Description',

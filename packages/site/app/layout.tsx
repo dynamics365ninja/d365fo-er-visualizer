@@ -11,18 +11,21 @@ const inter = Inter({
   variable: '--font-inter',
 });
 
+/* Face variables are named after the family, not after the Tailwind theme slot
+   (`--font-display` / `--font-mono`): the shared tokens map slot → face, and a
+   same-name reference would be circular. */
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
   display: 'swap',
   weight: ['500', '600', '700'],
-  variable: '--font-display',
+  variable: '--font-space-grotesk',
 });
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   display: 'swap',
   weight: ['400', '500'],
-  variable: '--font-mono',
+  variable: '--font-jetbrains-mono',
 });
 
 export const metadata: Metadata = {

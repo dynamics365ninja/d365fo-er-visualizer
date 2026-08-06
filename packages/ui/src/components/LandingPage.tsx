@@ -2,39 +2,24 @@ import React, { useCallback, useRef, useState } from 'react';
 import {
   makeStyles,
   mergeClasses,
-  tokens,
   shorthands,
+  tokens,
   Button,
-  Card,
-  CardHeader,
-  Title3,
-  Subtitle2,
-  Body1,
-  Body1Strong,
-  Caption1,
   Spinner,
-  Divider,
   MessageBar,
   MessageBarBody,
   MessageBarTitle,
   MessageBarActions,
-  Tag,
-  TagGroup,
-  TabList,
-  Tab,
-  type SelectTabEvent,
-  type SelectTabData,
 } from '@fluentui/react-components';
 import {
   ArrowDownloadRegular,
-  CheckmarkCircleFilled,
   CheckmarkCircleRegular,
   CloudRegular,
-  DataBarVerticalFilled,
+  DataBarVerticalRegular,
   DismissRegular,
-  DocumentFilled,
+  DocumentRegular,
   FolderOpenRegular,
-  LinkFilled,
+  LinkRegular,
   OpenRegular,
   DeleteRegular,
   WeatherMoonRegular,
@@ -45,258 +30,244 @@ import { locale, setLocale, t, useLocale } from '../i18n';
 import { FnoConnectPanel } from './FnoConnectPanel';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 
+/**
+ * Workspace entry point.
+ *
+ * Deliberately *not* a marketing page: what the product is, which ER component
+ * types exist and how the workflow goes are covered by the public site
+ * (`/`, `/features`, `/docs/*`). This screen only does the three things you
+ * cannot do anywhere else — open files, connect to F&O, reopen recent work —
+ * and links to the site for everything else.
+ */
+
 // ────────────────────────── styles ──────────────────────────
 
 const useStyles = makeStyles({
   root: {
     minHeight: '100%',
-    padding: '40px 24px 64px',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    gap: '32px',
-    backgroundColor: 'var(--bg-primary)',
-    backgroundImage: 'radial-gradient(ellipse at top, color-mix(in srgb, var(--accent) 8%, transparent) 0%, transparent 60%)',
-    position: 'relative',
-    '@media (max-width: 480px)': {
-      padding: '24px 12px 48px',
-      gap: '24px',
-    },
+    backgroundColor: 'var(--er-bg)',
+    color: 'var(--er-text)',
   },
-  themeToggle: {
-    position: 'absolute',
-    top: '16px',
-    right: '16px',
-    zIndex: 10,
-  },
-  langToggle: {
-    position: 'absolute',
-    top: '16px',
-    left: '16px',
-    zIndex: 10,
+  topbar: {
     display: 'flex',
-    gap: '4px',
-    padding: '2px',
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground3,
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
-  },
-  langButton: {
-    minWidth: '34px',
-    paddingLeft: '8px',
-    paddingRight: '8px',
-  },
-  hero: {
-    width: '100%',
-    maxWidth: '960px',
-    display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
     gap: '12px',
-    textAlign: 'center',
-    animationName: {
-      from: { opacity: 0, transform: 'translateY(-8px)' },
-      to: { opacity: 1, transform: 'translateY(0)' },
-    },
-    animationDuration: '420ms',
-    animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-    animationFillMode: 'forwards',
+    padding: '0 20px',
+    height: '60px',
+    flexShrink: 0,
+    borderBottom: '1px solid var(--er-border)',
+    backgroundColor: 'var(--er-surface)',
   },
-  heroLogo: {
-    width: '72px',
-    height: '72px',
-    borderRadius: '20px',
-    backgroundColor: tokens.colorBrandBackground,
-    backgroundImage: `linear-gradient(135deg, ${tokens.colorBrandBackground} 0%, ${tokens.colorBrandBackgroundPressed} 100%)`,
-    display: 'flex',
+  brand: {
+    display: 'inline-flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: tokens.shadow16,
-    color: tokens.colorNeutralForegroundOnBrand,
-    marginBottom: '8px',
-    position: 'relative',
-    animationName: {
-      '0%, 100%': { boxShadow: tokens.shadow16 },
-      '50%': { boxShadow: `${tokens.shadow28}, 0 0 0 6px ${tokens.colorBrandBackground2}` },
-    },
-    animationDuration: '3.2s',
-    animationIterationCount: 'infinite',
-    animationTimingFunction: 'ease-in-out',
+    gap: '10px',
+    fontFamily: 'var(--er-font-display)',
+    fontSize: '15px',
+    fontWeight: 700,
+    letterSpacing: '-0.01em',
   },
-  heroBadge: {
-    marginBottom: '4px',
-  },
-  heroTitle: {
-    margin: 0,
-  },
-  heroSub: {
-    color: tokens.colorNeutralForeground2,
-    maxWidth: '640px',
-    lineHeight: 1.45,
-    whiteSpace: 'pre-line',
-  },
-  dropzone: {
-    width: '100%',
-    maxWidth: '720px',
-    minHeight: '200px',
-    display: 'flex',
+  topbarActions: {
+    marginLeft: 'auto',
+    display: 'inline-flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: '32px',
-    borderRadius: tokens.borderRadiusXLarge,
-    ...shorthands.border('2px', 'dashed', tokens.colorNeutralStroke1),
-    backgroundColor: tokens.colorNeutralBackground1,
-    cursor: 'pointer',
-    transitionProperty: 'transform, box-shadow, border-color, background-color',
-    transitionDuration: '220ms',
-    transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-    textAlign: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-    animationName: {
-      from: { opacity: 0, transform: 'translateY(12px)' },
-      to: { opacity: 1, transform: 'translateY(0)' },
-    },
-    animationDuration: '520ms',
-    animationDelay: '80ms',
-    animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-    animationFillMode: 'forwards',
+    gap: '8px',
+  },
+  docsLink: {
+    color: 'var(--er-text-muted)',
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: 500,
+    textDecorationLine: 'none',
+    padding: '6px 8px',
+    borderRadius: 'var(--er-radius-md)',
     ':hover': {
-      ...shorthands.borderColor(tokens.colorBrandStroke1),
-      backgroundColor: tokens.colorNeutralBackground1Hover,
-      transform: 'translateY(-2px)',
-      boxShadow: tokens.shadow16,
+      color: 'var(--er-accent)',
+      backgroundColor: 'var(--er-surface-2)',
+    },
+  },
+  langSwitch: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '2px',
+    padding: '2px',
+    borderRadius: 'var(--er-radius-md)',
+    backgroundColor: 'var(--er-surface-2)',
+    ...shorthands.border('1px', 'solid', 'var(--er-border)'),
+  },
+  langButton: {
+    minWidth: '32px',
+    height: '24px',
+    fontSize: '11px',
+    fontWeight: 600,
+  },
+  main: {
+    flex: 1,
+    width: '100%',
+    maxWidth: '1080px',
+    margin: '0 auto',
+    padding: '56px 20px 72px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '28px',
+    '@media (max-width: 600px)': {
+      padding: '32px 16px 48px',
+    },
+  },
+  badge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    alignSelf: 'flex-start',
+    padding: '5px 12px',
+    borderRadius: 'var(--er-radius-pill)',
+    backgroundColor: 'var(--er-surface)',
+    ...shorthands.border('1px', 'solid', 'var(--er-border)'),
+    color: 'var(--er-text-muted)',
+    fontSize: '12px',
+    fontWeight: 500,
+  },
+  badgeDot: {
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: 'var(--er-accent)',
+  },
+  title: {
+    margin: 0,
+    fontFamily: 'var(--er-font-display)',
+    fontSize: 'clamp(30px, 4vw, 44px)',
+    lineHeight: 1.1,
+    fontWeight: 700,
+    letterSpacing: '-0.02em',
+    maxWidth: '18ch',
+  },
+  lead: {
+    margin: 0,
+    maxWidth: '62ch',
+    color: 'var(--er-text-muted)',
+    fontSize: '15px',
+    lineHeight: 1.6,
+  },
+  // ── workspace card ──
+  card: {
+    borderRadius: 'var(--er-radius-xl)',
+    ...shorthands.border('1px', 'solid', 'var(--er-border)'),
+    backgroundColor: 'var(--er-surface)',
+    overflow: 'hidden',
+  },
+  cardTabs: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '8px',
+    borderBottom: '1px solid var(--er-border)',
+    backgroundColor: 'var(--er-surface-2)',
+  },
+  cardTab: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '7px',
+    height: '32px',
+    padding: '0 14px',
+    borderRadius: 'var(--er-radius-md)',
+    ...shorthands.border('1px', 'solid', 'transparent'),
+    backgroundColor: 'transparent',
+    color: 'var(--er-text-muted)',
+    fontFamily: tokens.fontFamilyBase,
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    ':hover': { color: 'var(--er-text)', backgroundColor: 'var(--er-surface)' },
+  },
+  cardTabActive: {
+    backgroundColor: 'var(--er-surface)',
+    ...shorthands.borderColor('var(--er-border)'),
+    color: 'var(--er-text)',
+    fontWeight: 600,
+    boxShadow: 'var(--er-shadow-1)',
+  },
+  cardBody: {
+    padding: '20px',
+  },
+  // ── drop zone ──
+  dropzone: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    minHeight: '208px',
+    padding: '28px',
+    borderRadius: 'var(--er-radius-lg)',
+    ...shorthands.border('1px', 'dashed', 'var(--er-border-strong)'),
+    backgroundColor: 'var(--er-bg-soft)',
+    cursor: 'pointer',
+    textAlign: 'center',
+    transitionProperty: 'border-color, background-color',
+    transitionDuration: 'var(--er-duration)',
+    ':hover': {
+      ...shorthands.borderColor('var(--er-accent)'),
+      backgroundColor: 'var(--er-accent-soft)',
     },
     ':focus-visible': {
-      ...shorthands.outline('2px', 'solid', tokens.colorStrokeFocus2),
+      ...shorthands.outline('2px', 'solid', 'var(--er-accent)'),
       outlineOffset: '2px',
     },
   },
   dropzoneDragging: {
-    ...shorthands.borderColor(tokens.colorBrandStroke1),
-    ...shorthands.borderStyle('solid'),
-    backgroundColor: tokens.colorBrandBackground2,
-    transform: 'scale(1.01)',
-    boxShadow: tokens.shadow28,
+    ...shorthands.border('1px', 'solid', 'var(--er-accent)'),
+    backgroundColor: 'var(--er-accent-soft)',
   },
-  dropzoneInner: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '12px',
-    position: 'relative',
-    zIndex: 1,
-  },
-  dropzoneIcon: {
-    fontSize: '36px',
-    color: tokens.colorBrandForeground1,
+  dropIcon: {
+    color: 'var(--er-accent)',
     display: 'inline-flex',
-    transitionProperty: 'transform',
-    transitionDuration: '220ms',
   },
-  tags: {
-    marginTop: '4px',
+  dropTitle: {
+    margin: 0,
+    fontFamily: 'var(--er-font-display)',
+    fontSize: '17px',
+    fontWeight: 700,
   },
-  loadedBar: {
-    width: '100%',
-    maxWidth: '720px',
+  dropHint: {
+    margin: 0,
+    color: 'var(--er-text-muted)',
+    fontSize: '13px',
   },
-  cardGrid: {
-    width: '100%',
-    maxWidth: '1160px',
+  kinds: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: '6px',
+    marginTop: '6px',
+  },
+  kindPill: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '5px',
+    padding: '3px 9px',
+    borderRadius: 'var(--er-radius-pill)',
+    ...shorthands.border('1px', 'solid', 'var(--er-border)'),
+    backgroundColor: 'var(--er-surface)',
+    fontSize: '11px',
+    fontWeight: 500,
+    color: 'var(--er-text-muted)',
+  },
+  kindModel: { color: 'var(--er-model)' },
+  kindMapping: { color: 'var(--er-mapping)' },
+  kindFormat: { color: 'var(--er-format)' },
+  // ── recents ──
+  columns: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))',
     gap: '20px',
   },
-  card: {
-    padding: '20px',
-    gap: '12px',
-    backgroundColor: tokens.colorNeutralBackground1,
-    transitionProperty: 'transform, box-shadow, border-color',
-    transitionDuration: '260ms',
-    transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-    animationName: {
-      from: { opacity: 0, transform: 'translateY(16px) scale(0.98)' },
-      to: { opacity: 1, transform: 'translateY(0) scale(1)' },
-    },
-    animationDuration: '500ms',
-    animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-    animationFillMode: 'forwards',
-    ':hover': {
-      transform: 'translateY(-4px)',
-      boxShadow: tokens.shadow28,
-    },
-  },
-  cardDelay0: { animationDelay: '120ms' },
-  cardDelay1: { animationDelay: '200ms' },
-  cardDelay2: { animationDelay: '280ms' },
-  cardIconInfo: {
-    backgroundColor: 'color-mix(in srgb, var(--brand-1) 18%, transparent)',
-    color: 'var(--brand-1)',
-  },
-  cardIconSuccess: {
-    backgroundColor: tokens.colorPaletteGreenBackground2,
-    color: tokens.colorPaletteGreenForeground2,
-  },
-  cardIconPurple: {
-    backgroundColor: tokens.colorPalettePurpleBackground2,
-    color: tokens.colorPalettePurpleForeground2,
-  },
-  cardIcon: {
-    width: '48px',
-    height: '48px',
-    borderRadius: tokens.borderRadiusLarge,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '22px',
-    transitionProperty: 'transform',
-    transitionDuration: '260ms',
-    transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-  },
-  cardFeatures: {
-    margin: 0,
-    padding: 0,
-    listStyle: 'none',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
-  },
-  cardFeature: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: '8px',
-    color: tokens.colorNeutralForeground2,
-    fontSize: tokens.fontSizeBase200,
-  },
-  cardFeatureIcon: {
-    color: tokens.colorPaletteGreenForeground1,
-    flexShrink: 0,
-    marginTop: '2px',
-  },
-  cardHint: {
-    marginTop: '8px',
-    padding: '8px 10px',
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground3,
-    fontSize: tokens.fontSizeBase100,
-    color: tokens.colorNeutralForeground3,
-    fontFamily: tokens.fontFamilyMonospace,
-  },
   section: {
-    width: '100%',
-    maxWidth: '1160px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
-    animationName: {
-      from: { opacity: 0, transform: 'translateY(8px)' },
-      to: { opacity: 1, transform: 'translateY(0)' },
-    },
-    animationDuration: '520ms',
-    animationDelay: '360ms',
-    animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-    animationFillMode: 'forwards',
+    gap: '10px',
+    minWidth: 0,
   },
   sectionHeader: {
     display: 'flex',
@@ -304,84 +275,59 @@ const useStyles = makeStyles({
     justifyContent: 'space-between',
     gap: '12px',
   },
-  recentList: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(min(260px, 100%), 1fr))',
-    gap: '8px',
+  eyebrow: {
+    fontSize: '10.5px',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.09em',
+    color: 'var(--er-text-muted)',
   },
-  recentItem: {
+  list: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  item: {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
     padding: '10px 12px',
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
-    transitionProperty: 'transform, background-color, border-color, box-shadow',
-    transitionDuration: '180ms',
-    transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+    borderRadius: 'var(--er-radius-lg)',
+    ...shorthands.border('1px', 'solid', 'var(--er-border)'),
+    backgroundColor: 'var(--er-surface)',
+    transitionProperty: 'border-color, background-color',
+    transitionDuration: 'var(--er-duration)',
     ':hover': {
-      backgroundColor: tokens.colorNeutralBackground2Hover,
-      ...shorthands.borderColor(tokens.colorBrandStroke2),
-      transform: 'translateX(2px)',
-      boxShadow: tokens.shadow4,
+      ...shorthands.borderColor('var(--er-accent-border)'),
+      backgroundColor: 'var(--er-surface-2)',
     },
   },
-  recentName: {
+  itemBody: {
     flex: 1,
     minWidth: 0,
+  },
+  itemName: {
+    fontSize: '13px',
+    fontWeight: 600,
     overflow: 'hidden',
-    whiteSpace: 'nowrap',
     textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
-  sessionCard: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-    padding: '12px 14px',
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
-    cursor: 'pointer',
-    transitionProperty: 'transform, background-color, border-color, box-shadow',
-    transitionDuration: '180ms',
-    transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-    ':hover': {
-      backgroundColor: tokens.colorNeutralBackground2Hover,
-      ...shorthands.borderColor(tokens.colorBrandStroke2),
-      transform: 'translateY(-2px)',
-      boxShadow: tokens.shadow8,
-    },
-    ':hover .lp-session-open': {
-      opacity: 1,
-      pointerEvents: 'auto',
-    },
-    ':focus-within .lp-session-open': {
-      opacity: 1,
-      pointerEvents: 'auto',
-    },
-    ':focus-visible': {
-      ...shorthands.outline('2px', 'solid', tokens.colorStrokeFocus2),
-      outlineOffset: '2px',
-    },
-  },
-  sessionOpenBtn: {
-    opacity: 0,
-    pointerEvents: 'none',
-    transitionProperty: 'opacity',
-    transitionDuration: '160ms',
-  },
-  sessionHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
+  itemMeta: {
+    fontSize: '11px',
+    color: 'var(--er-text-muted)',
+    fontFamily: 'var(--er-font-mono)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   sessionFiles: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '4px',
-    fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground2,
+    gap: '3px',
+    marginTop: '6px',
+    fontSize: '11.5px',
+    color: 'var(--er-text-muted)',
   },
   sessionFileRow: {
     display: 'flex',
@@ -391,122 +337,65 @@ const useStyles = makeStyles({
     whiteSpace: 'nowrap',
     textOverflow: 'ellipsis',
   },
-  steps: {
-    width: '100%',
-    maxWidth: '1160px',
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))',
-    gap: '16px',
-    animationName: {
-      from: { opacity: 0 },
-      to: { opacity: 1 },
-    },
-    animationDuration: '600ms',
-    animationDelay: '440ms',
-    animationTimingFunction: 'ease-out',
-    animationFillMode: 'forwards',
-  },
-  step: {
-    display: 'flex',
-    gap: '12px',
-    alignItems: 'flex-start',
-    padding: '12px',
-    borderRadius: tokens.borderRadiusMedium,
-    transitionProperty: 'background-color, transform',
-    transitionDuration: '180ms',
-    ':hover': {
-      backgroundColor: tokens.colorNeutralBackground2,
-      transform: 'translateY(-1px)',
-    },
-  },
-  stepNum: {
-    width: '32px',
-    height: '32px',
-    borderRadius: tokens.borderRadiusCircular,
-    backgroundColor: tokens.colorBrandBackground,
-    backgroundImage: `linear-gradient(135deg, ${tokens.colorBrandBackground} 0%, ${tokens.colorBrandBackgroundPressed} 100%)`,
-    color: tokens.colorNeutralForegroundOnBrand,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: tokens.fontWeightSemibold,
-    flexShrink: 0,
-    boxShadow: tokens.shadow4,
-  },
   footer: {
-    marginTop: 'auto',
-    paddingTop: '24px',
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase100,
+    borderTop: '1px solid var(--er-border)',
+    padding: '18px 20px',
     textAlign: 'center',
+    color: 'var(--er-text-subtle)',
+    fontSize: '12px',
   },
+  // ── F&O ingest overlay ──
   ingestOverlay: {
     position: 'fixed',
     inset: 0,
     zIndex: 9999,
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '24px',
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    backdropFilter: 'blur(8px)',
-    animationName: {
-      from: { opacity: 0 },
-      to: { opacity: 1 },
-    },
-    animationDuration: '300ms',
-    animationTimingFunction: 'ease-out',
-    animationFillMode: 'both',
+    backgroundColor: 'color-mix(in srgb, var(--er-bg) 78%, transparent)',
+    backdropFilter: 'blur(4px)',
   },
   ingestCard: {
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'stretch',
     gap: '16px',
-    padding: '28px 32px',
-    borderRadius: tokens.borderRadiusXLarge,
-    backgroundColor: tokens.colorNeutralBackground1,
-    boxShadow: tokens.shadow64,
-    width: '360px',
-    maxWidth: 'calc(100vw - 48px)',
-    animationName: {
-      from: { opacity: 0, transform: 'scale(0.92) translateY(12px)' },
-      to: { opacity: 1, transform: 'scale(1) translateY(0)' },
-    },
-    animationDuration: '400ms',
-    animationDelay: '100ms',
-    animationTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
-    animationFillMode: 'both',
+    padding: '24px',
+    width: '380px',
+    maxWidth: 'calc(100vw - 32px)',
+    borderRadius: 'var(--er-radius-xl)',
+    ...shorthands.border('1px', 'solid', 'var(--er-border)'),
+    backgroundColor: 'var(--er-surface)',
+    boxShadow: 'var(--er-shadow-3)',
+  },
+  ingestHead: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
   },
   ingestIcon: {
-    width: '56px',
-    height: '56px',
-    borderRadius: '50%',
-    backgroundColor: tokens.colorBrandBackground,
-    backgroundImage: `linear-gradient(135deg, ${tokens.colorBrandBackground} 0%, ${tokens.colorBrandBackgroundPressed} 100%)`,
+    width: '40px',
+    height: '40px',
+    flexShrink: 0,
+    borderRadius: 'var(--er-radius-lg)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: tokens.shadow16,
-    position: 'relative',
-    zIndex: 1,
+    backgroundColor: 'var(--er-accent-soft)',
+    color: 'var(--er-accent)',
   },
-  ingestPulse: {
-    width: '56px',
-    height: '56px',
-    borderRadius: '50%',
-    border: `2px solid ${tokens.colorBrandBackground}`,
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    animationName: {
-      '0%': { transform: 'scale(1)', opacity: 0.7 },
-      '100%': { transform: 'scale(1.8)', opacity: 0 },
-    },
-    animationDuration: '1.8s',
-    animationTimingFunction: 'ease-out',
-    animationIterationCount: 'infinite',
+  ingestTitle: {
+    fontFamily: 'var(--er-font-display)',
+    fontSize: '15px',
+    fontWeight: 700,
+  },
+  ingestSub: {
+    fontSize: '12px',
+    color: 'var(--er-text-muted)',
+  },
+  ingestSteps: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '9px',
   },
 });
 
@@ -514,28 +403,27 @@ interface LandingPageProps {
   onFilesLoaded: () => void;
 }
 
-type LandingAccent = 'info' | 'success' | 'purple';
-
-function ErVisualizerMark() {
+function ErVisualizerMark({ size = 28 }: { size?: number }) {
   return (
-    <svg width="42" height="42" viewBox="0 0 64 64" fill="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="landing-paper" x1="18" y1="14" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#f0fffb" />
-          <stop offset="1" stopColor="#a7ebd7" />
-        </linearGradient>
-      </defs>
-      <path d="M23 14h15l8 8v23a4 4 0 0 1-4 4H23a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4Z" fill="url(#landing-paper)" />
-      <path d="M38 14v8h8" stroke="#0a6f73" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M28 26h8m-8 6h6" stroke="#0a6f73" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M28 37.5h8.5l6.5-6.5" stroke="#0f3d3e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M28 37.5l6 6.5h9" stroke="#0f3d3e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="25" cy="37.5" r="4.5" fill="#0f3d3e" />
-      <circle cx="45" cy="29" r="4" fill="#37a987" stroke="#defdf5" strokeWidth="2" />
-      <circle cx="45" cy="44" r="4" fill="#37a987" stroke="#defdf5" strokeWidth="2" />
-      <circle cx="25" cy="37.5" r="1.7" fill="#defdf5" />
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true">
+      <rect x="4" y="4" width="56" height="56" rx="14" fill="var(--er-accent)" />
+      <path d="M23 16h14l8 8v23a3 3 0 0 1-3 3H23a3 3 0 0 1-3-3V19a3 3 0 0 1 3-3Z" fill="var(--er-accent-contrast)" opacity="0.94" />
+      <path d="M37 16v8h8" stroke="var(--er-accent)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M27 38h8.5l6-6" stroke="var(--er-accent)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M27 38l6 6h8.5" stroke="var(--er-accent)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="25" cy="38" r="3.4" fill="var(--er-accent)" />
+      <circle cx="43" cy="32" r="3" fill="var(--er-accent)" />
+      <circle cx="43" cy="44" r="3" fill="var(--er-accent)" />
     </svg>
   );
+}
+
+/** Documentation lives on the marketing site; fall back to the repo in dev. */
+function docsHref(): string {
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/app')) {
+    return '/docs/getting-started';
+  }
+  return 'https://github.com/dynamics365ninja/d365fo-er-visualizer#readme';
 }
 
 // ────────────────────────── component ──────────────────────────
@@ -556,26 +444,12 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const cachedPaths = useAppStore(s => s.cachedPaths);
   const themeMode = useAppStore(s => s.themeMode);
   const setThemeMode = useAppStore(s => s.setThemeMode);
+  const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
   const [isDragging, setIsDragging] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [sourceTab, setSourceTab] = useState<'local' | 'remote'>('local');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
-
-  const landingBrandVars = {
-    '--colorBrandBackground': 'var(--brand-1)',
-    '--colorBrandBackgroundHover': 'var(--brand-2)',
-    '--colorBrandBackgroundPressed': 'var(--brand-1)',
-    '--colorBrandBackground2': 'color-mix(in srgb, var(--brand-1) 20%, transparent)',
-    '--colorBrandForeground1': 'var(--brand-1)',
-    '--colorBrandForeground2': 'var(--brand-2)',
-    '--colorBrandStroke1': 'var(--brand-1)',
-    '--colorBrandStroke2': 'color-mix(in srgb, var(--brand-1) 36%, transparent)',
-    '--colorCompoundBrandBackground': 'var(--brand-1)',
-    '--colorCompoundBrandBackgroundHover': 'var(--brand-2)',
-    '--colorCompoundBrandStroke': 'var(--brand-1)',
-  } as React.CSSProperties;
 
   const processFiles = useCallback(async (files: FileList | null) => {
     setLoading(true);
@@ -617,518 +491,371 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   return (
     <div
       className={styles.root}
-      style={landingBrandVars}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
-      <div className={styles.langToggle} aria-label={t.language} role="group">
-        <Button
-          appearance={currentLocale === 'cs' ? 'primary' : 'subtle'}
-          size="small"
-          className={styles.langButton}
-          onClick={() => setLocale('cs')}
-          aria-pressed={currentLocale === 'cs'}
-          title={t.languageCzech}
-        >
-          CZ
-        </Button>
-        <Button
-          appearance={currentLocale === 'en' ? 'primary' : 'subtle'}
-          size="small"
-          className={styles.langButton}
-          onClick={() => setLocale('en')}
-          aria-pressed={currentLocale === 'en'}
-          title={t.languageEnglish}
-        >
-          EN
-        </Button>
-      </div>
+      {fnoIngestStatus && <FnoIngestOverlay status={fnoIngestStatus} />}
 
-      {/* Full-page loading overlay during F&O download */}
-      {fnoIngestStatus && (
-        <div className={styles.ingestOverlay}>
-          <div className={styles.ingestCard}>
-            {/* Icon + title */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
-              <div style={{ position: 'relative', flexShrink: 0, width: '56px', height: '56px' }}>
-                <div className={styles.ingestPulse} />
-                <div className={styles.ingestIcon}>
-                  <CloudRegular fontSize={28} style={{ color: tokens.colorNeutralForegroundOnBrand }} />
-                </div>
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <Subtitle2 style={{ display: 'block' }}>{t.fnoLoading}</Subtitle2>
-                <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginTop: '3px' }}>
-                  {locale === 'cs' ? 'z Dynamics 365 F&O' : 'from Dynamics 365 F\u0026O'}
-                </Caption1>
-              </div>
-            </div>
-
-            {/* Progress bar */}
-            <div className="fno-ingest-progress-track" style={{ width: '100%' }}>
-              <div className="fno-ingest-progress-bar" />
-            </div>
-
-            {/* Step list */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-              {[
-                { key: 'prepare',  label: locale === 'cs' ? 'P\u0159\u00edprava' : 'Preparing' },
-                { key: 'dm',       label: locale === 'cs' ? 'Stahuji datov\u00e9 modely' : 'Downloading data models' },
-                { key: 'fm',       label: locale === 'cs' ? 'Stahuji form\u00e1ty a mapov\u00e1n\u00ed' : 'Downloading formats \u0026 mappings' },
-                { key: 'mm',       label: locale === 'cs' ? 'Stahov\u00e1n\u00ed mapov\u00e1n\u00ed model\u016f' : 'Downloading model mappings' },
-                { key: 'finalize', label: locale === 'cs' ? 'Dokon\u010duji' : 'Finalizing' },
-              ].map((step, i) => {
-                const s = fnoIngestStatus.toLowerCase();
-                let activeStep = 2;
-                if (s.includes('p\u0159ipravu') || s.includes('prepar')) activeStep = 0;
-                else if (s.includes('datamodel') || s.includes('datov')) activeStep = 1;
-                else if (s.includes('form') || s.includes('konfigurace') || s.includes('configuration')) activeStep = 2;
-                else if (s.includes('mapping') || s.includes('mapov')) activeStep = 3;
-                else if (s.includes('dokon') || s.includes('\u0159e\u0161') || s.includes('resolv') || s.includes('cross')) activeStep = 4;
-
-                const isDone   = i < activeStep;
-                const isActive = i === activeStep;
-
-                return (
-                  <div
-                    key={step.key}
-                    className={`fno-ingest-step${isDone ? ' done' : isActive ? ' active' : ''}`}
-                    style={{ fontSize: '13px' }}
-                  >
-                    {isDone ? (
-                      <CheckmarkCircleRegular
-                        fontSize={15}
-                        style={{ flexShrink: 0, color: tokens.colorPaletteGreenForeground1 }}
-                      />
-                    ) : (
-                      <div className="fno-ingest-step-dot" style={{ width: '9px', height: '9px' }} />
-                    )}
-                    <span>{step.label}</span>
-                    {isActive && (
-                      <span style={{
-                        fontSize: '11px',
-                        color: tokens.colorNeutralForeground3,
-                        marginLeft: 'auto',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        maxWidth: '160px',
-                      }}>
-                        {fnoIngestStatus}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Animated floating orbs */}
-      <div className="lp-orb lp-orb-1" aria-hidden="true" />
-      <div className="lp-orb lp-orb-2" aria-hidden="true" />
-      <div className="lp-orb lp-orb-3" aria-hidden="true" />
-
-      {/* Theme toggle */}
-      <Button
-        className={styles.themeToggle}
-        appearance="subtle"
-        shape="circular"
-        icon={themeMode === 'dark' ? <WeatherSunnyRegular /> : <WeatherMoonRegular />}
-        aria-label={themeMode === 'dark' ? t.lightTheme : t.darkTheme}
-        title={themeMode === 'dark' ? t.lightTheme : t.darkTheme}
-        onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
-      />
-
-      {/* Hero */}
-      <div className={mergeClasses(styles.hero, 'lp-above')} style={{ position: 'relative' }}>
-        <div className="lp-dot-grid" aria-hidden="true" style={{ inset: '-80px -40px -40px -40px' }} />
-        <div className={styles.heroLogo} aria-hidden="true" style={{ position: 'relative', zIndex: 1 }}>
+      <header className={styles.topbar}>
+        <span className={styles.brand}>
           <ErVisualizerMark />
+          {t.appName}
+        </span>
+        <div className={styles.topbarActions}>
+          <a className={styles.docsLink} href={docsHref()} target="_blank" rel="noreferrer noopener">
+            {t.landingDocsLink}
+          </a>
+          <div className={styles.langSwitch} aria-label={t.language} role="group">
+            <Button
+              appearance={currentLocale === 'cs' ? 'primary' : 'subtle'}
+              size="small"
+              className={styles.langButton}
+              onClick={() => setLocale('cs')}
+              aria-pressed={currentLocale === 'cs'}
+              title={t.languageCzech}
+            >
+              CZ
+            </Button>
+            <Button
+              appearance={currentLocale === 'en' ? 'primary' : 'subtle'}
+              size="small"
+              className={styles.langButton}
+              onClick={() => setLocale('en')}
+              aria-pressed={currentLocale === 'en'}
+              title={t.languageEnglish}
+            >
+              EN
+            </Button>
+          </div>
+          <Button
+            appearance="subtle"
+            shape="circular"
+            icon={themeMode === 'dark' ? <WeatherSunnyRegular /> : <WeatherMoonRegular />}
+            aria-label={themeMode === 'dark' ? t.lightTheme : t.darkTheme}
+            title={themeMode === 'dark' ? t.lightTheme : t.darkTheme}
+            onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
+          />
         </div>
-        <span className="lp-badge" style={{ position: 'relative', zIndex: 1 }}>
-          <span className="lp-badge-dot" aria-hidden="true" />
+      </header>
+
+      <main className={styles.main}>
+        <span className={styles.badge}>
+          <span className={styles.badgeDot} aria-hidden="true" />
           {t.landingBadge}
         </span>
-        <h1 className="lp-title" style={{ position: 'relative', zIndex: 1 }}>{t.landingTitle}</h1>
-        <Body1 className={styles.heroSub} style={{ position: 'relative', zIndex: 1 }}>{t.landingSub}</Body1>
+        <h1 className={styles.title}>{t.landingTitle}</h1>
+        <p className={styles.lead}>{t.landingSub}</p>
 
-        {/* Stats */}
-        <div className="lp-stats" style={{ position: 'relative', zIndex: 1 }}>
-          <div className="lp-stat">
-            <span className="lp-stat-value">{configs.length}</span>
-            <span className="lp-stat-label">{t.landingStatLoaded}</span>
+        <section className={styles.card}>
+          <div className={styles.cardTabs} role="tablist" aria-label={t.landingSourceLabel}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sourceTab === 'local'}
+              className={mergeClasses(styles.cardTab, sourceTab === 'local' && styles.cardTabActive)}
+              onClick={() => setSourceTab('local')}
+            >
+              <FolderOpenRegular fontSize={16} />
+              {t.fnoTabLocal}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sourceTab === 'remote'}
+              className={mergeClasses(styles.cardTab, sourceTab === 'remote' && styles.cardTabActive)}
+              onClick={() => setSourceTab('remote')}
+            >
+              <CloudRegular fontSize={16} />
+              {t.fnoTabRemote}
+            </button>
           </div>
-          <div className="lp-stat">
-            <span className="lp-stat-value">{recentFiles.length}</span>
-            <span className="lp-stat-label">{t.landingStatRecent}</span>
+
+          <div className={styles.cardBody}>
+            {sourceTab === 'local' ? (
+              <div
+                className={mergeClasses(styles.dropzone, isDragging && styles.dropzoneDragging)}
+                onClick={handleOpenFiles}
+                onKeyDown={e => e.key === 'Enter' && handleOpenFiles()}
+                role="button"
+                tabIndex={0}
+                aria-label={t.landingDropAriaLabel}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".xml"
+                  style={{ display: 'none' }}
+                  onChange={e => { processFiles(e.target.files); e.target.value = ''; }}
+                />
+                {loading ? (
+                  <Spinner size="medium" label={t.landingLoading} labelPosition="below" />
+                ) : (
+                  <>
+                    <span className={styles.dropIcon} aria-hidden="true">
+                      {isDragging ? <ArrowDownloadRegular fontSize={30} /> : <FolderOpenRegular fontSize={30} />}
+                    </span>
+                    <h2 className={styles.dropTitle}>
+                      {isDragging ? t.landingDropRelease : t.landingDropPrimary}
+                    </h2>
+                    <p className={styles.dropHint}>{t.landingDropSecondary}</p>
+                    <div className={styles.kinds}>
+                      <span className={styles.kindPill}>
+                        <DataBarVerticalRegular fontSize={13} className={styles.kindModel} />
+                        {t.landingPillModel}
+                      </span>
+                      <span className={styles.kindPill}>
+                        <LinkRegular fontSize={13} className={styles.kindMapping} />
+                        {t.landingPillMapping}
+                      </span>
+                      <span className={styles.kindPill}>
+                        <DocumentRegular fontSize={13} className={styles.kindFormat} />
+                        {t.landingPillFormat}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <FnoConnectPanel onFilesLoaded={onFilesLoaded} />
+            )}
           </div>
-          <div className="lp-stat">
-            <span className="lp-stat-value">3</span>
-            <span className="lp-stat-label">{t.landingStatTypes}</span>
-          </div>
-        </div>
+        </section>
 
-        <div className="lp-hero-divider" aria-hidden="true" />
-      </div>
+        {errors.map((e, i) => (
+          <MessageBar key={i} intent="error" layout="multiline">
+            <MessageBarBody>
+              <MessageBarTitle>{t.landingErrors}</MessageBarTitle>
+              {e}
+            </MessageBarBody>
+            <MessageBarActions
+              containerAction={
+                <Button
+                  appearance="transparent"
+                  aria-label={t.landingDismiss}
+                  icon={<DismissRegular />}
+                  size="small"
+                  onClick={() => setErrors(prev => prev.filter((_, idx) => idx !== i))}
+                />
+              }
+            />
+          </MessageBar>
+        ))}
 
-      {/* Source selector */}
-      <TabList
-        selectedValue={sourceTab}
-        onTabSelect={(_: SelectTabEvent, d: SelectTabData) => setSourceTab(d.value as 'local' | 'remote')}
-        size="large"
-      >
-        <Tab value="local">{t.fnoTabLocal}</Tab>
-        <Tab value="remote">{t.fnoTabRemote}</Tab>
-      </TabList>
+        {/* Hidden during an F&O ingest so nobody jumps into a half-loaded workspace. */}
+        {configs.length > 0 && !fnoIngestStatus && (
+          <MessageBar intent="info">
+            <MessageBarBody>{t.landingLoaded(configs.length)}</MessageBarBody>
+            <MessageBarActions>
+              <Button appearance="primary" size="small" icon={<OpenRegular />} onClick={onFilesLoaded}>
+                {t.landingOpen}
+              </Button>
+            </MessageBarActions>
+          </MessageBar>
+        )}
 
-      {sourceTab === 'remote' && <FnoConnectPanel onFilesLoaded={onFilesLoaded} />}
+        {(recentSessions.length > 0 || recentFiles.length > 0) && (
+          <div className={styles.columns}>
+            {recentSessions.length > 0 && (
+              <div className={styles.section}>
+                <div className={styles.sectionHeader}>
+                  <span className={styles.eyebrow}>{t.recentSessions}</span>
+                  <Button appearance="subtle" size="small" icon={<DeleteRegular />} onClick={clearRecentSessions}>
+                    {t.clearRecent}
+                  </Button>
+                </div>
+                <div className={styles.list}>
+                  {recentSessions.map(session => {
+                    const canLoad = session.files.some(f => cachedPaths.has(f.path));
+                    const title = session.files.length === 1
+                      ? session.files[0]?.name ?? ''
+                      : t.recentSessionTitle(session.files.length);
+                    const handleLoad = () => {
+                      if (!canLoad) return;
+                      void loadRecentSession(session.id).then(ok => { if (ok) onFilesLoaded(); });
+                    };
+                    return (
+                      <div
+                        key={session.id}
+                        className={styles.item}
+                        style={{ alignItems: 'flex-start', opacity: canLoad ? 1 : 0.6 }}
+                      >
+                        <div className={styles.itemBody}>
+                          <div className={styles.itemName}>{title}</div>
+                          <div className={styles.sessionFiles}>
+                            {session.files.map(f => (
+                              <span key={f.path} className={styles.sessionFileRow} title={f.path}>
+                                <KindIcon kind={f.kind} />
+                                {f.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        {canLoad && (
+                          <Button
+                            appearance="subtle"
+                            size="small"
+                            icon={<OpenRegular />}
+                            aria-label={t.recentSessionReloadHint}
+                            title={t.recentSessionReloadHint}
+                            onClick={handleLoad}
+                          />
+                        )}
+                        <Button
+                          appearance="transparent"
+                          size="small"
+                          icon={<DismissRegular />}
+                          aria-label={t.dismiss}
+                          onClick={() => removeRecentSession(session.id)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
-      {sourceTab === 'local' && <>
-      {/* Drop Zone */}
-      <div
-        className={mergeClasses(styles.dropzone, isDragging && styles.dropzoneDragging)}
-        onClick={handleOpenFiles}
-        onKeyDown={e => e.key === 'Enter' && handleOpenFiles()}
-        role="button"
-        tabIndex={0}
-        aria-label={t.landingDropAriaLabel}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept=".xml"
-          style={{ display: 'none' }}
-          onChange={e => { processFiles(e.target.files); e.target.value = ''; }}
-        />
-        {loading ? (
-          <div className={styles.dropzoneInner}>
-            <Spinner size="large" label={t.landingLoading} labelPosition="below" />
-          </div>
-        ) : (
-          <div className={styles.dropzoneInner}>
-            <span className={styles.dropzoneIcon} aria-hidden="true">
-              {isDragging ? <ArrowDownloadRegular fontSize={40} /> : <FolderOpenRegular fontSize={40} />}
-            </span>
-            <Title3 as="h3">{isDragging ? t.landingDropRelease : t.landingDropPrimary}</Title3>
-            <Body1 style={{ color: tokens.colorNeutralForeground2 }}>{t.landingDropSecondary}</Body1>
-            <div className={styles.tags}>
-              <TagGroup aria-label="File types" size="small">
-                <Tag shape="circular" appearance="brand" media={<DataBarVerticalFilled />}>{t.landingPillModel}</Tag>
-                <Tag shape="circular" appearance="brand" media={<LinkFilled />}>{t.landingPillMapping}</Tag>
-                <Tag shape="circular" appearance="brand" media={<DocumentFilled />}>{t.landingPillFormat}</Tag>
-              </TagGroup>
-            </div>
+            {recentFiles.length > 0 && (
+              <div className={styles.section}>
+                <div className={styles.sectionHeader}>
+                  <span className={styles.eyebrow}>{t.recentFiles}</span>
+                  <Button appearance="subtle" size="small" icon={<DeleteRegular />} onClick={clearRecentFiles}>
+                    {t.clearRecent}
+                  </Button>
+                </div>
+                <div className={styles.list}>
+                  {recentFiles.map(rf => {
+                    const canReload = cachedPaths.has(rf.path);
+                    const handleReload = () => {
+                      if (!canReload) return;
+                      void reloadRecentFile(rf.path).then(ok => { if (ok) onFilesLoaded(); });
+                    };
+                    return (
+                      <div
+                        key={rf.path}
+                        className={styles.item}
+                        title={canReload ? t.recentReloadHint : rf.path}
+                        style={{ opacity: canReload ? 1 : 0.75 }}
+                      >
+                        <KindIcon kind={rf.kind} size={16} />
+                        <div className={styles.itemBody}>
+                          <div className={styles.itemName}>{rf.name}</div>
+                          <div className={styles.itemMeta}>{rf.path}</div>
+                        </div>
+                        {canReload && (
+                          <Button
+                            appearance="subtle"
+                            size="small"
+                            icon={<OpenRegular />}
+                            aria-label={t.recentReloadHint}
+                            title={t.recentReloadHint}
+                            onClick={handleReload}
+                          />
+                        )}
+                        <Button
+                          appearance="transparent"
+                          size="small"
+                          icon={<DismissRegular />}
+                          aria-label={t.dismiss}
+                          onClick={() => removeRecentFile(rf.path)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
-      </div>
+      </main>
 
-      {/* Errors */}
-      {errors.length > 0 && (
-        <div style={{ width: '100%', maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {errors.map((e, i) => (
-            <MessageBar key={i} intent="error" layout="multiline">
-              <MessageBarBody>
-                <MessageBarTitle>{t.landingErrors}</MessageBarTitle>
-                {e}
-              </MessageBarBody>
-              <MessageBarActions
-                containerAction={
-                  <Button
-                    appearance="transparent"
-                    aria-label={t.landingDismiss}
-                    icon={<DismissRegular />}
-                    size="small"
-                    onClick={() => setErrors(prev => prev.filter((_, idx) => idx !== i))}
-                  />
-                }
-              />
-            </MessageBar>
-          ))}
-        </div>
-      )}
-
-      {/* Already loaded — hidden while an F&O ingest is running so the user
-           cannot jump to the designer mid-download and see partial results. */}
-      {configs.length > 0 && !fnoIngestStatus && (
-        <MessageBar className={styles.loadedBar} intent="info">
-          <MessageBarBody>{t.landingLoaded(configs.length)}</MessageBarBody>
-          <MessageBarActions>
-            <Button appearance="primary" size="small" icon={<OpenRegular />} onClick={onFilesLoaded}>
-              {t.landingOpen}
-            </Button>
-          </MessageBarActions>
-        </MessageBar>
-      )}
-
-      {/* Component Cards */}
-      <div className={styles.cardGrid}>
-        <ComponentCard
-          staggerIndex={0}
-          accent="info"
-          icon={<DataBarVerticalFilled fontSize={24} />}
-          title={t.landingCardModelTitle}
-          subtitle={t.landingCardModelSubtitle}
-          description={t.landingCardModelDesc}
-          features={t.landingCardModelFeatures}
-          fileHint={t.landingCardModelHint}
-        />
-        <ComponentCard
-          staggerIndex={1}
-          accent="success"
-          icon={<LinkFilled fontSize={24} />}
-          title={t.landingCardMappingTitle}
-          subtitle={t.landingCardMappingSubtitle}
-          description={t.landingCardMappingDesc}
-          features={t.landingCardMappingFeatures}
-          fileHint={t.landingCardMappingHint}
-        />
-        <ComponentCard
-          staggerIndex={2}
-          accent="purple"
-          icon={<DocumentFilled fontSize={24} />}
-          title={t.landingCardFormatTitle}
-          subtitle={t.landingCardFormatSubtitle}
-          description={t.landingCardFormatDesc}
-          features={t.landingCardFormatFeatures}
-          fileHint={t.landingCardFormatHint}
-        />
-      </div>
-      </>}
-
-      {/* Recent sessions */}
-      {recentSessions.length > 0 && (
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <Subtitle2>{t.recentSessions}</Subtitle2>
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<DeleteRegular />}
-              onClick={clearRecentSessions}
-            >
-              {t.clearRecent}
-            </Button>
-          </div>
-          <div className={styles.recentList}>
-            {recentSessions.map(session => {
-              const canLoad = session.files.some(f => cachedPaths.has(f.path));
-              const primaryName = session.files[0]?.name ?? '';
-              const title = session.files.length === 1
-                ? primaryName
-                : t.recentSessionTitle(session.files.length);
-              const handleLoad = () => {
-                if (!canLoad) return;
-                void loadRecentSession(session.id).then(ok => {
-                  if (ok) onFilesLoaded();
-                });
-              };
-              return (
-                <div
-                  key={session.id}
-                  className={styles.sessionCard}
-                  role="button"
-                  tabIndex={0}
-                  title={canLoad ? t.recentSessionReloadHint : undefined}
-                  style={{ opacity: canLoad ? 1 : 0.6 }}
-                  onDoubleClick={handleLoad}
-                  onKeyDown={e => {
-                    if (canLoad && (e.key === 'Enter' || e.key === ' ')) {
-                      e.preventDefault();
-                      handleLoad();
-                    }
-                  }}
-                >
-                  <div className={styles.sessionHeader}>
-                    <FolderOpenRegular fontSize={18} style={{ color: tokens.colorBrandForeground1 }} />
-                    <Body1Strong style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {title}
-                    </Body1Strong>
-                    {canLoad && (
-                      <Button
-                        appearance="subtle"
-                        size="small"
-                        icon={<OpenRegular />}
-                        className={mergeClasses(styles.sessionOpenBtn, 'lp-session-open')}
-                        aria-label={t.recentSessionReloadHint}
-                        title={t.recentSessionReloadHint}
-                        onClick={e => { e.stopPropagation(); handleLoad(); }}
-                      />
-                    )}
-                    <Button
-                      appearance="transparent"
-                      size="small"
-                      icon={<DismissRegular />}
-                      aria-label={t.dismiss}
-                      onClick={e => { e.stopPropagation(); removeRecentSession(session.id); }}
-                    />
-                  </div>
-                  <div className={styles.sessionFiles}>
-                    {session.files.map(f => (
-                      <div key={f.path} className={styles.sessionFileRow} title={f.path}>
-                        <span aria-hidden="true" style={{ display: 'inline-flex', color: tokens.colorNeutralForeground3 }}>
-                          {f.kind === 'DataModel' ? <DataBarVerticalFilled fontSize={14} />
-                            : f.kind === 'ModelMapping' ? <LinkFilled fontSize={14} />
-                            : <DocumentFilled fontSize={14} />}
-                        </span>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Recent files */}
-      {recentFiles.length > 0 && (
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <Subtitle2>{t.recentFiles}</Subtitle2>
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<DeleteRegular />}
-              onClick={clearRecentFiles}
-            >
-              {t.clearRecent}
-            </Button>
-          </div>
-          <div className={styles.recentList}>
-            {recentFiles.map(rf => {
-              const canReload = cachedPaths.has(rf.path);
-              const handleReload = () => {
-                if (!canReload) return;
-                void reloadRecentFile(rf.path).then(ok => {
-                  if (ok) onFilesLoaded();
-                });
-              };
-              return (
-                <div
-                  key={rf.path}
-                  className={styles.recentItem}
-                  title={canReload ? t.recentReloadHint : rf.path}
-                  role="button"
-                  tabIndex={0}
-                  style={{ cursor: canReload ? 'pointer' : 'default', opacity: canReload ? 1 : 0.75 }}
-                  onDoubleClick={handleReload}
-                  onKeyDown={e => {
-                    if (canReload && (e.key === 'Enter' || e.key === ' ')) {
-                      e.preventDefault();
-                      handleReload();
-                    }
-                  }}
-                >
-                  <span aria-hidden="true" style={{ display: 'inline-flex', color: tokens.colorBrandForeground1 }}>
-                    {rf.kind === 'DataModel' ? <DataBarVerticalFilled fontSize={18} />
-                      : rf.kind === 'ModelMapping' ? <LinkFilled fontSize={18} />
-                      : rf.kind === 'Format' ? <DocumentFilled fontSize={18} />
-                      : <DocumentFilled fontSize={18} />}
-                  </span>
-                  <div className={styles.recentName}>
-                    <Body1Strong>{rf.name}</Body1Strong>
-                    <div style={{ fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {rf.path}
-                    </div>
-                  </div>
-                  <Button
-                    appearance="transparent"
-                    size="small"
-                    icon={<DismissRegular />}
-                    aria-label={t.dismiss}
-                    onClick={e => { e.stopPropagation(); removeRecentFile(rf.path); }}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* How it works */}
-      <div className={styles.section}>
-        <Subtitle2>{t.landingHowTitle}</Subtitle2>
-        <div className={styles.steps}>
-          <HowStep n={1} title={t.landingStep1Title} desc={t.landingStep1Desc} />
-          <HowStep n={2} title={t.landingStep2Title} desc={t.landingStep2Desc} />
-          <HowStep n={3} title={t.landingStep3Title} desc={t.landingStep3Desc} />
-          <HowStep n={4} title={t.landingStep4Title} desc={t.landingStep4Desc} />
-        </div>
-      </div>
-
-      {/* Footer */}
-      <Divider style={{ width: '100%', maxWidth: 1160 }} />
-      <Caption1 className={styles.footer}>{t.landingFooter}</Caption1>
+      <footer className={styles.footer}>{t.landingFooter}</footer>
     </div>
   );
 }
 
-// ────────────────────────── cards ──────────────────────────
-
-function ComponentCard({
-  accent, icon, title, subtitle, description, features, fileHint, staggerIndex = 0,
-}: {
-  accent: LandingAccent;
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  description: string;
-  features: string[];
-  fileHint: string;
-  staggerIndex?: number;
-}) {
+function KindIcon({ kind, size = 14 }: { kind?: string; size?: number }) {
   const styles = useStyles();
-  const accentClass = accent === 'info' ? styles.cardIconInfo
-    : accent === 'success' ? styles.cardIconSuccess
-    : styles.cardIconPurple;
-  const delayClass = staggerIndex === 0 ? styles.cardDelay0
-    : staggerIndex === 1 ? styles.cardDelay1
-    : styles.cardDelay2;
-
-  return (
-    <Card className={mergeClasses(styles.card, delayClass, 'lp-glass-card')} appearance="filled-alternative">
-      <CardHeader
-        image={<div className={mergeClasses(styles.cardIcon, accentClass)} aria-hidden="true">{icon}</div>}
-        header={<Body1Strong className="lp-font-display" style={{ fontSize: 16 }}>{title}</Body1Strong>}
-        description={<Caption1 className="lp-font-mono" style={{ color: tokens.colorNeutralForeground3, letterSpacing: '0.04em' }}>{subtitle}</Caption1>}
-      />
-      <Body1>{description}</Body1>
-      <ul className={styles.cardFeatures}>
-        {features.map((f, i) => (
-          <li key={i} className={styles.cardFeature}>
-            <CheckmarkCircleFilled fontSize={16} className={styles.cardFeatureIcon} />
-            <span>{f}</span>
-          </li>
-        ))}
-      </ul>
-      <div className={styles.cardHint} title="Příklad souboru">📎 {fileHint}</div>
-    </Card>
-  );
+  if (kind === 'DataModel') return <DataBarVerticalRegular fontSize={size} className={styles.kindModel} />;
+  if (kind === 'ModelMapping') return <LinkRegular fontSize={size} className={styles.kindMapping} />;
+  return <DocumentRegular fontSize={size} className={styles.kindFormat} />;
 }
 
-// ────────────────────────── steps ──────────────────────────
+// ────────────────────────── F&O ingest progress ──────────────────────────
 
-function decodeSafeEntities(input: string): string {
-  return input
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, '&');
+const INGEST_STEPS = [
+  { key: 'prepare', cs: 'Příprava', en: 'Preparing' },
+  { key: 'dm', cs: 'Stahuji datové modely', en: 'Downloading data models' },
+  { key: 'fm', cs: 'Stahuji formáty a mapování', en: 'Downloading formats & mappings' },
+  { key: 'mm', cs: 'Stahování mapování modelů', en: 'Downloading model mappings' },
+  { key: 'finalize', cs: 'Dokončuji', en: 'Finalizing' },
+] as const;
+
+/** Map the free-text ingest status onto one of the five pipeline phases. */
+function activeIngestStep(status: string): number {
+  const s = status.toLowerCase();
+  if (s.includes('přípravu') || s.includes('prepar')) return 0;
+  if (s.includes('datamodel') || s.includes('datov')) return 1;
+  if (s.includes('mapping') || s.includes('mapov')) return 3;
+  if (s.includes('form') || s.includes('konfigurace') || s.includes('configuration')) return 2;
+  if (s.includes('dokon') || s.includes('řeš') || s.includes('resolv') || s.includes('cross')) return 4;
+  return 2;
 }
 
-function HowStep({ n, title, desc }: { n: number; title: string; desc: string }) {
+function FnoIngestOverlay({ status }: { status: string }) {
   const styles = useStyles();
+  const active = activeIngestStep(status);
+
   return (
-    <div className={styles.step}>
-      <div className={styles.stepNum} aria-hidden="true">{n}</div>
-      <div>
-        <Body1Strong>{title}</Body1Strong>
-        <div style={{ color: tokens.colorNeutralForeground2, fontSize: tokens.fontSizeBase200 }}>
-          {decodeSafeEntities(desc)}
+    <div className={styles.ingestOverlay} role="status" aria-live="polite">
+      <div className={styles.ingestCard}>
+        <div className={styles.ingestHead}>
+          <span className={styles.ingestIcon} aria-hidden="true">
+            <CloudRegular fontSize={22} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div className={styles.ingestTitle}>{t.fnoLoading}</div>
+            <div className={styles.ingestSub}>
+              {locale === 'cs' ? 'z Dynamics 365 F&O' : 'from Dynamics 365 F&O'}
+            </div>
+          </div>
+        </div>
+
+        <div className="fno-ingest-progress-track">
+          <div className="fno-ingest-progress-bar" />
+        </div>
+
+        <div className={styles.ingestSteps}>
+          {INGEST_STEPS.map((step, i) => {
+            const done = i < active;
+            const isActive = i === active;
+            return (
+              <div
+                key={step.key}
+                className={`fno-ingest-step${done ? ' done' : isActive ? ' active' : ''}`}
+                style={{ fontSize: '12.5px' }}
+              >
+                {done
+                  ? <CheckmarkCircleRegular fontSize={15} style={{ flexShrink: 0, color: 'var(--er-success)' }} />
+                  : <div className="fno-ingest-step-dot" style={{ width: '9px', height: '9px' }} />}
+                <span>{locale === 'cs' ? step.cs : step.en}</span>
+                {isActive && (
+                  <span style={{
+                    fontSize: '11px',
+                    color: 'var(--er-text-subtle)',
+                    marginLeft: 'auto',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    maxWidth: '150px',
+                  }}>
+                    {status}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
