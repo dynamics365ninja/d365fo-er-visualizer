@@ -926,6 +926,18 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
   }, [selected.expression, selected.label]);
 
   /**
+   * A selection that is more than a bare path — a function call, comparison or
+   * boolean expression. The left column truncates it to one line and the
+   * breadcrumb only covers paths, so without this the full text of the very
+   * expression being drilled was nowhere on screen.
+   */
+  const selectedExpressionKind = classifyExpr(selected.expression);
+  const showFullExpression =
+    selectedExpressionKind === 'er-function' ||
+    selectedExpressionKind === 'compound' ||
+    selected.expression.includes('(');
+
+  /**
    * Model references used by a *compound* expression (the root `IF(...)`, a
    * function call, a comparison …). Such an expression is not itself a model
    * path, so `resolveModelPath` finds nothing for it and the panel used to show
@@ -1099,8 +1111,23 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
             </div>
           </div>
 
-          {(showMappingExpression && mappingExpr || resolvedDs || referencedModelBindings.length > 0) && (
+          {(showMappingExpression && mappingExpr || resolvedDs || referencedModelBindings.length > 0 || showFullExpression) && (
             <div className="dd-workbench__detail-grid">
+              {showFullExpression && (
+                <div className="dd-workbench__detail-card">
+                  <div className="dd-workbench__detail-card-head">
+                    <span>{locale === 'cs' ? 'Výraz' : 'Expression'}</span>
+                    <span className="dd-workbench__card-meta">{selected.label}</span>
+                  </div>
+                  <ExpressionView
+                    expr={selected.expression}
+                    configIndex={frame.configIndex}
+                    onPush={pushWithContext}
+                    currentFrameExpression={selected.expression}
+                  />
+                </div>
+              )}
+
               {referencedModelBindings.length > 0 && (
                 <div className="dd-workbench__detail-card">
                   <div className="dd-workbench__detail-card-head">
