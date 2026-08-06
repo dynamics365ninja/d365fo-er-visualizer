@@ -13,6 +13,8 @@ interface ClickablePathProps {
   mode?: 'binding-expr' | 'model-path' | 'auto';
   style?: React.CSSProperties;
   interactive?: boolean;
+  /** Active filter query — occurrences are marked inside the rendered text. */
+  highlight?: string;
 }
 
 /**
@@ -20,7 +22,7 @@ interface ClickablePathProps {
  * Datasource names and model paths are resolved on hover.
  * If a reference resolves, it becomes clickable with a tooltip.
  */
-export function ClickablePath({ expression, configIndex, mode = 'auto', style, interactive = true }: ClickablePathProps) {
+export function ClickablePath({ expression, configIndex, mode = 'auto', style, interactive = true, highlight }: ClickablePathProps) {
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
   const resolveBinding = useAppStore(s => s.resolveBinding);
   const resolveModelPath = useAppStore(s => s.resolveModelPath);
@@ -38,6 +40,7 @@ export function ClickablePath({ expression, configIndex, mode = 'auto', style, i
           segment={seg}
           configIndex={configIndex}
           interactive={interactive}
+          highlight={highlight}
           resolveDatasource={resolveDatasource}
           resolveBinding={resolveBinding}
           resolveModelPath={resolveModelPath}
@@ -157,10 +160,26 @@ function parseSegments(expr: string, mode: string): Segment[] {
   return segments;
 }
 
+/** Wraps every occurrence of `query` in `text` so a filtered list can show
+ *  what matched, not just that something did. */
+function highlightSegmentText(text: string, query: string | undefined): React.ReactNode {
+  const needle = query?.trim();
+  if (!needle) return text;
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  if (parts.length === 1) return text;
+  return parts.map((part, i) =>
+    part.toLowerCase() === needle.toLowerCase()
+      ? <mark key={i} className="search-highlight">{part}</mark>
+      : <React.Fragment key={i}>{part}</React.Fragment>,
+  );
+}
+
 interface SmartSegmentProps {
   segment: Segment;
   configIndex: number;
   interactive: boolean;
+  highlight?: string;
   resolveDatasource: (name: string, ci: number) => any;
   resolveBinding: (path: string, ci: number) => any;
   resolveModelPath: (modelDotPath: string) => any;
@@ -168,7 +187,7 @@ interface SmartSegmentProps {
   navigateToTreeNode: (nodeId: string) => void;
 }
 
-function SmartSegment({ segment, configIndex, interactive, resolveDatasource, resolveBinding, resolveModelPath, findDatasourceNode, navigateToTreeNode }: SmartSegmentProps) {
+function SmartSegment({ segment, configIndex, interactive, highlight, resolveDatasource, resolveBinding, resolveModelPath, findDatasourceNode, navigateToTreeNode }: SmartSegmentProps) {
   const [tooltip, setTooltip] = useState<PathTooltipData | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const [resolved, setResolved] = useState<{ treeNodeId: string | null; type: string } | null>(null);
@@ -377,7 +396,7 @@ function SmartSegment({ segment, configIndex, interactive, resolveDatasource, re
         onMouseLeave={canResolve ? handleMouseLeave : undefined}
         onClick={isResolved ? handleClick : undefined}
       >
-        {segment.text}
+        {highlightSegmentText(segment.text, highlight)}
       </span>
       {tooltip && mousePos && (
         <PathTooltipCard data={tooltip} mouse={mousePos} />

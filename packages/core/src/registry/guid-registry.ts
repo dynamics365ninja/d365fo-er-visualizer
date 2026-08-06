@@ -323,18 +323,34 @@ export class GUIDRegistry {
     }
   }
 
-  private indexFormatElement(element: ERFormatElement, fp: string, ck: ERComponentKind): void {
+  private indexFormatElement(
+    element: ERFormatElement,
+    fp: string,
+    ck: ERComponentKind,
+    parentName?: string,
+  ): void {
+    /*
+     * Content nodes (`<ERTextFormatString ID.="…" MaximalLength="32" />` sitting
+     * under an XML attribute) carry no `Name`, so the parser falls back to the
+     * element type. A Value binding targets that node, which meant search hits
+     * and tooltips for such bindings were labelled "String" — telling the user
+     * nothing about which element they had found. Register them under the
+     * element they belong to instead.
+     */
+    const hasOwnName = Boolean(element.name) && element.name !== element.elementType;
+    const displayName = hasOwnName ? element.name : (parentName ?? element.name);
+
     if (element.id) {
       this.register({
         guid: element.id,
         kind: 'FormatElement',
-        name: element.name,
+        name: displayName,
         configFilePath: fp,
         componentKind: ck,
       });
     }
     for (const child of element.children) {
-      this.indexFormatElement(child, fp, ck);
+      this.indexFormatElement(child, fp, ck, hasOwnName ? element.name : parentName);
     }
   }
 
