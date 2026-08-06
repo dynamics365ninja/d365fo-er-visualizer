@@ -1,19 +1,18 @@
 /**
- * F&O proxy running on Vercel Edge.
+ * F&O proxy running on the edge.
  *
- * Browser SPA cannot call D365 F&O directly because F&O does not send
- * CORS headers. This function forwards the request server-side, preserving
+ * The browser SPA cannot call D365 F&O directly because F&O does not send
+ * CORS headers. This handler forwards the request server-side, preserving
  * the caller's bearer token, then returns the response with permissive CORS
  * headers so the SPA can read it.
  *
  * The target URL is passed in the `X-Fno-Target-Url` header. Only hosts that
  * match the F&O SaaS DNS patterns are allowed — this prevents the function
- * from being abused as an open proxy.
+ * from being abused as an open proxy. Nothing is logged or stored: the
+ * upstream body is streamed straight back to the caller.
  */
 
-export const config = {
-  runtime: 'edge',
-};
+export const runtime = 'edge';
 
 const ALLOWED_HOST_PATTERNS = [
   // Generic catch-all for *.dynamics.com (covers regional and sandbox suffixes
@@ -39,7 +38,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
-export default async function handler(req: Request): Promise<Response> {
+async function handler(req: Request): Promise<Response> {
   const origin = req.headers.get('origin');
   const cors = corsHeaders(origin);
 
@@ -82,12 +81,11 @@ export default async function handler(req: Request): Promise<Response> {
   const forwardedHeaders: Record<string, string> = {
     Authorization: authorization,
     Accept: req.headers.get('accept') ?? 'application/json',
-    // F&O filters some endpoints by User-Agent. Vercel Edge fetch sends a
-    // generic UA (or none), which can cause /api/services/* to respond
-    // with 404. Masquerade as a normal browser.
+    // F&O filters some endpoints by User-Agent. Edge fetch sends a generic UA
+    // (or none), which can cause /api/services/* to respond with 404.
+    // Masquerade as a normal browser.
     'User-Agent':
-      req.headers.get('user-agent') ??
-      'Mozilla/5.0 (compatible; d365fo-er-visualizer-proxy)',
+      req.headers.get('user-agent') ?? 'Mozilla/5.0 (compatible; d365fo-er-visualizer-proxy)',
   };
   if (method === 'POST') {
     forwardedHeaders['Content-Type'] =
@@ -138,3 +136,7 @@ export default async function handler(req: Request): Promise<Response> {
     headers: responseHeaders,
   });
 }
+
+export const GET = handler;
+export const POST = handler;
+export const OPTIONS = handler;

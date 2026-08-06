@@ -1,0 +1,81 @@
+import { DocHeader } from '@/components/DocHeader';
+import { docMetadata } from '@/lib/doc-metadata';
+
+export const metadata = docMetadata('designers');
+
+<DocHeader slug="designers" />
+
+Double-click the root of a configuration in the Explorer and it opens in a designer tab. Which
+designer you get depends on the component type. All three are interactive node graphs: pan by
+dragging the canvas, zoom with the wheel, and click a node to fill the Properties panel.
+
+Double-clicking a node **below** the root opens a focused detail view instead — the properties of
+that one node, without the surrounding graph. It is the quicker way in when you already know which
+element you care about.
+
+## Data model designer
+
+The data model is laid out breadth-first from left to right: the root container, then its child
+containers, then theirs. Edges connect containers to the types they reference, so a model that
+reuses a sub-structure in several places shows that reuse as shared edges rather than as
+duplicated boxes.
+
+What to look for:
+
+- **Containers** — the records and lists of the model.
+- **Fields** — the leaves, with their data type.
+- **Enumerations** — model enums and their values, which are frequently what a format element's
+  conditional logic actually switches on.
+
+Selecting any node fills the Properties panel with its label, description, type descriptor, and —
+in technical view — the identifiers underneath.
+
+## Model mapping designer
+
+The mapping designer uses three columns, which is the order you read a mapping in anyway:
+
+1. **Datasources** — where data comes from. Tables, enums, classes, user parameters, calculated
+   fields, group-by aggregations, and references to import formats each render with the properties
+   specific to their kind: the table name and cross-company flag for a table datasource, the class
+   name for a class datasource, the expression for a calculated field, and so on.
+2. **Bindings** — the model path each datasource feeds, with the expression that fills it.
+3. **Validations** — the conditions and messages attached to the mapping.
+
+Click any expression to open the [drill-down workbench](/docs/expression-drill-down) for it.
+
+## Format designer
+
+A format is a tree of elements — the structure of the file that gets produced or read — so the
+format designer renders it as a hierarchy rather than a flat graph.
+
+Each element carries a **binding status badge**, which is the fastest way to spot the two problems
+people usually go looking for: elements with no binding at all, and elements bound to something
+that cannot be resolved with the configurations currently loaded. Bindings are grouped by category
+so a large format stays readable.
+
+### Excel template formats
+
+Formats built on an Excel template get an extra view: the workbook renders with its original
+layout — merged cells, column widths, sheet tabs — and its named ranges highlighted. Clicking a
+cell that belongs to a named range jumps to the format element bound to it, which turns "which
+element writes this cell?" into a single click.
+
+Word, PDF, XML, CSV, and plain-text formats render as the element tree only.
+
+## Reading the graph
+
+A few conventions run through all three designers:
+
+- **Colour marks the component type** — data model, model mapping, and format keep the same accent
+  colour everywhere, including in the Explorer and in search results.
+- **Selection is shared** — selecting a node in a designer updates the Properties panel and the
+  Explorer selection, and vice versa.
+- **Technical view adds identifiers** — GUIDs, raw expression strings, and component references
+  appear on nodes and in the Properties panel when technical view is on.
+
+## Panels around the canvas
+
+The Properties panel (`Ctrl+J`) adapts to what is selected: a configuration file, a container, a
+field, a datasource, a binding, or a format element each show a different property set. Paths and
+identifiers inside it are clickable where they resolve to something — hovering shows a tooltip
+card with the resolved target before you commit to the jump.

@@ -8,5 +8,11 @@ generators/
 .DS_Store
 Thumbs.db
 
+# Next.js (packages/site)
+.next/
+next-env.d.ts
+# The SPA build staged into the site's public dir at deploy time
+packages/site/public/app/
+
 # Integration test — connection secrets (never commit)
 scripts/.fno-integration.json
