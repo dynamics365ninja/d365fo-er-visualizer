@@ -3,8 +3,8 @@
 /* ─── Dark Theme (default) ─── */
 :root,
 :root[data-theme='dark'] {
-  --font-display: 'Segoe UI', 'Segoe UI Variable', sans-serif;
-  --font-sans: 'Segoe UI', 'Segoe UI Variable', sans-serif;
+  --font-display: 'Space Grotesk', 'Segoe UI', sans-serif;
+  --font-sans: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   /* Single source of truth for the monospace stack — index.html preloads
      JetBrains Mono, and every `font-family` for code/expressions/GUIDs reads
      this token. Do not redefine it in a later theme block: those win on
@@ -96,8 +96,8 @@
 }
 
 :root[data-theme='light'] {
-  --font-display: 'Segoe UI', 'Segoe UI Variable', sans-serif;
-  --font-sans: 'Segoe UI', 'Segoe UI Variable', sans-serif;
+  --font-display: 'Space Grotesk', 'Segoe UI', sans-serif;
+  --font-sans: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --bg-primary: #f8fafc;
   --bg-secondary: #f1f4f9;
@@ -9208,17 +9208,13 @@ body {
 
 :root,
 :root[data-theme='dark'] {
-  --font-display: 'Segoe UI', 'Segoe UI Variable', sans-serif;
-  --font-sans: 'Segoe UI', 'Segoe UI Variable', sans-serif;
-  /* --font-mono intentionally not redefined here: this block sits after the
+  /* Font tokens intentionally not redefined here: this block sits after the
      theme definitions at the top of the file and would override them. */
   --accent: #038387;
   --accent-hover: #37a987;
 }
 
 :root[data-theme='light'] {
-  --font-display: 'Segoe UI', 'Segoe UI Variable', sans-serif;
-  --font-sans: 'Segoe UI', 'Segoe UI Variable', sans-serif;
   --accent: #038387;
   --accent-hover: #27a17f;
 }
