@@ -5377,6 +5377,17 @@ button.dd-workbench__breadcrumb-segment {
   font-size: 11px;
 }
 
+/* Plain-language note under a data source summary (e.g. user parameters). */
+.dd-workbench__summary-note {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--er-border);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--er-text-muted);
+}
+
+
 .dd-workbench__summary-row span {
   color: var(--text-secondary);
 }

@@ -1262,7 +1262,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   resolveDatasource: (expressionOrName: string, fromConfigIndex: number) => {
     const state = get();
-    const dsName = expressionOrName.split('.')[0].split('(')[0].replace(/['"]/g, '').trim();
+    // Walk the whole dotted path, not just its first segment: for
+    // "Parameters.'$ReferenceNumber'" the interesting datasource is the user
+    // parameter at the end, not the container it sits in. Callers that pass a
+    // single name are unaffected — the walk simply has nothing to descend into.
+    const segments = parseDottedPath(expressionOrName)
+      .map(seg => seg.replace(/['"]/g, '').trim())
+      .filter(Boolean);
+    const dsName = segments[0];
     if (!dsName) return null;
 
     const searchOrder = [fromConfigIndex, ...state.configurations.map((_, i) => i).filter(i => i !== fromConfigIndex)];
@@ -1272,11 +1279,23 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!config) continue;
 
       for (const datasources of getDatasourcePoolsForConfig(config)) {
-        const ds = findDatasourceByName(datasources, dsName);
-        if (ds) {
-          const treeNodeId = get().findDatasourceNode(dsName, ci, ds.parentPath);
-          return { configIndex: ci, datasourceName: dsName, treeNodeId, datasource: ds };
+        const root = findDatasourceByName(datasources, dsName);
+        if (!root) continue;
+
+        // Descend as far as the path actually matches; a partial match still
+        // returns the deepest node reached, which beats returning nothing.
+        let node = root;
+        for (let i = 1; i < segments.length; i++) {
+          const want = segments[i].toLowerCase();
+          const child = (node.children ?? []).find(
+            (c: any) => typeof c?.name === 'string' && c.name.replace(/['"]/g, '').toLowerCase() === want,
+          );
+          if (!child) break;
+          node = child;
         }
+
+        const treeNodeId = get().findDatasourceNode(node.name, ci, node.parentPath);
+        return { configIndex: ci, datasourceName: node.name, treeNodeId, datasource: node };
       }
     }
 
