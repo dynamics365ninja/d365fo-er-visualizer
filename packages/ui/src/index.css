@@ -2884,6 +2884,40 @@ body {
   opacity: 0.6;
 }
 
+/* "Why this row matched" line under a filtered element whose match lives in a
+   binding the collapsed row does not show (Visibility, Enabled, …). */
+.fmt-match-reason {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 8px 5px 0;
+  font-size: 10.5px;
+  color: var(--er-text-muted);
+  overflow: hidden;
+}
+
+.fmt-match-reason__prop {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: var(--er-radius-sm);
+  border: 1px solid var(--er-border);
+  background: var(--er-surface-2);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.fmt-match-reason > :not(.fmt-match-reason__prop) {
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+
 /* Expanded Binding Detail (shown below selected element) */
 
 .fmt-binding-expanded {
@@ -5376,6 +5410,17 @@ button.dd-workbench__breadcrumb-segment {
   gap: 10px;
   font-size: 11px;
 }
+
+/* Plain-language note under a data source summary (e.g. user parameters). */
+.dd-workbench__summary-note {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--er-border);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--er-text-muted);
+}
+
 
 .dd-workbench__summary-row span {
   color: var(--text-secondary);

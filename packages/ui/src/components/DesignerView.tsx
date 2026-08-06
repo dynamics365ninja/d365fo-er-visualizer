@@ -339,7 +339,28 @@ function normalizeModelReferenceVariants(expression: string): string[] {
   return [...new Set(variants)];
 }
 
-function ExpressionDetailLink({ expression, configIndex, className, interactive = true }: { expression: string; configIndex: number; className?: string; interactive?: boolean }) {
+function escapeRegExpLiteral(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Marks every occurrence of `query` inside `text` — the tree filter used to
+ *  show which rows matched, but never *what* in them matched. */
+function HighlightMatch({ text, query }: { text: string; query: string }) {
+  const needle = query.trim();
+  if (!needle) return <>{text}</>;
+  const parts = text.split(new RegExp(`(${escapeRegExpLiteral(needle)})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === needle.toLowerCase()
+          ? <mark key={i} className="search-highlight">{part}</mark>
+          : <React.Fragment key={i}>{part}</React.Fragment>,
+      )}
+    </>
+  );
+}
+
+function ExpressionDetailLink({ expression, configIndex, className, interactive = true, highlight }: { expression: string; configIndex: number; className?: string; interactive?: boolean; highlight?: string }) {
   const configurations = useAppStore(s => s.configurations);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
@@ -390,7 +411,7 @@ function ExpressionDetailLink({ expression, configIndex, className, interactive 
 
   return (
     <span className={className} onClick={interactive ? navigateExpressionTarget : undefined} title={interactive ? t.openInExplorerAction : undefined}>
-      <ClickablePath expression={expression} configIndex={configIndex} mode="binding-expr" interactive={false} />
+      <ClickablePath expression={expression} configIndex={configIndex} mode="binding-expr" interactive={false} highlight={highlight} />
     </span>
   );
 }
@@ -3373,7 +3394,44 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
   // When a filter is active, auto-expand any node that matches or has matching descendants.
   // showAll=true means an ancestor already matched — show everything below it.
   // Also auto-expand when a descendant is the navigation target.
-  const isExpanded = filter ? (showAll || matchesFilter || descendantMatches) : (expanded || selectedIsDescendant);
+  /*
+   * While filtering, only the path *down to* the matches is opened. A node that
+   * matches itself stays collapsed: expanding its whole subtree made every
+   * descendant look like a match too (search "ReferenceNumber", land on VetaA5,
+   * and its children appear as if they contained the word). The chevron still
+   * opens it, and everything below a match is exempt from the filter — so the
+   * children are there when you want them.
+   */
+  const hasMatchingDescendant = useMemo(
+    () => (element.children ?? []).some((child: any) => treeIndex.subtreeMatch.has(child.id)),
+    [element.children, treeIndex],
+  );
+
+  // Reset the manual override whenever the filter changes, so a new query
+  // starts from the same collapsed state everywhere.
+  const [manuallyExpanded, setManuallyExpanded] = useState(false);
+  useEffect(() => {
+    setManuallyExpanded(false);
+  }, [filter]);
+
+  /*
+   * A row can match through a binding the collapsed row never shows — most
+   * often Visibility/Enabled. Without this the row looked like a false
+   * positive: "VetaA5" with the term nowhere on it.
+   */
+  const matchedBinding = useMemo(() => {
+    const needle = filter.trim().toLowerCase();
+    if (!needle || !matchesFilter) return null;
+    if (element.name?.toLowerCase().includes(needle)) return null;
+    if (element.elementType?.toLowerCase().includes(needle)) return null;
+    const shown = mainBinding?.expressionAsString?.toLowerCase() ?? '';
+    if (shown.includes(needle)) return null;
+    return bindings.find((b: any) => b.expressionAsString?.toLowerCase().includes(needle)) ?? null;
+  }, [filter, matchesFilter, element.name, element.elementType, mainBinding, bindings]);
+
+  const isExpanded = filter
+    ? (hasMatchingDescendant || manuallyExpanded)
+    : (expanded || selectedIsDescendant);
 
   const rowRef = React.useRef<HTMLDivElement>(null);
 
@@ -3412,7 +3470,12 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
         {/* Expand/Collapse Toggle */}
         <span
           className="fmt-toggle"
-          onClick={e => { e.stopPropagation(); if (hasChildren) setExpanded(!expanded); }}
+          onClick={e => {
+            e.stopPropagation();
+            if (!hasChildren) return;
+            if (filter) setManuallyExpanded(v => !v);
+            else setExpanded(!expanded);
+          }}
           style={{ visibility: hasChildren ? 'visible' : 'hidden' }}
         >
           <span className={`tree-chevron ${isExpanded ? 'open' : ''}`} />
@@ -3427,12 +3490,14 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
             background: getFormatTypeColor(element.elementType) + '20',
             color: getFormatTypeColor(element.elementType),
           }}>
-            {element.elementType}
+            <HighlightMatch text={element.elementType} query={filter} />
           </span>
         )}
 
         {/* Element Name */}
-        <span className="fmt-element-name">{element.name}</span>
+        <span className="fmt-element-name">
+          <HighlightMatch text={element.name} query={filter} />
+        </span>
 
         {/* ExcelRange address */}
         {element.elementType === 'ExcelCell' && element.attributes?.['ExcelRange'] && (
@@ -3478,7 +3543,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
         {/* Main Binding — the original formula shown inline */}
         {mainBinding && (
           <span className="fmt-binding-inline" onClick={e => e.stopPropagation()}>
-            ← <ExpressionDetailLink expression={mainBinding.expressionAsString} configIndex={configIndex} />
+            ← <ExpressionDetailLink expression={mainBinding.expressionAsString} configIndex={configIndex} highlight={filter} />
           </span>
         )}
 
@@ -3487,6 +3552,21 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
           <span className="fmt-unbound-marker">○ {t.unbound}</span>
         )}
       </div>
+
+      {/* Why this row matched, when the match is not visible on the row itself. */}
+      {matchedBinding && (
+        <div className="fmt-match-reason" style={{ paddingLeft: depth * 20 + 30 }}>
+          <span className="fmt-match-reason__prop">
+            {matchedBinding.bindingDisplayLabel || matchedBinding.propertyName || t.bindings}
+          </span>
+          <ExpressionDetailLink
+            expression={matchedBinding.expressionAsString}
+            configIndex={configIndex}
+            interactive={false}
+            highlight={filter}
+          />
+        </div>
+      )}
 
       {/* Expanded Binding Details — shown when element is selected */}
       {isSelected && (

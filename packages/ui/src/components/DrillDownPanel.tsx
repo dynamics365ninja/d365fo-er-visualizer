@@ -133,6 +133,10 @@ function localizeBadgeLabel(badge: string): string {
     groupby: 'Seskupení',
     join: 'Spojení',
     object: 'Objekt',
+    userparameter: 'Uživatelský parametr',
+    importformat: 'Importní formát',
+    modelenum: 'Výčet modelu',
+    formatenum: 'Výčet formátu',
     unknown: 'Neznámé',
   };
   const en: Record<string, string> = {
@@ -144,6 +148,10 @@ function localizeBadgeLabel(badge: string): string {
     groupby: 'Group by',
     join: 'Join',
     object: 'Object',
+    userparameter: 'User parameter',
+    importformat: 'Import format',
+    modelenum: 'Model enum',
+    formatenum: 'Format enum',
     unknown: 'Unknown',
   };
   const dict = locale === 'cs' ? cs : en;
@@ -890,7 +898,11 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
     modelBindingConfigIndex: modelResult?.bindingConfigIndex,
   });
   const deepResult = resolveDeepExpression(effectiveExpr, configurations, effectiveCi);
-  const directResult = !shouldUseModelBinding ? resolveDatasource(firstSegment(selected.expression), frame.configIndex) : null;
+  // Resolve the *whole* selected path, not just its first segment: for
+  // "Parameters.'$ReferenceNumber'" the first segment is only the container,
+  // which is why such expressions reported "Data source: Container" and never
+  // showed the user parameter behind them.
+  const directResult = !shouldUseModelBinding ? resolveDatasource(selected.expression, frame.configIndex) : null;
   const resolvedDs = (deepResult?.nestedDs ?? deepResult?.rootDs)
     ?? modelResult?.datasource
     ?? directResult?.datasource
@@ -1179,6 +1191,21 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
                   <div className="dd-workbench__summary">
                     <div className="dd-workbench__summary-row"><span>{t.propName}</span><strong>{resolvedDs.name}</strong></div>
                     {targetIsDistinct && targetName && <div className="dd-workbench__summary-row"><span>{locale === 'cs' ? 'Cíl' : 'Target'}</span><strong>{targetName}</strong></div>}
+                    {typeof resolvedDs.label === 'string' && resolvedDs.label && (
+                      <div className="dd-workbench__summary-row"><span>{t.propLabel}</span><strong>{resolvedDs.label}</strong></div>
+                    )}
+                    {/* A user parameter has no formula behind it — its data type and
+                        label are the whole answer to "where does this come from". */}
+                    {resolvedDs.userParamInfo?.extendedDataTypeName && (
+                      <div className="dd-workbench__summary-row"><span>{t.propEdt}</span><strong>{resolvedDs.userParamInfo.extendedDataTypeName}</strong></div>
+                    )}
+                    {resolvedDs.type === 'UserParameter' && (
+                      <div className="dd-workbench__summary-note">
+                        {locale === 'cs'
+                          ? 'Hodnotu zadává uživatel při spuštění reportu — nepochází z modelu ani z tabulky.'
+                          : 'Filled in by the user when the report runs — it comes from neither the model nor a table.'}
+                      </div>
+                    )}
                   </div>
                   {datasourceDefinitionEntries.map((entry) => (
                     <div key={entry.key} className="dd-ds-formula">
