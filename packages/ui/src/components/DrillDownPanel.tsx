@@ -925,6 +925,63 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
     return [{ label: selected.label, expression: selected.expression }];
   }, [selected.expression, selected.label]);
 
+  /**
+   * A selection that is more than a bare path — a function call, comparison or
+   * boolean expression. The left column truncates it to one line and the
+   * breadcrumb only covers paths, so without this the full text of the very
+   * expression being drilled was nowhere on screen.
+   */
+  const selectedExpressionKind = classifyExpr(selected.expression);
+  const showFullExpression =
+    selectedExpressionKind === 'er-function' ||
+    selectedExpressionKind === 'compound' ||
+    selected.expression.includes('(');
+
+  /**
+   * Model references used by a *compound* expression (the root `IF(...)`, a
+   * function call, a comparison …). Such an expression is not itself a model
+   * path, so `resolveModelPath` finds nothing for it and the panel used to show
+   * no mapping at all — even though every path inside it is mapped. List them
+   * so the mapping formulas are one click away from the root, which is where
+   * the drill-down opens.
+   */
+  const referencedModelBindings = useMemo(() => {
+    // Only for compound selections: a resolvable path renders its own card.
+    if (modelResult) return [];
+
+    const seen = new Set<string>();
+    const out: Array<{
+      expression: string;
+      label: string;
+      mappingExpression: string;
+      mappingConfigIndex: number;
+      mappingConfigName: string | null;
+    }> = [];
+
+    for (const tok of tokenizeERExpr(selected.expression)) {
+      if (tok.kind !== 'ds' || !tok.segments || tok.segments.length === 0) continue;
+      // Longest form first: the leaf is what carries the binding.
+      for (let len = tok.segments.length; len >= 1; len--) {
+        const segs = tok.segments.slice(0, len);
+        const expression = segs.map(formatSegmentForExpression).join('.');
+        if (seen.has(expression)) break;
+        const resolved = resolveModelPath(expression);
+        if (!resolved?.binding?.expressionAsString) continue;
+        seen.add(expression);
+        out.push({
+          expression,
+          label: segs.map(formatSegmentForDisplay).join('.'),
+          mappingExpression: resolved.binding.expressionAsString,
+          mappingConfigIndex: resolved.bindingConfigIndex,
+          mappingConfigName:
+            configurations[resolved.bindingConfigIndex]?.solutionVersion?.solution?.name ?? null,
+        });
+        break;
+      }
+    }
+    return out;
+  }, [modelResult, selected.expression, resolveModelPath, configurations]);
+
   const datasourceDefinitionEntries = useMemo(() => {
     if (!resolvedDs) return [] as Array<{ key: string; label: string; expression: string; kind: 'calc' | 'user-param' | 'groupby' }>;
 
@@ -1054,8 +1111,55 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
             </div>
           </div>
 
-          {(showMappingExpression && mappingExpr || resolvedDs) && (
+          {(showMappingExpression && mappingExpr || resolvedDs || referencedModelBindings.length > 0 || showFullExpression) && (
             <div className="dd-workbench__detail-grid">
+              {showFullExpression && (
+                <div className="dd-workbench__detail-card">
+                  <div className="dd-workbench__detail-card-head">
+                    <span>{locale === 'cs' ? 'Výraz' : 'Expression'}</span>
+                    <span className="dd-workbench__card-meta">{selected.label}</span>
+                  </div>
+                  <ExpressionView
+                    expr={selected.expression}
+                    configIndex={frame.configIndex}
+                    onPush={pushWithContext}
+                    currentFrameExpression={selected.expression}
+                  />
+                </div>
+              )}
+
+              {referencedModelBindings.length > 0 && (
+                <div className="dd-workbench__detail-card">
+                  <div className="dd-workbench__detail-card-head">
+                    <span>{locale === 'cs' ? 'Mapování použitých cest' : 'Mapping of referenced paths'}</span>
+                    <span className="dd-workbench__card-meta">{referencedModelBindings.length}</span>
+                  </div>
+                  {referencedModelBindings.map(ref => (
+                    <div key={ref.expression} className="dd-ds-formula">
+                      <div className="dd-ds-formula__label">
+                        <button
+                          type="button"
+                          className="dd-workbench__ref-path"
+                          onClick={() => setSelectedExpr(ref.expression)}
+                          title={locale === 'cs' ? 'Vybrat tuto část výrazu' : 'Select this expression part'}
+                        >
+                          {ref.label}
+                        </button>
+                        {ref.mappingConfigName && (
+                          <span className="dd-workbench__card-meta">{ref.mappingConfigName}</span>
+                        )}
+                      </div>
+                      <ExpressionView
+                        expr={ref.mappingExpression}
+                        configIndex={ref.mappingConfigIndex}
+                        onPush={pushWithContext}
+                        currentFrameExpression={selected.expression}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {showMappingExpression && mappingExpr && (
                 <div className="dd-workbench__detail-card">
                   <div className="dd-workbench__detail-card-head">
