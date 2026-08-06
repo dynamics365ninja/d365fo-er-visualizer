@@ -15,11 +15,10 @@ import {
   KeyboardRegular,
   EyeRegular,
   CodeRegular,
-  WeatherSunnyRegular,
-  WeatherMoonRegular,
 } from '@fluentui/react-icons';
 import type { FluentIcon } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
+import { ThemeSwitch } from './ThemeSwitch';
 import { t, locale } from '../i18n';
 
 interface ActivityBarProps {
@@ -106,8 +105,6 @@ const useStyles = makeStyles({
  */
 export function ActivityBar(props: ActivityBarProps) {
   const styles = useStyles();
-  const themeMode = useAppStore(s => s.themeMode);
-  const setThemeMode = useAppStore(s => s.setThemeMode);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const setShowTechnicalDetails = useAppStore(s => s.setShowTechnicalDetails);
 
@@ -164,11 +161,12 @@ export function ActivityBar(props: ActivityBarProps) {
         onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
         active={showTechnicalDetails}
       />
-      <ActivityButton
-        Icon={themeMode === 'dark' ? WeatherSunnyRegular : WeatherMoonRegular}
-        label={themeMode === 'dark' ? t.lightTheme : t.darkTheme}
-        onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
-      />
+      {/* The shared switch rather than an `ActivityButton`: same 36px box and
+          radius as the rail, and its border marks it as a mode control instead
+          of one more panel toggle. */}
+      <div className={styles.btnWrap}>
+        <ThemeSwitch />
+      </div>
     </nav>
   );
 }

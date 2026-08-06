@@ -2,8 +2,14 @@
 /* Shared brand tokens (`--er-*`) — same file the marketing site imports.
    Everything below aliases those tokens; do not hard-code palette hexes here. */
 @import "@er-visualizer/design-tokens/tokens.css";
+/* The theme switch, shared verbatim with the marketing site — see its header. */
+@import "@er-visualizer/design-tokens/theme.css";
 
-/* ─── Dark Theme (default) ─── */
+/* ─── Base aliases + the dark-specific values ───
+   `src/main.tsx` puts `data-theme` on <html> before React mounts, so the bare
+   `:root` only ever applies for the instant before that module runs; the boot
+   styles in index.html paint an OS-correct background for that gap. Which
+   theme the app *starts* in is decided in `src/theme.ts`, not here. */
 :root,
 :root[data-theme='dark'] {
   --font-display: var(--er-font-display);
@@ -3769,19 +3775,19 @@ body {
   word-break: break-all;
 }
 
-@media (prefers-color-scheme: light) {
-  .fmt-deep-deps {
-    background: rgba(0, 120, 212, 0.04);
-    border-color: rgba(0, 120, 212, 0.2);
-  }
+/* Keyed off `data-theme`, not the OS: an explicit light choice on a dark
+   machine (or the reverse) has to reach these panels too. */
+:root[data-theme='light'] .fmt-deep-deps {
+  background: rgba(0, 120, 212, 0.04);
+  border-color: rgba(0, 120, 212, 0.2);
+}
 
-  .fmt-deep-deps-title {
-    border-bottom-color: rgba(0, 120, 212, 0.15);
-  }
+:root[data-theme='light'] .fmt-deep-deps-title {
+  border-bottom-color: rgba(0, 120, 212, 0.15);
+}
 
-  .fmt-deep-calc-item {
-    border-bottom-color: rgba(0, 0, 0, 0.06);
-  }
+:root[data-theme='light'] .fmt-deep-calc-item {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
 }
 
 @keyframes fno-skeleton-shimmer {

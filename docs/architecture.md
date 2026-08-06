@@ -58,8 +58,14 @@ React 19 SPA (Vite 6 + Fluent UI v9).
 | `openTabs` / `activeTabId` | Designer tabs |
 | `whereUsedResults` | Result of the last where-used trace |
 | `showTechnicalDetails` | Technical/consultant mode (persisted) |
+| `themeMode` / `resolvedTheme` | Preference (`system` by default, persisted only when explicit) and what it resolves to |
 
 **Key actions:** `loadXmlFile` · `selectNode` · `resolveDatasource` · `resolveBinding` · `whereUsed` · `setFnoIngestStatus`
+
+**Theming** — the rules live in `@er-visualizer/design-tokens/theme` (re-exported by `src/theme.ts`)
+next to the CSS that encodes the same precedence, and the marketing site imports the very same
+module. `main.tsx` writes `data-theme` before React mounts. `components/ThemeSwitch.tsx` is the one
+switch, used by both the landing page and the activity bar. See [Theming](#theming).
 
 **F&O session** (`state/fno-session.ts`) is kept separate so browsing state (solutions, components, selection across drill levels) survives panel unmounts.
 
@@ -79,8 +85,11 @@ the only part of the repo written for search engines.
 - **`/api/fno`** — edge route handler proxying F&O calls, since F&O sends no CORS headers. Allows
   `*.dynamics.com` over HTTPS only; streams the upstream body back without storing anything.
 
-Styling is Tailwind 4 with CSS custom properties that flip on `prefers-color-scheme` — no theme
-switcher, no client-side theme state.
+Styling is Tailwind 4 with CSS custom properties that flip on `prefers-color-scheme`. The header's
+`ThemeSwitch` (the site's only client component) and a blocking script in the root layout both go
+through `@er-visualizer/design-tokens`, so the site and the SPA render the same control and read and
+write one preference — a choice made on either side holds on both, and `system` falls through to the
+CSS. See [Theming](#theming).
 
 ### `@er-visualizer/electron`
 
@@ -148,7 +157,31 @@ Non-root explorer items open a **FocusedNodeTab** — a properties-only detail v
 Two complementary systems:
 
 - **Fluent UI tokens** (`tokens.*`) — all Fluent component styling; controlled via `FluentProvider`.
-- **CSS custom properties** (`--accent`, `--bg-primary/secondary`, `--text-primary/secondary`, `--format-type-*`, `--surface-*-*`) — shared across custom CSS in `index.css`. Light and dark variants both defined; active mode stored in Zustand and persisted in localStorage.
+- **CSS custom properties** (`--accent`, `--bg-primary/secondary`, `--text-primary/secondary`, `--format-type-*`, `--surface-*-*`) — shared across custom CSS in `index.css`. Light and dark variants both defined; the active one is chosen by `data-theme` on `<html>`.
+
+**Which theme, and who decides.** `@er-visualizer/design-tokens` owns all of it: `tokens.css`
+resolves `[data-theme]` → `prefers-color-scheme` → light in CSS, `theme.js` does the same in JS and
+carries the switch's icon geometry, and `theme.css` carries its appearance. The switch cycles
+**system → light → dark**; only an explicit choice is written to localStorage
+(`er-visualizer.themeMode.v2`), so the default keeps following the OS and returning to `system`
+clears the key rather than freezing today's OS setting.
+
+**One switch, three places.** The site header, the SPA landing page and the activity-bar rail all
+render the same `<button class="er-theme-switch">` with the same shared SVG shapes and the same
+`Theme: <mode>` label (translated in the SPA, English on the site). Deliberately a plain button
+rather than a Fluent one — that is what lets the SPA and the site share `theme.css` verbatim instead
+of maintaining two lookalikes. Restyle it there; there is no per-surface override.
+
+The two surfaces share one origin in the web deployment (`/` and `/app`), hence one key and one
+choice. Two consequences worth knowing:
+
+- On `localhost` they are two ports, so two origins — the shared choice does **not** carry across in
+  dev. That is the dev setup, not a bug.
+- Electron has its own storage and no site next to it; it just keeps its own preference.
+
+Anything that paints before the app boots — `packages/ui/index.html`, the Electron window
+background, `<meta name="theme-color">` — mirrors the same fallback with literal `--er-bg-soft`
+values, because the tokens are not loaded at that point.
 
 ---
 

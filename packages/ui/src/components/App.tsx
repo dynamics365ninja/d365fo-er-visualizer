@@ -366,8 +366,7 @@ export function App() {
   const treeNodes = useAppStore(s => s.treeNodes);
   const openTabs = useAppStore(s => s.openTabs);
   const activeTabId = useAppStore(s => s.activeTabId);
-  const themeMode = useAppStore(s => s.themeMode);
-  const setThemeMode = useAppStore(s => s.setThemeMode);
+  const cycleTheme = useAppStore(s => s.cycleTheme);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const setShowTechnicalDetails = useAppStore(s => s.setShowTechnicalDetails);
   const navigateBack = useAppStore(s => s.navigateBack);
@@ -385,10 +384,6 @@ export function App() {
     setSearchPanelMode('where-used');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [whereUsedTrigger?.version]);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = themeMode;
-  }, [themeMode]);
 
   useEffect(() => {
     if (configs.length > 0 && treeNodes.length !== configs.length) {
@@ -502,11 +497,11 @@ export function App() {
     { id: 'search', group: t.cmdGroupView, label: t.cmdToggleSearch, hint: 'Ctrl+F', action: toggleSearch },
     { id: 'explorer', group: t.cmdGroupView, label: t.cmdToggleExplorer, hint: 'Ctrl+B', action: () => setShowLeft(s => !s) },
     { id: 'props', group: t.cmdGroupView, label: t.cmdToggleProperties, hint: 'Ctrl+J', action: toggleProperties },
-    { id: 'theme', group: t.cmdGroupView, label: t.cmdToggleTheme, action: () => setThemeMode(themeMode === 'dark' ? 'light' : 'dark') },
+    { id: 'theme', group: t.cmdGroupView, label: t.cmdToggleTheme, action: cycleTheme },
     { id: 'tech', group: t.cmdGroupView, label: t.cmdToggleTechnical, action: () => setShowTechnicalDetails(!showTechnicalDetails) },
     { id: 'collapse', group: t.cmdGroupTools, label: t.cmdCollapseAll, action: () => requestExplorerExpand('none') },
     { id: 'expand', group: t.cmdGroupTools, label: t.cmdExpandAll, action: () => requestExplorerExpand('all') },
-  ], [navigateBack, navigateForward, toggleSearch, toggleProperties, setThemeMode, themeMode, setShowTechnicalDetails, showTechnicalDetails, requestExplorerExpand, locale]);
+  ], [navigateBack, navigateForward, toggleSearch, toggleProperties, cycleTheme, setShowTechnicalDetails, showTechnicalDetails, requestExplorerExpand, locale]);
 
   useEffect(() => {
     const active = openTabs.find(tab => tab.id === activeTabId);

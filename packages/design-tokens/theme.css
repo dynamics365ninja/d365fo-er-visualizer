@@ -1,0 +1,59 @@
+/**
+ * The theme switch — one control, one appearance, both surfaces.
+ *
+ * Imported by `packages/site/app/globals.css` and `packages/ui/src/index.css`.
+ * The site cannot use the SPA's Fluent `makeStyles` and the SPA does not ship
+ * Tailwind's utility set to the same classes, so the *rendered* CSS is what the
+ * two share — copying the declarations into either package would put them back
+ * on separate clocks.
+ *
+ * Geometry matches the SPA's activity-bar rail (36px, `--er-radius-lg`), which
+ * is the tighter constraint; the visible border is what marks it out as a mode
+ * control rather than one more panel toggle.
+ *
+ * Only `--er-*` tokens here, so it flips with `data-theme` like everything else.
+ */
+
+.er-theme-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: transparent;
+  color: var(--er-text-muted);
+  cursor: pointer;
+  /* Fluent's `Button` reset does not apply — this is a plain <button>. */
+  font-family: var(--er-font-sans);
+  line-height: 1;
+  transition:
+    background-color var(--er-duration-fast) var(--er-ease),
+    border-color var(--er-duration-fast) var(--er-ease),
+    color var(--er-duration-fast) var(--er-ease);
+}
+
+.er-theme-switch:hover {
+  background: var(--er-surface-2);
+  border-color: var(--er-border-strong);
+  color: var(--er-text);
+}
+
+.er-theme-switch:active {
+  background: var(--er-surface-3);
+}
+
+.er-theme-switch:focus-visible {
+  outline: 2px solid var(--er-accent);
+  outline-offset: 2px;
+}
+
+.er-theme-switch > svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}

@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#ffffff" />
+  <!-- Both entries, so the browser chrome follows the OS the same way the shell
+       below and the marketing site do. Values are `--er-bg-soft`. -->
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f8f8" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#10161a" />
   <!-- Application shell — no indexable content. The marketing site at / is what search engines should see. -->
   <meta name="robots" content="noindex, follow" />
   <meta name="apple-mobile-web-app-title" content="ER Visualizer" />
@@ -21,21 +24,28 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     /* Paint the shell before the bundle arrives, so the gap between navigation
-       and React mounting is not a bright flash on the way into a dark UI.
-       Deliberately CSS-only: the packaged Electron CSP is script-src 'self',
-       which would block an inline theme-bootstrap script. This follows the OS
-       preference — the same default readStoredThemeMode() in state/store.ts
-       uses when nothing is persisted. */
+       and React mounting is not a flash of the wrong theme. Deliberately
+       CSS-only: the packaged Electron CSP is script-src 'self', which would
+       block an inline theme-bootstrap script — src/main.tsx applies the real
+       theme as soon as the module runs.
+
+       Same fallback chain as design-tokens/tokens.css and the marketing site:
+       light unless the OS explicitly asks for dark. The literals are
+       `--er-bg-soft`, which the tokens are not loaded yet to provide. */
     html, body {
-      background: #181a1f;
+      background: #f4f8f8;
       height: 100vh;
       overflow: hidden;
       font-family: 'Inter', 'Segoe UI', sans-serif;
     }
 
-    @media (prefers-color-scheme: light) {
-      html, body { background: #f8fafc; }
+    @media (prefers-color-scheme: dark) {
+      html, body { background: #10161a; }
     }
+
+    /* An explicit choice already on <html> wins over the OS, as in the tokens. */
+    html[data-theme='light'], html[data-theme='light'] body { background: #f4f8f8; }
+    html[data-theme='dark'], html[data-theme='dark'] body { background: #10161a; }
   </style>
 </head>
 <body>

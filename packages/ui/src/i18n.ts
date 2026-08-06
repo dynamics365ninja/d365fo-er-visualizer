@@ -77,8 +77,12 @@ export interface Translations {
   showProperties: string;
   showDetails: string;
   hideDetails: string;
+  /* The theme switch names the mode it is in, as `<themeLabel>: <mode>` — the
+     same wording the marketing site uses, translated. */
+  themeLabel: string;
   lightTheme: string;
   darkTheme: string;
+  systemTheme: string;
   consultantView: string;
   technicalView: string;
   explorer: string;
@@ -472,8 +476,10 @@ const cs: Translations = {
   showProperties: 'Zobrazit Vlastnosti',
   showDetails: 'Zobrazit detaily',
   hideDetails: 'Skrýt detaily',
-  lightTheme: 'Světlý režim',
-  darkTheme: 'Tmavý režim',
+  themeLabel: 'Motiv',
+  lightTheme: 'Světlý',
+  darkTheme: 'Tmavý',
+  systemTheme: 'Podle systému',
   consultantView: 'Konzultantský pohled',
   technicalView: 'Technický pohled',
   explorer: 'Explorer',
@@ -647,7 +653,7 @@ const cs: Translations = {
   cmdToggleSearch: 'Hledat / Místa použití',
   cmdToggleExplorer: 'Přepnout Explorer',
   cmdToggleProperties: 'Přepnout Vlastnosti',
-  cmdToggleTheme: 'Přepnout světlý/tmavý režim',
+  cmdToggleTheme: 'Přepnout motiv (systém / světlý / tmavý)',
   cmdToggleTechnical: 'Přepnout technický pohled',
   cmdCollapseAll: 'Sbalit celý strom',
   cmdExpandAll: 'Rozbalit celý strom',
@@ -861,8 +867,10 @@ const en: Translations = {
   showProperties: 'Show Properties',
   showDetails: 'Show details',
   hideDetails: 'Hide details',
-  lightTheme: 'Light mode',
-  darkTheme: 'Dark mode',
+  themeLabel: 'Theme',
+  lightTheme: 'Light',
+  darkTheme: 'Dark',
+  systemTheme: 'Follow system',
   consultantView: 'Consultant view',
   technicalView: 'Technical view',
   explorer: 'Explorer',
@@ -1031,7 +1039,7 @@ const en: Translations = {
   cmdToggleSearch: 'Search / Where used',
   cmdToggleExplorer: 'Toggle Explorer',
   cmdToggleProperties: 'Toggle Properties',
-  cmdToggleTheme: 'Toggle light/dark theme',
+  cmdToggleTheme: 'Cycle theme (system / light / dark)',
   cmdToggleTechnical: 'Toggle technical view',
   cmdCollapseAll: 'Collapse entire tree',
   cmdExpandAll: 'Expand entire tree',

@@ -6,9 +6,17 @@
   "type": "module",
   "exports": {
     "./tokens.css": "./tokens.css",
+    "./theme.css": "./theme.css",
+    "./theme": {
+      "types": "./theme.d.ts",
+      "default": "./theme.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
-    "tokens.css"
+    "tokens.css",
+    "theme.css",
+    "theme.js",
+    "theme.d.ts"
   ]
 }

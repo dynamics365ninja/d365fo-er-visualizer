@@ -22,10 +22,9 @@ import {
   LinkRegular,
   OpenRegular,
   DeleteRegular,
-  WeatherMoonRegular,
-  WeatherSunnyRegular,
 } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
+import { ThemeSwitch } from './ThemeSwitch';
 import { locale, setLocale, t, useLocale } from '../i18n';
 import { FnoConnectPanel } from './FnoConnectPanel';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
@@ -442,8 +441,6 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const clearRecentSessions = useAppStore(s => s.clearRecentSessions);
   const loadRecentSession = useAppStore(s => s.loadRecentSession);
   const cachedPaths = useAppStore(s => s.cachedPaths);
-  const themeMode = useAppStore(s => s.themeMode);
-  const setThemeMode = useAppStore(s => s.setThemeMode);
   const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
   const [isDragging, setIsDragging] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -528,14 +525,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
               EN
             </Button>
           </div>
-          <Button
-            appearance="subtle"
-            shape="circular"
-            icon={themeMode === 'dark' ? <WeatherSunnyRegular /> : <WeatherMoonRegular />}
-            aria-label={themeMode === 'dark' ? t.lightTheme : t.darkTheme}
-            title={themeMode === 'dark' ? t.lightTheme : t.darkTheme}
-            onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
-          />
+          <ThemeSwitch />
         </div>
       </header>
 

@@ -7,6 +7,7 @@ import {
   type Theme,
 } from '@fluentui/react-components';
 import { useAppStore } from '../state/store';
+import { applyResolvedTheme } from '../theme';
 import { useLocale } from '../i18n';
 import { App } from './App';
 
@@ -59,15 +60,25 @@ const lightTheme: Theme = { ...webLightTheme, ...sharedOverrides };
 export const TOASTER_ID = 'er-visualizer-toaster';
 
 export function FluentRoot() {
-  const themeMode = useAppStore(s => s.themeMode);
+  const resolvedTheme = useAppStore(s => s.resolvedTheme);
+  const syncSystemTheme = useAppStore(s => s.syncSystemTheme);
   const rebuildDerivedState = useAppStore(s => s.rebuildDerivedState);
   const currentLocale = useLocale();
-  const theme = themeMode === 'dark' ? darkTheme : lightTheme;
+  const theme = resolvedTheme === 'dark' ? darkTheme : lightTheme;
 
   useEffect(() => {
-    document.documentElement.dataset.theme = themeMode;
-    document.documentElement.style.colorScheme = themeMode;
-  }, [themeMode]);
+    applyResolvedTheme(resolvedTheme);
+  }, [resolvedTheme]);
+
+  // While the mode is `system`, follow the OS live — the marketing site does
+  // the same through `prefers-color-scheme`, so the two never drift apart.
+  useEffect(() => {
+    const query = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!query) return;
+    const onChange = () => syncSystemTheme();
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, [syncSystemTheme]);
 
   useEffect(() => {
     document.documentElement.lang = currentLocale;
