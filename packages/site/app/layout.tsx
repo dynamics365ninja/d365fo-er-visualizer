@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SiteHeader } from '@/components/SiteHeader';
 import { siteDescription, siteName, siteTagline, siteUrl } from '@/lib/site';
+import { themeBootstrapScript } from '@er-visualizer/design-tokens/theme';
 import './globals.css';
 
 const inter = Inter({
@@ -88,7 +89,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="en"
       className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
+      /* The bootstrap script below writes `data-theme` / `color-scheme` onto
+         this element before hydration; without this React reports the diff as
+         a mismatch. Scoped to <html>'s own attributes, not the tree. */
+      suppressHydrationWarning
     >
+      <head>
+        {/* Adopt the theme the user picked in the app (same origin under /app). */}
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
+      </head>
       <body className="flex min-h-screen flex-col">
         <a
           href="#main"

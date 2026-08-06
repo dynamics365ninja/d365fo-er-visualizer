@@ -17,15 +17,23 @@ import {
   clearAllFileContent,
   listCachedPaths,
 } from '../utils/content-cache';
+import {
+  nextThemeMode,
+  persistThemeMode,
+  readThemeMode,
+  resolveThemeMode,
+  systemTheme,
+  type ResolvedTheme,
+  type ThemeMode,
+} from '../theme';
 
 const TECHNICAL_DETAILS_STORAGE_KEY = 'er-visualizer.showTechnicalDetails';
-const THEME_MODE_STORAGE_KEY = 'er-visualizer.themeMode';
 const RECENT_FILES_STORAGE_KEY = 'er-visualizer.recentFiles.v1';
 const RECENT_SESSIONS_STORAGE_KEY = 'er-visualizer.recentSessions.v1';
 const MAX_RECENT_FILES = 12;
 const MAX_RECENT_SESSIONS = 12;
 
-export type ThemeMode = 'dark' | 'light';
+export type { ThemeMode, ResolvedTheme } from '../theme';
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';
 
 export interface Toast {
@@ -185,26 +193,6 @@ function persistTechnicalDetails(show: boolean): void {
   }
 }
 
-function readStoredThemeMode(): ThemeMode {
-  if (typeof window === 'undefined') return 'dark';
-  try {
-    const stored = window.localStorage.getItem(THEME_MODE_STORAGE_KEY);
-    if (stored === 'dark' || stored === 'light') return stored;
-    return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-  } catch {
-    return 'dark';
-  }
-}
-
-function persistThemeMode(mode: ThemeMode): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(THEME_MODE_STORAGE_KEY, mode);
-  } catch {
-    // Ignore storage failures and keep in-memory state only.
-  }
-}
-
 // ─── Tree Node (unified for all component types) ───
 
 export interface TreeNode {
@@ -269,7 +257,9 @@ export interface AppState {
   whereUsedScope: 'all' | 'mapping' | 'format';
   activeWhereUsedRefKey: string | null;
   showTechnicalDetails: boolean;
+  /** The user's preference. Read `resolvedTheme` to know what is on screen. */
   themeMode: ThemeMode;
+  resolvedTheme: ResolvedTheme;
   navigationHistory: NavigationSnapshot[];
   navigationForward: NavigationSnapshot[];
   canNavigateBack: boolean;
@@ -299,6 +289,10 @@ export interface AppState {
   setShowTechnicalDetails: (show: boolean) => void;
   setFnoIngestStatus: (status: string) => void;
   setThemeMode: (mode: ThemeMode) => void;
+  /** Advance the switch: system → light → dark → system. */
+  cycleTheme: () => void;
+  /** Called by the `prefers-color-scheme` listener while the mode is `system`. */
+  syncSystemTheme: () => void;
   setSearchQuery: (query: string) => void;
   executeSearch: () => void;
   setSearchPanelMode: (mode: 'search' | 'where-used') => void;
@@ -614,6 +608,8 @@ function collectConfigurationWarnings(configurations: ERConfiguration[]): Config
   return warnings;
 }
 
+const initialThemeMode = readThemeMode();
+
 export const useAppStore = create<AppState>((set, get) => ({
   configurations: [],
   registry: new GUIDRegistry(),
@@ -631,7 +627,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeWhereUsedRefKey: null,
   showTechnicalDetails: readStoredTechnicalDetails(),
   fnoIngestStatus: '',
-  themeMode: readStoredThemeMode(),
+  themeMode: initialThemeMode,
+  resolvedTheme: resolveThemeMode(initialThemeMode),
   navigationHistory: [],
   navigationForward: [],
   canNavigateBack: false,
@@ -948,7 +945,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setThemeMode: (mode: ThemeMode) => {
     persistThemeMode(mode);
-    set({ themeMode: mode });
+    set({ themeMode: mode, resolvedTheme: resolveThemeMode(mode) });
+  },
+
+  cycleTheme: () => {
+    get().setThemeMode(nextThemeMode(get().themeMode));
+  },
+
+  syncSystemTheme: () => {
+    if (get().themeMode !== 'system') return;
+    const next = systemTheme();
+    if (next !== get().resolvedTheme) set({ resolvedTheme: next });
   },
 
   setSearchQuery: (query: string) => set({ searchQuery: query }),

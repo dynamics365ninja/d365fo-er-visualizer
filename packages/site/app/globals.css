@@ -2,6 +2,8 @@
 /* Shared brand tokens (`--er-*`) — the same file the SPA imports, so the site
    and the app cannot drift apart. Palette changes belong there, not here. */
 @import '@er-visualizer/design-tokens/tokens.css';
+/* The theme switch, shared verbatim with the SPA — see the file's header. */
+@import '@er-visualizer/design-tokens/theme.css';
 
 /* ── Theme tokens ──────────────────────────────────────────────────────────
    Local aliases over the shared tokens (which already flip with the OS colour

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Logo } from './Logo';
+import { ThemeSwitch } from './ThemeSwitch';
 import { appPath, primaryNav, siteName } from '@/lib/site';
 
 export function SiteHeader() {
@@ -30,12 +31,15 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <Link
-          href={appPath}
-          className="ml-auto shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast transition-colors hover:bg-accent-hover md:ml-0"
-        >
-          Open the app
-        </Link>
+        <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-0">
+          <ThemeSwitch />
+          <Link
+            href={appPath}
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast transition-colors hover:bg-accent-hover"
+          >
+            Open the app
+          </Link>
+        </div>
       </div>
 
       {/* Mobile navigation — no JavaScript, just a second row. */}
