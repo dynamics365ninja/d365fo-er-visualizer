@@ -1,0 +1,86 @@
+import { DocHeader } from '@/components/DocHeader';
+import { docMetadata } from '@/lib/doc-metadata';
+
+export const metadata = docMetadata('expression-drill-down');
+
+<DocHeader slug="expression-drill-down" />
+
+An ER formula rarely tells you where its data comes from. `model.Invoice.Lines.Amount` is a model
+path; the mapping decides what fills it, and that may itself be a calculated field wrapping
+another calculated field. The drill-down workbench walks that chain for you, one level at a time.
+
+## Opening it
+
+Click an expression anywhere it appears — on a format element, on a mapping binding, or in the
+Properties panel. The workbench opens with the expression on the left and its resolution on the
+right.
+
+## How it works
+
+The workbench keeps a **stack of frames**. Each frame is one expression resolved to one source.
+Clicking a formula or a related datasource inside a frame pushes a new frame onto the stack, and a
+breadcrumb bar across the top jumps back to any earlier level — so you can dig four levels deep
+and still return to where you started in one click.
+
+A typical descent through a format element:
+
+1. **Format** — the element and the expression bound to it.
+2. **Mapping** — the model path the expression refers to, and the binding that fills it.
+3. **Value source** — the datasource behind that binding.
+4. **Table, enum, or class** — the concrete source, with its field, enum type, or class name.
+
+Calculated fields add levels in the middle: the workbench shows the calculation rule and lets you
+click into the expressions inside it.
+
+## Reading a frame
+
+Frames label what they are showing — format, mapping, value source, table, enum, class,
+calculation — and the panel is explicit when a chain cannot continue, rather than silently
+stopping:
+
+| What you see | What it means |
+|---|---|
+| **This value is not connected** | The element has no expression assigned |
+| **Load the ModelMapping file to continue** | The reference points at the model, but no model mapping for it is loaded |
+| **Path not found in ModelMapping** | The model path has no binding in the mapping that is loaded — often a version mismatch |
+| **Datasource not found in loaded configurations** | The expression names a datasource that lives in a file you have not loaded |
+| **Complex ER function** | The expression cannot resolve to a single source; read the breakdown instead |
+| **Constant value** | There is no data source behind it |
+| **Reference to the current loop record** | `@` refers to the record of the enclosing format element — look at the parent to find the source |
+
+The first three are the ones you will actually hit, and all three mean the same thing in practice:
+something is missing from the workspace. Load the model mapping, or the data model, or the format
+that defines the datasource, and run the trace again.
+
+## Compound and conditional expressions
+
+Real formulas are rarely a single path. When an expression contains several references — a
+comparison, a conditional, a concatenation — the workbench shows the breakdown and highlights
+every reference in it. Each highlighted reference is clickable, so you choose which branch to
+follow rather than being given one arbitrary answer.
+
+Conditionals (`IF`, `CASE`), operators, and function calls are parsed into typed nodes, which is
+why the breakdown can distinguish the condition from the branches instead of showing you one long
+string.
+
+## Clickable paths and tooltips
+
+Outside the workbench, identifiers inside expressions are hyperlinks wherever they resolve.
+Hovering over one shows a tooltip card with the resolved source — enough to answer "what is this?"
+without leaving the view you are in. Clicking navigates to it.
+
+This is the shortcut for the common case. Use the workbench when you need the whole chain, and the
+tooltips when you need one step.
+
+## When a trace stops early
+
+Almost always because a file is missing. Check, in this order:
+
+1. Is the **model mapping** for that data model loaded? A format alone stops at the model path.
+2. Is the **data model** loaded? Without it, paths have no structure behind them.
+3. Are the configurations the **same version**? A format built against an older model version can
+   reference paths the loaded mapping does not have.
+4. Was the configuration **derived** from another one? Derived configurations carry no XML of
+   their own — load the base configuration.
+
+[Troubleshooting](/docs/troubleshooting) covers what each of those looks like in practice.

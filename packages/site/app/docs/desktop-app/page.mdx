@@ -1,0 +1,57 @@
+import { DocHeader } from '@/components/DocHeader';
+import { docMetadata } from '@/lib/doc-metadata';
+
+export const metadata = docMetadata('desktop-app');
+
+<DocHeader slug="desktop-app" />
+
+The web app covers almost every case. The desktop shell exists for the one it does not: tenants
+where the Microsoft sign-in popup is blocked, or where a web origin cannot be added to the Entra
+app registration at all.
+
+## What it adds
+
+- **Loopback sign-in** — authorization code with PKCE against a temporary `http://localhost`
+  listener, instead of a browser popup.
+- **Native file dialogs** — the operating system's own file picker for opening ER XML.
+- **Direct API calls** — requests go to your environment from the desktop process, so the CORS
+  proxy the web version needs is not involved at all.
+
+Everything else is identical: same interface, same parser, same designers.
+
+## Running it
+
+There is no packaged installer yet — the desktop shell runs from the repository. You need
+[Node.js](https://nodejs.org) 20 or newer and [pnpm](https://pnpm.io).
+
+```bash
+git clone https://github.com/dynamics365ninja/d365fo-er-visualizer.git
+cd d365fo-er-visualizer
+pnpm install
+pnpm dev:electron
+```
+
+That starts the Vite dev server and opens the Electron window against it.
+
+## Entra registration for the desktop flow
+
+The desktop flow needs two things in the app registration described under
+[F&amp;O connection](/docs/connect-to-fno):
+
+1. A **Mobile and desktop applications** platform with the redirect URI `http://localhost`. Entra
+   matches any port for loopback URIs, which is what lets the shell pick a free one at runtime.
+2. **Allow public client flows** set to **Yes**, under *Authentication → Advanced settings*.
+
+Connection profiles are entered exactly as in the browser: profile name, environment URL, tenant
+ID, client ID.
+
+## Which one should you use?
+
+Use the web app unless something forces you not to. It needs no install, updates itself, and
+handles files identically.
+
+Reach for the desktop shell when:
+
+- sign-in popups are blocked by tenant policy, or
+- your security team will not allow the hosted origin as a redirect URI, or
+- you want F&amp;O traffic to leave your machine directly rather than through a proxy.

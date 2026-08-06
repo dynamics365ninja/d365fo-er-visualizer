@@ -2,17 +2,21 @@
 
 ## Overview
 
-pnpm monorepo — four packages with a clear dependency direction:
+pnpm monorepo — five packages with a clear dependency direction:
 
 ```
-Electron shell (optional)
-        │
-   React UI (Vite SPA)
+Electron shell (optional)        Next.js site (marketing + docs)
+        │                                │
+        │                        hosts the SPA build at /app
+        │                                │
+   React UI (Vite SPA)  ──────────────────
         │
    @er-visualizer/core          ← XML parser · GUID registry · type system
         │
    @er-visualizer/fno-client    ← F&O API client (host-agnostic)
 ```
+
+The site depends on the UI only as a build artifact — no imports cross that boundary.
 
 ---
 
@@ -58,6 +62,25 @@ React 19 SPA (Vite 6 + Fluent UI v9).
 **Key actions:** `loadXmlFile` · `selectNode` · `resolveDatasource` · `resolveBinding` · `whereUsed` · `setFnoIngestStatus`
 
 **F&O session** (`state/fno-session.ts`) is kept separate so browsing state (solutions, components, selection across drill levels) survives panel unmounts.
+
+### `@er-visualizer/site`
+
+Next.js 15 (App Router) marketing site and user documentation — the public face of the project and
+the only part of the repo written for search engines.
+
+- **Pages** — `/` (marketing), `/features`, `/docs/*`. Documentation pages are MDX with
+  `remark-gfm` and `rehype-slug`; the table of contents in `lib/site.ts` drives the sidebar,
+  prev/next links, page metadata, and `sitemap.xml` from one source.
+- **SEO** — per-page Metadata API entries with canonical URLs, generated `sitemap.xml` and
+  `robots.txt`, JSON-LD (`SoftwareApplication`, `FAQPage`, `BreadcrumbList`), and an
+  `ImageResponse` Open Graph card.
+- **Hosts the SPA** — `scripts/stage-app.mjs` copies `packages/ui/dist` into `public/app`, and a
+  rewrite maps `/app` to its entry document. The SPA must be built with `APP_BASE=/app/`.
+- **`/api/fno`** — edge route handler proxying F&O calls, since F&O sends no CORS headers. Allows
+  `*.dynamics.com` over HTTPS only; streams the upstream body back without storing anything.
+
+Styling is Tailwind 4 with CSS custom properties that flip on `prefers-color-scheme` — no theme
+switcher, no client-side theme state.
 
 ### `@er-visualizer/electron`
 
@@ -136,7 +159,11 @@ Two complementary systems:
 | `core` | tsc | `dist/` `.js` + `.d.ts` |
 | `fno-client` | tsc | `dist/` `.js` + `.d.ts` |
 | `ui` | Vite 6 | `dist/` SPA with code-split chunks |
+| `site` | Next 15 | `.next/` — prerendered pages + one edge route |
 | `electron` | tsc | `dist/main.js` + `dist/preload.js` |
+
+The web deployment is `pnpm build:web`: build the SPA with `APP_BASE=/app/`, stage it into
+`packages/site/public/app`, then `next build`. Vercel's root directory is `packages/site`.
 
 Vite aliases `@er-visualizer/core` to the core source during dev for instant HMR.
 

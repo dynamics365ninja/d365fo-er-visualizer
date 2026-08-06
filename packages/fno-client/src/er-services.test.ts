@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
+  clearServiceOpsCache,
   listSolutions,
   listComponents,
   downloadConfigXml,
@@ -32,6 +33,13 @@ interface PostCall {
   url: string;
   body: unknown;
 }
+
+// listServiceOperations memoizes discovery per `${envUrl}::${servicePath}` in a
+// module-level map. Every test here shares one `conn`, so without this reset a
+// test that exercises discovery leaks its operation names into later tests.
+beforeEach(() => {
+  clearServiceOpsCache();
+});
 
 function makeTransport(handlers: {
   post?: (url: string, body: unknown) => unknown;
@@ -242,7 +250,7 @@ describe('listSolutions', () => {
     }
   });
 
-  it('uses the highest VersionNumber from Versions[] as the display version', async () => {
+  it('uses the highest completed VersionNumber from Versions[] as the display version', async () => {
     const op = ER_SERVICE_OPS.listSolutions[0];
     const { transport } = makeTransport({
       post: (_url, body) => {
@@ -268,7 +276,8 @@ describe('listSolutions', () => {
     });
     const solutions = await listSolutions(transport, conn, 'tok');
     const someModel = solutions.find(s => s.solutionName === 'Some model');
-    expect(someModel?.version).toBe('7');
+    // v7 is a draft (Status=0), so the highest *completed* version wins.
+    expect(someModel?.version).toBe('5');
   });
 
   it('falls through 404 to the next candidate operation name', async () => {
@@ -441,9 +450,11 @@ describe('listComponents', () => {
       configurationName: 'MyConf',
       componentType: 'Format',
       revisionGuid: 'abc-def',
-      version: '10',
       hasContent: true,
     });
+    // The bare ConfigurationVersion string carries no Status, so it may be a
+    // draft number — mapComponentRow deliberately ignores it for display.
+    expect(rows[0].version).toBeUndefined();
     expect(rows[1]).toMatchObject({
       solutionName: "Tax'Report",
       configurationName: 'OtherConf',

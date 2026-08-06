@@ -1,0 +1,106 @@
+import { DocHeader } from '@/components/DocHeader';
+import { docMetadata } from '@/lib/doc-metadata';
+
+export const metadata = docMetadata('connect-to-fno');
+
+<DocHeader slug="connect-to-fno" />
+
+Exporting configurations by hand gets old quickly. The live connection signs you in to a Finance
+&amp; Operations environment with your own Entra application registration and downloads ER
+configurations straight from it — read-only, using your own permissions.
+
+## What you need
+
+- An **Entra ID (Azure AD) application registration** in the tenant of the environment. You need
+  someone with permission to create one, and usually an administrator to grant consent.
+- The **environment URL**, for example `https://myenv.sandbox.operations.dynamics.com`.
+- The **tenant ID** and the **application (client) ID** of that registration.
+- A user account with access to Electronic Reporting in that environment.
+
+## Register the application
+
+In the Entra admin center, go to **App registrations → New registration**.
+
+1. Give it a name — `ER Visualizer` is fine.
+2. Under **Supported account types**, single tenant is the normal choice.
+3. Add the platform you will use, under **Authentication → Add a platform**:
+   - **Single-page application** — redirect URI is the origin you open the app from, for example
+     `https://your-er-visualizer-domain` (no path). For local development that is
+     `http://localhost:5173`.
+   - **Mobile and desktop applications** — add `http://localhost` if you will use the
+     [desktop app](/docs/desktop-app). The loopback flow picks a free port at runtime, and Entra
+     matches any port for `http://localhost`.
+4. Under **Authentication → Advanced settings**, set **Allow public client flows** to **Yes**.
+   This is what the desktop loopback flow needs.
+5. Under **API permissions → Add a permission → Dynamics ERP**, add the **delegated** permission
+   `user_impersonation` (shown as *Access Dynamics 365 as the signed-in user*). Grant admin
+   consent if your tenant requires it.
+
+Copy the **Directory (tenant) ID** and **Application (client) ID** from the registration overview.
+
+> The application is a public client — there is no client secret anywhere in this setup, and none
+> is needed. Sign-in happens with authorization code plus PKCE, and the resulting token lives in
+> your browser session only.
+
+### Register the user in Finance &amp; Operations
+
+The Entra registration also has to be known to the environment. In F&amp;O, open **System
+administration → Setup → Azure Active Directory applications** and add a row with the client ID,
+a name, and the user account whose permissions the calls should run under. Without this step,
+sign-in succeeds but the ER service calls come back empty or unauthorised.
+
+## Create a connection profile
+
+In the app, switch to the **D365 F&amp;O server** tab and click **New profile**. Fill in:
+
+| Field | Value |
+|---|---|
+| **Profile name** | Anything you will recognise — `Contoso UAT` |
+| **Environment URL** | `https://myenv.sandbox.operations.dynamics.com` |
+| **Tenant ID (Entra)** | Directory (tenant) ID from the registration |
+| **Application (client) ID** | Application (client) ID from the registration |
+
+Click **Save profile**, then **Connect**. Microsoft sign-in opens in a popup; after it completes
+the panel shows the account you are connected as. Profiles are stored in your browser's local
+storage so you only do this once per environment.
+
+## Browse and ingest
+
+Once connected, the panel walks the ER hierarchy of the environment:
+
+1. **ER solutions** — the top level. Pick one to see its configurations.
+2. **Configurations** — tick the ones you want. You can filter by component type, use **Select
+   all** or **Clear selection**, and keep selections across drill levels — the counter shows how
+   many are selected in total.
+3. **Load selected** — downloads and parses everything you picked.
+
+Ingestion runs in phases, and the progress display names the one it is in: resolving data model
+identifiers, downloading data models, downloading formats and mappings, downloading model
+mappings, and finally resolving data models discovered inside the mapping XML. That last phase is
+why a load sometimes pulls in more configurations than you selected — dependencies found along
+the way are fetched so bindings actually resolve.
+
+Configurations loaded this way behave exactly like files opened from disk, and cross-reference
+them freely.
+
+## Notes and limits
+
+- **Derived configurations are skipped.** A configuration that inherits from another one has no
+  XML of its own; load the base configuration instead. The tool tells you which ones it skipped.
+- **Model mappings are not always downloadable.** When `GetModelMappingByID` returns nothing for a
+  data model, the panel says so — format element bindings still resolve through the format's own
+  mapping information, but the mapping-level trace stops there.
+- **Nothing is written back.** Every call the tool makes is a read.
+
+## How the network path works
+
+Finance &amp; Operations does not send CORS headers, so a browser cannot call its services
+directly. The hosted app routes those calls through a stateless proxy that forwards the request
+server-side, carrying your bearer token, and returns the response with CORS headers attached.
+
+The proxy only forwards to hosts matching `*.dynamics.com` over HTTPS — it cannot be used as an
+open relay — and it stores nothing: no tokens, no configuration content, no logs of your data. The
+[desktop app](/docs/desktop-app) skips the proxy entirely and calls the environment directly.
+
+If sign-in or downloading fails, [Troubleshooting](/docs/troubleshooting) lists the errors this
+setup actually produces and what each one means.

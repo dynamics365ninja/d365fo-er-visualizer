@@ -1,0 +1,82 @@
+import { DocHeader } from '@/components/DocHeader';
+import { docMetadata } from '@/lib/doc-metadata';
+
+export const metadata = docMetadata('getting-started');
+
+<DocHeader slug="getting-started" />
+
+The ER Visualizer is a read-only workspace for Dynamics 365 Finance &amp; Operations Electronic
+Reporting configurations. It never writes to your environment and never uploads your files — the
+XML is parsed by code running in your own browser tab.
+
+## Open the app
+
+Go to [the app](/app). There is nothing to install and no account to create. It runs in any current
+browser; if your tenant blocks the Microsoft sign-in popup, use the [desktop
+app](/docs/desktop-app) instead.
+
+## Load your first configuration
+
+Export a configuration from Finance &amp; Operations first — in the **Electronic reporting**
+workspace, open **Reporting configurations**, select the configuration, and use **Exchange →
+Export configuration** to download the XML file.
+
+Then either:
+
+- drag the XML file onto the drop zone on the landing page, or
+- click the drop zone and pick the files, or
+- switch to the **D365 F&amp;O server** tab and [pull the configurations straight from an
+  environment](/docs/connect-to-fno).
+
+You can load several files at once, and you can keep adding files later — everything you load
+shares one workspace and one cross-reference index.
+
+> Load all three component types together — the data model, the model mapping, and the format. A
+> format on its own shows you which model paths its elements bind to, but not which table those
+> paths ultimately read from. See [Loading configurations](/docs/loading-configurations) for what
+> each type contributes.
+
+## Find your way around
+
+The workspace follows the layout of a code editor.
+
+| Area | What it does |
+|---|---|
+| **Activity bar** (far left) | Switches panels and toggles view options |
+| **Explorer** (`Ctrl+B`) | The hierarchy of everything you have loaded |
+| **Designer tabs** (centre) | The visual view of the configuration you opened |
+| **Search** (`Ctrl+F`) | Full-text search across every loaded configuration |
+| **Where used** (`Ctrl+U`) | Reverse trace: what references this element |
+| **Properties** (`Ctrl+J`) | Details of whatever is currently selected |
+
+In the Explorer, a **single click** selects a node and fills the Properties panel. A **double
+click** opens it in its own tab — the root of a configuration opens the full designer, while a
+node deeper in the tree opens a focused detail view.
+
+## Three things worth knowing on day one
+
+### The command palette
+
+`Ctrl+K` (`⌘+K` on macOS) opens a jump-to-anything palette covering loaded configurations, open
+tabs, and panel actions. It is the fastest way to move around once you have more than a couple of
+files loaded.
+
+### Consultant view and technical view
+
+The bottom of the activity bar has a toggle between **Consultant view** and **Technical view**.
+Technical view reveals the underlying detail — GUIDs, raw expression strings, component
+identifiers — which you want when you are comparing configurations or filing a bug, and which is
+mostly noise when you are trying to understand a report. The choice is remembered between visits.
+
+### Theme and language
+
+The theme toggle sits below the view toggle. The interface language follows your browser locale —
+Czech and English are supported — and can be switched from the toolbar at the top.
+
+## Where to go next
+
+- [Loading configurations](/docs/loading-configurations) — which file shapes are accepted and why
+  loading all three types matters
+- [Visual designers](/docs/designers) — how to read each of the three designer views
+- [Search and where-used](/docs/search-and-where-used) — the impact analysis workflow
+- [Expression drill-down](/docs/expression-drill-down) — following a formula to its real source

@@ -1,0 +1,86 @@
+import { DocHeader } from '@/components/DocHeader';
+import { docMetadata } from '@/lib/doc-metadata';
+
+export const metadata = docMetadata('loading-configurations');
+
+<DocHeader slug="loading-configurations" />
+
+## What you can load
+
+The parser accepts the file shapes that Electronic Reporting exports produce, and works out which
+one it is given without being told:
+
+- **`ErFnoBundle` exports** — the wrapper Finance &amp; Operations produces when you export a
+  configuration from the Electronic reporting workspace.
+- **Bare configuration XML** — a file whose root is the configuration content itself.
+- **Base64-wrapped payloads** — content embedded as an encoded blob, which is unwrapped before
+  parsing.
+
+Within a file, the correct configuration version node is resolved automatically, so a file
+containing several revisions still opens as the configuration you expected.
+
+Three component types are recognised: **data model**, **model mapping**, and **format**. The type
+is detected from the content, not from the file name — renaming a file changes nothing.
+
+## How to load
+
+There are three routes, and they can be mixed freely in one session:
+
+1. **Drag and drop** — drop one or more `.xml` files onto the landing page.
+2. **File picker** — click the drop zone, or use the folder button in the toolbar.
+3. **Live environment** — the **D365 F&amp;O server** tab downloads configurations directly. See
+   [Connect to a live F&amp;O environment](/docs/connect-to-fno).
+
+Everything you load lands in the same workspace. Configurations pulled from an environment sit
+next to files opened from disk and cross-reference each other exactly the same way.
+
+## Why you should load all three types
+
+Each component answers a different question, and a trace only reaches the end when all three are
+present.
+
+| Component | Answers | Without it |
+|---|---|---|
+| **Data model** | What data does this solution describe? | Model paths have no structure or types behind them |
+| **Model mapping** | Where does that data come from? | Bindings stop at the model path; you never reach the table |
+| **Format** | What does the output file look like? | You see sources but not what consumes them |
+
+A practical example: a format element bound to `Declaration.Item.Amount` tells you which model
+path feeds it. Only the model mapping knows that this path is filled from `TaxTrans.AmountCur`,
+and only the data model knows the path's type and cardinality. With all three loaded, one click
+goes from the output element to the table field.
+
+When you ingest from a live environment, the ancestor data models of the configurations you select
+are pulled in automatically, and model mappings are fetched for each of those data models — the
+tool tries to complete the picture without you having to hunt for the dependencies.
+
+## The Explorer
+
+The Explorer shows every loaded configuration as a tree: configuration → containers, datasources,
+or format elements → their children. It has three controls worth knowing:
+
+- **Filter** — narrows the tree to nodes matching what you type.
+- **Filter by kind** — restricts the tree to one component type when you have many files loaded.
+- **Sort** — load order, name ascending, or name descending.
+
+There is also an expand/collapse control for opening the tree to a chosen depth, which is a fast
+way to get an overview of a format's element hierarchy without clicking through it.
+
+## What happens to your files
+
+Nothing leaves your browser. Files are read with the browser's file APIs and parsed in memory;
+there is no upload step and no server-side copy. Closing the tab discards the workspace — the tool
+keeps your preferences (theme, language, view mode, connection profiles) in local storage, but not
+configuration content.
+
+## Files that will not load
+
+If a file fails to parse, the landing page lists it under a load-error banner with the reason. The
+usual causes:
+
+- The file is a Finance &amp; Operations **derived configuration** with no XML of its own — there
+  is nothing to parse. Load its base configuration instead.
+- The XML is truncated, or was saved as a different artifact (a report definition, a package
+  manifest) rather than an ER configuration.
+
+See [Troubleshooting](/docs/troubleshooting) if a file you expected to work does not.

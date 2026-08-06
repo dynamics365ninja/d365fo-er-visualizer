@@ -1,0 +1,108 @@
+import { DocHeader } from '@/components/DocHeader';
+import { docMetadata } from '@/lib/doc-metadata';
+
+export const metadata = docMetadata('troubleshooting');
+
+<DocHeader slug="troubleshooting" />
+
+## Loading files
+
+### A file will not parse
+
+The landing page lists failed files with the reason. Common causes:
+
+- **The configuration is derived.** A configuration that inherits from another has no XML of its
+  own. Export and load the base configuration.
+- **The file is not an ER configuration.** Report definitions, package manifests, and data project
+  exports look similar but are different artifacts.
+- **The export is incomplete.** Re-export from the Electronic reporting workspace and check the
+  file is not truncated.
+
+### Everything loads but nothing cross-references
+
+You have probably loaded one component type. A format alone knows its model paths but not what
+fills them. Load the model mapping and the data model as well — see
+[Loading configurations](/docs/loading-configurations).
+
+## Tracing
+
+### "Load the ModelMapping file to continue"
+
+The expression resolves to a model path, and no model mapping for that data model is loaded. Load
+the mapping, or ingest it from the environment where the ancestor data models are pulled in
+automatically.
+
+### "Path not found in ModelMapping"
+
+The model path exists in the format but has no binding in the mapping you loaded. Usually a
+version mismatch: the format was built against a different version of the model than the mapping
+you have. Check the configuration versions in the Properties panel with technical view on.
+
+### "Datasource not found in loaded configurations"
+
+The expression names a datasource defined somewhere you have not loaded — frequently an import
+format referenced from a mapping. Load that configuration too.
+
+### The trace stops at a complex function
+
+Some ER functions combine several sources and cannot resolve to a single one. The workbench shows
+the expression breakdown instead; click the individual references inside it to follow whichever
+branch you care about.
+
+## Signing in to Finance &amp; Operations
+
+### The sign-in popup is blocked
+
+Allow popups for the site, or use the [desktop app](/docs/desktop-app), which signs in through a
+loopback listener instead.
+
+### "Sign-in failed" mentioning Content Security Policy
+
+The browser blocked the request to Microsoft identity endpoints. This normally means the app is
+being served from a host whose policy does not allow them — check you are on the official
+deployment rather than a copy behind a proxy that rewrites headers.
+
+### Sign-in succeeds but the solution list is empty
+
+The Entra application is not registered inside Finance &amp; Operations. In F&amp;O, open **System
+administration → Setup → Azure Active Directory applications** and add the client ID with a user
+account whose permissions the calls run under.
+
+### "Upstream F&O redirected … login redirect"
+
+The environment rejected the access token and answered with a sign-in redirect. Check that:
+
+- the **environment URL** in the profile matches the environment you signed in against — the token
+  audience is derived from it,
+- the **tenant ID** is the tenant that owns the environment, and
+- the delegated **Dynamics ERP** permission has been granted and consented.
+
+### "Target host not allowed"
+
+The proxy only forwards to `*.dynamics.com` over HTTPS. A private or vanity host for your
+environment will not pass. Use the [desktop app](/docs/desktop-app), which calls the environment
+directly.
+
+## Ingestion from an environment
+
+### Some configurations were skipped
+
+Derived configurations have no XML of their own and are reported as skipped. Select their base
+configurations instead.
+
+### "ModelMapping could not be downloaded"
+
+`GetModelMappingByID` returned nothing for that data model — it may not exist in the environment,
+or your account may not have access to it. Format element bindings still resolve through the
+format's own mapping information; the mapping-level trace is what you lose.
+
+### The load pulled in more than I selected
+
+That is deliberate. Ancestor data models and mappings discovered inside downloaded XML are fetched
+so that bindings resolve end to end.
+
+## Still stuck?
+
+Open an issue with the component type, what you loaded, and the exact message — screenshots of the
+drill-down panel help.
+[github.com/dynamics365ninja/d365fo-er-visualizer/issues](https://github.com/dynamics365ninja/d365fo-er-visualizer/issues)

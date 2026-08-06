@@ -1,6 +1,0 @@
-{
-  "framework": null,
-  "installCommand": "pnpm install",
-  "buildCommand": "pnpm --filter @er-visualizer/ui build",
-  "outputDirectory": "packages/ui/dist"
-}

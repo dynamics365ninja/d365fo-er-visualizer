@@ -16,6 +16,12 @@ import { buildFnoPath } from './path-key';
 /** Per-session cache of service operation names. Key: `${envUrl}::${servicePath}`. */
 const _serviceOpsCache = new Map<string, string[]>();
 
+/** Drop cached service-operation discovery results. Call after switching or
+ * re-provisioning an environment; tests use it to stay isolated. */
+export function clearServiceOpsCache(): void {
+  _serviceOpsCache.clear();
+}
+
 /** Stable service-path constants (group + service). */
 export const ER_SERVICES = {
   configurationList: 'ERConfigurationServices/ERConfigurationListService',

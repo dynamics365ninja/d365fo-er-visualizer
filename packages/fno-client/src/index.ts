@@ -8,6 +8,7 @@ export {
   downloadConfigXml,
   callErService,
   listServiceOperations,
+  clearServiceOpsCache,
   extractOperationNames,
   listGroupServices,
   extractServiceNames,

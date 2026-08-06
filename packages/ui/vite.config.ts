@@ -5,7 +5,10 @@ import path from 'node:path';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: process.env.VERCEL ? '/' : './',
+  // Relative by default so the Electron shell can load the build over file://.
+  // The web deployment stages the SPA under /app on the marketing site and
+  // sets APP_BASE=/app/ so assets resolve from any URL under that path.
+  base: process.env.APP_BASE ?? './',
   resolve: {
     alias: {
       '@er-visualizer/core': path.resolve(__dirname, '../core/src/index.ts'),

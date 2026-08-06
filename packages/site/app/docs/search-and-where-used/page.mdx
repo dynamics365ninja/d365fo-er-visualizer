@@ -1,0 +1,71 @@
+import { DocHeader } from '@/components/DocHeader';
+import { docMetadata } from '@/lib/doc-metadata';
+
+export const metadata = docMetadata('search-and-where-used');
+
+<DocHeader slug="search-and-where-used" />
+
+Search answers "where is this?". Where-used answers "what breaks if I change this?". They share a
+panel and a single index built across every configuration you have loaded.
+
+## Search
+
+Open it from the activity bar or with `Ctrl+F`, then type. The index covers data models, model
+mappings, and formats at once, so a search for a container name finds it in the model, in the
+mapping that fills it, and in the format elements that consume it — in one list.
+
+Each result carries its source context: which configuration it came from and where inside it the
+match sits. That context is what lets you tell apart the four `Amount` fields that a large
+solution inevitably contains.
+
+Clicking a result selects the node — in the Explorer, in the designer, and in the Properties
+panel — and highlights it so you can see where you landed.
+
+## Where used
+
+Where-used runs the reference graph backwards. Open it from the activity bar or with `Ctrl+U`,
+enter the name of a table, enum, class, or datasource — the field suggests examples such as
+`TaxTrans`, `CustTable`, or a calculated field name — and run the trace.
+
+The result lists every place that consumes it:
+
+- **Format bindings** — format elements whose expressions read from it
+- **Model bindings** — model paths filled from it
+- **Datasources** — datasources defined in terms of it, including calculated fields that wrap it
+
+Results are summarised as occurrences across files, so you can see immediately whether a change is
+contained in one format or spreads across the whole solution.
+
+## The workflow this is for
+
+The usual reason to reach for where-used is an impact question. Somebody asks whether a table
+field can be repurposed, or a legal requirement changes and you need to know which reports read a
+particular transaction table.
+
+1. Load every configuration in the solution — formats, mappings, and the data models they build
+   on. Coverage is only as complete as what you loaded.
+2. Run where-used on the table or field in question.
+3. Work through the format bindings in the result. Each one is a place where the output would
+   change.
+4. For anything non-obvious, open the binding in the [drill-down
+   workbench](/docs/expression-drill-down) to see the full expression rather than guessing from
+   the path.
+
+## Command palette
+
+`Ctrl+K` opens the command palette: a single input that jumps to loaded configurations, open tabs,
+and panel actions. It is faster than the Explorer once you have a dozen files loaded, and it is
+the only place some view actions (toggling technical view, expanding or collapsing the whole tree)
+are available as commands rather than buttons.
+
+## Keyboard reference
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+B` | Toggle the Explorer |
+| `Ctrl+F` | Search panel |
+| `Ctrl+U` | Where used |
+| `Ctrl+J` | Properties panel |
+| `Ctrl+K` | Command palette |
+
+On macOS, use `⌘` in place of `Ctrl`.

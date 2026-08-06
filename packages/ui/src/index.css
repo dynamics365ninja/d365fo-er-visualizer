@@ -3,9 +3,13 @@
 /* ─── Dark Theme (default) ─── */
 :root,
 :root[data-theme='dark'] {
-  --font-display: 'Segoe UI', 'Segoe UI Variable', sans-serif;
-  --font-sans: 'Segoe UI', 'Segoe UI Variable', sans-serif;
-  --font-mono: 'Cascadia Code', 'Consolas', monospace;
+  --font-display: 'Space Grotesk', 'Segoe UI', sans-serif;
+  --font-sans: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* Single source of truth for the monospace stack — index.html preloads
+     JetBrains Mono, and every `font-family` for code/expressions/GUIDs reads
+     this token. Do not redefine it in a later theme block: those win on
+     specificity and silently swap the font back. */
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --bg-primary: #181a1f;
   --bg-secondary: #202329;
   --bg-tertiary: #252931;
@@ -92,9 +96,9 @@
 }
 
 :root[data-theme='light'] {
-  --font-display: 'Segoe UI', 'Segoe UI Variable', sans-serif;
-  --font-sans: 'Segoe UI', 'Segoe UI Variable', sans-serif;
-  --font-mono: 'Cascadia Code', 'Consolas', monospace;
+  --font-display: 'Space Grotesk', 'Segoe UI', sans-serif;
+  --font-sans: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --bg-primary: #f8fafc;
   --bg-secondary: #f1f4f9;
   --bg-tertiary: #e9edf4;
@@ -251,7 +255,7 @@ body {
   background: color-mix(in srgb, var(--bg-tertiary) 90%, transparent);
   border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
   color: var(--surface-danger-fg);
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -2364,7 +2368,7 @@ body {
   max-width: 100%;
   overflow-wrap: anywhere;
   word-break: break-word;
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
 }
 
 .fmt-bind-row-expr > .dd-trigger-expr {
@@ -2783,7 +2787,7 @@ body {
 .fmt-const-value {
   color: #ce9178;
   font-size: 11px;
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
 }
 
 .fmt-meta {
@@ -2811,7 +2815,7 @@ body {
 .fmt-binding-inline {
   margin-left: auto;
   font-size: 11px;
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2862,7 +2866,7 @@ body {
 }
 
 .fmt-binding-formula {
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
@@ -2895,7 +2899,7 @@ body {
 }
 
 .fmt-drill-hint code {
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   background: rgba(255, 255, 255, 0.08);
   padding: 0 3px;
   border-radius: 2px;
@@ -2935,7 +2939,7 @@ body {
 }
 
 .fmt-debug-path-item {
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-primary);
   padding: 1px 0;
@@ -3185,7 +3189,7 @@ body {
 .mm-group-name {
   flex: 1;
   color: var(--syn-path);
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
 }
 
@@ -3244,7 +3248,7 @@ body {
 .mm-binding-parent {
   color: var(--text-secondary);
   font-size: 10px;
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
 }
 .mm-binding-name {
   color: var(--syn-resolved);
@@ -5119,7 +5123,7 @@ body {
   border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
   background: color-mix(in srgb, var(--bg-secondary) 74%, transparent);
   color: var(--text-primary);
-  font-family: var(--font-mono, 'IBM Plex Mono', 'Cascadia Code', 'Consolas', monospace);
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.65;
   white-space: pre-wrap;
@@ -5167,7 +5171,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-family: var(--font-mono, 'Cascadia Code', Consolas, monospace);
+  font-family: var(--font-mono);
   background: color-mix(in srgb, var(--bg-primary) 78%, transparent);
   border: 1px solid color-mix(in srgb, var(--border-color) 68%, transparent);
   border-radius: 4px;
@@ -5267,7 +5271,7 @@ body {
 }
 
 .dd-path-tree__node-name {
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-weight: 600;
   flex: 1;
   min-width: 0;
@@ -5283,7 +5287,7 @@ body {
 
 .dd-path-tree__target {
   padding: 3px 4px 0 22px;
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -5324,7 +5328,7 @@ body {
 }
 .dd-legend-swatch {
   display: inline-block;
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   padding: 1px 5px;
   border-radius: 3px;
@@ -5412,14 +5416,16 @@ body {
 .dd-workbench__tree,
 .dd-workbench__detail {
   border: 1px solid color-mix(in srgb, var(--border-color) 76%, transparent);
-  border-radius: 10px;
+  /* Outer panels 12px, cards nested inside them 10px — the same two-step
+     radius hierarchy the marketing site uses. */
+  border-radius: 12px;
   background: color-mix(in srgb, var(--bg-primary) 80%, transparent);
   overflow: hidden;
   align-self: start;
 }
 
 .dd-workbench__panel-head {
-  padding: 8px 10px;
+  padding: 10px 12px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.45px;
@@ -5492,7 +5498,7 @@ body {
 .dd-workbench__tree-expr {
   font-size: 10px;
   color: var(--text-secondary);
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5504,7 +5510,7 @@ body {
 }
 
 .dd-workbench__detail-block {
-  padding: 10px;
+  padding: 12px;
   display: grid;
   gap: 6px;
 }
@@ -5519,11 +5525,11 @@ body {
 
 .dd-workbench__detail-code {
   margin: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
   background: color-mix(in srgb, var(--bg-secondary) 68%, transparent);
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -5549,7 +5555,7 @@ body {
   border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
   background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
   color: var(--text-primary);
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   cursor: pointer;
 }
 
@@ -5611,21 +5617,21 @@ button.dd-workbench__breadcrumb-segment {
   margin-top: 2px;
   font-size: 11px;
   color: var(--text-primary);
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   word-break: break-word;
 }
 
 .dd-workbench__detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-  padding: 0 10px 10px;
+  gap: 12px;
+  padding: 0 12px 12px;
 }
 
 .dd-workbench__detail-card {
   border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
-  border-radius: 8px;
-  padding: 8px;
+  border-radius: 10px;
+  padding: 12px;
   background: color-mix(in srgb, var(--bg-primary) 74%, transparent);
   display: grid;
   gap: 8px;
@@ -5901,7 +5907,7 @@ button.dd-workbench__breadcrumb-segment {
 }
 
 .dd-wizard__option-expr {
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-secondary);
 }
@@ -6171,7 +6177,7 @@ button.dd-workbench__breadcrumb-segment {
   display: block;
   width: 100%;
   text-align: left;
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-primary);
   padding: 3px 6px;
@@ -6193,7 +6199,7 @@ button.dd-workbench__breadcrumb-segment {
 /* Step body expression (legacy) */
 .dd-step-expr {
   padding: 5px 8px;
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--syn-literal);
   word-break: break-all;
@@ -6252,7 +6258,7 @@ button.dd-workbench__breadcrumb-segment {
 
 .dd-ds-card__name {
   font-weight: 700;
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-primary);
   flex: 1;
@@ -6329,7 +6335,7 @@ button.dd-workbench__breadcrumb-segment {
 }
 
 .dd-target-name {
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-weight: 700;
   font-size: 12px;
 }
@@ -6452,7 +6458,7 @@ button.dd-workbench__breadcrumb-segment {
 
 .dd-ds-target-inline {
   margin-left: auto;
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-secondary);
 }
@@ -6590,12 +6596,12 @@ button.dd-dep-item:hover {
 .dd-dep-name {
   font-weight: 600;
   color: var(--syn-identifier);
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   flex-shrink: 0;
 }
 
 .dd-dep-formula {
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-secondary);
   flex: 1;
@@ -6607,7 +6613,7 @@ button.dd-dep-item:hover {
 .dd-dep-target {
   color: var(--text-secondary);
   font-size: 11px;
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
 }
 
 .dd-dep-empty-filter {
@@ -6682,7 +6688,7 @@ button.dd-dep-item:hover {
 .dd-influence-card__name {
   font-weight: 600;
   color: var(--syn-identifier);
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
 }
 
 .dd-influence-card__count {
@@ -6728,7 +6734,7 @@ button.dd-dep-item:hover {
   grid-column: 2 / span 2;
   font-size: 10px;
   color: var(--text-secondary);
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6821,7 +6827,7 @@ button.dd-dep-item:hover {
 
 /* Unresolvable expression display */
 .dd-unres-expr {
-  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   padding: 4px 6px;
   background: color-mix(in srgb, var(--text-primary) 5%, transparent);
@@ -6853,7 +6859,7 @@ button.dd-dep-item:hover {
 /* Syntax-highlighted, tokenised, clickable expression viewer inside drill-down */
 
 .er-expr {
-  font-family: var(--font-mono, 'IBM Plex Mono', 'Cascadia Code', 'Consolas', monospace);
+  font-family: var(--font-mono);
   font-size: 11.5px;
   line-height: 1.65;
   word-break: break-word;
@@ -6893,10 +6899,12 @@ button.dd-dep-item:hover {
 .er-token-ds-segment {
   display: inline-flex;
   align-items: center;
-  border-radius: 7px;
+  border-radius: 6px;
   padding: 1px 6px;
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 36%, transparent);
+  /* Calmer fill than the border, so a dense expression reads as text with
+     accents rather than a wall of chips. Matches the marketing site. */
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   color: var(--syn-identifier);
   cursor: pointer;
   font-weight: 600;
@@ -7238,7 +7246,7 @@ button.dd-dep-item:hover {
 }
 .landing-recent-item:last-child { border-bottom: none; }
 .landing-recent-name { color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.landing-recent-path { color: var(--text-secondary); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Cascadia Code', 'Consolas', monospace; }
+.landing-recent-path { color: var(--text-secondary); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
 .landing-recent-remove {
   background: none; border: none; color: var(--text-secondary);
   cursor: pointer; font-size: 15px; padding: 0 4px;
@@ -9002,7 +9010,7 @@ body {
 .search-result-group-name,
 .search-result-guid,
 .search-result-child-target {
-  font-family: var(--font-mono, 'IBM Plex Mono', 'Cascadia Code', monospace);
+  font-family: var(--font-mono);
 }
 
 .search-result-context {
@@ -9095,7 +9103,7 @@ body {
 .wu-ref-location,
 .wu-ref-preview,
 .wu-ref-breadcrumb {
-  font-family: var(--font-mono, 'IBM Plex Mono', 'Cascadia Code', monospace);
+  font-family: var(--font-mono);
 }
 
 .wu-ref-summary {
@@ -9200,17 +9208,13 @@ body {
 
 :root,
 :root[data-theme='dark'] {
-  --font-display: 'Segoe UI', 'Segoe UI Variable', sans-serif;
-  --font-sans: 'Segoe UI', 'Segoe UI Variable', sans-serif;
-  --font-mono: 'Cascadia Code', Consolas, monospace;
+  /* Font tokens intentionally not redefined here: this block sits after the
+     theme definitions at the top of the file and would override them. */
   --accent: #038387;
   --accent-hover: #37a987;
 }
 
 :root[data-theme='light'] {
-  --font-display: 'Segoe UI', 'Segoe UI Variable', sans-serif;
-  --font-sans: 'Segoe UI', 'Segoe UI Variable', sans-serif;
-  --font-mono: 'Cascadia Code', Consolas, monospace;
   --accent: #038387;
   --accent-hover: #27a17f;
 }
@@ -10693,7 +10697,7 @@ body {
 .ddt-node {
   background: var(--ddt-bg, var(--bg-secondary));
   border: 1.5px solid var(--ddt-border, var(--border-color));
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 0;
   overflow: hidden;
   font-family: var(--font-sans, inherit);
@@ -10745,12 +10749,15 @@ body {
 }
 
 .ddt-node__badge {
-  font-size: 9px;
+  /* Same uppercase micro-label as .dd-workbench__panel-head. Size stays under
+     the 13px icon that sets the head's line box, so estimateTreeNodeHeight()
+     in DrillDownPanel.tsx keeps holding. */
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.7px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--ddt-fg, var(--text-secondary));
-  opacity: 0.75;
+  opacity: 0.8;
 }
 
 .ddt-node__pin {
