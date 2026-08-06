@@ -21,6 +21,7 @@ import {
   ArrowSyncRegular,
   ArrowUploadRegular,
   ArrowDownloadRegular,
+  SearchRegular,
   TextAlignJustifyRegular,
   TextBulletListSquareRegular,
 } from '@fluentui/react-icons';
@@ -528,35 +529,35 @@ function getConsultantFormatTypeLabel(type: string): string {
 
 function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): string {
   if (showTechnicalDetails) {
-    return dsGroupLabels[type] ?? `❓ ${type}`;
+    return dsGroupLabels[type] ?? type;
   }
 
   const csLabels: Record<string, string> = {
-    Table: '🗃️ Tabulky',
-    CalculatedField: '🧮 Vypočtené hodnoty',
-    Class: '⚙️ Logika',
-    Enum: '🔤 Hodnoty',
-    ModelEnum: '🔤 Hodnoty',
-    FormatEnum: '🔤 Hodnoty',
-    ImportFormat: '📥 Importní formát',
-    UserParameter: '👤 Parametry',
-    GroupBy: '📊 Seskupená data',
-    Container: '📦 Kontejnery',
+    Table: 'Tabulky',
+    CalculatedField: 'Vypočtené hodnoty',
+    Class: 'Logika',
+    Enum: 'Hodnoty',
+    ModelEnum: 'Hodnoty',
+    FormatEnum: 'Hodnoty',
+    ImportFormat: 'Importní formát',
+    UserParameter: 'Parametry',
+    GroupBy: 'Seskupená data',
+    Container: 'Kontejnery',
   };
   const enLabels: Record<string, string> = {
-    Table: '🗃️ Tables',
-    CalculatedField: '🧮 Calculated values',
-    Class: '⚙️ Logic',
-    Enum: '🔤 Values',
-    ModelEnum: '🔤 Values',
-    FormatEnum: '🔤 Values',
-    ImportFormat: '📥 Import format',
-    UserParameter: '👤 Parameters',
-    GroupBy: '📊 Grouped data',
-    Container: '📦 Containers',
+    Table: 'Tables',
+    CalculatedField: 'Calculated values',
+    Class: 'Logic',
+    Enum: 'Values',
+    ModelEnum: 'Values',
+    FormatEnum: 'Values',
+    ImportFormat: 'Import format',
+    UserParameter: 'Parameters',
+    GroupBy: 'Grouped data',
+    Container: 'Containers',
   };
   const labels = locale === 'cs' ? csLabels : enLabels;
-  return labels[type] ?? (locale === 'cs' ? '📁 Ostatní' : '📁 Other');
+  return labels[type] ?? (locale === 'cs' ? 'Ostatní' : 'Other');
 }
 
 /** Returns true if ds or any of its descendants has the given name */
@@ -1006,7 +1007,26 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
+      {/* Identity + counts — the mapping designer had no header at all, so you
+          could not tell what you were looking at or how big it was. */}
+      <div className="fmt-header">
+        <span className="fmt-header-title">
+          <LinkFilled fontSize={15} />
+          {locale === 'cs' ? 'Mapování modelu' : 'Model mapping'}
+        </span>
+        <div className="fmt-header-stats">
+          <span className="fmt-stat">{t.bindings}: {mm.bindings.length}</span>
+          <span className="fmt-stat">{t.dataSources}: {mm.datasources.length}</span>
+          {mm.validations?.length > 0 && (
+            <span className="fmt-stat">{t.propValidations}: {mm.validations.length}</span>
+          )}
+        </div>
+        <div className="fmt-header-hint">
+          {locale === 'cs'
+            ? 'Klikni na řádek pro vlastnosti, na lupu pro rozpad výrazu'
+            : 'Click a row for properties, the magnifier for the expression drill-down'}
+        </div>
+      </div>
       <div className="fmt-toolbar">
         <SlidingTabs
           tabs={[
@@ -1112,9 +1132,18 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
                             <span className="mm-binding-name">{fieldName}</span>
                           </div>
                           <div className="mm-binding-expr">
-                            <span className="mm-binding-arrow">←</span>
+                            <span className="mm-binding-arrow" aria-hidden>←</span>
                             <ClickablePath expression={b.expressionAsString} configIndex={configIndex} mode="binding-expr" />
                           </div>
+                          <DrillDownTrigger
+                            expression={b.expressionAsString}
+                            configIndex={configIndex}
+                            elementName={fieldName}
+                            className="mm-binding-drill"
+                          >
+                            <SearchRegular fontSize={14} />
+                            <span>{locale === 'cs' ? 'Rozpad' : 'Drill-down'}</span>
+                          </DrillDownTrigger>
                         </div>
                       );
                     })}
@@ -4001,15 +4030,15 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
 
 const dsGroupOrder = ['Table', 'CalculatedField', 'Class', 'Enum', 'ModelEnum', 'FormatEnum', 'UserParameter', 'GroupBy', 'Container'];
 const dsGroupLabels: Record<string, string> = {
-  Table: '🗃️ Tables',
-  CalculatedField: '🧮 Calculated Fields',
-  Class: '⚙️ Classes',
-  Enum: '🔤 Ax Enums',
-  ModelEnum: '📋 Data model Enums',
-  FormatEnum: '🏷️ Format enums',
-  UserParameter: '👤 User Parameters',
-  GroupBy: '📊 Group By',
-  Container: '📦 Containers',
+  Table: 'Tables',
+  CalculatedField: 'Calculated Fields',
+  Class: 'Classes',
+  Enum: 'Ax Enums',
+  ModelEnum: 'Data model Enums',
+  FormatEnum: 'Format enums',
+  UserParameter: 'User Parameters',
+  GroupBy: 'Group By',
+  Container: 'Containers',
 };
 
 export interface GroupedDatasourceListHandle {

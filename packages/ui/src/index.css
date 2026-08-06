@@ -3257,14 +3257,17 @@ body {
 }
 
 .mm-binding-row {
+  position: relative;
   margin: 2px 6px 2px 12px;
-  padding: 8px 12px 8px 20px;
-  border: 1px solid color-mix(in srgb, var(--border-color) 64%, transparent);
-  border-radius: 12px;
+  padding: 8px 44px 8px 16px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
   font-size: 12px;
+  transition: background 0.12s ease, border-color 0.12s ease;
 }
 .mm-binding-row:hover {
-  background: color-mix(in srgb, var(--bg-hover) 76%, transparent);
+  background: var(--er-surface-2);
+  border-color: var(--er-border-strong);
 }
 .mm-binding-row.search-match {
   background: color-mix(in srgb, var(--color-accent-bg, #0078d40f) 60%, transparent);
@@ -3308,17 +3311,71 @@ body {
   font-weight: 600;
   font-size: 12px;
 }
+/* Long formulas used to be cut off at the container edge with no ellipsis and
+   no way to read the rest. Wrap them, clamped to four lines; the row's
+   drill-down opens the full expression. */
 .mm-binding-expr {
   display: flex;
   align-items: flex-start;
-  gap: 4px;
+  gap: 6px;
   font-size: 11px;
-  overflow: hidden;
   padding-left: 2px;
+  min-width: 0;
+}
+
+.mm-binding-expr > :not(.mm-binding-arrow) {
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow-wrap: anywhere;
+}
+
+/* Per-row drill-down: the format designer had this affordance, the mapping
+   designer did not, so the workbench was two hops away from every binding. */
+.mm-binding-drill {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface);
+  color: var(--er-text-muted);
+  font-family: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.mm-binding-drill span {
+  display: none;
+}
+
+.mm-binding-row:hover .mm-binding-drill,
+.mm-binding-row:focus-within .mm-binding-drill,
+.mm-binding-drill:focus-visible {
+  opacity: 1;
+}
+
+.mm-binding-drill:hover {
+  background: var(--er-accent-soft);
+  border-color: var(--er-accent-border);
+  color: var(--er-accent);
+}
+
+.mm-binding-drill:hover span {
+  display: inline;
 }
 .mm-binding-arrow {
   flex-shrink: 0;
-  color: var(--text-secondary);
+  color: var(--er-accent);
   font-size: 13px;
   line-height: 1.4;
 }
