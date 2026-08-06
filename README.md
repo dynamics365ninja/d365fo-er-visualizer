@@ -29,7 +29,7 @@ This tool parses the full ER XML bundle, merges cross-references across all load
 | 🏷️ **Property inspector** | Context-aware property grid for any selected node — files, containers, fields, datasources, bindings, format elements |
 | 🔗 **Clickable paths** | Identifiers in ER expressions are hyperlinks; hovering shows a tooltip card with the resolved source |
 | 🌐 **F&O server browser** | Connect to a live environment, browse the ER solution hierarchy, multi-select configurations across drill levels, and ingest them in one click |
-| ⌨️ **Command palette** | `Ctrl/⌘+P` jump-to-anything across configurations, tabs, and panel actions |
+| ⌨️ **Command palette** | `Ctrl/⌘+K` jump-to-anything across configurations, tabs, and panel actions |
 | 🖥️ **Electron shell** | Optional native desktop app with native file-open dialogs and loopback MSAL sign-in |
 | 🌍 **Czech / English UI** | `cs` and `en` — auto-detected from OS locale |
 
@@ -52,10 +52,20 @@ Drag and drop one or more ER XML files onto the landing page, or click **Open fi
 pnpm dev:electron   # Vite + Electron window; required for loopback MSAL sign-in
 ```
 
+### Marketing site & documentation
+
+```bash
+pnpm dev:site   # Next.js dev server → http://localhost:3000
+```
+
+The public site (`/`, `/features`, `/docs/*`) lives in `packages/site`. The SPA is served by the
+same deployment under `/app`.
+
 ### Build & test
 
 ```bash
-pnpm build      # core → tsc, fno-client → tsc, ui → Vite bundle, electron → tsc
+pnpm build      # core → tsc, fno-client → tsc, ui → Vite bundle, electron → tsc, site → Next
+pnpm build:web  # production web deploy — SPA built with base /app/, staged into the site, then Next
 pnpm test       # Vitest — core XML parser + GUID registry
 pnpm --filter @er-visualizer/fno-client test   # fno-client ER service + path-key tests
 ```
@@ -79,10 +89,11 @@ d365fo-er-visualizer/
 │   ├── core/          # XML parser, TS types, GUID registry
 │   ├── fno-client/    # Host-agnostic F&O API client — MSAL helpers, ER service calls
 │   ├── ui/            # React + Vite SPA — designer, explorer, inspector, F&O panel
+│   ├── site/          # Next.js marketing site + docs; hosts the SPA at /app and /api/fno
 │   └── electron/      # Electron shell — native file dialogs + loopback MSAL
 ├── docs/              # Architecture notes
+├── scripts/           # stage-app.mjs (SPA → site/public/app), integration test
 ├── pnpm-workspace.yaml
-├── vercel.json        # Vercel deployment (UI + /api/fno serverless proxy)
 └── package.json
 ```
 
@@ -94,20 +105,46 @@ d365fo-er-visualizer/
 |---|---|
 | Monorepo | pnpm workspaces |
 | Language | TypeScript 5.7+ |
-| Build | Vite 6 (UI), tsc (core / fno-client / electron) |
+| Build | Vite 6 (UI), Next 15 (site), tsc (core / fno-client / electron) |
 | UI | React 19 + Fluent UI v9 |
 | Graph | React Flow (`@xyflow/react`) |
 | State | Zustand 5 |
 | XML | fast-xml-parser 4 |
 | Auth | `@azure/msal-browser` (web) / `@azure/msal-node` (Electron) |
+| Site | Next 15 (App Router) + Tailwind 4 + MDX |
 | Testing | Vitest 3 |
-| Deployment | Vercel (static + `/api/fno` proxy) |
+| Deployment | Vercel — Next site, SPA under `/app`, `/api/fno` edge proxy |
 
 ---
 
 ## Deployment
 
-The SPA deploys to **Vercel** — root `vercel.json` builds `packages/ui` and exposes `packages/ui/api/fno.ts` as a serverless proxy to bypass browser CORS when calling F&O custom services. Set the `FNO_TARGET` environment variable in Vercel to your F&O base URL.
+One Vercel project serves everything:
+
+| Path | Served by |
+|---|---|
+| `/`, `/features`, `/docs/*` | Next.js pages from `packages/site` — statically prerendered |
+| `/app` | The Vite SPA, staged into `packages/site/public/app` at build time |
+| `/api/fno` | Edge route handler proxying F&O calls (F&O sends no CORS headers) |
+
+`pnpm build:web` runs the whole chain: build the SPA with `APP_BASE=/app/`, copy it into the
+site's `public/app`, then `next build`.
+
+### Vercel project settings
+
+| Setting | Value |
+|---|---|
+| **Root Directory** | `packages/site` |
+| **Framework preset** | Next.js (from `packages/site/vercel.json`) |
+| **Build command** | `pnpm run build:all` (from `packages/site/vercel.json`) |
+| `NEXT_PUBLIC_SITE_URL` | Production origin, e.g. `https://er-visualizer.example.com` — used for canonical URLs, `sitemap.xml`, and Open Graph tags |
+
+> **Migrating an existing deployment:** the Root Directory used to be `packages/ui`. Change it to
+> `packages/site` — the old `packages/ui/vercel.json` and `packages/ui/api/fno.ts` have been
+> replaced by the site package and its edge route.
+
+The proxy forwards only to `*.dynamics.com` over HTTPS and stores nothing; the target URL travels
+in the `X-Fno-Target-Url` header. No environment variable is needed for it.
 
 ---
 
