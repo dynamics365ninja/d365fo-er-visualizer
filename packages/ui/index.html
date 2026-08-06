@@ -20,122 +20,26 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /* Paint the shell before the bundle arrives, so the gap between navigation
+       and React mounting is not a bright flash on the way into a dark UI.
+       Deliberately CSS-only: the packaged Electron CSP is script-src 'self',
+       which would block an inline theme-bootstrap script. This follows the OS
+       preference — the same default readStoredThemeMode() in state/store.ts
+       uses when nothing is persisted. */
     html, body {
-      background: #ffffff;
+      background: #181a1f;
       height: 100vh;
       overflow: hidden;
       font-family: 'Inter', 'Segoe UI', sans-serif;
     }
 
-    /* ── Boot splash ── */
-    .boot {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 20px;
-      background: #ffffff;
-      z-index: 9999;
-      animation: boot-in 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-    }
-
-    @keyframes boot-in {
-      from { opacity: 0; transform: translateY(6px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    /* ── Icon box ── */
-    .boot__icon {
-      width: 68px;
-      height: 68px;
-      border-radius: 18px;
-      background: linear-gradient(135deg, #027578 0%, #37a987 55%, #4d9eff 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow:
-        0 0 0 1px rgba(3,131,135,0.15),
-        0 4px 20px rgba(3,131,135,0.30),
-        0 8px 40px rgba(77,158,255,0.15);
-      animation: boot-glow 3s ease-in-out infinite;
-    }
-    @keyframes boot-glow {
-      0%, 100% { box-shadow: 0 0 0 1px rgba(3,131,135,0.15), 0 4px 20px rgba(3,131,135,0.30), 0 8px 40px rgba(77,158,255,0.15); }
-      50%       { box-shadow: 0 0 0 1px rgba(77,158,255,0.20), 0 4px 28px rgba(77,158,255,0.35), 0 8px 48px rgba(3,131,135,0.20); }
-    }
-
-    /* ── Text ── */
-    .boot__name {
-      font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      color: #0f172a;
-      text-align: center;
-    }
-    .boot__sub {
-      margin-top: 5px;
-      font-size: 12px;
-      color: #475569;
-      letter-spacing: 0.01em;
-      text-align: center;
-    }
-
-    /* ── Loading bar ── */
-    .boot__bar-track {
-      width: 160px;
-      height: 2px;
-      border-radius: 2px;
-      background: rgba(0,0,0,0.08);
-      overflow: hidden;
-      margin-top: 4px;
-    }
-    .boot__bar-fill {
-      height: 100%;
-      border-radius: 2px;
-      background: linear-gradient(90deg, #27a17f, #4d9eff, #27a17f);
-      background-size: 200% 100%;
-      animation: boot-bar 1.8s ease-in-out infinite;
-    }
-    @keyframes boot-bar {
-      0%   { transform: translateX(-100%); width: 55%; }
-      50%  { transform: translateX(100%);  width: 55%; }
-      100% { transform: translateX(280%);  width: 55%; }
+    @media (prefers-color-scheme: light) {
+      html, body { background: #f8fafc; }
     }
   </style>
 </head>
 <body>
-  <div id="root">
-    <div class="boot" role="status" aria-live="polite" aria-label="Loading D365FO ER Visualizer">
-      <!-- App icon: gradient box with the ER document mark -->
-      <div class="boot__icon" aria-hidden="true">
-        <svg width="38" height="38" viewBox="0 0 64 64" fill="none">
-          <path d="M23 14h15l8 8v23a4 4 0 0 1-4 4H23a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4Z" fill="rgba(255,255,255,0.95)"/>
-          <path d="M38 14v8h8" stroke="rgba(3,131,135,0.6)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M28 26h8m-8 6h6" stroke="#038387" stroke-width="2.2" stroke-linecap="round"/>
-          <path d="M28 37.5h8l6-6" stroke="#1a6edd" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M28 37.5l5.5 6.5h8" stroke="#1a6edd" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="25" cy="37.5" r="4" fill="#0f3d3e"/>
-          <circle cx="44" cy="29" r="3.5" fill="#37a987"/>
-          <circle cx="44" cy="44" r="3.5" fill="#4d9eff"/>
-          <circle cx="25" cy="37.5" r="1.6" fill="rgba(255,255,255,0.9)"/>
-        </svg>
-      </div>
-
-      <!-- Text -->
-      <div>
-        <h1 class="boot__name">D365FO ER Visualizer</h1>
-        <p class="boot__sub">Preparing Electronic Reporting designer…</p>
-      </div>
-
-      <!-- Progress bar -->
-      <div class="boot__bar-track" aria-hidden="true">
-        <div class="boot__bar-fill"></div>
-      </div>
-    </div>
-  </div>
+  <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
