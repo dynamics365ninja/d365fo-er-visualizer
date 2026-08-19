@@ -1057,17 +1057,21 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
     });
   }, []);
 
-  const expandAllBindings = useCallback(() => setCollapsedGroups(new Set()), []);
-  const collapseAllBindings = useCallback(() => {
+  const collapseAllKeys = useCallback((nodes: BindingTreeNode[]): string[] => {
     const keys: string[] = [];
-    const walk = (nodes: BindingTreeNode[]) => {
-      for (const n of nodes) {
+    const walk = (list: BindingTreeNode[]) => {
+      for (const n of list) {
         if (n.children.length > 0) { keys.push(n.key); walk(n.children); }
       }
     };
-    walk(bindingTree);
-    setCollapsedGroups(new Set(keys));
-  }, [bindingTree]);
+    walk(nodes);
+    return keys;
+  }, []);
+
+  const expandAllBindings = useCallback(() => setCollapsedGroups(new Set()), []);
+  const collapseAllBindings = useCallback(() => {
+    setCollapsedGroups(new Set(collapseAllKeys(bindingTree)));
+  }, [bindingTree, collapseAllKeys]);
 
   const selectBindingByPath = useCallback((path: string) => {
     const rootNode = treeNodes[configIndex];
@@ -1076,10 +1080,12 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
     if (match) selectNode(match.id);
   }, [treeNodes, configIndex, selectNode]);
 
+  // Every level starts closed, not just the roots — the tree opens as the user
+  // clicks down through it.
   useEffect(() => {
     if (bindingTree.length === 0) return;
-    setCollapsedGroups(prev => prev.size > 0 ? prev : new Set(bindingTree.map(node => node.key)));
-  }, [bindingTree]);
+    setCollapsedGroups(prev => prev.size > 0 ? prev : new Set(collapseAllKeys(bindingTree)));
+  }, [bindingTree, collapseAllKeys]);
 
   const totalShown = bindingTree.reduce((n, g) => n + g.count, 0);
 
@@ -1360,7 +1366,9 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const [filter, setFilter] = useState('');
   const [view, setView] = useState<'structure' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping'>('structure');
   const [density, setDensity] = useState<DensityMode>('comfortable');
-  const [structureExpandMode, setStructureExpandMode] = useState<'all' | 'none'>('all');
+  // Start collapsed: a fully expanded format tree buries the top level under
+  // hundreds of rows. Expand-all is one click away in the toolbar.
+  const [structureExpandMode, setStructureExpandMode] = useState<'all' | 'none'>('none');
   const [structureExpandVersion, setStructureExpandVersion] = useState(0);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [selectedEmbeddedMappingIdx, setSelectedEmbeddedMappingIdx] = useState(0);
