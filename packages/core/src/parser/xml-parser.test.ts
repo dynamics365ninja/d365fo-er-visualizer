@@ -217,8 +217,75 @@ describe('parseERConfiguration', () => {
     ]);
   });
 
-  it('decodes numeric Unicode entities beyond the BMP', () => {
+  it('nests datasources under a "#"-prefixed intermediate parent', () => {
     const xml = buildSolutionEnvelope(`
+      <ERModelMappingVersion ID.="{MAP},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERModelMapping ID.="{MAP}" Name="Mapping" DataContainerDescriptor="Root" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1">
+            <Datasource>
+              <ERModelDefinition>
+                <Contents.>
+                  <ERModelItemDefinition>
+                    <ValueDefinition>
+                      <ERModelItemValueDefinition Name="Tables">
+                        <ValueSource>
+                          <ERContainerDataSourceHandler />
+                        </ValueSource>
+                      </ERModelItemValueDefinition>
+                    </ValueDefinition>
+                  </ERModelItemDefinition>
+                  <ERModelItemDefinition ParentPath="Tables">
+                    <ValueDefinition>
+                      <ERModelItemValueDefinition Name="#SourceJournalTables">
+                        <ValueSource>
+                          <ERContainerDataSourceHandler />
+                        </ValueSource>
+                      </ERModelItemValueDefinition>
+                    </ValueDefinition>
+                  </ERModelItemDefinition>
+                  <ERModelItemDefinition ParentPath="Tables/#SourceJournalTables">
+                    <ValueDefinition>
+                      <ERModelItemValueDefinition Name="$CustInvoiceJour">
+                        <ValueSource>
+                          <ERModelExpressionItem ExpressionAsString="FILTER(Tables.CustInvoiceJour)" />
+                        </ValueSource>
+                      </ERModelItemValueDefinition>
+                    </ValueDefinition>
+                  </ERModelItemDefinition>
+                  <ERModelItemDefinition ParentPath="Tables/#SourceJournalTables/$CustInvoiceJour">
+                    <ValueDefinition>
+                      <ERModelItemValueDefinition Name="$InvoiceDate">
+                        <ValueSource>
+                          <ERModelExpressionItem ExpressionAsString="Tables.'#SourceJournalTables'.'$CustInvoiceJour'.InvoiceDate" />
+                        </ValueSource>
+                      </ERModelItemValueDefinition>
+                    </ValueDefinition>
+                  </ERModelItemDefinition>
+                </Contents.>
+              </ERModelDefinition>
+            </Datasource>
+          </ERModelMapping>
+        </Mapping>
+      </ERModelMappingVersion>
+    `, { contentRefId: '{MAP}' });
+
+    const config = parseERConfiguration(xml, 'mapping.xml');
+    if (config.content.kind !== 'ModelMapping') {
+      throw new Error('Expected model mapping content');
+    }
+
+    const datasources = config.content.version.mapping.datasources;
+    expect(datasources.map(ds => ds.name)).toEqual(['Tables']);
+
+    const sourceJournalTables = datasources[0]?.children[0];
+    expect(sourceJournalTables?.name).toBe('#SourceJournalTables');
+
+    const custInvoiceJour = sourceJournalTables?.children[0];
+    expect(custInvoiceJour?.name).toBe('$CustInvoiceJour');
+    expect(custInvoiceJour?.children.map(child => child.name)).toEqual(['$InvoiceDate']);
+  });
+
+  it('decodes numeric Unicode entities beyond the BMP', () => {    const xml = buildSolutionEnvelope(`
       <ERDataModelVersion ID.="{MODEL},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
         <Model>
           <ERDataModel ID.="{MODEL}" Name="Model">
