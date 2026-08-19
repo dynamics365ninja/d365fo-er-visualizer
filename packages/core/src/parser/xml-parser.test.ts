@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseERConfiguration } from './xml-parser.js';
+import { parseERConfiguration, parseERConfigurations } from './xml-parser.js';
 import type { ERExpression } from '../types/expressions.js';
 
 function buildSolutionEnvelope(contents: string, options?: { contentRefId?: string; contentRefIds?: string[] }) {
@@ -498,6 +498,64 @@ describe('parseERConfiguration', () => {
     expect(config.content.direction).toBe('Export');
   });
 
+  it('parses PDF converter formats and labels Excel components by their range name', () => {
+    const xml = buildSolutionEnvelope(`
+      <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Format>
+          <ERTextFormat ID.="{FORMAT}" Name="Order (PDF)">
+            <Root>
+              <ERTextFormatPDFConverterComponent ID.="{PDF}">
+                <Contents.>
+                  <ERTextFormatExcelFileComponent ID.="{XLSX}">
+                    <Contents.>
+                      <ERTextFormatExcelSheet ID.="{SHEET}" ExcelSheetName="Sheet1">
+                        <Contents.>
+                          <ERTextFormatExcelRange ID.="{RANGE}" ExcelRange="Header">
+                            <Contents.>
+                              <ERTextFormatExcelCell ID.="{CELL}" ExcelRange="Header_CompanyName_Value" />
+                            </Contents.>
+                          </ERTextFormatExcelRange>
+                        </Contents.>
+                      </ERTextFormatExcelSheet>
+                    </Contents.>
+                  </ERTextFormatExcelFileComponent>
+                </Contents.>
+              </ERTextFormatPDFConverterComponent>
+            </Root>
+          </ERTextFormat>
+        </Format>
+      </ERFormatVersion>
+      <ERFormatMappingVersion ID.="{FORMAT-MAP},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERFormatMapping ID.="{FORMAT-MAP}" Format="{FORMAT}" FormatVersion="{FORMAT},1" Name="Order (PDF)" />
+        </Mapping>
+      </ERFormatMappingVersion>
+    `, { contentRefIds: ['{FORMAT}', '{FORMAT-MAP}'] });
+
+    const config = parseERConfiguration(xml, 'pdf-format.xml');
+    if (config.content.kind !== 'Format') {
+      throw new Error('Expected format content');
+    }
+
+    const root = config.content.formatVersion.format.rootElement;
+    expect(root.elementType).toBe('PDFFile');
+
+    const file = root.children[0];
+    expect(file?.elementType).toBe('ExcelFile');
+
+    const sheet = file?.children[0];
+    expect(sheet?.elementType).toBe('ExcelSheet');
+    expect(sheet?.name).toBe('Sheet1');
+
+    const range = sheet?.children[0];
+    expect(range?.elementType).toBe('ExcelRange');
+    expect(range?.name).toBe('Header');
+
+    const cell = range?.children[0];
+    expect(cell?.elementType).toBe('ExcelCell');
+    expect(cell?.name).toBe('Header_CompanyName_Value');
+  });
+
   it('recognizes import formats from DataImportSupport="1"', () => {
     const xml = buildSolutionEnvelope(`
       <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
@@ -960,5 +1018,56 @@ describe('parseERConfiguration', () => {
       </ERExpressionNumericUnarySubtract>
     `);
     expect(negateExpression).toMatchObject({ kind: 'UnaryOp', operator: 'Negate' });
+  });
+});
+
+describe('parseERConfigurations', () => {
+  it('splits a bundle carrying both a data model and a model mapping into two configurations', () => {
+    const xml = buildSolutionEnvelope(`
+      <ERDataModelVersion ID.="{MODEL},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Model>
+          <ERDataModel ID.="{MODEL}" Name="Model">
+            <Contents.>
+              <ERDataContainerDescriptor ID.="{ROOT}" Name="Root" IsRoot="1">
+                <Contents.>
+                  <ERDataContainerDescriptorItem Name="Value" Type="6" />
+                </Contents.>
+              </ERDataContainerDescriptor>
+            </Contents.>
+          </ERDataModel>
+        </Model>
+      </ERDataModelVersion>
+      <ERModelMappingVersion ID.="{MAP},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERModelMapping ID.="{MAP}" Name="Mapping" DataContainerDescriptor="Root" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1" />
+        </Mapping>
+      </ERModelMappingVersion>
+    `, { contentRefIds: ['{MODEL}', '{MAP}'] });
+
+    const configs = parseERConfigurations(xml, 'model-and-mapping.xml');
+
+    expect(configs.map(c => c.kind)).toEqual(['DataModel', 'ModelMapping']);
+    expect(configs[0]?.filePath).toBe('model-and-mapping.xml#datamodel:{MODEL}');
+    expect(configs[1]?.filePath).toBe('model-and-mapping.xml');
+  });
+
+  it('returns a single configuration for bundles without an embedded data model', () => {
+    const xml = buildSolutionEnvelope(`
+      <ERDataModelVersion ID.="{MODEL},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Model>
+          <ERDataModel ID.="{MODEL}" Name="Model">
+            <Contents.>
+              <ERDataContainerDescriptor ID.="{ROOT}" Name="Root" IsRoot="1" />
+            </Contents.>
+          </ERDataModel>
+        </Model>
+      </ERDataModelVersion>
+    `, { contentRefId: '{MODEL}' });
+
+    const configs = parseERConfigurations(xml, 'model.xml');
+
+    expect(configs).toHaveLength(1);
+    expect(configs[0]?.kind).toBe('DataModel');
+    expect(configs[0]?.filePath).toBe('model.xml');
   });
 });

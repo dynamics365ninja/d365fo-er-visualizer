@@ -915,7 +915,62 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
 
 // ─── Mapping Designer ───
 
+interface BindingTreeNode {
+  /** Full binding path — also the collapse-state key. */
+  key: string;
+  /** Last path segment, i.e. what the F&O designer shows at this level. */
+  name: string;
+  children: BindingTreeNode[];
+  binding?: any;
+  /** Number of bindings in this subtree, including this node. */
+  count: number;
+}
+
+/**
+ * Turn the flat `parent/child/leaf` binding paths into the nested structure the
+ * F&O model-mapping designer shows. Intermediate levels that carry no binding
+ * of their own are still materialised so the hierarchy stays continuous.
+ */
+function buildBindingTree(bindings: any[]): BindingTreeNode[] {
+  const roots: BindingTreeNode[] = [];
+  const index = new Map<string, BindingTreeNode>();
+
+  const ensure = (path: string): BindingTreeNode => {
+    const existing = index.get(path);
+    if (existing) return existing;
+    const slash = path.lastIndexOf('/');
+    const node: BindingTreeNode = {
+      key: path,
+      name: slash >= 0 ? path.slice(slash + 1) : path,
+      children: [],
+      count: 0,
+    };
+    index.set(path, node);
+    if (slash >= 0) ensure(path.slice(0, slash)).children.push(node);
+    else roots.push(node);
+    return node;
+  };
+
+  for (const b of bindings) ensure(b.path).binding = b;
+
+  const tally = (node: BindingTreeNode): number => {
+    node.children.sort((a, b) => a.name.localeCompare(b.name));
+    node.count = (node.binding ? 1 : 0) + node.children.reduce((sum, c) => sum + tally(c), 0);
+    return node.count;
+  };
+  for (const root of roots) tally(root);
+  roots.sort((a, b) => a.name.localeCompare(b.name));
+  return roots;
+}
+
+/** Every ancestor path of `path`, outermost first. */
+function bindingAncestorKeys(path: string): string[] {
+  const segments = path.split('/');
+  return segments.slice(0, -1).map((_, i) => segments.slice(0, i + 1).join('/'));
+}
+
 function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; configIndex: number; focusNode: any | null }) {
+
   const mm = mapping;
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const selectNode = useAppStore(s => s.selectNode);
@@ -935,8 +990,13 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
       setView('bindings');
       const focusPath = focusNode.data?.path as string | undefined;
       if (focusPath) {
-        const focusGroup = focusPath.split('/')[0];
-        setCollapsedGroups(prev => { const next = new Set(prev); next.delete(focusGroup); return next; });
+        // Open every level on the way down to the focused binding.
+        const ancestors = bindingAncestorKeys(focusPath);
+        setCollapsedGroups(prev => {
+          const next = new Set(prev);
+          for (const key of ancestors) next.delete(key);
+          return next;
+        });
       }
     }
     if (focusNode.type === 'datasource') setView('datasources');
@@ -961,8 +1021,8 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
   // Trivial constant detector — same logic as Format bindings
   const isTrivialExpr = (expr: string) => /^(false|true|0|1|""|'')$/i.test(expr.trim());
 
-  // Grouped, deduplicated, filtered bindings
-  const mappingGroups = useMemo(() => {
+  // Deduplicated, filtered bindings arranged as the designer's own hierarchy
+  const bindingTree = useMemo(() => {
     // 1. Deduplicate by path
     const seen = new Set<string>();
     const deduped: typeof mm.bindings = [];
@@ -985,20 +1045,8 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
         )
       : meaningful;
 
-    // 4. Group by first path segment (e.g. "TaxTransactions" from "TaxTransactions/Values/Amount")
-    const groups = new Map<string, typeof mm.bindings>();
-    for (const b of textFiltered) {
-      const firstSeg = b.path.split('/')[0];
-      if (!groups.has(firstSeg)) groups.set(firstSeg, []);
-      groups.get(firstSeg)!.push(b);
-    }
-
-    return Array.from(groups.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([group, items]) => ({
-        group,
-        items: [...items].sort((a, b) => a.path.localeCompare(b.path)),
-      }));
+    // 4. Nest by path segments
+    return buildBindingTree(textFiltered);
   }, [mm.bindings, filter]);
 
   const toggleGroup = useCallback((g: string) => {
@@ -1009,12 +1057,31 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
     });
   }, []);
 
-  useEffect(() => {
-    if (mappingGroups.length === 0) return;
-    setCollapsedGroups(prev => prev.size > 0 ? prev : new Set(mappingGroups.map(group => group.group)));
-  }, [mappingGroups]);
+  const expandAllBindings = useCallback(() => setCollapsedGroups(new Set()), []);
+  const collapseAllBindings = useCallback(() => {
+    const keys: string[] = [];
+    const walk = (nodes: BindingTreeNode[]) => {
+      for (const n of nodes) {
+        if (n.children.length > 0) { keys.push(n.key); walk(n.children); }
+      }
+    };
+    walk(bindingTree);
+    setCollapsedGroups(new Set(keys));
+  }, [bindingTree]);
 
-  const totalShown = mappingGroups.reduce((n, g) => n + g.items.length, 0);
+  const selectBindingByPath = useCallback((path: string) => {
+    const rootNode = treeNodes[configIndex];
+    if (!rootNode) return;
+    const match = findTreeNodeByMatch(rootNode, n => n.type === 'binding' && n.data?.path === path);
+    if (match) selectNode(match.id);
+  }, [treeNodes, configIndex, selectNode]);
+
+  useEffect(() => {
+    if (bindingTree.length === 0) return;
+    setCollapsedGroups(prev => prev.size > 0 ? prev : new Set(bindingTree.map(node => node.key)));
+  }, [bindingTree]);
+
+  const totalShown = bindingTree.reduce((n, g) => n + g.count, 0);
 
   const filteredDatasources = useMemo(() => {
     if (!filter) return mm.datasources;
@@ -1059,6 +1126,27 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
         />
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
           <DensityToggle density={density} onChange={setDensity} />
+          {view === 'bindings' && (
+            <ExpandCollapseSlider
+              size="compact"
+              expandLabel={t.expand}
+              collapseLabel={t.collapse}
+              expandIcon={
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 6 L8 2 L12 6" />
+                  <path d="M4 10 L8 14 L12 10" />
+                </svg>
+              }
+              collapseIcon={
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 3 L8 7 L12 3" />
+                  <path d="M4 13 L8 9 L12 13" />
+                </svg>
+              }
+              onExpand={expandAllBindings}
+              onCollapse={collapseAllBindings}
+            />
+          )}
           {view === 'datasources' && (
             <ExpandCollapseSlider
               size="compact"
@@ -1111,72 +1199,130 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
       {/* Content */}
       <div className={`designer-scroll-pane density-${density}`}>
         {view === 'bindings' && (
-          mappingGroups.length === 0
+          bindingTree.length === 0
             ? <div style={{ color: 'var(--text-secondary)', fontSize: 12, padding: 12 }}>{t.noResults}</div>
-            : mappingGroups.map(({ group, items }) => {
-                const collapsed = collapsedGroups.has(group);
-                return (
-                  <div key={group} className="mm-group">
-                    {/* Group header */}
-                    <div className="mm-group-header" onClick={() => toggleGroup(group)}>
-                      <span className={`tree-chevron ${!collapsed ? 'open' : ''}`} />
-                      <span className="mm-group-name">{group}</span>
-                      <span className="mm-group-count">{items.length}</span>
-                    </div>
-                    {/* Group rows */}
-                    {!collapsed && items.map((b, i) => {
-                      // Tail = the part after the group prefix, e.g. "Values/TaxAmount" from "TaxTransactions/Values/TaxAmount"
-                      const tail = b.path.startsWith(group + '/')
-                        ? b.path.slice(group.length + 1)
-                        : b.path;
-                      // Split tail into parent context + field name
-                      const slashIdx = tail.lastIndexOf('/');
-                      const fieldName = slashIdx >= 0 ? tail.slice(slashIdx + 1) : tail;
-                      const parentCtx = slashIdx >= 0 ? tail.slice(0, slashIdx) : null;
-                      const isFocused = b.path === focusBindingPath;
-                      const navFlash = isFocused && flashBindingPath === b.path;
-
-                      return (
-                        <div key={i} ref={isFocused ? bindingScrollRef : null} className={`mm-binding-row${isFocused ? ' search-match' : ''}${navFlash ? ' nav-flash' : ''}`}
-                          style={{ cursor: 'pointer' }}
-                          onClick={() => {
-                            const rootNode = treeNodes[configIndex];
-                            if (!rootNode) return;
-                            const match = findTreeNodeByMatch(rootNode, n => n.type === 'binding' && n.data?.path === b.path);
-                            if (match) selectNode(match.id);
-                          }}
-                        >
-                          <div className="mm-binding-field">
-                            {parentCtx && (
-                              <span className="mm-binding-parent">{parentCtx} /</span>
-                            )}
-                            <span className="mm-binding-name">{fieldName}</span>
-                          </div>
-                          <div className="mm-binding-expr">
-                            <span className="mm-binding-arrow" aria-hidden>←</span>
-                            <ClickablePath expression={b.expressionAsString} configIndex={configIndex} mode="binding-expr" />
-                          </div>
-                          <DrillDownTrigger
-                            expression={b.expressionAsString}
-                            configIndex={configIndex}
-                            elementName={fieldName}
-                            className="mm-binding-drill"
-                          >
-                            <SearchRegular fontSize={14} />
-                            <span>{locale === 'cs' ? 'Rozpad' : 'Drill-down'}</span>
-                          </DrillDownTrigger>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })
+            : <div className="mm-tree" role="tree">
+                {bindingTree.map(node => (
+                  <BindingTreeRows
+                    key={node.key}
+                    node={node}
+                    depth={0}
+                    collapsed={collapsedGroups}
+                    onToggle={toggleGroup}
+                    configIndex={configIndex}
+                    focusBindingPath={focusBindingPath}
+                    flashBindingPath={flashBindingPath}
+                    focusRef={bindingScrollRef}
+                    onSelectBinding={selectBindingByPath}
+                  />
+                ))}
+              </div>
         )}
 
         {view === 'datasources' && (
           <GroupedDatasourceList ref={dsListRef} datasources={filteredDatasources} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusNode?.type === 'datasource' ? focusNode.name : undefined} />
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * One level of the model-mapping binding hierarchy. Container levels render as
+ * collapsible branches, bound levels additionally render their expression and
+ * the drill-down trigger, so a node that is both keeps a single row.
+ */
+function BindingTreeRows({
+  node, depth, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding,
+}: {
+  node: BindingTreeNode;
+  depth: number;
+  collapsed: Set<string>;
+  onToggle: (key: string) => void;
+  configIndex: number;
+  focusBindingPath?: string;
+  flashBindingPath: string | null;
+  focusRef: React.MutableRefObject<HTMLDivElement | null>;
+  onSelectBinding: (path: string) => void;
+}) {
+  const hasChildren = node.children.length > 0;
+  const isCollapsed = hasChildren && collapsed.has(node.key);
+  const binding = node.binding;
+  const isFocused = !!binding && node.key === focusBindingPath;
+  const navFlash = isFocused && flashBindingPath === node.key;
+
+  const classes = [
+    'mm-tree-row',
+    binding ? 'mm-binding-row' : 'mm-tree-branch',
+    isFocused ? 'search-match' : '',
+    navFlash ? 'nav-flash' : '',
+  ].filter(Boolean).join(' ');
+
+  return (
+    <div className="mm-tree-node">
+      <div
+        className={classes}
+        style={{ ['--mm-depth' as string]: depth }}
+        role="treeitem"
+        aria-expanded={hasChildren ? !isCollapsed : undefined}
+        ref={isFocused ? focusRef : null}
+        onClick={() => {
+          if (binding) onSelectBinding(node.key);
+          else if (hasChildren) onToggle(node.key);
+        }}
+      >
+        <div className="mm-tree-head">
+          {hasChildren ? (
+            <button
+              type="button"
+              className={`mm-tree-toggle ${isCollapsed ? '' : 'open'}`}
+              aria-label={node.name}
+              onClick={e => { e.stopPropagation(); onToggle(node.key); }}
+            >
+              <span className={`tree-chevron ${isCollapsed ? '' : 'open'}`} />
+            </button>
+          ) : (
+            <span className="mm-tree-toggle mm-tree-toggle--leaf" aria-hidden />
+          )}
+          <span className={binding ? 'mm-binding-name' : 'mm-tree-branch-name'}>{node.name}</span>
+          {hasChildren && <span className="mm-group-count">{node.count}</span>}
+          {binding && (
+            <DrillDownTrigger
+              expression={binding.expressionAsString}
+              configIndex={configIndex}
+              elementName={node.name}
+              className="mm-binding-drill"
+            >
+              <SearchRegular fontSize={14} />
+              <span>{locale === 'cs' ? 'Rozpad' : 'Drill-down'}</span>
+            </DrillDownTrigger>
+          )}
+        </div>
+        {binding && (
+          <div className="mm-binding-expr">
+            <span className="mm-binding-arrow" aria-hidden>←</span>
+            <ClickablePath expression={binding.expressionAsString} configIndex={configIndex} mode="binding-expr" />
+          </div>
+        )}
+      </div>
+      {hasChildren && !isCollapsed && (
+        <div className="mm-tree-children" role="group">
+          {node.children.map(child => (
+            <BindingTreeRows
+              key={child.key}
+              node={child}
+              depth={depth + 1}
+              collapsed={collapsed}
+              onToggle={onToggle}
+              configIndex={configIndex}
+              focusBindingPath={focusBindingPath}
+              flashBindingPath={flashBindingPath}
+              focusRef={focusRef}
+              onSelectBinding={onSelectBinding}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

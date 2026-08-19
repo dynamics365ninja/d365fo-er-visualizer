@@ -383,6 +383,83 @@ function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> 
 }
 
 export function parseERConfiguration(xml: string, filePath: string): ERConfiguration {
+  const root = resolveSolutionRoot(xml, filePath);
+  const solutionVersion = parseSolutionVersion(root);
+  const kind = detectComponentKind(root);
+  return buildConfiguration(root, kind, solutionVersion, filePath);
+}
+
+/**
+ * Same as {@link parseERConfiguration} but splits a bundle that carries both a
+ * data model and a model mapping into two configurations instead of dropping
+ * the model half. F&O exports a derived model mapping together with its parent
+ * `ERDataModelVersion`, and the single-kind detection only kept the mapping.
+ *
+ * The extra data-model entry gets a derived, deterministic `filePath` so
+ * repeated loads of the same bundle replace rather than duplicate it.
+ */
+export function parseERConfigurations(xml: string, filePath: string): ERConfiguration[] {
+  const root = resolveSolutionRoot(xml, filePath);
+  const solutionVersion = parseSolutionVersion(root);
+  const kind = detectComponentKind(root);
+  const primary = buildConfiguration(root, kind, solutionVersion, filePath);
+
+  if (kind !== 'ModelMapping') return [primary];
+
+  const contents = getContents(root);
+  if (!contents?.['ERDataModelVersion']) return [primary];
+
+  try {
+    const version = parseDataModelVersion(root);
+    const modelGuid = version.id.split(',')[0] || version.model.id;
+    const model: ERConfiguration = {
+      filePath: `${filePath}#datamodel:${modelGuid}`,
+      kind: ERComponentKind.DataModel,
+      solutionVersion,
+      content: { kind: ERComponentKind.DataModel, version },
+    };
+    return [model, primary];
+  } catch {
+    // A malformed model half must not cost us the mapping.
+    return [primary];
+  }
+}
+
+function buildConfiguration(
+  root: any,
+  kind: string,
+  solutionVersion: ERSolutionVersion,
+  filePath: string,
+): ERConfiguration {
+  let content: ERDataModelContent | ERModelMappingContent | ERFormatContent;
+
+  switch (kind) {
+    case 'DataModel':
+      content = {
+        kind: ERComponentKind.DataModel,
+        version: parseDataModelVersion(root),
+      };
+      break;
+    case 'ModelMapping':
+      content = {
+        kind: ERComponentKind.ModelMapping,
+        version: parseModelMappingVersion(root),
+      };
+      break;
+    case 'Format':
+      content = {
+        kind: ERComponentKind.Format,
+        ...parseFormatVersions(root),
+      };
+      break;
+    default:
+      throw new Error(`Unknown ER component kind`);
+  }
+
+  return { filePath, kind: kind as ERComponentKind, solutionVersion, content };
+}
+
+function resolveSolutionRoot(xml: string, filePath: string): any {
   const parser = createParser();
   const rawDoc = parser.parse(xml);
   const doc = sanitizeAndDecode(rawDoc);
@@ -423,35 +500,7 @@ export function parseERConfiguration(xml: string, filePath: string): ERConfigura
     );
   }
 
-  const solutionVersion = parseSolutionVersion(root);
-  const kind = detectComponentKind(root);
-
-  let content: ERDataModelContent | ERModelMappingContent | ERFormatContent;
-
-  switch (kind) {
-    case 'DataModel':
-      content = {
-        kind: ERComponentKind.DataModel,
-        version: parseDataModelVersion(root),
-      };
-      break;
-    case 'ModelMapping':
-      content = {
-        kind: ERComponentKind.ModelMapping,
-        version: parseModelMappingVersion(root),
-      };
-      break;
-    case 'Format':
-      content = {
-        kind: ERComponentKind.Format,
-        ...parseFormatVersions(root),
-      };
-      break;
-    default:
-      throw new Error(`Unknown ER component kind`);
-  }
-
-  return { filePath, kind: kind as ERComponentKind, solutionVersion, content };
+  return root;
 }
 
 // ─── Component Kind Detection ───
@@ -1392,7 +1441,12 @@ function parseFormatElement(node: any, type: ERFormatElementType): ERFormatEleme
 
   return {
     id: getAttr(node, 'ID.') ?? '',
-    name: getAttr(node, 'Name') ?? type,
+    // Excel components carry no `Name`; the designer shows the named range /
+    // sheet name instead, so fall back to those before the bare type label.
+    name: getAttr(node, 'Name')
+      ?? getAttr(node, 'ExcelRange')
+      ?? getAttr(node, 'ExcelSheetName')
+      ?? type,
     elementType: type,
     encoding: getAttr(node, 'Encoding'),
     maximalLength: getAttr(node, 'MaximalLength')
@@ -1426,6 +1480,13 @@ const formatElementTypeMap: Record<string, ERFormatElementType> = {
   ERTextFormatExcelCell: 'ExcelCell',
   ERTextFormatExcelHeader: 'ExcelHeader',
   ERTextFormatExcelFooter: 'ExcelFooter',
+  // Converter / office wrappers — without these the whole tree below a
+  // PDF-converted Excel template parsed as `Unknown` and rendered empty.
+  ERTextFormatPDFConverterComponent: 'PDFFile',
+  ERTextFormatPdfConverterComponent: 'PDFFile',
+  ERTextFormatPDFFileComponent: 'PDFFile',
+  ERTextFormatWordFileComponent: 'WordFile',
+  ERTextFormatWordDocumentComponent: 'WordFile',
 };
 
 function extractAllAttributes(node: any): Record<string, string> {

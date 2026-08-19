@@ -737,7 +737,10 @@ body {
   width: 100%;
 }
 
-/* Badge styles */
+/* Badge styles.
+   Text stays on `--text-primary` (near-black / near-white): same-hue text on a
+   same-hue soft background was unreadable. The hue lives in the tint and the
+   border instead. */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -745,18 +748,19 @@ body {
   border-radius: 3px;
   font-size: 11px;
   font-weight: 500;
+  color: var(--text-primary);
 }
-.badge-table { background: var(--surface-info-bg); color: var(--surface-info-fg); border: 1px solid var(--surface-info-border); }
-.badge-enum { background: var(--surface-warning-bg); color: var(--surface-warning-fg); border: 1px solid var(--surface-warning-border); }
-.badge-class { background: var(--surface-purple-bg); color: var(--surface-purple-fg); border: 1px solid var(--surface-purple-border); }
-.badge-calc { background: var(--surface-success-bg); color: var(--surface-success-fg); border: 1px solid var(--surface-success-border); }
-.badge-param { background: var(--surface-danger-bg); color: var(--surface-danger-fg); border: 1px solid var(--surface-danger-border); }
-.badge-export { background: var(--surface-success-bg); color: var(--surface-success-fg); border: 1px solid var(--surface-success-border); }
-.badge-import { background: var(--surface-purple-bg); color: var(--surface-purple-fg); border: 1px solid var(--surface-purple-border); }
-.badge-xml { background: var(--surface-info-bg); color: var(--surface-info-fg); border: 1px solid var(--surface-info-border); }
-.badge-csv { background: var(--surface-success-bg); color: var(--surface-success-fg); border: 1px solid var(--surface-success-border); }
-.badge-success { background: var(--surface-success-bg); color: var(--surface-success-fg); border: 1px solid var(--surface-success-border); }
-.badge-info { background: var(--surface-info-bg); color: var(--surface-info-fg); border: 1px solid var(--surface-info-border); }
+.badge-table { background: var(--surface-info-bg); border: 1px solid var(--surface-info-border); }
+.badge-enum { background: var(--surface-warning-bg); border: 1px solid var(--surface-warning-border); }
+.badge-class { background: var(--surface-purple-bg); border: 1px solid var(--surface-purple-border); }
+.badge-calc { background: var(--surface-success-bg); border: 1px solid var(--surface-success-border); }
+.badge-param { background: var(--surface-danger-bg); border: 1px solid var(--surface-danger-border); }
+.badge-export { background: var(--surface-success-bg); border: 1px solid var(--surface-success-border); }
+.badge-import { background: var(--surface-purple-bg); border: 1px solid var(--surface-purple-border); }
+.badge-xml { background: var(--surface-info-bg); border: 1px solid var(--surface-info-border); }
+.badge-csv { background: var(--surface-success-bg); border: 1px solid var(--surface-success-border); }
+.badge-success { background: var(--surface-success-bg); border: 1px solid var(--surface-success-border); }
+.badge-info { background: var(--surface-info-bg); border: 1px solid var(--surface-info-border); }
 
 /* ─── VS Code-style rotating chevron ─── */
 /* Use: <span className={`tree-chevron ${open ? 'open' : ''}`} />              */
@@ -1985,7 +1989,7 @@ body {
 
 .toolbar-mode-badge {
   font-size: 11px;
-  color: var(--surface-success-fg);
+  color: var(--text-primary);
   padding: 6px 10px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface-success-bg) 72%, transparent);
@@ -1993,7 +1997,6 @@ body {
 }
 
 .toolbar-mode-badge-technical {
-  color: var(--surface-info-fg);
   background: color-mix(in srgb, var(--surface-info-bg) 72%, transparent);
   border-color: color-mix(in srgb, var(--surface-info-border) 80%, transparent);
 }
@@ -3299,11 +3302,84 @@ body {
 .mm-binding-row {
   position: relative;
   margin: 2px 6px 2px 12px;
-  padding: 8px 44px 8px 16px;
+  padding: 8px 12px 8px 16px;
   border: 1px solid var(--er-border);
   border-radius: var(--er-radius-lg);
   font-size: 12px;
   transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+/* ─── Model-mapping binding hierarchy ───
+   Bindings are nested by their `parent/child/leaf` path so the panel mirrors
+   the F&O designer tree instead of a one-level grouping. */
+.mm-tree {
+  padding: 4px 0 12px;
+}
+
+.mm-tree-children {
+  position: relative;
+}
+
+.mm-tree-row {
+  --mm-indent: calc(var(--mm-depth, 0) * 16px);
+  margin-left: calc(12px + var(--mm-indent));
+}
+
+.mm-tree-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mm-tree-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.mm-tree-toggle--leaf {
+  cursor: default;
+}
+
+.mm-tree-branch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin-top: 2px;
+  margin-bottom: 2px;
+  margin-right: 6px;
+  border: 1px solid transparent;
+  border-radius: var(--er-radius-md);
+  background: color-mix(in srgb, var(--bg-tertiary) 60%, transparent);
+  cursor: pointer;
+  user-select: none;
+}
+
+.mm-tree-branch:hover {
+  background: var(--bg-hover);
+  border-color: var(--er-border);
+}
+
+.mm-tree-branch-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mm-binding-row:hover {
   background: var(--er-surface-2);
@@ -3347,9 +3423,14 @@ body {
   font-family: var(--font-mono);
 }
 .mm-binding-name {
-  color: var(--syn-resolved);
+  flex: 1;
+  min-width: 0;
+  color: var(--text-primary);
   font-weight: 600;
   font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* Long formulas used to be cut off at the container edge with no ellipsis and
    no way to read the rest. Wrap them, clamped to four lines; the row's
@@ -3374,11 +3455,12 @@ body {
 }
 
 /* Per-row drill-down: the format designer had this affordance, the mapping
-   designer did not, so the workbench was two hops away from every binding. */
+   designer did not, so the workbench was two hops away from every binding.
+   It sits inline in the row header and stays visible — hiding it until hover
+   made users believe drill-down was missing. */
 .mm-binding-drill {
-  position: absolute;
-  top: 6px;
-  right: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -3386,32 +3468,17 @@ body {
   border: 1px solid var(--er-border);
   border-radius: var(--er-radius-md);
   background: var(--er-surface);
-  color: var(--er-text-muted);
+  color: var(--er-text-secondary);
   font-family: inherit;
   font-size: 10.5px;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
-}
-
-.mm-binding-drill span {
-  display: none;
-}
-
-.mm-binding-row:hover .mm-binding-drill,
-.mm-binding-row:focus-within .mm-binding-drill,
-.mm-binding-drill:focus-visible {
-  opacity: 1;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 
 .mm-binding-drill:hover {
   background: var(--er-accent-soft);
   border-color: var(--er-accent-border);
   color: var(--er-accent);
-}
-
-.mm-binding-drill:hover span {
-  display: inline;
 }
 .mm-binding-arrow {
   flex-shrink: 0;
@@ -3555,23 +3622,23 @@ body {
 }
 
 .ds-row-groupby-column-grouped .fmt-ds-label {
-  color: var(--surface-info-fg);
+  color: var(--text-primary);
 }
 
 .ds-row-groupby-column-aggregated .fmt-ds-label {
-  color: var(--surface-warning-fg);
+  color: var(--text-primary);
 }
 
 .ds-row-groupby-column-grouped .ds-row-groupby-count {
   border-color: color-mix(in srgb, var(--surface-info-border) 72%, transparent);
   background: color-mix(in srgb, var(--surface-info-bg) 68%, transparent);
-  color: var(--surface-info-fg);
+  color: var(--text-primary);
 }
 
 .ds-row-groupby-column-aggregated .ds-row-groupby-count {
   border-color: color-mix(in srgb, var(--surface-warning-border) 72%, transparent);
   background: color-mix(in srgb, var(--surface-warning-bg) 68%, transparent);
-  color: var(--surface-warning-fg);
+  color: var(--text-primary);
 }
 
 .ds-row-groupby-column-toggle {
@@ -3651,19 +3718,19 @@ body {
 }
 
 .ds-row-groupby-fn-sum {
-  color: var(--surface-success-fg);
+  color: var(--text-primary);
   border-color: color-mix(in srgb, var(--surface-success-border) 74%, transparent);
   background: color-mix(in srgb, var(--surface-success-bg) 74%, transparent);
 }
 
 .ds-row-groupby-fn-count {
-  color: var(--surface-info-fg);
+  color: var(--text-primary);
   border-color: color-mix(in srgb, var(--surface-info-border) 74%, transparent);
   background: color-mix(in srgb, var(--surface-info-bg) 74%, transparent);
 }
 
 .ds-row-groupby-fn-avg {
-  color: var(--surface-warning-fg);
+  color: var(--text-primary);
   border-color: color-mix(in srgb, var(--surface-warning-border) 74%, transparent);
   background: color-mix(in srgb, var(--surface-warning-bg) 74%, transparent);
 }
@@ -9646,5 +9713,217 @@ body {
   color: currentColor;
   fill: currentColor;
   stroke: currentColor;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Explorer legibility pass
+   Loaded last on purpose: several earlier blocks restyle `.tree-node`, and the
+   Explorer needs the final word on hierarchy cues, contrast and spacing.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.explorer-tree-shell .tree-node {
+  min-height: 26px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  padding-right: 8px;
+  border-radius: 0;
+  border-left: 2px solid transparent;
+  color: var(--text-primary);
+}
+
+/* Indent guide for the row's own level — the flat rows gave no sense of depth. */
+.explorer-tree-shell .tree-node:not([data-depth="0"])::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(13px + (var(--depth, 1) - 1) * 16px);
+  width: 1px;
+  background: var(--er-border);
+}
+
+.explorer-tree-shell .tree-node:hover {
+  background: var(--bg-hover);
+  border-color: transparent;
+  border-left-color: var(--er-border-strong, var(--er-border));
+}
+
+.explorer-tree-shell .tree-node.selected {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-left-color: var(--accent);
+  font-weight: 600;
+}
+
+.explorer-tree-shell .tree-node.ancestor {
+  border-left-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* Root configuration rows anchor the tree — give them weight and a hue rail. */
+.explorer-tree-shell .tree-node[data-depth="0"] {
+  min-height: 30px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: var(--er-surface-2);
+  border-top: 1px solid var(--er-border);
+  border-bottom: 1px solid var(--er-border);
+  margin-top: 4px;
+}
+
+.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-model { border-left-color: var(--kind-model); }
+.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-mapping { border-left-color: var(--kind-mapping); }
+.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-format { border-left-color: var(--kind-format); }
+
+/* Section rows (Data sources, Bindings, …) read as labels, not as data. */
+.explorer-tree-shell .tree-node-group {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.explorer-tree-shell .tree-node-version-pill,
+.explorer-tree-shell .tree-node-kind-pill {
+  color: var(--text-primary);
+  background: var(--er-surface);
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-pill);
+  padding: 0 6px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Kind group headers stay visible while scrolling a long configuration list. */
+.explorer-sections .explorer-kind-group-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--er-surface);
+  border-bottom: 1px solid var(--er-border);
+}
+
+.explorer-kind-group-model .explorer-kind-group-header { box-shadow: inset 3px 0 0 var(--kind-model); }
+.explorer-kind-group-mapping .explorer-kind-group-header { box-shadow: inset 3px 0 0 var(--kind-mapping); }
+.explorer-kind-group-format .explorer-kind-group-header { box-shadow: inset 3px 0 0 var(--kind-format); }
+
+/* Icon-only filter chips were guesswork; show what they filter. */
+.explorer-kind-chip-label {
+  display: inline;
+}
+
+.explorer-kind-chip {
+  height: 24px;
+  padding: 2px 8px;
+  color: var(--text-primary);
+}
+
+.explorer-kind-chip-count {
+  color: var(--text-primary);
+}
+
+.explorer-kind-chip--model.active { background: var(--er-model-soft); }
+.explorer-kind-chip--mapping.active { background: var(--er-mapping-soft); }
+.explorer-kind-chip--format.active { background: var(--er-format-soft); }
+
+/* ─── Workspace manager dialog ─── */
+
+.ws-surface {
+  max-width: 720px;
+}
+
+.ws-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.ws-section-head--spaced {
+  margin-top: 18px;
+}
+
+.ws-count {
+  padding: 0 6px;
+  border-radius: var(--er-radius-pill);
+  border: 1px solid var(--er-border);
+  background: var(--er-surface-2);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-empty {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.ws-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.ws-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface);
+}
+
+.ws-kind {
+  flex-shrink: 0;
+  min-width: 68px;
+  text-align: center;
+  padding: 2px 6px;
+  border-radius: var(--er-radius-pill);
+  border: 1px solid var(--er-border);
+  background: var(--er-surface-2);
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ws-kind--model { border-color: var(--kind-model); background: var(--er-model-soft); }
+.ws-kind--mapping { border-color: var(--kind-mapping); background: var(--er-mapping-soft); }
+.ws-kind--format { border-color: var(--kind-format); background: var(--er-format-soft); }
+
+.ws-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ws-row-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-row-meta {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 

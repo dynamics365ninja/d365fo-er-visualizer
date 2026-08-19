@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAppStore } from '../state/store';
 import { ClickablePath } from './ClickablePath';
-import { ERDirection } from '@er-visualizer/core';
+import { ERDirection, getFormatElementDataType, getFormatElementExcelRange } from '@er-visualizer/core';
 import { getEnumTypeLabel } from '../utils/enum-display';
 import { resolveLabel } from '../utils/label-resolver';
 import { t, locale } from '../i18n';
@@ -387,9 +387,12 @@ function ValidationProps({ data, configIndex, showTechnicalDetails }: { data: an
 }
 
 function FormatElementProps({ data, showTechnicalDetails }: { data: any; showTechnicalDetails: boolean }) {
+  const excelRange = getFormatElementExcelRange(data);
   const items: [string, React.ReactNode, string?][] = [
+    [t.propDataType, getFormatElementDataType(data)],
     [t.propChildren, `${data.children?.length ?? 0}`],
   ];
+  if (excelRange) items.splice(1, 0, [t.propExcelRange, excelRange]);
   if (showTechnicalDetails) {
     items.unshift(['GUID', data.id, 'guid']);
     items.splice(1, 0, [t.propType, data.elementType]);
