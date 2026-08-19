@@ -136,6 +136,13 @@ export interface Translations {
   back: string;
   closeConfiguration: string;
   closeAllConfigurations: string;
+  workspaceManager: string;
+  workspaceLoaded: string;
+  workspaceEmpty: string;
+  workspaceAddRecent: string;
+  workspaceAdd: string;
+  workspaceAddFiles: string;
+  workspaceClose: string;
   openInExplorerAction: string;
   explorerActionShort: string;
   noSelection: string;
@@ -190,6 +197,8 @@ export interface Translations {
   // Results / counts
   searchResultCount: (n: number) => string;
   propChildren: string;
+  propDataType: string;
+  propExcelRange: string;
   // Property inspector
   propId: string;
   propType: string;
@@ -240,6 +249,9 @@ export interface Translations {
   recentSessions: string;
   recentSessionTitle: (count: number) => string;
   recentSessionReloadHint: string;
+  recentSessionMergeHint: string;
+  recentSessionReplaceHint: string;
+  recentSessionFileHint: string;
   loadSample: string;
   validatorOk: string;
   validatorIssues: (n: number) => string;
@@ -534,6 +546,13 @@ const cs: Translations = {
   back: 'Zpět',
   closeConfiguration: 'Zavřít konfiguraci',
   closeAllConfigurations: 'Zavřít vše',
+  workspaceManager: 'Správa pracovní plochy',
+  workspaceLoaded: 'Načtené konfigurace',
+  workspaceEmpty: 'Žádná konfigurace není načtena.',
+  workspaceAddRecent: 'Přidat z nedávných',
+  workspaceAdd: 'Přidat do pracovní plochy',
+  workspaceAddFiles: 'Přidat soubory…',
+  workspaceClose: 'Zavřít',
   openInExplorerAction: 'Otevřít v Exploreru',
   explorerActionShort: 'Explorer',
   noSelection: 'Není vybraný žádný prvek.',
@@ -590,6 +609,8 @@ const cs: Translations = {
   // Results / counts
   searchResultCount: (n: number) => `Výsledky: ${n}`,
   propChildren: 'Potomci',
+  propDataType: 'Datový typ',
+  propExcelRange: 'Excel rozsah',
   // Property inspector
   propId: 'ID',
   propType: 'Typ',
@@ -637,6 +658,9 @@ const cs: Translations = {
   recentSessions: 'Nedávné relace',
   recentSessionTitle: (count: number) => `Relace (${count} ${count === 1 ? 'soubor' : count >= 2 && count <= 4 ? 'soubory' : 'souborů'})`,
   recentSessionReloadHint: 'Dvojklik pro načtení celé relace',
+  recentSessionMergeHint: 'Přidat relaci do pracovní plochy',
+  recentSessionReplaceHint: 'Nahradit pracovní plochu touto relací',
+  recentSessionFileHint: 'Přidat konfiguraci do pracovní plochy',
   clearRecent: 'Vymazat historii',
   loadSample: 'Načíst ukázkovou konfiguraci',
   validatorOk: 'Konfigurace vypadá v pořádku.',
@@ -924,6 +948,13 @@ const en: Translations = {
   back: 'Back',
   closeConfiguration: 'Close configuration',
   closeAllConfigurations: 'Close all',
+  workspaceManager: 'Workspace manager',
+  workspaceLoaded: 'Loaded configurations',
+  workspaceEmpty: 'No configuration is loaded.',
+  workspaceAddRecent: 'Add from recent',
+  workspaceAdd: 'Add to workspace',
+  workspaceAddFiles: 'Add files…',
+  workspaceClose: 'Close',
   openInExplorerAction: 'Open in Explorer',
   explorerActionShort: 'Explorer',
   noSelection: 'No element selected.',
@@ -978,6 +1009,8 @@ const en: Translations = {
 
   searchResultCount: (n: number) => `Results: ${n}`,
   propChildren: 'Children',
+  propDataType: 'Data type',
+  propExcelRange: 'Excel range',
   propId: 'ID',
   propType: 'Type',
   propName: 'Name',
@@ -1023,6 +1056,9 @@ const en: Translations = {
   recentSessions: 'Recent sessions',
   recentSessionTitle: (count: number) => `Session (${count} ${count === 1 ? 'file' : 'files'})`,
   recentSessionReloadHint: 'Double-click to load the whole session',
+  recentSessionMergeHint: 'Add session to workspace',
+  recentSessionReplaceHint: 'Replace workspace with this session',
+  recentSessionFileHint: 'Add configuration to workspace',
   clearRecent: 'Clear history',
   loadSample: 'Load sample configuration',
   validatorOk: 'Configuration looks fine.',

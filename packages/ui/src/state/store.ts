@@ -6,7 +6,7 @@ import type {
   ERModelMappingContent,
   ERFormatContent,
 } from '@er-visualizer/core';
-import { parseERConfiguration, GUIDRegistry } from '@er-visualizer/core';
+import { parseERConfigurations, GUIDRegistry } from '@er-visualizer/core';
 import { locale } from '../i18n';
 import { buildFormatBindingPresentation } from '../utils/format-binding-display';
 import { useFnoSession } from './fno-session';
@@ -320,12 +320,17 @@ export interface AppState {
   clearRecentFiles: () => void;
   /** Re-load a recent file from its cached XML content. Returns true on success. */
   reloadRecentFile: (path: string) => Promise<boolean>;
+  /** Add a single cached file to the workspace without touching what's loaded. */
+  loadCachedFile: (path: string, name?: string) => Promise<boolean>;
 
   // Recent sessions
   removeRecentSession: (id: string) => void;
   clearRecentSessions: () => void;
-  /** Replace the current analysis by re-loading all files of a saved session. */
-  loadRecentSession: (id: string) => Promise<boolean>;
+  /**
+   * Load all files of a saved session. Files are merged into the current
+   * workspace unless `replace` is set, which clears it first.
+   */
+  loadRecentSession: (id: string, options?: { replace?: boolean }) => Promise<boolean>;
   /**
    * Resolve a datasource name from an expression string (e.g. "CompanyInfo" from binding expr).
    * Returns { configIndex, datasourceName, treeNodeId } or null.
@@ -493,6 +498,54 @@ function parseVersionForComparison(version: string | undefined | null): number {
   return match ? parseInt(match[0], 10) : 0;
 }
 
+/**
+ * Insert `config` into `configs`, replacing an entry with the same path or the
+ * same solution GUID + kind. Returns `null` when an already-loaded entry is a
+ * newer version and the candidate should be dropped.
+ */
+function mergeConfiguration(
+  configs: ERConfiguration[],
+  config: ERConfiguration,
+): ERConfiguration[] | null {
+  const existingIdx = configs.findIndex(c => c.filePath === config.filePath);
+  if (existingIdx >= 0) {
+    return configs.map((c, i) => (i === existingIdx ? config : c));
+  }
+
+  // A data model extracted from a mapping bundle and the same model loaded
+  // from its own file must not coexist as two entries.
+  if (config.content.kind === 'DataModel') {
+    const modelId = normalizeSolutionId(config.content.version.model.id);
+    const twinIdx = modelId
+      ? configs.findIndex(c =>
+          c.content.kind === 'DataModel'
+          && normalizeSolutionId(c.content.version.model.id) === modelId,
+        )
+      : -1;
+    if (twinIdx >= 0) {
+      if (config.filePath.includes('#datamodel:')) return null;
+      return configs.map((c, i) => (i === twinIdx ? config : c));
+    }
+  }
+
+  const solutionId = normalizeSolutionId(config.solutionVersion.solution.id);
+  const byGuidIdx = solutionId
+    ? configs.findIndex(c =>
+        c.content.kind === config.content.kind
+        && normalizeSolutionId(c.solutionVersion.solution.id) === solutionId,
+      )
+    : -1;
+  if (byGuidIdx < 0) return [...configs, config];
+
+  const existingVersion = parseVersionForComparison(
+    configs[byGuidIdx].solutionVersion.publicVersionNumber,
+  );
+  const newVersion = parseVersionForComparison(config.solutionVersion.publicVersionNumber);
+  if (newVersion < existingVersion) return null;
+  // Replace in-place so configIndex references in openTabs stay valid.
+  return configs.map((c, i) => (i === byGuidIdx ? config : c));
+}
+
 function buildDerivedState(configurations: ERConfiguration[]): { registry: GUIDRegistry; treeNodes: TreeNode[]; warnings: ConfigWarning[] } {
   const registry = new GUIDRegistry();
   for (const config of configurations) {
@@ -643,48 +696,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   loadXmlFile: (xml: string, filePath: string) => {
     try {
-      const config = parseERConfiguration(xml, filePath);
+      // A single export can bundle a data model together with its model
+      // mapping; the parser hands both back so the model no longer
+      // disappears when the mapping/format is re-opened.
+      const parsed = parseERConfigurations(xml, filePath);
+      const config = parsed.find(c => c.filePath === filePath) ?? parsed[parsed.length - 1];
       const state = get();
-      // Deduplicate by filePath: if the same synthetic/real path is loaded
-      // again (e.g. user clicks "Load selected" twice on the same config,
-      // or reloads from F&O), replace the previous entry instead of adding
-      // a duplicate. Prevents React "two children with the same key"
-      // warnings and keeps the tree view tidy.
-      const existingIdx = state.configurations.findIndex(c => c.filePath === filePath);
 
-      // Secondary deduplication by solution GUID + kind: when the same
-      // logical configuration appears at a different path (e.g. two versions
-      // loaded from files, or a model auto-fetched by F&O at a version the
-      // user already has at a newer path), keep only the latest version so
-      // that the explorer always shows a single, coherent version set.
-      const newSolutionId = normalizeSolutionId(config.solutionVersion.solution.id);
-      const existingByGuidIdx = existingIdx < 0 && newSolutionId
-        ? state.configurations.findIndex(c =>
-            c.content.kind === config.content.kind
-            && normalizeSolutionId(c.solutionVersion.solution.id) === newSolutionId,
-          )
-        : -1;
-
-      let newConfigs: ERConfiguration[];
-      if (existingIdx >= 0) {
-        // Same path — always replace (user explicitly reloaded this file).
-        newConfigs = state.configurations.map((c, i) => (i === existingIdx ? config : c));
-      } else if (existingByGuidIdx >= 0) {
-        const existingVersion = parseVersionForComparison(
-          state.configurations[existingByGuidIdx].solutionVersion.publicVersionNumber,
-        );
-        const newVersion = parseVersionForComparison(config.solutionVersion.publicVersionNumber);
-        if (newVersion >= existingVersion) {
-          // New config is the same version or newer — replace in-place so
-          // that configIndex references in openTabs / selectedNodeId stay valid.
-          newConfigs = state.configurations.map((c, i) => (i === existingByGuidIdx ? config : c));
-        } else {
-          // Existing config is already newer — silently skip to keep the latest.
-          return;
-        }
-      } else {
-        newConfigs = [...state.configurations, config];
+      let newConfigs = state.configurations;
+      let primaryAdded = false;
+      for (const candidate of parsed) {
+        const merged = mergeConfiguration(newConfigs, candidate);
+        if (merged) newConfigs = merged;
+        if (candidate === config && merged) primaryAdded = true;
       }
+      // Every candidate was superseded by an already-loaded newer version.
+      if (newConfigs === state.configurations && !primaryAdded) return;
 
       const { registry, treeNodes, warnings } = buildDerivedState(newConfigs);
 
@@ -1207,7 +1234,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     saveRecentSessions([]);
     set({ recentSessions: [] });
   },
-  loadRecentSession: async (id: string) => {
+  loadRecentSession: async (id: string, options?: { replace?: boolean }) => {
     const session = get().recentSessions.find(s => s.id === id);
     if (!session) return false;
 
@@ -1226,28 +1253,32 @@ export const useAppStore = create<AppState>((set, get) => ({
       return false;
     }
 
-    // Reset workspace-level state so the session replaces the current analysis.
-    set({
-      configurations: [],
-      registry: new GUIDRegistry(),
-      treeNodes: [],
-      warnings: [],
-      openTabs: [],
-      activeTabId: null,
-      selectedNodeId: null,
-      selectedNode: null,
-      navigationHistory: [],
-      navigationForward: [],
-      canNavigateBack: false,
-      canNavigateForward: false,
-      searchPanelMode: 'search',
-      searchQuery: '',
-      searchResults: [],
-      whereUsedQuery: '',
-      whereUsedResults: [],
-      whereUsedScope: 'all',
-      activeWhereUsedRefKey: null,
-    });
+    // Sessions are merged into the workspace by default so re-opening a
+    // mapping or format never closes an already-loaded data model. Only an
+    // explicit "replace" clears the workspace first.
+    if (options?.replace) {
+      set({
+        configurations: [],
+        registry: new GUIDRegistry(),
+        treeNodes: [],
+        warnings: [],
+        openTabs: [],
+        activeTabId: null,
+        selectedNodeId: null,
+        selectedNode: null,
+        navigationHistory: [],
+        navigationForward: [],
+        canNavigateBack: false,
+        canNavigateForward: false,
+        searchPanelMode: 'search',
+        searchQuery: '',
+        searchResults: [],
+        whereUsedQuery: '',
+        whereUsedResults: [],
+        whereUsedScope: 'all',
+        activeWhereUsedRefKey: null,
+      });
+    }
     let loaded = 0;
     for (const { file, content } of available) {
       if (!content) continue;
@@ -1265,6 +1296,28 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
     }
     return loaded > 0;
+  },
+
+  loadCachedFile: async (path: string, name?: string) => {
+    const label = name ?? path.split(/[\\/]/).pop() ?? path;
+    if (get().configurations.some(c => c.filePath === path)) {
+      get().pushToast({ kind: 'info', message: `„${label}“ už je otevřen v pracovní ploše.` });
+      return true;
+    }
+    const content = await readFileContent(path);
+    if (!content) {
+      get().pushToast({
+        kind: 'warning',
+        message: `Obsah „${label}“ už není v mezipaměti, otevřete soubor znovu ručně.`,
+      });
+      return false;
+    }
+    try {
+      get().loadXmlFile(content, path);
+      return true;
+    } catch {
+      return false;
+    }
   },
 
   resolveDatasource: (expressionOrName: string, fromConfigIndex: number) => {
@@ -3081,7 +3134,11 @@ function buildFormatElementTree(element: any, prefix: string, configIndex: numbe
 
   const baseName = element.name || element.elementType;
   const excelRange = element.elementType === 'ExcelCell' ? element.attributes?.['ExcelRange'] : undefined;
-  const displayName = excelRange ? `${baseName}  [${excelRange}]` : baseName;
+  // The parser already falls back to the named range when an Excel component
+  // has no Name, so only append it when it adds information.
+  const displayName = excelRange && excelRange !== baseName
+    ? `${baseName}  [${excelRange}]`
+    : baseName;
 
   return {
     id: prefix,

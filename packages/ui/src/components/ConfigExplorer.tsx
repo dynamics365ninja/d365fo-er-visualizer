@@ -26,12 +26,14 @@ import {
   ListRegular,
   DismissSquareMultipleRegular,
   FolderRegular,
+  AppsListDetailRegular,
 } from '@fluentui/react-icons';
 import { locale, t } from '../i18n';
 import { useAppStore, type TreeNode } from '../state/store';
 import { ERDirection } from '@er-visualizer/core';
 import type { ERConfiguration, ERModelMappingContent, ERFormatContent, ERDataModelContent } from '@er-visualizer/core';
 import { loadBrowserFiles } from '../utils/file-loading';
+import { WorkspaceManager } from './WorkspaceManager';
 import {
   ArrowSyncRegular,
   CloudArrowDownRegular,
@@ -338,6 +340,7 @@ export function ConfigExplorer() {
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const removeConfiguration = useAppStore(s => s.removeConfiguration);
   const removeAllConfigurations = useAppStore(s => s.removeAllConfigurations);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const selectNode = useAppStore(s => s.selectNode);
   const openTab = useAppStore(s => s.openTab);
   const openDrillDownTab = useAppStore(s => s.openDrillDownTab);
@@ -675,6 +678,9 @@ export function ConfigExplorer() {
                 {t.explorerSortNameDesc}
               </MenuItem>
               <MenuDivider />
+              <MenuItem icon={<AppsListDetailRegular />} onClick={() => setWorkspaceOpen(true)}>
+                {t.workspaceManager}
+              </MenuItem>
               <MenuItem icon={<DismissSquareMultipleRegular />} onClick={removeAllConfigurations}>
                 {t.closeAllConfigurations}
               </MenuItem>
@@ -682,6 +688,8 @@ export function ConfigExplorer() {
           </MenuPopover>
         </Menu>
       </div>
+
+      <WorkspaceManager open={workspaceOpen} onOpenChange={setWorkspaceOpen} />
 
       <div className="explorer-toolbar config-explorer-toolbar">
         <div className="panel-filter-row explorer-toolbar-filter">
@@ -931,7 +939,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
       <div
         className={`tree-node tree-node-${node.type} ${sectionClass} ${parentClass} ${sectionKindClass} ${accentClass} ${isSelected ? 'selected' : ''} ${isAncestor ? 'ancestor' : ''}`}
         data-depth={depth}
-        style={{ paddingLeft: 8 + depth * 16 }}
+        style={{ paddingLeft: 8 + depth * 16, ['--depth' as string]: depth }}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
       >

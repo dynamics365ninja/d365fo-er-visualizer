@@ -13,6 +13,7 @@ import {
 } from '@fluentui/react-components';
 import {
   ArrowDownloadRegular,
+  ArrowSyncRegular,
   CheckmarkCircleRegular,
   CloudRegular,
   DataBarVerticalRegular,
@@ -336,6 +337,28 @@ const useStyles = makeStyles({
     whiteSpace: 'nowrap',
     textOverflow: 'ellipsis',
   },
+  sessionFileButton: {
+    ...shorthands.border('1px', 'solid', 'transparent'),
+    ...shorthands.borderRadius('4px'),
+    ...shorthands.padding('2px', '6px'),
+    width: '100%',
+    textAlign: 'left',
+    font: 'inherit',
+    color: 'var(--er-text-secondary)',
+    backgroundColor: 'transparent',
+    cursor: 'pointer',
+    ':hover': {
+      backgroundColor: 'var(--er-surface-2)',
+      ...shorthands.borderColor('var(--er-accent-border)'),
+      color: 'var(--er-text-primary)',
+    },
+    ':disabled': {
+      cursor: 'default',
+      opacity: 0.6,
+      backgroundColor: 'transparent',
+      ...shorthands.borderColor('transparent'),
+    },
+  },
   footer: {
     borderTop: '1px solid var(--er-border)',
     padding: '18px 20px',
@@ -440,6 +463,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const removeRecentSession = useAppStore(s => s.removeRecentSession);
   const clearRecentSessions = useAppStore(s => s.clearRecentSessions);
   const loadRecentSession = useAppStore(s => s.loadRecentSession);
+  const loadCachedFile = useAppStore(s => s.loadCachedFile);
   const cachedPaths = useAppStore(s => s.cachedPaths);
   const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
   const [isDragging, setIsDragging] = useState(false);
@@ -661,9 +685,9 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
                     const title = session.files.length === 1
                       ? session.files[0]?.name ?? ''
                       : t.recentSessionTitle(session.files.length);
-                    const handleLoad = () => {
+                    const handleLoad = (replace: boolean) => {
                       if (!canLoad) return;
-                      void loadRecentSession(session.id).then(ok => { if (ok) onFilesLoaded(); });
+                      void loadRecentSession(session.id, { replace }).then(ok => { if (ok) onFilesLoaded(); });
                     };
                     return (
                       <div
@@ -674,23 +698,48 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
                         <div className={styles.itemBody}>
                           <div className={styles.itemName}>{title}</div>
                           <div className={styles.sessionFiles}>
-                            {session.files.map(f => (
-                              <span key={f.path} className={styles.sessionFileRow} title={f.path}>
-                                <KindIcon kind={f.kind} />
-                                {f.name}
-                              </span>
-                            ))}
+                            {session.files.map(f => {
+                              const cached = cachedPaths.has(f.path);
+                              const openOne = () => {
+                                if (!cached) return;
+                                void loadCachedFile(f.path, f.name).then(ok => { if (ok) onFilesLoaded(); });
+                              };
+                              return (
+                                <button
+                                  key={f.path}
+                                  type="button"
+                                  disabled={!cached}
+                                  className={mergeClasses(styles.sessionFileRow, styles.sessionFileButton)}
+                                  title={cached ? `${t.recentSessionFileHint} — ${f.path}` : f.path}
+                                  onClick={openOne}
+                                  onDoubleClick={openOne}
+                                >
+                                  <KindIcon kind={f.kind} />
+                                  {f.name}
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
                         {canLoad && (
-                          <Button
-                            appearance="subtle"
-                            size="small"
-                            icon={<OpenRegular />}
-                            aria-label={t.recentSessionReloadHint}
-                            title={t.recentSessionReloadHint}
-                            onClick={handleLoad}
-                          />
+                          <>
+                            <Button
+                              appearance="subtle"
+                              size="small"
+                              icon={<OpenRegular />}
+                              aria-label={t.recentSessionMergeHint}
+                              title={t.recentSessionMergeHint}
+                              onClick={() => handleLoad(false)}
+                            />
+                            <Button
+                              appearance="transparent"
+                              size="small"
+                              icon={<ArrowSyncRegular />}
+                              aria-label={t.recentSessionReplaceHint}
+                              title={t.recentSessionReplaceHint}
+                              onClick={() => handleLoad(true)}
+                            />
+                          </>
                         )}
                         <Button
                           appearance="transparent"
