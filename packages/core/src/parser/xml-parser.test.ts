@@ -126,6 +126,47 @@ describe('parseERConfiguration', () => {
     expect(bindings[0]?.expressionAsString).toBe('invoiceId');
   });
 
+  it('exposes the root container descriptor a format binds to (ERModelDataSourceHandler)', () => {
+    // `model.*` expressions only resolve against the ModelMapping of the
+    // descriptor named here — F&O serves a different mapping per descriptor.
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<ErFnoBundle>
+  <ERTextFormat ID.="{FORMAT}" Name="Sales invoice">
+    <Root>
+      <ERTextFormatFileComponent ID.="{ROOT}" Name="Root" />
+    </Root>
+  </ERTextFormat>
+  <ERFormatMapping ID.="{FORMAT-MAP}" Format="{FORMAT}" FormatVersion="{FORMAT},1" Name="Sales invoice mapping">
+    <Datasource>
+      <ERModelDefinition>
+        <Contents.>
+          <ERModelItemDefinition>
+            <ValueDefinition>
+              <ERModelItemValueDefinition Name="model">
+                <ValueSource>
+                  <ERModelDataSourceHandler DataContainerDescriptorName="SalesInvoice" ModelGuid="{MODEL}" RevisionNumber="224" />
+                </ValueSource>
+              </ERModelItemValueDefinition>
+            </ValueDefinition>
+          </ERModelItemDefinition>
+        </Contents.>
+      </ERModelDefinition>
+    </Datasource>
+  </ERFormatMapping>
+</ErFnoBundle>`;
+
+    const config = parseERConfiguration(xml, 'format-model-descriptor.xml');
+    if (config.content.kind !== 'Format') {
+      throw new Error('Expected format content');
+    }
+    const modelDs = config.content.formatMappingVersion.formatMapping.datasources.find(
+      d => d.name === 'model',
+    );
+    expect(modelDs?.type).toBe('DataModel');
+    expect(modelDs?.modelInfo?.dataContainerDescriptorName).toBe('SalesInvoice');
+    expect(modelDs?.modelInfo?.modelGuid).toBe('{MODEL}');
+  });
+
   it('parses bare ERDataModel root (F&O GetDataModelByIDAndRevision shape)', () => {
     // F&O's GetDataModelByIDAndRevision returns the DataModel content
     // under a bare `<ERDataModel>` root (no surrounding

@@ -2019,6 +2019,47 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       dmByName.set(dmName, candidate);
     }
 
+    // ── Descriptors the loaded Formats actually bind to ──
+    // A Format's `model` datasource names exactly one root container descriptor
+    // (`ERModelDataSourceHandler/@DataContainerDescriptorName`). F&O returns a
+    // *different* ModelMapping per descriptor, so probing descriptors in DataModel
+    // order picks an unrelated mapping — its bindings cover only the paths the two
+    // descriptors happen to share, which is why header fields resolved while
+    // list/row paths (e.g. `model.InvoiceLines.ItemId`) did not.
+    type ParsedFormatContent = {
+      formatMappingVersion?: {
+        formatMapping?: {
+          datasources?: {
+            modelInfo?: { dataContainerDescriptorName?: string; modelGuid?: string };
+          }[];
+        };
+      };
+    };
+    /** DataModel GUID (normalized, `''` when unknown) → descriptor names. */
+    const formatDescriptorsByDmGuid = new Map<string, string[]>();
+    for (const cfg of useAppStore.getState().configurations) {
+      if (cfg.kind !== 'Format') continue;
+      const datasources =
+        (cfg.content as ParsedFormatContent | undefined)?.formatMappingVersion?.formatMapping
+          ?.datasources ?? [];
+      for (const ds of datasources) {
+        const descriptor = ds.modelInfo?.dataContainerDescriptorName?.trim();
+        if (!descriptor) continue;
+        const key = normalizeGuid(ds.modelInfo?.modelGuid);
+        const list = formatDescriptorsByDmGuid.get(key) ?? [];
+        if (!list.includes(descriptor)) list.push(descriptor);
+        formatDescriptorsByDmGuid.set(key, list);
+      }
+    }
+    /** Descriptors declared by formats for `dmGuid`, plus any with an unknown GUID. */
+    const formatDescriptorsFor = (dmGuid: string): string[] => [
+      ...new Set([
+        ...(formatDescriptorsByDmGuid.get(dmGuid) ?? []),
+        ...(formatDescriptorsByDmGuid.get('') ?? []),
+      ]),
+    ];
+    console.debug('[fno-ui] format-declared descriptors', [...formatDescriptorsByDmGuid]);
+
     const synthQueue: { synth: ErConfigSummary; dmGuid: string; label: string }[] = [];
 
     // ── Resolve pending mapping branches ──
@@ -2075,7 +2116,12 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           ...derivedBranches.map(b => b.mappingName),
           ...otherBranches.map(b => b.mappingName),
         ].filter((s): s is string => Boolean(s)))];
-        const descriptors = [...new Set([...ownerDm.descriptorNames, ...allBranchNames, ''])];
+        const descriptors = [...new Set([
+          ...formatDescriptorsFor(ownerDm.guid),
+          ...ownerDm.descriptorNames,
+          ...allBranchNames,
+          '',
+        ])];
         console.debug('[fno-ui] synth-pass mapping', {
           dmName, dmSolName: ownerDm.solutionName,
           derivedCount: derivedBranches.length,
@@ -2209,7 +2255,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           componentType: 'ModelMapping',
           parentDataModelGuid: dm.guid,
           parentDataModelRevisionGuid: dm.solutionGuid,
-          descriptorNameCandidates: dm.descriptorNames,
+          descriptorNameCandidates: [...formatDescriptorsFor(dm.guid), ...dm.descriptorNames],
           hasContent: true,
         },
         dmGuid: dm.guid,
@@ -2280,6 +2326,29 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
 
     for (const mapping of mappingsToLoad.values()) {
       allMappingDownloads.push({ synth: mapping, label: mapping.configurationName });
+    }
+
+    // One probe per format-declared descriptor, deliberately without `dmGuid` so the
+    // "first success wins per DataModel" rule cannot drop them: two formats over the
+    // same model (e.g. SalesInvoice and InvoiceCustomer) need two different mappings.
+    for (const dm of dmGuidIndex.values()) {
+      for (const descriptor of formatDescriptorsFor(dm.guid)) {
+        const synthKey = `format-descriptor-mapping:${dm.guid}:${descriptor}`;
+        if (synthesizedMappingKeys.has(synthKey)) continue;
+        synthesizedMappingKeys.add(synthKey);
+        allMappingDownloads.push({
+          synth: {
+            solutionName: dm.solutionName,
+            configurationName: `${dm.name} mapping (${descriptor})`,
+            componentType: 'ModelMapping',
+            parentDataModelGuid: dm.guid,
+            parentDataModelRevisionGuid: dm.solutionGuid,
+            descriptorNameCandidates: [descriptor],
+            hasContent: true,
+          },
+          label: `mapping for descriptor "${descriptor}" of ${dm.name}`,
+        });
+      }
     }
 
     if (allMappingDownloads.length > 0) {
