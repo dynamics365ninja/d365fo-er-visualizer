@@ -46,6 +46,7 @@ export type ERDatasourceType =
   | 'GroupBy'
   | 'Container'
   | 'Join'
+  | 'DataModel'
   | 'Unknown';
 
 export interface ERDatasource {
@@ -64,6 +65,18 @@ export interface ERDatasource {
   userParamInfo?: ERUserParamDatasource;
   calculatedField?: ERCalculatedFieldDatasource;
   groupByInfo?: ERGroupByDatasource;
+  modelInfo?: ERModelDatasource;
+}
+
+/**
+ * The `model` datasource of a format mapping. `dataContainerDescriptorName`
+ * names the root descriptor whose ModelMapping must be loaded for
+ * `model.*` expressions to resolve.
+ */
+export interface ERModelDatasource {
+  dataContainerDescriptorName: string;
+  modelGuid?: string;
+  revisionNumber?: string;
 }
 
 export interface ERImportFormatDatasource {

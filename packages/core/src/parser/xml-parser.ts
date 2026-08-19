@@ -1023,6 +1023,14 @@ function parseDatasourceItem(node: any): ERDatasource {
       isModelEnum: false,
       sourceKind: 'Ax',
     };
+  } else if (valueSource['ERModelDataSourceHandler']) {
+    const m = valueSource['ERModelDataSourceHandler'];
+    ds.type = 'DataModel';
+    ds.modelInfo = {
+      dataContainerDescriptorName: getAttr(m, 'DataContainerDescriptorName') ?? '',
+      modelGuid: getAttr(m, 'ModelGuid'),
+      revisionNumber: getAttr(m, 'RevisionNumber'),
+    };
   } else if (valueSource['ERModelEnumDataSourceHandler']) {
     const e = valueSource['ERModelEnumDataSourceHandler'];
     ds.type = 'ModelEnum';
