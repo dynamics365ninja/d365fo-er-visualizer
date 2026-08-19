@@ -2206,8 +2206,13 @@ body {
 
 .density-compact .mm-binding-row {
   padding: 4px 10px 4px 14px;
-  margin: 1px 4px 1px 8px;
+  margin: 2px 4px 2px 8px;
   border-radius: 8px;
+}
+
+.density-compact .mm-tree-branch {
+  margin-top: 2px;
+  margin-bottom: 2px;
 }
 
 .density-compact .mm-group-header {
@@ -2769,7 +2774,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 2px 0;
+  margin: 5px 0;
   padding: 7px 10px;
   min-height: 34px;
   cursor: pointer;
@@ -2811,6 +2816,7 @@ body {
 .density-compact .fmt-element-row {
   min-height: 28px;
   padding: 4px 8px;
+  margin: 2px 0;
 }
 
 .fmt-toggle {
@@ -2935,7 +2941,7 @@ body {
 
 .fmt-binding-expanded {
   padding: 10px 12px;
-  margin-bottom: 2px;
+  margin-bottom: 6px;
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border-color));
   border-left: 2px solid var(--accent);
@@ -3305,7 +3311,7 @@ body {
 
 .mm-binding-row {
   position: relative;
-  margin: 2px 6px 2px 12px;
+  margin: 5px 6px 5px 12px;
   padding: 8px 12px 8px 16px;
   background: var(--er-surface);
   border: 1px solid var(--er-border);
@@ -3360,8 +3366,8 @@ body {
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  margin-top: 2px;
-  margin-bottom: 2px;
+  margin-top: 5px;
+  margin-bottom: 5px;
   margin-right: 6px;
   border: 1px solid var(--er-border);
   border-radius: var(--er-radius-md);
@@ -3495,7 +3501,7 @@ body {
 /* ─── Datasource Row (Format tab) ─── */
 
 .ds-row-wrap {
-  padding: 2px 6px;
+  padding: 4px 6px;
 }
 
 .ds-row-wrap.search-match .ds-row {
