@@ -2160,25 +2160,90 @@ function extractExpressionReferences(expr: string): string[] {
 }
 
 /**
+ * Datasources a calculated field / group-by / user parameter delegates to.
+ * `Parameters.'$SourceJournal'` is a calculated field over
+ * `Tables.'#SourceJournalTables'.'$CustInvoiceJour'`, so the fields addressed as
+ * `Parameters.'$SourceJournal'.'$InvoiceDate'` live on the *referenced* datasource,
+ * never on the calculated field itself.
+ * Resolves references with plain navigation only — no delegate following — so this
+ * cannot recurse into itself.
+ */
+function getDelegateDatasources(ds: any, pools: any[][]): any[] {
+  const expressions: string[] = [];
+  if (ds.calculatedField?.expressionAsString) expressions.push(ds.calculatedField.expressionAsString);
+  if (ds.groupByInfo?.listToGroup) expressions.push(String(ds.groupByInfo.listToGroup).replace(/\//g, '.'));
+  if (ds.userParamInfo?.expressionAsString) expressions.push(ds.userParamInfo.expressionAsString);
+
+  const delegates: any[] = [];
+  for (const expression of expressions) {
+    for (const ref of extractExpressionReferences(expression)) {
+      const segments = parseDottedPath(ref);
+      if (segments.length === 0) continue;
+      const found = findDsAcrossPools(pools, segments);
+      if (found && found !== ds && !delegates.includes(found)) delegates.push(found);
+    }
+  }
+  return delegates;
+}
+
+const MAX_DELEGATE_HOPS = 4;
+
+/** Find `segment` under `current`, following calculated-field references when needed. */
+function findChildSegment(
+  current: any,
+  segment: string,
+  pools: any[][],
+  visited: Set<any>,
+  depth: number,
+): any | null {
+  const children: any[] = current.children ?? [];
+  // Exact match wins: a container can hold both `CustInvoiceJour` (the table) and
+  // `$CustInvoiceJour` (a calculated field over it), and only the decorated name
+  // carries the sub-fields the path continues into. An undecorated segment is only
+  // ever matched exactly — otherwise a table field (`….InvoiceDate`) would be
+  // mistaken for the calculated field named `$InvoiceDate` beside it.
+  const decorated = /^[$#]/.test(segment);
+  const direct = children.find((c: any) => c.name === segment)
+    ?? (decorated
+      ? children.find((c: any) => c.name === segment.slice(1))
+      : undefined);
+  if (direct) return direct;
+
+  if (pools.length === 0 || depth >= MAX_DELEGATE_HOPS || visited.has(current)) return null;
+  visited.add(current);
+
+  for (const delegate of getDelegateDatasources(current, pools)) {
+    if (visited.has(delegate)) continue;
+    const found = findChildSegment(delegate, segment, pools, visited, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
  * Navigate a datasource tree following a path of segment names.
  * E.g. ["ReportFields", "$PurchaseVATDeductionAdjustStandardAmount"] →
  *   find "ReportFields" root DS, then find "$PurchaseVATDeductionAdjustStandardAmount" child.
+ *
+ * Pass `pools` to resolve segments that hang off a calculated field's *target*
+ * rather than off the calculated field itself.
  */
-function navigateDatasourcePath(datasources: any[], segments: string[]): { rootDs: any | null; leafDs: any | null } {
+function navigateDatasourcePath(
+  datasources: any[],
+  segments: string[],
+  pools: any[][] = [],
+): { rootDs: any | null; leafDs: any | null } {
   if (segments.length === 0) return { rootDs: null, leafDs: null };
 
-  // Find root — strip leading $ if present for matching
-  const rootName = segments[0].replace(/^\$/, '');
-  let rootDs = findDatasourceByName(datasources, segments[0]) ??
+  // Find root — strip leading $/# if present for matching
+  const rootName = segments[0].replace(/^[$#]/, '');
+  const rootDs = findDatasourceByName(datasources, segments[0]) ??
                findDatasourceByName(datasources, rootName);
   if (!rootDs) return { rootDs: null, leafDs: null };
 
   let current = rootDs;
   for (let i = 1; i < segments.length; i++) {
-    const seg = segments[i].replace(/^\$/, '');
-    const child = current.children?.find((c: any) =>
-      c.name === segments[i] || c.name === seg || c.name === '$' + seg
-    );
+    const child = findChildSegment(current, segments[i], pools, new Set(), 0);
     if (!child) break;
     current = child;
   }
@@ -2227,7 +2292,7 @@ function traceCalculatedFieldDeps(
     const refs = extractExpressionReferences(ds.calculatedField.expressionAsString);
     for (const ref of refs) {
       const refSegments = parseDottedPath(ref);
-      const found = findDsAcrossPools(allDatasourcePools, refSegments);
+      const found = findDsAcrossPools(allDatasourcePools, refSegments, true);
       if (found) {
         traceCalculatedFieldDeps(found, allDatasourcePools, visited, involvedDatasources, calcChain);
       }
@@ -2239,8 +2304,8 @@ function traceCalculatedFieldDeps(
     // GroupBy references a list datasource
     const listRef = ds.groupByInfo.listToGroup;
     if (listRef) {
-      const refSegments = parseDottedPath(listRef);
-      const found = findDsAcrossPools(allDatasourcePools, refSegments);
+      const refSegments = parseDottedPath(String(listRef).replace(/\//g, '.'));
+      const found = findDsAcrossPools(allDatasourcePools, refSegments, true);
       if (found) {
         traceCalculatedFieldDeps(found, allDatasourcePools, visited, involvedDatasources, calcChain);
       }
@@ -2252,9 +2317,9 @@ function traceCalculatedFieldDeps(
  * Try to find a datasource by navigating a dotted path across multiple datasource pools.
  * Falls back to simple name search if path navigation fails.
  */
-function findDsAcrossPools(pools: any[][], segments: string[]): any | null {
+function findDsAcrossPools(pools: any[][], segments: string[], followDelegates = false): any | null {
   for (const pool of pools) {
-    const { leafDs } = navigateDatasourcePath(pool, segments);
+    const { leafDs } = navigateDatasourcePath(pool, segments, followDelegates ? pools : []);
     if (leafDs) return leafDs;
   }
   // Fallback: try simple name match for single-segment refs
@@ -2302,7 +2367,7 @@ export function resolveDeepExpression(
     let rootDs: any = null;
     let leafDs: any = null;
     for (const datasources of datasourcePools) {
-      const resolved = navigateDatasourcePath(datasources, pathSegments);
+      const resolved = navigateDatasourcePath(datasources, pathSegments, allDatasourcePools);
       if (resolved.rootDs) {
         rootDs = resolved.rootDs;
         leafDs = resolved.leafDs;
@@ -2341,7 +2406,7 @@ export function resolveDeepExpression(
       const datasourcePools = configDatasources.get(ci);
       if (!datasourcePools) continue;
       for (const datasources of datasourcePools) {
-        const resolved = navigateDatasourcePath(datasources, refSegments);
+        const resolved = navigateDatasourcePath(datasources, refSegments, allDatasourcePools);
         if (!resolved.rootDs) continue;
         const result: DeepResolutionResult = {
           rootDs: resolved.rootDs,

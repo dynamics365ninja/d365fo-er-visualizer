@@ -965,7 +965,10 @@ function normalizeDatasourcePath(path: string | undefined): string {
     .split('/')
     .map(segment => segment.trim())
     .filter(Boolean)
-    .map((segment, index) => segment.replace(index === 0 ? /^#/ : /^\$/, ''))
+    // `#` and `$` are ER name decorations, not path syntax — strip them on every
+    // segment so a ParentPath ("Tables/#SourceJournalTables") matches the key
+    // buildDatasourcePath() produces for that parent.
+    .map(segment => segment.replace(/^[$#]/, ''))
     .join('/');
 }
 

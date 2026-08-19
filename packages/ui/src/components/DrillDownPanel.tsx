@@ -705,12 +705,23 @@ interface WizardFrameViewProps {
   configurations: any[];
 }
 
+/** One row of the workbench's left-hand "Expression parts" list. */
+interface WorkbenchPart {
+  id: string;
+  expression: string;
+  label: string;
+  detail?: string;
+  depth: number;
+  badge: TreeExprNode['badge'];
+  configIndex: number;
+}
+
 // Keep legacy views reachable for future re-use and migration.
 function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps) {
   const resolveModelPath = useAppStore(s => s.resolveModelPath);
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
 
-  const [selectedExpr, setSelectedExpr] = useState(frame.expression);
+  const [selectedId, setSelectedId] = useState('root');
   const treeItemRefs = React.useRef<Record<string, HTMLButtonElement | null>>({});
   const treeListRef = React.useRef<HTMLDivElement | null>(null);
   const [listScrollTop, setListScrollTop] = useState(0);
@@ -720,37 +731,38 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
   const TREE_OVERSCAN = 8;
 
   React.useEffect(() => {
-    setSelectedExpr(frame.expression);
+    setSelectedId('root');
   }, [frame.expression, frame.configIndex]);
 
-  const treeNodes = useMemo(() => {
-    const unique = new Map<string, { expression: string; label: string; depth: number }>();
-    unique.set(frame.expression, { expression: frame.expression, label: frame.label, depth: 0 });
-
-    const tokens = tokenizeERExpr(frame.expression);
-    for (const tok of tokens) {
-      if (tok.kind !== 'ds' || !tok.segments || tok.segments.length === 0) continue;
-      for (let i = 0; i < tok.segments.length; i++) {
-        const expression = tok.segments.slice(0, i + 1).map(formatSegmentForExpression).join('.');
-        if (unique.has(expression)) continue;
-        unique.set(expression, {
-          expression,
-          label: formatSegmentForDisplay(tok.segments[i]),
-          depth: i + 1,
-        });
-      }
-    }
-
-    return Array.from(unique.values());
-  }, [frame.expression, frame.label]);
-
-  const selected = useMemo(
-    () => treeNodes.find(n => n.expression === selectedExpr) ?? treeNodes[0],
-    [treeNodes, selectedExpr],
+  /**
+   * The whole resolution chain, not just the segments of the expression text:
+   * model path → mapping formula → datasource → nested calculated fields → entity.
+   * Listing only the text segments hid every formula behind the first hop.
+   */
+  const treeNodes = useMemo(
+    () => buildWorkbenchParts({
+      expression: frame.expression,
+      label: frame.label,
+      configIndex: frame.configIndex,
+      configurations,
+      resolveModelPath,
+      resolveDatasource,
+    }),
+    [configurations, frame.configIndex, frame.expression, frame.label, resolveDatasource, resolveModelPath],
   );
 
+  const selected = useMemo(
+    () => treeNodes.find(n => n.id === selectedId) ?? treeNodes[0],
+    [treeNodes, selectedId],
+  );
+
+  const selectByExpression = React.useCallback((expression: string) => {
+    const match = treeNodes.find(n => n.expression === expression);
+    if (match) setSelectedId(match.id);
+  }, [treeNodes]);
+
   React.useEffect(() => {
-    const active = selected ? treeItemRefs.current[selected.expression] : null;
+    const active = selected ? treeItemRefs.current[selected.id] : null;
     if (active) {
       active.scrollIntoView({ block: 'nearest' });
     }
@@ -781,7 +793,7 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
   const modelResult = resolveModelPath(cleanSelectedExpr);
   const shouldUseModelBinding = selectedIsModel || Boolean(modelResult);
   const mappingExpr = modelResult?.binding?.expressionAsString ?? frame.mappingExpression ?? null;
-  const mappingCi = modelResult?.bindingConfigIndex ?? frame.mappingConfigIndex ?? frame.configIndex;
+  const mappingCi = modelResult?.bindingConfigIndex ?? frame.mappingConfigIndex ?? selected.configIndex;
   const mappingConfig = modelResult
     ? configurations[mappingCi]?.solutionVersion?.solution?.name
     : (frame.mappingConfigName ?? (mappingExpr ? configurations[mappingCi]?.solutionVersion?.solution?.name : null));
@@ -797,7 +809,7 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
     onPush(buildContextualFrame(nextFrame));
   }, [buildContextualFrame, onPush]);
 
-  const selectedIndex = Math.max(0, treeNodes.findIndex(n => n.expression === selected.expression));
+  const selectedIndex = Math.max(0, treeNodes.findIndex(n => n.id === selected.id));
 
   const ensureTreeIndexVisible = React.useCallback((index: number) => {
     const listEl = treeListRef.current;
@@ -823,8 +835,7 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       const nextIndex = Math.min(treeNodes.length - 1, selectedIndex + 1);
-      const next = treeNodes[nextIndex];
-      setSelectedExpr(next.expression);
+      setSelectedId(treeNodes[nextIndex].id);
       ensureTreeIndexVisible(nextIndex);
       return;
     }
@@ -832,16 +843,14 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
     if (event.key === 'ArrowUp') {
       event.preventDefault();
       const nextIndex = Math.max(0, selectedIndex - 1);
-      const next = treeNodes[nextIndex];
-      setSelectedExpr(next.expression);
+      setSelectedId(treeNodes[nextIndex].id);
       ensureTreeIndexVisible(nextIndex);
       return;
     }
 
     if (event.key === 'Home') {
       event.preventDefault();
-      const next = treeNodes[0];
-      setSelectedExpr(next.expression);
+      setSelectedId(treeNodes[0].id);
       ensureTreeIndexVisible(0);
       return;
     }
@@ -849,8 +858,7 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
     if (event.key === 'End') {
       event.preventDefault();
       const lastIndex = treeNodes.length - 1;
-      const next = treeNodes[lastIndex];
-      setSelectedExpr(next.expression);
+      setSelectedId(treeNodes[lastIndex].id);
       ensureTreeIndexVisible(lastIndex);
       return;
     }
@@ -860,10 +868,10 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
       pushWithContext({
         label: selected.label,
         expression: selected.expression,
-        configIndex: frame.configIndex,
+        configIndex: selected.configIndex,
       });
     }
-  }, [ensureTreeIndexVisible, frame.configIndex, pushWithContext, selected.expression, selected.label, selectedIndex, treeNodes]);
+  }, [ensureTreeIndexVisible, pushWithContext, selected.configIndex, selected.expression, selected.label, selectedIndex, treeNodes]);
 
   const pushMappingToDatasource = React.useCallback((nextFrame: Frame) => {
     const deep = resolveDeepExpression(nextFrame.expression, configurations, nextFrame.configIndex);
@@ -893,7 +901,7 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
   const { effectiveExpr, effectiveCi } = getDrillDownEffectiveResolutionInput({
     selectedExpression: selected.expression,
     selectedIsModel: shouldUseModelBinding,
-    frameConfigIndex: frame.configIndex,
+    frameConfigIndex: selected.configIndex,
     modelBindingExpression: modelResult?.binding?.expressionAsString,
     modelBindingConfigIndex: modelResult?.bindingConfigIndex,
   });
@@ -902,7 +910,7 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
   // "Parameters.'$ReferenceNumber'" the first segment is only the container,
   // which is why such expressions reported "Data source: Container" and never
   // showed the user parameter behind them.
-  const directResult = !shouldUseModelBinding ? resolveDatasource(selected.expression, frame.configIndex) : null;
+  const directResult = !shouldUseModelBinding ? resolveDatasource(selected.expression, selected.configIndex) : null;
   const resolvedDs = (deepResult?.nestedDs ?? deepResult?.rootDs)
     ?? modelResult?.datasource
     ?? directResult?.datasource
@@ -1077,22 +1085,25 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
             )}
             {virtualWindow.items.map(node => (
               <button
-                key={node.expression}
+                key={node.id}
                 type="button"
-                className={`dd-workbench__tree-item${selected.expression === node.expression ? ' is-active' : ''}`}
+                className={`dd-workbench__tree-item${selected.id === node.id ? ' is-active' : ''}`}
                 data-depth={node.depth}
-                onClick={() => setSelectedExpr(node.expression)}
+                onClick={() => setSelectedId(node.id)}
                 ref={(el) => {
-                  treeItemRefs.current[node.expression] = el;
+                  treeItemRefs.current[node.id] = el;
                 }}
                 style={{
                   paddingLeft: `${12 + node.depth * 18}px`,
                   ['--dd-tree-depth' as string]: node.depth,
                 }}
-                title={node.expression}
+                title={node.detail ? `${node.expression}\n\n${node.detail}` : node.expression}
               >
-                <span className="dd-workbench__tree-label">{node.label}</span>
-                <span className="dd-workbench__tree-expr">{node.expression}</span>
+                <span className="dd-workbench__tree-label">
+                  <span className={`badge badge-${node.badge}`}>{badgeLabel(node.badge)}</span>
+                  {node.label}
+                </span>
+                <span className="dd-workbench__tree-expr">{node.detail ?? node.expression}</span>
               </button>
             ))}
             {virtualWindow.bottomSpacer > 0 && (
@@ -1113,7 +1124,7 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
                   <button
                     type="button"
                     className={`dd-workbench__breadcrumb-segment${selected.expression === segment.expression ? ' is-active' : ''}`}
-                    onClick={() => setSelectedExpr(segment.expression)}
+                    onClick={() => selectByExpression(segment.expression)}
                     title={segment.expression}
                   >
                     {segment.label}
@@ -1133,7 +1144,7 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
                   </div>
                   <ExpressionView
                     expr={selected.expression}
-                    configIndex={frame.configIndex}
+                    configIndex={selected.configIndex}
                     onPush={pushWithContext}
                     currentFrameExpression={selected.expression}
                   />
@@ -1152,7 +1163,7 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
                         <button
                           type="button"
                           className="dd-workbench__ref-path"
-                          onClick={() => setSelectedExpr(ref.expression)}
+                          onClick={() => selectByExpression(ref.expression)}
                           title={locale === 'cs' ? 'Vybrat tuto část výrazu' : 'Select this expression part'}
                         >
                           {ref.label}
@@ -1575,7 +1586,7 @@ interface TreeExprNode {
   kind: 'root' | 'ref' | 'mapping' | 'datasource' | 'calcfield' | 'leaf';
   label: string;
   sublabel?: string;           // table name, enum name, class name, formula snippet
-  badge: 'root' | 'model' | 'mapping' | 'table' | 'enum' | 'class' | 'calc' | 'ds' | 'leaf';
+  badge: 'root' | 'model' | 'mapping' | 'table' | 'enum' | 'class' | 'calc' | 'ds' | 'leaf' | 'param' | 'groupby';
   expression?: string;
   configIndex?: number;
   children: TreeExprNode[];
@@ -1584,29 +1595,43 @@ interface TreeExprNode {
 
 type TreeLabelMode = 'compact' | 'full';
 
-const MAX_CALC_DEPTH = 3;
+/**
+ * Calculated fields chain deeply — `$InvoiceDate` → `$CustInvoiceJour` → `CustInvoiceJour`
+ * is already three hops for a single field — so the walk keeps going until it hits
+ * concrete entities. `MAX_TREE_NODES` is what actually stops a runaway expansion.
+ */
+const MAX_CALC_DEPTH = 12;
+const MAX_TREE_DEPTH = 16;
+const MAX_TREE_NODES = 600;
+
+interface TreeBuildContext {
+  configurations: any[];
+  resolveModelPath: (p: string) => any;
+  resolveDatasource: (n: string, ci: number) => any;
+  includeUnresolvedRefs: boolean;
+  /** Remaining node budget, decremented as nodes are produced. */
+  budget: number;
+}
 
 function buildTreeNode(
+  ctx: TreeBuildContext,
   id: string,
   expression: string,
   configIndex: number,
-  configurations: any[],
-  resolveModelPath: (p: string) => any,
-  resolveDatasource: (n: string, ci: number) => any,
   visited: Set<string>,
-  includeUnresolvedRefs: boolean,
   depth = 0,
 ): TreeExprNode | null {
   const visitKey = `${configIndex}::${expression}`;
-  if (visited.has(visitKey) || depth > 6) return null;
+  if (visited.has(visitKey) || depth > MAX_TREE_DEPTH || ctx.budget <= 0) return null;
   visited.add(visitKey);
+  ctx.budget -= 1;
 
   const isModel = expression.toLowerCase().startsWith('model.') || expression.toLowerCase().startsWith('model\\');
 
   // ── Model path → resolve via ModelMapping ──────────────────────────────
   if (isModel) {
     const cleanPath = extractModelPath(expression);
-    const modelResult = resolveModelPath(cleanPath);
+    const modelResult = ctx.resolveModelPath(cleanPath);
     if (!modelResult) {
       return {
         id, kind: 'ref', label: cleanPath.split(/[.\\]/).pop() ?? cleanPath,
@@ -1615,13 +1640,12 @@ function buildTreeNode(
     }
     const bindingExpr: string = modelResult.binding?.expressionAsString ?? '';
     const bindingCi: number = modelResult.bindingConfigIndex ?? configIndex;
-    const mappingLabel = bindingExpr;
 
     const mappingNode: TreeExprNode = {
       id: `${id}-m`,
       kind: 'mapping',
       label: locale === 'cs' ? 'Mapování' : 'Mapping',
-      sublabel: mappingLabel,
+      sublabel: bindingExpr,
       badge: 'mapping',
       expression: bindingExpr,
       configIndex: bindingCi,
@@ -1630,14 +1654,11 @@ function buildTreeNode(
 
     // Resolve the binding expression's datasources
     if (bindingExpr) {
-      const tokens = tokenizeERExpr(bindingExpr);
-      const dsTokens = uniqueDsTokens(tokens);
+      const dsTokens = uniqueDsTokens(tokenizeERExpr(bindingExpr));
       dsTokens.forEach((tok, ti) => {
-        const fullExpr = tok.expression;
         const child = buildTreeNode(
-          `${id}-m-ds${ti}`, fullExpr, bindingCi,
-          configurations, resolveModelPath, resolveDatasource,
-          new Set(visited), includeUnresolvedRefs, depth + 1,
+          ctx, `${id}-m-ds${ti}`, tok.expression, bindingCi,
+          new Set(visited), depth + 1,
         );
         if (child) mappingNode.children.push(child);
       });
@@ -1655,15 +1676,15 @@ function buildTreeNode(
   }
 
   // ── Direct DS reference ────────────────────────────────────────────────
-  const deep = resolveDeepExpression(expression, configurations, configIndex);
+  const deep = resolveDeepExpression(expression, ctx.configurations, configIndex);
   const resolvedDs = (deep?.nestedDs ?? deep?.rootDs) ?? null;
 
   if (!resolvedDs) {
     // Try simple root-name lookup
     const rootName = firstSegment(expression);
-    const direct = rootName ? resolveDatasource(rootName, configIndex) : null;
+    const direct = rootName ? ctx.resolveDatasource(rootName, configIndex) : null;
     if (!direct?.datasource) {
-      if (!includeUnresolvedRefs) {
+      if (!ctx.includeUnresolvedRefs) {
         // Filter out unresolved singleton identifiers (often constants/functions),
         // keep only path-like expressions so the tree doesn't fill with noise.
         const isPathLike = /[.\\]/.test(expression) || /'[^']+'/.test(expression);
@@ -1672,26 +1693,23 @@ function buildTreeNode(
 
       return {
         id, kind: 'ref', label: expression.split(/[.(]/)[0] || expression,
-        sublabel: includeUnresolvedRefs ? expression : undefined,
+        sublabel: ctx.includeUnresolvedRefs ? expression : undefined,
         badge: 'ds', expression, configIndex, children: [],
       };
     }
-    return buildDsNode(id, direct.datasource, configIndex, expression, configurations, resolveModelPath, resolveDatasource, visited, includeUnresolvedRefs, depth);
+    return buildDsNode(ctx, id, direct.datasource, configIndex, expression, visited, depth);
   }
 
-  return buildDsNode(id, resolvedDs, deep?.rootDsConfigIndex ?? configIndex, expression, configurations, resolveModelPath, resolveDatasource, visited, includeUnresolvedRefs, depth);
+  return buildDsNode(ctx, id, resolvedDs, deep?.rootDsConfigIndex ?? configIndex, expression, visited, depth);
 }
 
 function buildDsNode(
+  ctx: TreeBuildContext,
   id: string,
   ds: any,
   configIndex: number,
   expression: string,
-  configurations: any[],
-  resolveModelPath: (p: string) => any,
-  resolveDatasource: (n: string, ci: number) => any,
   visited: Set<string>,
-  includeUnresolvedRefs: boolean,
   depth: number,
 ): TreeExprNode {
   const sameLabel = (a?: string, b?: string): boolean => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
@@ -1704,6 +1722,18 @@ function buildDsNode(
     expression,
     configIndex,
     children: [],
+  };
+
+  /** Expand every datasource an expression references as children of `parent`. */
+  const expandExpression = (parent: TreeExprNode, expr: string, keyPrefix: string, ci: number): void => {
+    uniqueDsTokens(tokenizeERExpr(expr)).forEach((tok, ti) => {
+      const child = buildTreeNode(
+        ctx, `${id}-${keyPrefix}${ti}`, tok.expression, ci,
+        new Set(visited), depth + 1,
+      );
+      if (child) parent.children.push(child);
+    });
+    parent.children = dedupeTreeChildren(parent.children);
   };
 
   if (ds.tableInfo) {
@@ -1739,39 +1769,153 @@ function buildDsNode(
         kind: 'leaf', label: className, badge: 'class', leafType: 'class', children: [],
       });
     }
+  } else if (ds.userParamInfo) {
+    // A user parameter has no formula — its data type and "who fills it in" are the
+    // whole answer. Without this the node rendered as a bare name with no explanation.
+    const edt = ds.userParamInfo.extendedDataTypeName;
+    const valueExpr = ds.userParamInfo.expressionAsString?.trim();
+    dsNode.badge = 'param';
+    dsNode.sublabel = valueExpr
+      ? valueExpr
+      : [edt, locale === 'cs' ? 'zadává uživatel při spuštění' : 'entered by the user at run time']
+          .filter(Boolean).join(' — ');
+    if (valueExpr) expandExpression(dsNode, valueExpr, 'ds-param-ref', configIndex);
+  } else if (ds.groupByInfo) {
+    const listToGroup = String(ds.groupByInfo.listToGroup ?? '').trim();
+    dsNode.badge = 'groupby';
+    dsNode.sublabel = listToGroup || undefined;
+    if (listToGroup) expandExpression(dsNode, listToGroup.replace(/\//g, '.'), 'ds-grp-ref', configIndex);
   } else if (ds.calculatedField?.expressionAsString && depth < MAX_CALC_DEPTH) {
     const calcExpr: string = ds.calculatedField.expressionAsString;
-    const calcNode: TreeExprNode = {
-      id: `${id}-ds-calc`,
-      kind: 'calcfield',
-      label: ds.name,
-      sublabel: calcExpr,
-      badge: 'calc',
-      expression: calcExpr,
-      configIndex,
-      children: [],
-    };
-
-    // Recursively expand the formula's references
-    const calcTokens = uniqueDsTokens(tokenizeERExpr(calcExpr));
-    calcTokens.forEach((tok, ti) => {
-      const refExpr = tok.expression;
-      const child = buildTreeNode(
-        `${id}-ds-calc-ref${ti}`, refExpr, configIndex,
-        configurations, resolveModelPath, resolveDatasource,
-        new Set(visited), includeUnresolvedRefs, depth + 1,
-      );
-      if (child) calcNode.children.push(child);
-    });
-    calcNode.children = dedupeTreeChildren(calcNode.children);
-
     dsNode.badge = 'calc';
     dsNode.kind = 'calcfield';
-    dsNode.sublabel = calcNode.sublabel;
-    dsNode.children.push(...calcNode.children);
+    dsNode.sublabel = calcExpr;
+    expandExpression(dsNode, calcExpr, 'ds-calc-ref', configIndex);
   }
 
   return dsNode;
+}
+
+/**
+ * Full breakdown of one expression: model path → mapping formula → datasource →
+ * nested calculated fields → concrete table / enum / class. Exported for tests.
+ */
+export function buildExpressionTree(options: {
+  expression: string;
+  configIndex: number;
+  configurations: any[];
+  resolveModelPath: (p: string) => any;
+  resolveDatasource: (n: string, ci: number) => any;
+  includeUnresolvedRefs?: boolean;
+}): TreeExprNode {
+  const {
+    expression, configIndex, configurations,
+    resolveModelPath, resolveDatasource, includeUnresolvedRefs = false,
+  } = options;
+
+  const dsTokens = uniqueDsTokens(tokenizeERExpr(expression));
+  let rootChildren: TreeExprNode[] = [];
+
+  if (dsTokens.length === 0) {
+    // No DS refs found – show single "unresolved" leaf
+    rootChildren.push({
+      id: 'unresolved', kind: 'ref',
+      label: locale === 'cs' ? 'Žádná datová reference' : 'No data reference',
+      badge: 'ds', children: [],
+    });
+  } else {
+    const ctx: TreeBuildContext = {
+      configurations,
+      resolveModelPath,
+      resolveDatasource,
+      includeUnresolvedRefs,
+      budget: MAX_TREE_NODES,
+    };
+    dsTokens.forEach((tok, ti) => {
+      const child = buildTreeNode(ctx, `ref${ti}`, tok.expression, configIndex, new Set(), 0);
+      if (child) rootChildren.push(child);
+    });
+    rootChildren = dedupeTreeChildren(rootChildren);
+  }
+
+  return {
+    id: 'root',
+    kind: 'root',
+    label: expression,
+    badge: 'root',
+    expression,
+    configIndex,
+    children: rootChildren,
+  };
+}
+
+/**
+ * Rows for the workbench's left column: the path prefixes of the expression
+ * followed by everything each leaf resolves to — mapping formula, nested
+ * calculated fields, user parameters, and the entity they end at. Listing only
+ * the prefixes hid every formula behind the first hop. Exported for tests.
+ */
+export function buildWorkbenchParts(options: {
+  expression: string;
+  label: string;
+  configIndex: number;
+  configurations: any[];
+  resolveModelPath: (p: string) => any;
+  resolveDatasource: (n: string, ci: number) => any;
+}): WorkbenchPart[] {
+  const { expression, label, configIndex, configurations, resolveModelPath, resolveDatasource } = options;
+
+  const root = buildExpressionTree({ expression, configIndex, configurations, resolveModelPath, resolveDatasource });
+  const resolutionByExpression = new Map<string, TreeExprNode>();
+  for (const child of root.children) {
+    if (child.expression) resolutionByExpression.set(child.expression, child);
+  }
+
+  const parts: WorkbenchPart[] = [{ id: 'root', expression, label, depth: 0, badge: 'root', configIndex }];
+  const seen = new Set<string>([expression]);
+
+  const walk = (node: TreeExprNode, depth: number): void => {
+    if (node.expression) {
+      parts.push({
+        id: node.id,
+        expression: node.expression,
+        label: node.label,
+        detail: node.sublabel,
+        depth,
+        badge: node.badge,
+        configIndex: node.configIndex ?? configIndex,
+      });
+    }
+    const childDepth = node.expression ? depth + 1 : depth;
+    for (const child of node.children) walk(child, childDepth);
+  };
+
+  for (const tok of tokenizeERExpr(expression)) {
+    if (tok.kind !== 'ds' || !tok.segments || tok.segments.length === 0) continue;
+
+    for (let i = 0; i < tok.segments.length; i++) {
+      const prefix = tok.segments.slice(0, i + 1).map(formatSegmentForExpression).join('.');
+      if (seen.has(prefix)) continue;
+      seen.add(prefix);
+      const resolution = resolutionByExpression.get(prefix);
+      parts.push({
+        id: `part:${prefix}`,
+        expression: prefix,
+        label: formatSegmentForDisplay(tok.segments[i]),
+        detail: resolution?.sublabel,
+        depth: i + 1,
+        badge: resolution?.badge ?? 'ds',
+        configIndex: resolution?.configIndex ?? configIndex,
+      });
+    }
+
+    const leaf = resolutionByExpression.get(tok.segments.map(formatSegmentForExpression).join('.'));
+    if (leaf) {
+      for (const child of leaf.children) walk(child, tok.segments.length + 1);
+    }
+  }
+
+  return parts;
 }
 
 // ── Layout: assign x/y to each node (top-down, centered subtrees) ──────────
@@ -1910,6 +2054,8 @@ const BADGE_COLORS: Record<string, { bg: string; fg: string; border: string }> =
   enum:    { bg: 'var(--surface-warning-bg)', fg: 'var(--surface-warning-fg)', border: 'var(--surface-warning-border)' },
   class:   { bg: 'color-mix(in srgb,var(--accent)15%,transparent)', fg: 'var(--accent)', border: 'color-mix(in srgb,var(--accent)40%,transparent)' },
   calc:    { bg: 'var(--bg-tertiary)', fg: 'var(--text-secondary)', border: 'var(--border-color)' },
+  param:   { bg: 'var(--surface-info-bg)', fg: 'var(--surface-info-fg)', border: 'var(--surface-info-border)' },
+  groupby: { bg: 'var(--bg-tertiary)', fg: 'var(--text-secondary)', border: 'var(--border-color)' },
   leaf:    { bg: 'var(--surface-success-bg)', fg: 'var(--surface-success-fg)', border: 'var(--surface-success-border)' },
 };
 
@@ -1921,13 +2067,15 @@ function badgeIcon(badge: string): React.ReactNode {
   if (badge === 'enum') return <TextCaseTitleRegular {...s} />;
   if (badge === 'class') return <SettingsRegular {...s} />;
   if (badge === 'calc') return <CalculatorRegular {...s} />;
+  if (badge === 'param') return <TextQuoteRegular {...s} />;
+  if (badge === 'groupby') return <ArrowShuffleRegular {...s} />;
   if (badge === 'ds') return <PinRegular {...s} />;
   return <CircleRegular {...s} />;
 }
 
 function badgeLabel(badge: string): string {
-  const cs: Record<string, string> = { root: 'Výraz', model: 'Model', mapping: 'Mapování', table: 'Tabulka', enum: 'Výčet', class: 'Třída', calc: 'Výpočet', ds: 'DS', leaf: 'Entita' };
-  const en: Record<string, string> = { root: 'Expression', model: 'Model', mapping: 'Mapping', table: 'Table', enum: 'Enum', class: 'Class', calc: 'Calculation', ds: 'DS', leaf: 'Entity' };
+  const cs: Record<string, string> = { root: 'Výraz', model: 'Model', mapping: 'Mapování', table: 'Tabulka', enum: 'Výčet', class: 'Třída', calc: 'Výpočet', param: 'Parametr', groupby: 'Seskupení', ds: 'DS', leaf: 'Entita' };
+  const en: Record<string, string> = { root: 'Expression', model: 'Model', mapping: 'Mapping', table: 'Table', enum: 'Enum', class: 'Class', calc: 'Calculation', param: 'Parameter', groupby: 'Group by', ds: 'DS', leaf: 'Entity' };
   return (locale === 'cs' ? cs : en)[badge] ?? badge;
 }
 
@@ -2011,45 +2159,13 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill, i
   const [selectedNodeId, setSelectedNodeId] = useState('root');
 
   // Build tree data structure
-  const rootNode = useMemo<TreeExprNode>(() => {
-    const tokens = tokenizeERExpr(expression);
-    const dsTokens = uniqueDsTokens(tokens);
-
-    const rootChildren: TreeExprNode[] = [];
-
-    if (dsTokens.length === 0) {
-      // No DS refs found – show single "unresolved" leaf
-      rootChildren.push({
-        id: 'unresolved', kind: 'ref',
-        label: locale === 'cs' ? 'Žádná datová reference' : 'No data reference',
-        badge: 'ds', children: [],
-      });
-    } else {
-      dsTokens.forEach((tok, ti) => {
-        const fullExpr = tok.expression;
-        const child = buildTreeNode(
-          `ref${ti}`, fullExpr, configIndex,
-          configurations, resolveModelPath, resolveDatasource,
-          new Set(), includeUnresolvedRefs, 0,
-        );
-        if (child) rootChildren.push(child);
-      });
-      const uniqueRootChildren = dedupeTreeChildren(rootChildren);
-      rootChildren.length = 0;
-      rootChildren.push(...uniqueRootChildren);
-    }
-
-    const exprLabel = expression;
-    return {
-      id: 'root',
-      kind: 'root',
-      label: exprLabel,
-      badge: 'root',
-      expression,
-      configIndex,
-      children: rootChildren,
-    };
-  }, [expression, configIndex, configurations, includeUnresolvedRefs, resolveModelPath, resolveDatasource]);
+  const rootNode = useMemo<TreeExprNode>(
+    () => buildExpressionTree({
+      expression, configIndex, configurations,
+      resolveModelPath, resolveDatasource, includeUnresolvedRefs,
+    }),
+    [expression, configIndex, configurations, includeUnresolvedRefs, resolveModelPath, resolveDatasource],
+  );
 
   React.useEffect(() => {
     setSelectedNodeId('root');
