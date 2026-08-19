@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <!-- Both entries, so the browser chrome follows the OS the same way the shell
        below and the marketing site do. Values are `--er-bg-soft`. -->
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f8f8" />
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#10161a" />
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f7f8" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1011" />
   <!-- Application shell — no indexable content. The marketing site at / is what search engines should see. -->
   <meta name="robots" content="noindex, follow" />
   <meta name="apple-mobile-web-app-title" content="ER Visualizer" />
@@ -33,19 +33,19 @@
        light unless the OS explicitly asks for dark. The literals are
        `--er-bg-soft`, which the tokens are not loaded yet to provide. */
     html, body {
-      background: #f4f8f8;
+      background: #f7f7f8;
       height: 100vh;
       overflow: hidden;
       font-family: 'Inter', 'Segoe UI', sans-serif;
     }
 
     @media (prefers-color-scheme: dark) {
-      html, body { background: #10161a; }
+      html, body { background: #0f1011; }
     }
 
     /* An explicit choice already on <html> wins over the OS, as in the tokens. */
-    html[data-theme='light'], html[data-theme='light'] body { background: #f4f8f8; }
-    html[data-theme='dark'], html[data-theme='dark'] body { background: #10161a; }
+    html[data-theme='light'], html[data-theme='light'] body { background: #f7f7f8; }
+    html[data-theme='dark'], html[data-theme='dark'] body { background: #0f1011; }
   </style>
 </head>
 <body>

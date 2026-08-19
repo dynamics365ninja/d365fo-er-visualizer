@@ -17,20 +17,22 @@
 /* ── Light (default) ─────────────────────────────────────────────────────── */
 
 :root {
-  /* Neutral ramp — page → surface → sunken → hover */
+  /* Neutral ramp — page → surface → sunken → hover.
+     Kept genuinely neutral: the teal used to bleed into every surface, so the
+     designers read as one green wash instead of cards on a plain canvas. */
   --er-bg: #ffffff;
-  --er-bg-soft: #f4f8f8;
+  --er-bg-soft: #f7f7f8;
   --er-surface: #ffffff;
-  --er-surface-2: #eef4f4;
-  --er-surface-3: #e4eded;
-  --er-selected: #d9ecec;
+  --er-surface-2: #f1f2f3;
+  --er-surface-3: #e6e7e9;
+  --er-selected: #dfeced;
 
-  --er-border: #dde7e8;
-  --er-border-strong: #c6d5d6;
+  --er-border: #e2e3e5;
+  --er-border-strong: #c8cacd;
 
-  --er-text: #0d1618;
-  --er-text-muted: #536569;
-  --er-text-subtle: #7b8a8e;
+  --er-text: #101214;
+  --er-text-muted: #5c6165;
+  --er-text-subtle: #82878b;
 
   /* Brand */
   --er-accent: #0a6f73;
@@ -76,19 +78,19 @@
 /* Shared by both dark entry points below. Keep the two selector lists in sync. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --er-bg: #0c1012;
-    --er-bg-soft: #10161a;
-    --er-surface: #141b1f;
-    --er-surface-2: #1a2328;
-    --er-surface-3: #212c32;
+    --er-bg: #0b0b0c;
+    --er-bg-soft: #0f1011;
+    --er-surface: #161719;
+    --er-surface-2: #1d1e21;
+    --er-surface-3: #262829;
     --er-selected: #16343a;
 
-    --er-border: #253036;
-    --er-border-strong: #33434a;
+    --er-border: #2a2c2e;
+    --er-border-strong: #3b3e41;
 
-    --er-text: #e8f0f1;
-    --er-text-muted: #94a6ab;
-    --er-text-subtle: #6f8288;
+    --er-text: #ecedef;
+    --er-text-muted: #a0a4a8;
+    --er-text-subtle: #7a7f84;
 
     --er-accent: #35b8bd;
     --er-accent-hover: #52ced3;
@@ -127,19 +129,19 @@
 }
 
 :root[data-theme='dark'] {
-  --er-bg: #0c1012;
-  --er-bg-soft: #10161a;
-  --er-surface: #141b1f;
-  --er-surface-2: #1a2328;
-  --er-surface-3: #212c32;
+  --er-bg: #0b0b0c;
+  --er-bg-soft: #0f1011;
+  --er-surface: #161719;
+  --er-surface-2: #1d1e21;
+  --er-surface-3: #262829;
   --er-selected: #16343a;
 
-  --er-border: #253036;
-  --er-border-strong: #33434a;
+  --er-border: #2a2c2e;
+  --er-border-strong: #3b3e41;
 
-  --er-text: #e8f0f1;
-  --er-text-muted: #94a6ab;
-  --er-text-subtle: #6f8288;
+  --er-text: #ecedef;
+  --er-text-muted: #a0a4a8;
+  --er-text-subtle: #7a7f84;
 
   --er-accent: #35b8bd;
   --er-accent-hover: #52ced3;

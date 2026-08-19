@@ -2751,13 +2751,16 @@ body {
 .designer-scroll-pane {
   flex: 1;
   overflow: auto;
+  background: var(--er-bg-soft);
 }
 
+/* Plain canvas on purpose — only the rows carry a surface, otherwise the tree
+   and its background merge into one tinted block and stop being readable. */
 .designer-list-pane {
   flex: 1;
   overflow: auto;
   padding: 6px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-secondary) 16%, transparent), transparent 30%);
+  background: var(--er-bg-soft);
 }
 
 /* Format Element Tree Row */
@@ -2770,16 +2773,17 @@ body {
   padding: 7px 10px;
   min-height: 34px;
   cursor: pointer;
-  border: 1px solid transparent;
-  border-left: 2px solid transparent;
+  background: var(--er-surface);
+  border: 1px solid var(--er-border);
+  border-left: 2px solid var(--er-border);
   border-radius: 12px;
   transition: background 0.1s, border-color 0.1s, transform 0.1s;
   font-size: 12px;
 }
 
 .fmt-element-row:hover {
-  background: color-mix(in srgb, var(--bg-hover) 76%, transparent);
-  border-color: color-mix(in srgb, var(--border-color) 78%, transparent);
+  background: var(--bg-hover);
+  border-color: var(--er-border-strong);
 }
 
 .fmt-element-row.selected {
@@ -3303,6 +3307,7 @@ body {
   position: relative;
   margin: 2px 6px 2px 12px;
   padding: 8px 12px 8px 16px;
+  background: var(--er-surface);
   border: 1px solid var(--er-border);
   border-radius: var(--er-radius-lg);
   font-size: 12px;
@@ -3358,16 +3363,16 @@ body {
   margin-top: 2px;
   margin-bottom: 2px;
   margin-right: 6px;
-  border: 1px solid transparent;
+  border: 1px solid var(--er-border);
   border-radius: var(--er-radius-md);
-  background: color-mix(in srgb, var(--bg-tertiary) 60%, transparent);
+  background: var(--er-surface-2);
   cursor: pointer;
   user-select: none;
 }
 
 .mm-tree-branch:hover {
   background: var(--bg-hover);
-  border-color: var(--er-border);
+  border-color: var(--er-border-strong);
 }
 
 .mm-tree-branch-name {
@@ -3505,9 +3510,9 @@ body {
   padding: 8px 12px;
   cursor: pointer;
   font-size: 12px;
-  border: 1px solid color-mix(in srgb, var(--border-color) 64%, transparent);
+  border: 1px solid var(--er-border);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-primary) 16%, transparent);
+  background: var(--er-surface);
 }
 
 .density-compact .ds-row {
@@ -3515,7 +3520,8 @@ body {
 }
 
 .ds-row:hover {
-  background: color-mix(in srgb, var(--bg-hover) 76%, transparent);
+  background: var(--bg-hover);
+  border-color: var(--er-border-strong);
 }
 
 .fmt-detail-action {
@@ -8122,11 +8128,11 @@ body::after,
 }
 
 :root[data-theme='light'] {
-  --ui-surface-0: #f8fafc;
-  --ui-surface-1: #f1f4f9;
-  --ui-surface-2: #e9edf4;
-  --ui-stroke-1: #cdd5e3;
-  --ui-stroke-2: #dbe2ec;
+  --ui-surface-0: #ffffff;
+  --ui-surface-1: #f5f5f6;
+  --ui-surface-2: #ececee;
+  --ui-stroke-1: #d9dadc;
+  --ui-stroke-2: #e5e6e8;
 }
 
 body {
