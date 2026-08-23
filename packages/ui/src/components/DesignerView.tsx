@@ -550,6 +550,7 @@ function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): s
     Table: 'Tabulky',
     CalculatedField: 'Vypočtené hodnoty',
     Class: 'Logika',
+    Object: 'Objekty',
     Enum: 'Hodnoty',
     ModelEnum: 'Hodnoty',
     FormatEnum: 'Hodnoty',
@@ -562,6 +563,7 @@ function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): s
     Table: 'Tables',
     CalculatedField: 'Calculated values',
     Class: 'Logic',
+    Object: 'Objects',
     Enum: 'Values',
     ModelEnum: 'Values',
     FormatEnum: 'Values',
@@ -4096,6 +4098,7 @@ function getDsBadgeClass(type: string): string {
     Table: 'badge-table',
     CalculatedField: 'badge-calc',
     Class: 'badge-class',
+    Object: 'badge-class',
     Enum: 'badge-enum',
     ModelEnum: 'badge-enum',
     FormatEnum: 'badge-enum',
@@ -4316,11 +4319,12 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
 
 // ── Grouped Datasource List ──
 
-const dsGroupOrder = ['Table', 'CalculatedField', 'Class', 'Enum', 'ModelEnum', 'FormatEnum', 'UserParameter', 'GroupBy', 'Container'];
+const dsGroupOrder = ['Table', 'CalculatedField', 'Class', 'Object', 'Enum', 'ModelEnum', 'FormatEnum', 'UserParameter', 'GroupBy', 'Container'];
 const dsGroupLabels: Record<string, string> = {
   Table: 'Tables',
   CalculatedField: 'Calculated Fields',
   Class: 'Classes',
+  Object: 'Objects',
   Enum: 'Ax Enums',
   ModelEnum: 'Data model Enums',
   FormatEnum: 'Format enums',
