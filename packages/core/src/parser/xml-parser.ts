@@ -551,12 +551,15 @@ function parseSolutionVersion(root: any): ERSolutionVersion {
 function parseSolution(node: any): ERSolution {
   if (!node) throw new Error('Missing ERSolution element');
 
-  const labelsNode = node['Labels']?.['ERClassList'];
-  const labels: ERLabel[] = getContentsArray(labelsNode, 'ERLabel').map((l: any) => ({
-    labelId: getAttr(l, 'LabelId') ?? '',
-    labelValue: getAttr(l, 'LabelValue') ?? '',
-    languageId: getAttr(l, 'LanguageId') ?? '',
-  }));
+  // F&O splits the label dictionary into one ERClassList per language pack,
+  // so `Labels` can hold an array — flatten all of them into one table.
+  const labels: ERLabel[] = asArray(node['Labels']?.['ERClassList'])
+    .flatMap((classList: any) => getContentsArray(classList, 'ERLabel'))
+    .map((l: any) => ({
+      labelId: getAttr(l, 'LabelId') ?? '',
+      labelValue: getAttr(l, 'LabelValue') ?? '',
+      languageId: getAttr(l, 'LanguageId') ?? '',
+    }));
 
   const vendorNode = node['Vendor']?.['ERVendor'];
   const contentRefNode = getContents(node);
@@ -694,6 +697,8 @@ function parseContainer(node: any): ERDataContainerDescriptor {
   return {
     id: getAttr(node, 'ID.') ?? '',
     name: getAttr(node, 'Name') ?? '',
+    label: getAttr(node, 'Label'),
+    description: getAttr(node, 'Description'),
     isRoot: getAttr(node, 'IsRoot') === '1',
     isEnum: getAttr(node, 'IsEnum') === '1',
     items,

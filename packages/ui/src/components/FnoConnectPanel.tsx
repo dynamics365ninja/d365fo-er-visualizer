@@ -2312,25 +2312,20 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     };
 
     // Download synthesized mappings and sibling mappings in parallel
-    const allMappingDownloads: { synth: ErConfigSummary; label: string; dmGuid?: string }[] = [];
-
-    for (const item of synthQueue) {
-      // Key by (dmGuid + configurationName) so multiple distinct mappings
-      // for the same DataModel (e.g. base + CZ) are all downloaded.
-      // The default probe is still suppressed via dmGuidsWithResolvedBranch.
-      const synthKey = `synth-mapping:${item.dmGuid}:${item.synth.configurationName}`;
-          if (synthesizedMappingKeys.has(synthKey)) continue;
-      synthesizedMappingKeys.add(synthKey);
-      allMappingDownloads.push({ synth: item.synth, label: item.label, dmGuid: item.dmGuid });
-    }
-
-    for (const mapping of mappingsToLoad.values()) {
-      allMappingDownloads.push({ synth: mapping, label: mapping.configurationName });
-    }
+    const allMappingDownloads: {
+      synth: ErConfigSummary;
+      label: string;
+      dmGuid?: string;
+      /** Marks the DM as resolved on success without being skipped itself. */
+      recordDmGuid?: string;
+    }[] = [];
 
     // One probe per format-declared descriptor, deliberately without `dmGuid` so the
     // "first success wins per DataModel" rule cannot drop them: two formats over the
     // same model (e.g. SalesInvoice and InvoiceCustomer) need two different mappings.
+    // Queued FIRST and marked exclusive: F&O returns a different mapping per
+    // descriptor, so a heuristic probe that falls back to '' or the mapping name
+    // resolves to a sibling mapping the loaded formats never bind to.
     for (const dm of dmGuidIndex.values()) {
       for (const descriptor of formatDescriptorsFor(dm.guid)) {
         const synthKey = `format-descriptor-mapping:${dm.guid}:${descriptor}`;
@@ -2344,11 +2339,29 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             parentDataModelGuid: dm.guid,
             parentDataModelRevisionGuid: dm.solutionGuid,
             descriptorNameCandidates: [descriptor],
+            descriptorNamesExclusive: true,
             hasContent: true,
           },
+          recordDmGuid: dm.guid,
           label: `mapping for descriptor "${descriptor}" of ${dm.name}`,
         });
       }
+    }
+    /** Entries above this index are the heuristic fallbacks. */
+    const descriptorProbeCount = allMappingDownloads.length;
+
+    for (const item of synthQueue) {
+      // Key by (dmGuid + configurationName) so multiple distinct mappings
+      // for the same DataModel (e.g. base + CZ) are all downloaded.
+      // The default probe is still suppressed via dmGuidsWithResolvedBranch.
+      const synthKey = `synth-mapping:${item.dmGuid}:${item.synth.configurationName}`;
+          if (synthesizedMappingKeys.has(synthKey)) continue;
+      synthesizedMappingKeys.add(synthKey);
+      allMappingDownloads.push({ synth: item.synth, label: item.label, dmGuid: item.dmGuid });
+    }
+
+    for (const mapping of mappingsToLoad.values()) {
+      allMappingDownloads.push({ synth: mapping, label: mapping.configurationName });
     }
 
     if (allMappingDownloads.length > 0) {
@@ -2393,8 +2406,14 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         });
       };
       const MAPPING_BATCH_SIZE = 2;
-      for (let batch = 0; batch < allMappingDownloads.length; batch += MAPPING_BATCH_SIZE) {
-        const slice = allMappingDownloads.slice(batch, batch + MAPPING_BATCH_SIZE);
+      for (let batch = 0; batch < allMappingDownloads.length; ) {
+        // Never mix descriptor probes with fallbacks in one batch — the
+        // fallbacks must see the descriptor results before they decide to run.
+        const sliceEnd = batch < descriptorProbeCount
+          ? Math.min(batch + MAPPING_BATCH_SIZE, descriptorProbeCount)
+          : Math.min(batch + MAPPING_BATCH_SIZE, allMappingDownloads.length);
+        const slice = allMappingDownloads.slice(batch, sliceEnd);
+        batch = sliceEnd;
         // Only skip entries whose DM GUID was resolved (success) in a prior batch.
         const pending = slice.filter(
           item => !item.dmGuid || !downloadedMappingDmGuids.has(item.dmGuid),
@@ -2414,7 +2433,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             mappingSuccessCount += 1;
             recordAttempt(item, 'ok');
             // Mark DM as resolved so subsequent branches for the same DM are skipped.
-            if (result.value.item.dmGuid) downloadedMappingDmGuids.add(result.value.item.dmGuid);
+            const resolvedDmGuid = result.value.item.dmGuid ?? result.value.item.recordDmGuid;
+            if (resolvedDmGuid) downloadedMappingDmGuids.add(resolvedDmGuid);
             collectLateRefs(result.value.download);
           } else {
             const reason = result.reason;

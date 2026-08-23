@@ -195,6 +195,55 @@ describe('parseERConfiguration', () => {
     expect(config.content.version.model.containers[0]?.name).toBe('Reports');
   });
 
+  it('collects labels from every ERClassList language pack and container-level Label refs', () => {
+    // F&O exports the label dictionary as one <ERClassList> per language,
+    // so `Labels` arrives as an array. Reading only the first node dropped
+    // every translation and left raw @GER_LABEL: ids on screen.
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<ERSolutionVersion DateTime="2026-04-14T12:00:00" Description="test" Number="1" PublicVersionNumber="1" VersionStatus="2">
+  <Solution>
+    <ERSolution ID.="{SOLUTION}" Name="Test solution">
+      <Labels>
+        <ERClassList>
+          <Contents.>
+            <ERLabel LabelId="GER_LABEL:Amount" LabelValue="Amount" LanguageId="en-us" />
+          </Contents.>
+        </ERClassList>
+        <ERClassList>
+          <Contents.>
+            <ERLabel LabelId="GER_LABEL:Amount" LabelValue="Částka" LanguageId="cs" />
+          </Contents.>
+        </ERClassList>
+      </Labels>
+      <Vendor><ERVendor Name="Microsoft" Url="http://microsoft.com" /></Vendor>
+      <Contents.><Ref. ID.="{MODEL}" /></Contents.>
+    </ERSolution>
+  </Solution>
+  <Contents.>
+    <ERDataModelVersion ID.="{MODEL},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+      <Model>
+        <ERDataModel ID.="{MODEL}" Name="Model">
+          <Contents.>
+            <ERDataContainerDescriptor ID.="{CONT}" Name="Reports" IsRoot="1" Label="@&quot;GER_LABEL:Amount&quot;" Description="@&quot;GER_LABEL:Amount&quot;">
+              <Contents.>
+                <ERDataContainerDescriptorItem Name="Amount" Type="6" Label="@&quot;GER_LABEL:Amount&quot;" />
+              </Contents.>
+            </ERDataContainerDescriptor>
+          </Contents.>
+        </ERDataModel>
+      </Model>
+    </ERDataModelVersion>
+  </Contents.>
+</ERSolutionVersion>`;
+    const config = parseERConfiguration(xml, 'labels.xml');
+    expect(config.solutionVersion.solution.labels.map(l => l.languageId)).toEqual(['en-us', 'cs']);
+    if (config.content.kind !== 'DataModel') throw new Error('Expected data model');
+    const container = config.content.version.model.containers[0];
+    expect(container?.label).toBe('@"GER_LABEL:Amount"');
+    expect(container?.description).toBe('@"GER_LABEL:Amount"');
+    expect(container?.items[0]?.label).toBe('@"GER_LABEL:Amount"');
+  });
+
   it('rejects incomplete format XML before parsing content', () => {
     const xml = buildSolutionEnvelope(`
       <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">

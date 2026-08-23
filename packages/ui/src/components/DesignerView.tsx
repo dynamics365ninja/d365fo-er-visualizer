@@ -34,6 +34,7 @@ import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { buildFormatBindingPresentation, groupFormatBindingsByCategory } from '../utils/format-binding-display';
+import { buildFormatTreeIndex, type FormatTreeIndex } from '../utils/format-tree-filter';
 import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/theme-colors';
 import { ERDirection, getFormatElementExcelRange, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent, type ERFormatElement, type ERLabel } from '@er-visualizer/core';
 import { resolveLabel, buildLabelPool } from '../utils/label-resolver';
@@ -1525,37 +1526,10 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
 
   // One pass over the element tree answers the filter / binding / ancestry
   // questions for every row; see FormatTreeIndex.
-  const treeIndex = useMemo<FormatTreeIndex>(() => {
-    const needle = filter.trim().toLowerCase();
-    const selfMatch = new Set<string>();
-    const subtreeMatch = new Set<string>();
-    const subtreeBound = new Set<string>();
-    const parentOf = new Map<string, string>();
-
-    const walk = (el: any, parentId?: string): void => {
-      if (parentId) parentOf.set(el.id, parentId);
-      const bs = bindingMap.get(el.id) ?? [];
-      const isMatch =
-        !needle ||
-        el.name?.toLowerCase().includes(needle) ||
-        el.elementType?.toLowerCase().includes(needle) ||
-        bs.some((b: any) => b.expressionAsString?.toLowerCase().includes(needle));
-      if (isMatch) selfMatch.add(el.id);
-      const isBound = bs.some((b: any) => b.bindingCategory === 'data');
-
-      let childMatch = false;
-      let childBound = false;
-      for (const child of el.children ?? []) {
-        walk(child, el.id);
-        if (subtreeMatch.has(child.id)) childMatch = true;
-        if (subtreeBound.has(child.id)) childBound = true;
-      }
-      if (isMatch || childMatch) subtreeMatch.add(el.id);
-      if (isBound || childBound) subtreeBound.add(el.id);
-    };
-    walk(rootElement);
-    return { selfMatch, subtreeMatch, subtreeBound, parentOf };
-  }, [rootElement, bindingMap, filter]);
+  const treeIndex = useMemo<FormatTreeIndex>(
+    () => buildFormatTreeIndex(rootElement, bindingMap, filter),
+    [rootElement, bindingMap, filter],
+  );
 
   /** Walk up from the selection — O(depth) instead of a subtree scan per row. */
   const selectedAncestors = useMemo(() => {
@@ -3551,20 +3525,10 @@ const formatTypeIcons: Record<string, string> = {
 // ── Recursive Format Element Tree ──
 
 /**
- * Precomputed answers to the three questions every row used to answer by
- * walking its own subtree — which made rendering the tree O(n²) in the number
- * of elements on every keystroke and every selection change.
+ * `FormatTreeIndex` precomputes the answers every row used to derive by walking
+ * its own subtree — which made rendering O(n²) on every keystroke. Built by
+ * `buildFormatTreeIndex` in utils/format-tree-filter.
  */
-interface FormatTreeIndex {
-  /** Elements matching the current filter themselves. */
-  selfMatch: Set<string>;
-  /** Elements that match, or have a descendant that matches. */
-  subtreeMatch: Set<string>;
-  /** Elements that carry a data binding, or have a descendant that does. */
-  subtreeBound: Set<string>;
-  /** child id → parent id, for walking up to the selected element. */
-  parentOf: Map<string, string>;
-}
 
 interface FormatElementTreeProps {
   element: any;
@@ -3643,18 +3607,16 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
 
   /*
    * A row can match through a binding the collapsed row never shows — most
-   * often Visibility/Enabled. Without this the row looked like a false
-   * positive: "VetaA5" with the term nowhere on it.
+   * often Visibility/Enabled — or through its element type alone. Without this
+   * the row looked like a false positive: "VetaA5" with the term nowhere on it.
    */
+  const matchReason = filter ? treeIndex.matchReason.get(element.id) : undefined;
   const matchedBinding = useMemo(() => {
-    const needle = filter.trim().toLowerCase();
-    if (!needle || !matchesFilter) return null;
-    if (element.name?.toLowerCase().includes(needle)) return null;
-    if (element.elementType?.toLowerCase().includes(needle)) return null;
-    const shown = mainBinding?.expressionAsString?.toLowerCase() ?? '';
-    if (shown.includes(needle)) return null;
-    return bindings.find((b: any) => b.expressionAsString?.toLowerCase().includes(needle)) ?? null;
-  }, [filter, matchesFilter, element.name, element.elementType, mainBinding, bindings]);
+    if (matchReason !== 'binding') return null;
+    const found = treeIndex.matchedBinding.get(element.id) ?? null;
+    // The data binding is already printed on the row — no need to repeat it.
+    return found && found === mainBinding ? null : found;
+  }, [matchReason, treeIndex, element.id, mainBinding]);
 
   const isExpanded = filter
     ? (hasMatchingDescendant || manuallyExpanded)
@@ -3837,7 +3799,10 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
           transformationMap={transformationMap}
           configIndex={configIndex}
           filter={filter}
-          showAll={showAll || matchesFilter}
+          // Only an explicit chevron click lifts the filter for the subtree.
+          // Auto-expanding a match used to do it too, which made every
+          // descendant of a hit look like a hit of its own.
+          showAll={showAll || (matchesFilter && manuallyExpanded)}
           expandMode={expandMode}
           expandVersion={expandVersion}
           selectedId={selectedId}

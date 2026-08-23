@@ -41,6 +41,8 @@ import {
   ER_STORAGE_OPS_BY_TYPE,
 } from '../packages/fno-client/src/er-services.js';
 import { parseERConfiguration, ERComponentKind } from '../packages/core/src/index.js';
+import { buildFormatBindingPresentation } from '../packages/ui/src/utils/format-binding-display.js';
+import { buildFormatTreeIndex, visibleFormatElementIds } from '../packages/ui/src/utils/format-tree-filter.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -2699,6 +2701,90 @@ async function main(): Promise<void> {
     }
   } else {
     console.log('  (skipped — solutionName not set)');
+  }
+  console.log();
+
+  // ─── Step 14: Format tree filter precision ────────────────────────────────
+  // Downloads the target format, builds the same index the designer's structure
+  // tree uses, and asserts every visible row is either a real match (name or
+  // binding expression) or an ancestor on the way to one. Guards the regression
+  // where a term like "Date" pulled in whole unrelated subtrees.
+  console.log('─── Step 14: Format tree filter precision');
+  const filterTerm = (process.env['FNO_FILTER_TERM'] ?? 'Date').trim();
+  if (cfg.configName) {
+    try {
+      const targetFmt14 =
+        components.find(c => c.configurationName === cfg.configName && c.hasContent) ??
+        rootComponents.find(c => c.configurationName === cfg.configName && c.hasContent);
+
+      if (!targetFmt14) {
+        console.log(`  ⚠ Format "${cfg.configName}" not found in component listing — skipping`);
+      } else {
+        const fmtDl14 = await downloadConfigXml(transport, conn, token, targetFmt14);
+        const parsed14 = parseERConfiguration(fmtDl14.xml, 'step14.xml');
+        const content14 = parsed14.content;
+        const formatVersion14 = content14.kind === ERComponentKind.Format ? content14.formatVersion : undefined;
+        const formatMapping14 = content14.kind === ERComponentKind.Format ? content14.formatMappingVersion : undefined;
+        const rootElement14 = formatVersion14?.format?.rootElement;
+
+        if (!rootElement14) {
+          console.log('  ⚠ No format root element parsed — skipping');
+          check('Step 14: format root element parsed', false, 'no rootElement');
+        } else {
+          const presentation14 = buildFormatBindingPresentation(
+            rootElement14,
+            formatMapping14?.formatMapping?.bindings ?? [],
+          );
+          const bindingMap14 = presentation14.bindingMap;
+          const index14 = buildFormatTreeIndex(rootElement14, bindingMap14, filterTerm);
+          const visible14 = visibleFormatElementIds(rootElement14, index14, filterTerm);
+
+          let total14 = 0;
+          const byId14 = new Map<string, { name?: string; elementType?: string }>();
+          const countAll = (el: typeof rootElement14): void => {
+            total14++;
+            byId14.set(el.id, { name: el.name, elementType: el.elementType });
+            for (const child of el.children ?? []) countAll(child);
+          };
+          countAll(rootElement14);
+
+          const needle14 = filterTerm.toLowerCase();
+          // Every visible row must match itself or lead to a match.
+          const unexplained = [...visible14].filter(id => !index14.subtreeMatch.has(id));
+          // Every self-match must carry the term in its name or one of its formulas.
+          const bogus = [...index14.selfMatch].filter(id => {
+            const el = byId14.get(id);
+            if (el?.name?.toLowerCase().includes(needle14)) return false;
+            return !(bindingMap14.get(id) ?? []).some(b =>
+              b.expressionAsString?.toLowerCase().includes(needle14),
+            );
+          });
+
+          console.log(`  Format: "${cfg.configName}" — ${total14} elements, filter "${filterTerm}"`);
+          console.log(`  Self matches: ${index14.selfMatch.size}  visible rows (matches + ancestors): ${visible14.size}`);
+          for (const id of [...index14.selfMatch].slice(0, 10)) {
+            const el = byId14.get(id);
+            console.log(`    • ${el?.name ?? id} [${el?.elementType ?? '?'}] — ${index14.matchReason.get(id)}` +
+              (index14.matchedBinding.get(id)
+                ? ` (${index14.matchedBinding.get(id)?.bindingDisplayLabel}: ${index14.matchedBinding.get(id)?.expressionAsString?.slice(0, 80)})`
+                : ''));
+          }
+
+          check('Step 14: every visible row matches or leads to a match', unexplained.length === 0,
+            unexplained.length === 0 ? 'no orphan rows' : `${unexplained.length} rows with no match below them`);
+          check('Step 14: no match without the term in name or a formula', bogus.length === 0,
+            bogus.length === 0
+              ? 'all matches explained by name/formula'
+              : `${bogus.length} e.g. "${byId14.get(bogus[0]!)?.name}" [${byId14.get(bogus[0]!)?.elementType}]`);
+          check('Step 14: filter narrows the tree', visible14.size < total14,
+            `${visible14.size} of ${total14} elements visible`);
+        }
+      }
+    } catch (err14) {
+      console.log(`  ⚠ Step 14 failed: ${err14 instanceof Error ? err14.message.slice(0, 200) : err14}`);
+    }
+  } else {
+    console.log('  (skipped — configName not set)');
   }
   console.log();
 
