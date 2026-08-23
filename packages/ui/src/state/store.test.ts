@@ -122,3 +122,35 @@ describe('deriveRecentSessionsAfterConfigChange', () => {
     expect(useFnoSession.getState().selected.size).toBe(0);
   });
 });
+describe('addInheritedLabels', () => {
+  afterEach(() => {
+    useAppStore.setState({ configurations: [] });
+  });
+
+  it('merges ancestor labels into direct inheritors and their loaded descendants', () => {
+    const base = '{AAAA0000-0000-0000-0000-000000000001}';
+    const derived = makeConfig('derived.xml', ERComponentKind.DataModel);
+    derived.solutionVersion.solution.id = '{BBBB0000-0000-0000-0000-000000000002}';
+    derived.solutionVersion.solution.baseSolutionId = base;
+    derived.solutionVersion.solution.labels = [{ labelId: 'Fax', labelValue: 'Vlastní', languageId: 'cs' }];
+    const format = makeConfig('format.xml');
+    format.solutionVersion.solution.id = '{CCCC0000-0000-0000-0000-000000000003}';
+    format.solutionVersion.solution.baseSolutionId = derived.solutionVersion.solution.id;
+    const unrelated = makeConfig('other.xml');
+    useAppStore.setState({ configurations: [derived, format, unrelated] });
+
+    useAppStore.getState().addInheritedLabels(
+      ['bbbb0000-0000-0000-0000-000000000002'],
+      [
+        { labelId: 'Fax', labelValue: 'Fax', languageId: 'en-US' },
+        { labelId: 'Fax', labelValue: 'Vlastní', languageId: 'cs' },
+      ],
+    );
+
+    const [d, f, u] = useAppStore.getState().configurations;
+    expect(d.solutionVersion.solution.labels).toHaveLength(2); // own cs kept, en-US added, no duplicate
+    expect(f.solutionVersion.solution.labels.map(l => l.languageId)).toEqual(['en-US', 'cs']);
+    expect(u.solutionVersion.solution.labels).toHaveLength(0);
+    expect(u).toBe(unrelated); // untouched configurations keep identity
+  });
+});
