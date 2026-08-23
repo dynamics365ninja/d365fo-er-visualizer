@@ -45,3 +45,24 @@ describe('getDrillDownEffectiveResolutionInput', () => {
     });
   });
 });
+
+import { tokenizeERExpr } from './DrillDownPanel';
+
+describe('tokenizeERExpr label references', () => {
+  it('tokenizes the quoted form as a single label token', () => {
+    const tokens = tokenizeERExpr('@"GER_LABEL:Foo"');
+    expect(tokens).toEqual([{ kind: 'label', raw: '@"GER_LABEL:Foo"' }]);
+  });
+
+  it('tokenizes the bare form as a label instead of a datasource', () => {
+    const tokens = tokenizeERExpr('CONCATENATE(@GER_LABEL:Foo, " ", @SYS12345)');
+    const labels = tokens.filter(tk => tk.kind === 'label').map(tk => tk.raw);
+    expect(labels).toEqual(['@GER_LABEL:Foo', '@SYS12345']);
+    expect(tokens.some(tk => tk.kind === 'ds' && tk.raw === 'GER_LABEL')).toBe(false);
+  });
+
+  it('keeps the current-record reference intact', () => {
+    const tokens = tokenizeERExpr('@.Amount');
+    expect(tokens).toEqual([{ kind: 'other', raw: '@.Amount' }]);
+  });
+});

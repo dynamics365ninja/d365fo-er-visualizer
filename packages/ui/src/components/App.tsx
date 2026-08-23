@@ -360,6 +360,10 @@ export function App() {
   const [rightTab, setRightTab] = useState<'properties' | 'search' | 'where-used'>('properties');
   const [rightFullscreen, setRightFullscreen] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
+  const landingRequest = useAppStore(s => s.landingRequest);
+  useEffect(() => {
+    if (landingRequest) setShowLanding(true);
+  }, [landingRequest]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [statusWarningsOpen, setStatusWarningsOpen] = useState(false);
   const configs = useAppStore(s => s.configurations);
@@ -558,7 +562,7 @@ export function App() {
               <PanelGroup direction="horizontal">
                 {showLeft && (
                   <>
-                    <Panel defaultSize={22} minSize={15} maxSize={40}>
+                    <Panel defaultSize={26} minSize={15} maxSize={40}>
                       <div className={styles.sidebar}>
                         <ErrorBoundary label="Explorer">
                           <ConfigExplorer />

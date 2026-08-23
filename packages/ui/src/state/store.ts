@@ -10,6 +10,9 @@ import { parseERConfigurations, GUIDRegistry, getFormatElementExcelRange } from 
 import { locale } from '../i18n';
 import { buildFormatBindingPresentation } from '../utils/format-binding-display';
 import { useFnoSession } from './fno-session';
+import { onFnoDownloadEvent } from '../fno/session';
+import { formatReferencedModelIds } from '../utils/model-hierarchy';
+import { FnoEmptyContentError } from '@er-visualizer/fno-client';
 import {
   saveFileContent,
   readFileContent,
@@ -30,7 +33,7 @@ import {
 const TECHNICAL_DETAILS_STORAGE_KEY = 'er-visualizer.showTechnicalDetails';
 const RECENT_FILES_STORAGE_KEY = 'er-visualizer.recentFiles.v1';
 const RECENT_SESSIONS_STORAGE_KEY = 'er-visualizer.recentSessions.v1';
-const MAX_RECENT_FILES = 12;
+const MAX_RECENT_FILES = 60;
 const MAX_RECENT_SESSIONS = 12;
 
 export type { ThemeMode, ResolvedTheme } from '../theme';
@@ -56,6 +59,49 @@ export interface RecentFile {
    * is hit. Undefined means the content is no longer cached.
    */
   content?: string;
+  /** Human-readable configuration name (ERSolution.Name). */
+  solutionName?: string;
+  /** Public version as shown in the explorer pill. */
+  version?: string;
+  /**
+   * DataModel component GUID this configuration is tied to: the model's own
+   * `ERDataModel ID.` for a DataModel, the referenced `modelId` for a
+   * ModelMapping / Format. Lets the workspace manager offer the related
+   * model + mapping when a format is re-opened.
+   */
+  modelId?: string;
+  /** Solution wrapper GUID (`ERSolution ID.`). */
+  solutionId?: string;
+  /** Where the XML came from. */
+  source?: 'file' | 'fno';
+  /**
+   * For configurations extracted from a bundle (`…#datamodel:{guid}`) the
+   * cached XML lives under the outer file path; re-loading that path brings
+   * the extract back too.
+   */
+  bundlePath?: string;
+}
+
+export type FnoIngestItemStatus = 'queued' | 'downloading' | 'done' | 'empty' | 'failed';
+
+/** One row of the structured F&O download log shown in the ingest dialog. */
+export interface FnoIngestItem {
+  key: string;
+  name: string;
+  kind: 'DataModel' | 'ModelMapping' | 'Format' | 'Unknown';
+  status: FnoIngestItemStatus;
+  /** True when the user ticked this item (vs. auto-resolved dependency). */
+  explicit: boolean;
+  message?: string;
+  startedAt?: number;
+  finishedAt?: number;
+}
+
+export interface FnoIngestProgress {
+  active: boolean;
+  startedAt: number | null;
+  finishedAt: number | null;
+  items: FnoIngestItem[];
 }
 
 /**
@@ -175,6 +221,82 @@ export function deriveRecentSessionsAfterConfigChange(
   ].slice(0, MAX_RECENT_SESSIONS);
 }
 
+function normGuidKey(g: string | undefined): string {
+  return (g ?? '').replace(/^\{|\}$/g, '').toLowerCase();
+}
+
+/** Model GUID a configuration is tied to (see `RecentFile.modelId`). */
+export function configurationModelId(cfg: ERConfiguration): string | undefined {
+  const content = cfg.content as unknown as {
+    kind: string;
+    version?: { model?: { id?: string }; mapping?: { modelId?: string } };
+    embeddedModelMappingVersions?: Array<{ mapping?: { modelId?: string } }>;
+  };
+  if (content.kind === 'DataModel') return normGuidKey(content.version?.model?.id) || undefined;
+  if (content.kind === 'ModelMapping') return normGuidKey(content.version?.mapping?.modelId) || undefined;
+  return formatReferencedModelIds(cfg.content as ERFormatContent)[0];
+}
+
+/** Metadata snapshot of a configuration for the recent-files list. */
+export function describeRecentFile(cfg: ERConfiguration, source: 'file' | 'fno'): Omit<RecentFile, 'openedAt'> {
+  const fileName = cfg.filePath.split(/[\\/]/).pop() ?? cfg.filePath;
+  const publicVersion = cfg.solutionVersion.publicVersionNumber
+    || (cfg.solutionVersion.number > 0 ? String(cfg.solutionVersion.number) : '');
+  return {
+    path: cfg.filePath,
+    name: fileName.replace(/#datamodel:.*$/, ''),
+    kind: cfg.content.kind,
+    solutionName: cfg.solutionVersion.solution.name || undefined,
+    version: publicVersion || undefined,
+    modelId: configurationModelId(cfg),
+    solutionId: normGuidKey(cfg.solutionVersion.solution.id) || undefined,
+    source,
+  };
+}
+
+export interface RelatedRecentFiles {
+  dataModel?: RecentFile;
+  mappings: RecentFile[];
+  formats: RecentFile[];
+}
+
+/**
+ * Cached-but-not-loaded configurations that belong to the same data model as
+ * `entry`. Used to ask "load the model and its mapping too?" when a format or
+ * mapping is (re-)added to the workspace.
+ */
+export function findRelatedRecentFiles(
+  entry: RecentFile,
+  recentFiles: readonly RecentFile[],
+  configurations: readonly ERConfiguration[],
+  cachedPaths: ReadonlySet<string>,
+): RelatedRecentFiles {
+  const result: RelatedRecentFiles = { mappings: [], formats: [] };
+  if (!entry.modelId) return result;
+  const loadedPaths = new Set(configurations.map(c => c.filePath));
+  const loadedModelIds = new Set(
+    configurations.filter(c => c.content.kind === 'DataModel').map(c => configurationModelId(c)).filter(Boolean),
+  );
+  const loadedMappingModelIds = new Set(
+    configurations.filter(c => c.content.kind === 'ModelMapping').map(c => configurationModelId(c)).filter(Boolean),
+  );
+  const seen = new Set<string>();
+  for (const other of recentFiles) {
+    if (other.path === entry.path || other.modelId !== entry.modelId) continue;
+    if (loadedPaths.has(other.path) || seen.has(other.path)) continue;
+    if (!cachedPaths.has(other.path) && !(other.bundlePath && cachedPaths.has(other.bundlePath))) continue;
+    seen.add(other.path);
+    if (other.kind === 'DataModel') {
+      if (!loadedModelIds.has(other.modelId) && !result.dataModel) result.dataModel = other;
+    } else if (other.kind === 'ModelMapping') {
+      if (entry.kind !== 'ModelMapping' && !loadedMappingModelIds.has(other.modelId)) result.mappings.push(other);
+    } else if (other.kind === 'Format' && entry.kind === 'DataModel') {
+      result.formats.push(other);
+    }
+  }
+  return result;
+}
+
 function readStoredTechnicalDetails(): boolean {
   if (typeof window === 'undefined') return false;
   try {
@@ -275,11 +397,21 @@ export interface AppState {
 
   /** Global F&O download progress label, empty when idle. */
   fnoIngestStatus: string;
+  /** Structured per-configuration progress of the running / last F&O download. */
+  fnoIngestProgress: FnoIngestProgress;
+  /** One-shot request to show the landing page on a given source tab. */
+  landingRequest: { tab: 'local' | 'remote'; version: number } | null;
+  requestLanding: (tab: 'local' | 'remote') => void;
 
   // Actions
-  loadXmlFile: (xml: string, filePath: string) => void;
+  loadXmlFile: (xml: string, filePath: string, options?: { source?: 'file' | 'fno' }) => void;
   removeConfiguration: (index: number) => void;
+  /** Close a configuration and offer an undo toast that re-opens it from the cache. */
+  closeConfigurationWithUndo: (index: number) => void;
   removeAllConfigurations: () => void;
+  beginFnoIngest: (items: Array<Pick<FnoIngestItem, 'key' | 'name' | 'kind' | 'explicit'>>) => void;
+  updateFnoIngestItem: (item: Pick<FnoIngestItem, 'key' | 'name' | 'kind'> & Partial<FnoIngestItem>) => void;
+  endFnoIngest: () => void;
   selectNode: (nodeId: string | null) => void;
   openTab: (id: string, label: string, configIndex: number) => void;
   openDrillDownTab: (expression: string, configIndex: number, elementName?: string) => void;
@@ -680,6 +812,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeWhereUsedRefKey: null,
   showTechnicalDetails: readStoredTechnicalDetails(),
   fnoIngestStatus: '',
+  fnoIngestProgress: { active: false, startedAt: null, finishedAt: null, items: [] },
+  landingRequest: null,
+  requestLanding: (tab) => set(state => ({ landingRequest: { tab, version: (state.landingRequest?.version ?? 0) + 1 } })),
   themeMode: initialThemeMode,
   resolvedTheme: resolveThemeMode(initialThemeMode),
   navigationHistory: [],
@@ -694,7 +829,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   warnings: [],
   whereUsedTrigger: null,
 
-  loadXmlFile: (xml: string, filePath: string) => {
+  loadXmlFile: (xml: string, filePath: string, options?: { source?: 'file' | 'fno' }) => {
     try {
       // A single export can bundle a data model together with its model
       // mapping; the parser hands both back so the model no longer
@@ -715,12 +850,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       const { registry, treeNodes, warnings } = buildDerivedState(newConfigs);
 
-      // Add recent entry
-      const recentName = filePath.split(/[\\/]/).pop() ?? filePath;
-      const recentKind = config.content.kind;
+      // Add recent entries — one per parsed configuration so bundled
+      // extracts (`…#datamodel:{guid}`) can be re-opened from the workspace
+      // manager after they are closed.
+      const source = options?.source ?? (filePath.startsWith('fno://') ? 'fno' : 'file');
+      const now = Date.now();
+      const newEntries: RecentFile[] = parsed.map((cfg, i) => ({
+        ...describeRecentFile(cfg, source),
+        path: cfg.filePath,
+        openedAt: now - i,
+        bundlePath: cfg.filePath === filePath ? undefined : filePath,
+      }));
+      const newPaths = new Set(newEntries.map(e => e.path));
       const candidateRecent: RecentFile[] = [
-        { path: filePath, name: recentName, kind: recentKind, openedAt: Date.now() },
-        ...state.recentFiles.filter(r => r.path !== filePath),
+        ...newEntries,
+        ...state.recentFiles.filter(r => !newPaths.has(r.path)),
       ].slice(0, MAX_RECENT_FILES);
       const nextRecent = saveRecentFiles(candidateRecent);
 
@@ -740,6 +884,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       void saveFileContent(filePath, xml);
       const nextCachedPaths = new Set(state.cachedPaths);
       nextCachedPaths.add(filePath);
+      // Extracts are reachable through the outer file's cache entry.
+      for (const entry of newEntries) {
+        if (entry.bundlePath) nextCachedPaths.add(entry.path);
+      }
 
       set({
         configurations: newConfigs,
@@ -834,6 +982,64 @@ export const useAppStore = create<AppState>((set, get) => ({
       canNavigateForward: false,
       recentSessions: nextRecentSessions,
     });
+  },
+
+  closeConfigurationWithUndo: (index: number) => {
+    const cfg = get().configurations[index];
+    if (!cfg) return;
+    const path = cfg.filePath;
+    const name = cfg.solutionVersion.solution.name || path.split(/[\\/]/).pop() || path;
+    get().removeConfiguration(index);
+    const cached = get().cachedPaths.has(path) || get().recentFiles.some(r => r.path === path && r.bundlePath);
+    get().pushToast({
+      kind: 'info',
+      message: locale === 'cs' ? `Konfigurace „${name}“ byla zavřena.` : `Configuration "${name}" was closed.`,
+      action: cached
+        ? { label: locale === 'cs' ? 'Znovu otevřít' : 'Reopen', onClick: () => { void get().loadCachedFile(path, name); } }
+        : undefined,
+    });
+  },
+
+  beginFnoIngest: (items) => {
+    set({
+      fnoIngestProgress: {
+        active: true,
+        startedAt: Date.now(),
+        finishedAt: null,
+        items: items.map(i => ({ ...i, status: 'queued' as const })),
+      },
+    });
+  },
+
+  updateFnoIngestItem: (item) => {
+    const progress = get().fnoIngestProgress;
+    if (!progress.active) return;
+    const idx = progress.items.findIndex(i => i.key === item.key);
+    const now = Date.now();
+    const nextItems = [...progress.items];
+    if (idx === -1) {
+      nextItems.push({
+        explicit: false,
+        status: 'queued',
+        ...item,
+        startedAt: item.status === 'downloading' ? now : item.startedAt,
+        finishedAt: item.status && item.status !== 'downloading' && item.status !== 'queued' ? now : undefined,
+      });
+    } else {
+      const prev = nextItems[idx];
+      nextItems[idx] = {
+        ...prev,
+        ...item,
+        startedAt: prev.startedAt ?? (item.status === 'downloading' ? now : undefined),
+        finishedAt: item.status && item.status !== 'downloading' && item.status !== 'queued' ? now : prev.finishedAt,
+      };
+    }
+    set({ fnoIngestProgress: { ...progress, items: nextItems } });
+  },
+
+  endFnoIngest: () => {
+    const progress = get().fnoIngestProgress;
+    set({ fnoIngestProgress: { ...progress, active: false, finishedAt: Date.now() } });
   },
 
   removeAllConfigurations: () => {
@@ -1299,21 +1505,28 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   loadCachedFile: async (path: string, name?: string) => {
-    const label = name ?? path.split(/[\\/]/).pop() ?? path;
+    const entry = get().recentFiles.find(r => r.path === path);
+    const label = name ?? entry?.solutionName ?? path.split(/[\\/]/).pop() ?? path;
     if (get().configurations.some(c => c.filePath === path)) {
-      get().pushToast({ kind: 'info', message: `„${label}“ už je otevřen v pracovní ploše.` });
+      get().pushToast({
+        kind: 'info',
+        message: locale === 'cs' ? `„${label}“ už je otevřen v pracovní ploše.` : `"${label}" is already open in the workspace.`,
+      });
       return true;
     }
-    const content = await readFileContent(path);
+    const contentPath = entry?.bundlePath ?? path;
+    const content = await readFileContent(contentPath);
     if (!content) {
       get().pushToast({
         kind: 'warning',
-        message: `Obsah „${label}“ už není v mezipaměti, otevřete soubor znovu ručně.`,
+        message: locale === 'cs'
+          ? `Obsah „${label}“ už není v mezipaměti, otevřete soubor znovu ručně.`
+          : `"${label}" is no longer cached, please open the file again.`,
       });
       return false;
     }
     try {
-      get().loadXmlFile(content, path);
+      get().loadXmlFile(content, contentPath, { source: entry?.source });
       return true;
     } catch {
       return false;
@@ -1723,6 +1936,25 @@ export const useAppStore = create<AppState>((set, get) => ({
     whereUsedTrigger: { query, version: (state.whereUsedTrigger?.version ?? 0) + 1 },
   })),
 }));
+
+// Mirror F&O download lifecycle events into the structured ingest log so the
+// download dialog can show every configuration (explicit or auto-resolved).
+onFnoDownloadEvent(event => {
+  const state = useAppStore.getState();
+  if (!state.fnoIngestProgress.active) return;
+  const c = event.component;
+  const key = `${c.solutionName}::${c.configurationName}::${c.componentType}::${c.version ?? ''}`;
+  const base = { key, name: c.configurationName || c.solutionName, kind: c.componentType };
+  if (event.type === 'start') {
+    state.updateFnoIngestItem({ ...base, status: 'downloading' });
+  } else if (event.type === 'done') {
+    state.updateFnoIngestItem({ ...base, status: 'done' });
+  } else {
+    const isEmpty = event.error instanceof FnoEmptyContentError;
+    const message = event.error instanceof Error ? event.error.message : String(event.error);
+    state.updateFnoIngestItem({ ...base, status: isEmpty ? 'empty' : 'failed', message: isEmpty ? undefined : message });
+  }
+});
 
 // Populate the cachedPaths set from IndexedDB on startup so the landing page
 // can indicate which recent files/sessions are actually reloadable.

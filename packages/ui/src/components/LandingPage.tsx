@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   makeStyles,
   mergeClasses,
@@ -14,7 +14,6 @@ import {
 import {
   ArrowDownloadRegular,
   ArrowSyncRegular,
-  CheckmarkCircleRegular,
   CloudRegular,
   DataBarVerticalRegular,
   DismissRegular,
@@ -24,9 +23,10 @@ import {
   OpenRegular,
   DeleteRegular,
 } from '@fluentui/react-icons';
+import { FnoIngestPanel } from './FnoIngestPanel';
 import { useAppStore } from '../state/store';
 import { ThemeSwitch } from './ThemeSwitch';
-import { locale, setLocale, t, useLocale } from '../i18n';
+import { setLocale, t, useLocale } from '../i18n';
 import { FnoConnectPanel } from './FnoConnectPanel';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 
@@ -470,6 +470,10 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [sourceTab, setSourceTab] = useState<'local' | 'remote'>('local');
+  const landingRequest = useAppStore(s => s.landingRequest);
+  useEffect(() => {
+    if (landingRequest) setSourceTab(landingRequest.tab);
+  }, [landingRequest]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFiles = useCallback(async (files: FileList | null) => {
@@ -516,7 +520,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
-      {fnoIngestStatus && <FnoIngestOverlay status={fnoIngestStatus} />}
+      {fnoIngestStatus && <FnoIngestPanel variant="overlay" />}
 
       <header className={styles.topbar}>
         <span className={styles.brand}>
@@ -818,84 +822,4 @@ function KindIcon({ kind, size = 14 }: { kind?: string; size?: number }) {
   if (kind === 'DataModel') return <DataBarVerticalRegular fontSize={size} className={styles.kindModel} />;
   if (kind === 'ModelMapping') return <LinkRegular fontSize={size} className={styles.kindMapping} />;
   return <DocumentRegular fontSize={size} className={styles.kindFormat} />;
-}
-
-// ────────────────────────── F&O ingest progress ──────────────────────────
-
-const INGEST_STEPS = [
-  { key: 'prepare', cs: 'Příprava', en: 'Preparing' },
-  { key: 'dm', cs: 'Stahuji datové modely', en: 'Downloading data models' },
-  { key: 'fm', cs: 'Stahuji formáty a mapování', en: 'Downloading formats & mappings' },
-  { key: 'mm', cs: 'Stahování mapování modelů', en: 'Downloading model mappings' },
-  { key: 'finalize', cs: 'Dokončuji', en: 'Finalizing' },
-] as const;
-
-/** Map the free-text ingest status onto one of the five pipeline phases. */
-function activeIngestStep(status: string): number {
-  const s = status.toLowerCase();
-  if (s.includes('přípravu') || s.includes('prepar')) return 0;
-  if (s.includes('datamodel') || s.includes('datov')) return 1;
-  if (s.includes('mapping') || s.includes('mapov')) return 3;
-  if (s.includes('form') || s.includes('konfigurace') || s.includes('configuration')) return 2;
-  if (s.includes('dokon') || s.includes('řeš') || s.includes('resolv') || s.includes('cross')) return 4;
-  return 2;
-}
-
-function FnoIngestOverlay({ status }: { status: string }) {
-  const styles = useStyles();
-  const active = activeIngestStep(status);
-
-  return (
-    <div className={styles.ingestOverlay} role="status" aria-live="polite">
-      <div className={styles.ingestCard}>
-        <div className={styles.ingestHead}>
-          <span className={styles.ingestIcon} aria-hidden="true">
-            <CloudRegular fontSize={22} />
-          </span>
-          <div style={{ minWidth: 0 }}>
-            <div className={styles.ingestTitle}>{t.fnoLoading}</div>
-            <div className={styles.ingestSub}>
-              {locale === 'cs' ? 'z Dynamics 365 F&O' : 'from Dynamics 365 F&O'}
-            </div>
-          </div>
-        </div>
-
-        <div className="fno-ingest-progress-track">
-          <div className="fno-ingest-progress-bar" />
-        </div>
-
-        <div className={styles.ingestSteps}>
-          {INGEST_STEPS.map((step, i) => {
-            const done = i < active;
-            const isActive = i === active;
-            return (
-              <div
-                key={step.key}
-                className={`fno-ingest-step${done ? ' done' : isActive ? ' active' : ''}`}
-                style={{ fontSize: '12.5px' }}
-              >
-                {done
-                  ? <CheckmarkCircleRegular fontSize={15} style={{ flexShrink: 0, color: 'var(--er-success)' }} />
-                  : <div className="fno-ingest-step-dot" style={{ width: '9px', height: '9px' }} />}
-                <span>{locale === 'cs' ? step.cs : step.en}</span>
-                {isActive && (
-                  <span style={{
-                    fontSize: '11px',
-                    color: 'var(--er-text-subtle)',
-                    marginLeft: 'auto',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    maxWidth: '150px',
-                  }}>
-                    {status}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
 }

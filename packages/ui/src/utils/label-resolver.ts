@@ -1,7 +1,7 @@
 import type { ERLabel } from '@er-visualizer/core';
 
 export interface ResolvedLabel {
-  /** Normalised label id (without @ prefix or surrounding quotes). */
+  /** Normalised label id (without @ prefix, quotes or the `GER_LABEL:` module prefix). */
   id: string;
   /** Original raw reference (what the model stored). */
   raw: string;
@@ -24,9 +24,64 @@ export function getUserLanguageTag(): string {
 }
 
 /**
- * Resolves a label reference (e.g. `@"_MyLabel"`, `@Foo`, or plain `Foo`) against
- * the label table of an ERSolution. Returns the en-us translation plus the user's
- * locale translation, when available.
+ * Strips reference decorations from a label reference and returns the bare
+ * id plus a "core" id with any `MODULE:` prefix (e.g. `GER_LABEL:`) removed.
+ *
+ * Accepted input shapes (all seen in real ER exports):
+ *   `@"GER_LABEL:Foo"`, `@GER_LABEL:Foo`, `"GER_LABEL:Foo"`, `GER_LABEL:Foo`,
+ *   `@"Foo"`, `@Foo`, `Foo`, `@GER_LABEL_1`
+ */
+export function normalizeLabelRef(ref: string): { bare: string; core: string } {
+  const bare = ref
+    .trim()
+    .replace(/^@/, '')
+    .replace(/^"(.*)"$/s, '$1')
+    .replace(/^'(.*)'$/s, '$1')
+    .trim();
+  const core = bare.replace(/^[A-Za-z][A-Za-z0-9_]*:/, '').trim();
+  return { bare, core };
+}
+
+/** Lower-cased, prefix-less key used to compare label ids across export paths. */
+function labelKey(id: string): string {
+  return normalizeLabelRef(id).core.toLowerCase();
+}
+
+/** True when the value looks like a label reference rather than literal text. */
+export function looksLikeLabelRef(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const v = value.trim();
+  return v.startsWith('@') || /^"?[A-Za-z][A-Za-z0-9_]*:[^"\s]+"?$/.test(v);
+}
+
+/** Cached per label array — the same table is queried for every row in a tree. */
+const labelIndexCache = new WeakMap<ERLabel[], Map<string, ERLabel[]>>();
+
+function indexLabels(labels: ERLabel[]): Map<string, ERLabel[]> {
+  const cached = labelIndexCache.get(labels);
+  if (cached) return cached;
+  const index = new Map<string, ERLabel[]>();
+  for (const label of labels) {
+    if (!label.labelId) continue;
+    const key = labelKey(label.labelId);
+    if (!key) continue;
+    const bucket = index.get(key);
+    if (bucket) bucket.push(label);
+    else index.set(key, [label]);
+  }
+  labelIndexCache.set(labels, index);
+  return index;
+}
+
+/**
+ * Resolves a label reference (e.g. `@"GER_LABEL:Foo"`, `@GER_LABEL:Foo`, `@Foo`
+ * or plain `Foo`) against the label table of an ERSolution. Returns the en-us
+ * translation plus the user's locale translation, when available.
+ *
+ * Matching is tolerant on purpose: ids are compared case-insensitively and
+ * without the module prefix (`GER_LABEL:`), because F&O writes the prefix into
+ * the reference but different export paths store the table id either with or
+ * without it.
  */
 export function resolveLabel(
   labelRef: string | null | undefined,
@@ -37,25 +92,18 @@ export function resolveLabel(
   const trimmed = String(labelRef).trim();
   if (!trimmed) return null;
 
-  // Strip common reference decorations: leading '@' and surrounding quotes.
-  const bare = trimmed
-    .replace(/^@/, '')
-    .replace(/^"(.*)"$/, '$1')
-    .trim();
-  // D365 ER writes references as `@"GER_LABEL:Foo"`, but the label table stores
-  // the id either with or without that prefix depending on the export path.
-  const stripped = bare.replace(/^GER_LABEL:/, '').trim();
+  const { bare, core } = normalizeLabelRef(trimmed);
   const raw = trimmed;
   if (!bare) return { id: '', raw };
-  if (!labels || labels.length === 0) return { id: stripped, raw };
+  if (!labels || labels.length === 0) return { id: core, raw };
 
-  let id = bare;
-  let pool = labels.filter(l => l.labelId === bare);
-  if (pool.length === 0 && stripped !== bare) {
-    id = stripped;
-    pool = labels.filter(l => l.labelId === stripped);
-  }
-  if (pool.length === 0) return { id: stripped, raw };
+  const index = indexLabels(labels);
+  // Exact (case-sensitive) match on the bare id wins when several ids collapse
+  // to the same key; otherwise fall back to the tolerant bucket.
+  const bucket = index.get(core.toLowerCase()) ?? [];
+  let pool = bucket.filter(l => l.labelId === bare || l.labelId === core);
+  if (pool.length === 0) pool = bucket;
+  if (pool.length === 0) return { id: core, raw };
 
   const findByLang = (lang: string) =>
     pool.find(l => normalizeLang(l.languageId) === lang);
@@ -72,15 +120,38 @@ export function resolveLabel(
     localized = pool.find(l => normalizeLang(l.languageId).startsWith(lang + '-'));
   }
 
-  const sameAsEnUs = localized && enUs && localized.languageId === enUs.languageId;
+  // Last resort: any translation at all is better than the raw id.
+  const anyText = enUs ?? localized ?? pool.find(l => l.labelValue);
+  const effectiveEnUs = enUs ?? (localized ? undefined : anyText);
+
+  const sameAsEnUs = localized && effectiveEnUs && localized.languageId === effectiveEnUs.languageId;
 
   return {
-    id,
+    id: core,
     raw,
-    enUs: enUs?.labelValue,
+    enUs: effectiveEnUs?.labelValue,
     localized: sameAsEnUs ? undefined : localized?.labelValue,
     localizedLang: sameAsEnUs ? undefined : localized?.languageId,
   };
+}
+
+/**
+ * Best human-readable text for a label reference: the user's locale first,
+ * then en-us, then the bare id. Returns `undefined` when `labelRef` is empty.
+ */
+export function labelDisplayText(
+  labelRef: string | null | undefined,
+  labels: ERLabel[] | undefined,
+  userLang?: string,
+): string | undefined {
+  const resolved = resolveLabel(labelRef, labels, userLang);
+  if (!resolved) return undefined;
+  return resolved.localized ?? resolved.enUs ?? resolved.id ?? resolved.raw;
+}
+
+/** True when the reference resolved to at least one translation. */
+export function isLabelResolved(resolved: ResolvedLabel | null | undefined): boolean {
+  return Boolean(resolved && (resolved.enUs || resolved.localized));
 }
 
 interface LabelBearingConfiguration {
@@ -120,4 +191,3 @@ export function buildLabelPool(
   labelPoolCache.set(configurations, byIndex);
   return pool;
 }
-

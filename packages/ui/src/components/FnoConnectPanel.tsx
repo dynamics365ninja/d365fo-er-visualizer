@@ -60,6 +60,7 @@ import { useAppStore } from '../state/store';
 import { useFnoProfiles, newProfileId } from '../state/fno-profiles';
 import { useFnoSession } from '../state/fno-session';
 import { fnoSession } from '../fno/session';
+import { DependencyPromptDialog, type DependencyPromptRequest } from './DependencyPromptDialog';
 
 const useStyles = makeStyles({
   root: {
@@ -451,6 +452,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   // missing sibling formats / mappings).
   const rootComponentCacheRef = useRef(new Map<string, ErConfigSummary[]>());
   const setFnoIngestStatus = useAppStore(s => s.setFnoIngestStatus);
+  const beginFnoIngest = useAppStore(s => s.beginFnoIngest);
+  const endFnoIngest = useAppStore(s => s.endFnoIngest);
+  const [depPrompt, setDepPrompt] = useState<(DependencyPromptRequest & { candidates: Array<{ key: string; kind: 'DataModel' | 'ModelMapping' | 'Format'; name: string; meta?: string; comp: ErConfigSummary }> }) | null>(null);
   const setIngestStatus = useCallback((status: string) => {
     setFnoIngestStatus(status);
   }, [setFnoIngestStatus]);
@@ -784,8 +788,49 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   const toggleSelect = useCallback((comp: ErConfigSummary) => {
     if (!isComponentDownloadable(comp)) return;
     const key = componentKey(comp);
+    const wasSelected = selected.has(key);
     toggleSelected(key, comp);
-  }, [isComponentDownloadable, toggleSelected]);
+    if (wasSelected || comp.componentType !== 'Format') return;
+
+    // Ask whether to also pull the model and its mapping. Candidates come
+    // from the listing the user is looking at: the owning DataModel row and
+    // the ModelMapping rows under the same solution.
+    const ownerNames = new Set([comp.ownerDataModelName, comp.solutionName].filter(Boolean) as string[]);
+    const related = components.filter(c => {
+      if (componentKey(c) === key || selected.has(componentKey(c))) return false;
+      if (!isComponentDownloadable(c)) return false;
+      if (c.componentType === 'DataModel') {
+        return ownerNames.has(c.configurationName) || ownerNames.has(c.solutionName);
+      }
+      if (c.componentType === 'ModelMapping') {
+        return (c.ownerDataModelName ? ownerNames.has(c.ownerDataModelName) : false) || ownerNames.has(c.solutionName);
+      }
+      return false;
+    });
+    // Also consider the DataModel the user drilled through (left panel) when
+    // the listing itself carries no DataModel row.
+    const chainDm = dataModelChain[dataModelChain.length - 1];
+    if (chainDm && !related.some(c => c.componentType === 'DataModel') && isComponentDownloadable(chainDm)
+      && !selected.has(componentKey(chainDm)) && ownerNames.has(chainDm.configurationName)) {
+      related.unshift(chainDm);
+    }
+    if (related.length === 0) return;
+    const seen = new Set<string>();
+    setDepPrompt({
+      subjectName: comp.configurationName,
+      subjectKind: 'Format',
+      body: t.depPromptBodyFno(comp.configurationName),
+      candidates: related
+        .filter(c => { const k = componentKey(c); if (seen.has(k)) return false; seen.add(k); return true; })
+        .map(c => ({
+          key: componentKey(c),
+          kind: c.componentType as 'DataModel' | 'ModelMapping' | 'Format',
+          name: c.configurationName,
+          meta: c.version ? `v${c.version}` : undefined,
+          comp: c,
+        })),
+    });
+  }, [isComponentDownloadable, toggleSelected, selected, components, dataModelChain]);
 
   const selectAllVisible = useCallback(() => {
     const next = new Map(selected);
@@ -932,6 +977,14 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       }
     }
     setIngesting(true);
+    beginFnoIngest(
+      Array.from(augmented.values()).map(c => ({
+        key: componentKey(c),
+        name: c.configurationName || c.solutionName,
+        kind: c.componentType,
+        explicit: selected.has(componentKey(c)),
+      })),
+    );
     // Set a non-empty status immediately so the "Already loaded / Open" button
     // is hidden from the very first moment (fnoIngestStatus gate in LandingPage).
     // Without this, Phase 0 scout downloads run with fnoIngestStatus='', leaving
@@ -2801,6 +2854,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
 
     setIngesting(false);
     setIngestStatus('');
+    endFnoIngest();
     if (ok > 0) {
       // Clear the queue when the entire batch resolved (success or
       // benign empty). Partial *real* failures stay selected for retry.
@@ -2808,7 +2862,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       pushToast({ kind: 'success', message: t.fnoLoadedCount(ok) });
       onFilesLoaded?.();
     }
-  }, [activeProfile, selected, allDataModelsSeen, solutions, solutionPath, loadXmlFile, pushToast]);
+  }, [activeProfile, selected, allDataModelsSeen, solutions, solutionPath, loadXmlFile, pushToast, beginFnoIngest, endFnoIngest]);
 
   // ── Helper: type badge ──────────────────────────────────────────────────
   const TypeBadge = ({ type }: { type: ErComponentType }) => {
@@ -3377,6 +3431,19 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             </div>
           </div>
 
+          <DependencyPromptDialog
+            request={depPrompt}
+            onConfirm={keys => {
+              const next = new Map(selected);
+              for (const c of depPrompt?.candidates ?? []) {
+                if (keys.includes(c.key)) next.set(c.key, c.comp);
+              }
+              setSelected(next);
+              setDepPrompt(null);
+            }}
+            onOnlySubject={() => setDepPrompt(null)}
+          />
+
           {/* ── Footer / download bar ─────────────────────────────────────── */}
           <div className={styles.footer}>
             <div className={styles.footerStatus}>
@@ -3385,7 +3452,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                   <ArrowSyncRegular fontSize={16} style={{ animation: 'spin 1s linear infinite', flexShrink: 0, color: tokens.colorBrandForeground1 }} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <Caption2 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginBottom: '2px' }}>
-                      Stahování konfigurací&hellip;
+                      {t.fnoFooterDownloading}
                     </Caption2>
                     <Caption1 style={{ fontWeight: '600', color: tokens.colorNeutralForeground1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
                       {ingestStatus}
@@ -3409,9 +3476,11 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                   </Tooltip>
                 </>
               ) : (
-                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-                  Select configurations to download
-                </Caption1>
+                <Tooltip content={t.fnoDownloadInfo} relationship="description">
+                  <Caption1 style={{ color: tokens.colorNeutralForeground3, cursor: 'help' }}>
+                    {t.fnoFooterIdle}
+                  </Caption1>
+                </Tooltip>
               )}
             </div>
             <Button
