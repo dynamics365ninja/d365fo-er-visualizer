@@ -135,4 +135,42 @@ describe('drill-down through nested calculated fields', () => {
     );
     expect(parts.find(p => p.label === '$CustInvoiceJour')?.detail).toContain('FILTER(');
   });
+
+  it('reports the field addressed on a table datasource', () => {
+    const configurations = loadConfigurations();
+    const expression = "Tables.'#SourceJournalTables'.CustInvoiceJour.InvoiceDate";
+    const result = resolveDeepExpression(expression, configurations, 0);
+
+    expect(result?.nestedDs?.name).toBe('CustInvoiceJour');
+    expect(result?.fieldPath).toEqual(['InvoiceDate']);
+
+    const store = useAppStore.getState();
+    const tree = buildExpressionTree({
+      expression,
+      configIndex: 0,
+      configurations,
+      resolveModelPath: store.resolveModelPath,
+      resolveDatasource: store.resolveDatasource,
+    });
+
+    // The row has to name the column, not just the table it hangs off.
+    expect(flatten(tree).map(n => n.sublabel)).toContain('CustInvoiceJour.InvoiceDate');
+  });
+
+  it('breaks down every calculated field along the path, not just the leaf', () => {
+    const configurations = loadConfigurations();
+    const store = useAppStore.getState();
+
+    const tree = buildExpressionTree({
+      expression: "Parameters.'$SourceJournal'.'$InvoiceDate'",
+      configIndex: 0,
+      configurations,
+      resolveModelPath: store.resolveModelPath,
+      resolveDatasource: store.resolveDatasource,
+    });
+
+    const sourceJournal = flatten(tree).find(n => n.label === '$SourceJournal');
+    expect(sourceJournal?.badge).toBe('calc');
+    expect(sourceJournal?.sublabel).toContain('FIRSTORNULL(');
+  });
 });

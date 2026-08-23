@@ -6,7 +6,7 @@ import type {
   ERModelMappingContent,
   ERFormatContent,
 } from '@er-visualizer/core';
-import { parseERConfigurations, GUIDRegistry } from '@er-visualizer/core';
+import { parseERConfigurations, GUIDRegistry, getFormatElementExcelRange } from '@er-visualizer/core';
 import { locale } from '../i18n';
 import { buildFormatBindingPresentation } from '../utils/format-binding-display';
 import { useFnoSession } from './fno-session';
@@ -2146,6 +2146,12 @@ export interface DeepResolutionResult {
   nestedDs: any | null;
   /** Full path segments resolved */
   pathSegments: string[];
+  /**
+   * Trailing segments that are not datasources of their own — i.e. the field
+   * addressed on `nestedDs`/`rootDs`. `model.InvoiceLines.ItemId` binds to a
+   * table datasource plus the field `ItemId`, which is otherwise dropped.
+   */
+  fieldPath: string[];
   /** The calculated field formula (if the resolved DS is a calc field) */
   formula: string | null;
   /** All datasources involved (tables, enums, classes, etc.) found by tracing the formula recursively */
@@ -2285,23 +2291,25 @@ function navigateDatasourcePath(
   datasources: any[],
   segments: string[],
   pools: any[][] = [],
-): { rootDs: any | null; leafDs: any | null } {
-  if (segments.length === 0) return { rootDs: null, leafDs: null };
+): { rootDs: any | null; leafDs: any | null; fieldPath: string[] } {
+  if (segments.length === 0) return { rootDs: null, leafDs: null, fieldPath: [] };
 
   // Find root — strip leading $/# if present for matching
   const rootName = segments[0].replace(/^[$#]/, '');
   const rootDs = findDatasourceByName(datasources, segments[0]) ??
                findDatasourceByName(datasources, rootName);
-  if (!rootDs) return { rootDs: null, leafDs: null };
+  if (!rootDs) return { rootDs: null, leafDs: null, fieldPath: [] };
 
   let current = rootDs;
-  for (let i = 1; i < segments.length; i++) {
+  let i = 1;
+  for (; i < segments.length; i++) {
     const child = findChildSegment(current, segments[i], pools, new Set(), 0);
     if (!child) break;
     current = child;
   }
 
-  return { rootDs, leafDs: current };
+  // Whatever is left addresses fields on `current`, not datasources.
+  return { rootDs, leafDs: current, fieldPath: segments.slice(i) };
 }
 
 /**
@@ -2419,13 +2427,17 @@ export function resolveDeepExpression(
 
     let rootDs: any = null;
     let leafDs: any = null;
+    let fieldPath: string[] = [];
     for (const datasources of datasourcePools) {
       const resolved = navigateDatasourcePath(datasources, pathSegments, allDatasourcePools);
-      if (resolved.rootDs) {
-        rootDs = resolved.rootDs;
-        leafDs = resolved.leafDs;
-        break;
-      }
+      if (!resolved.rootDs) continue;
+      // Several pools can expose the same root; keep the one that walks deepest,
+      // otherwise a shallow hit hides the datasource the path really lands on.
+      if (rootDs && resolved.fieldPath.length >= fieldPath.length) continue;
+      rootDs = resolved.rootDs;
+      leafDs = resolved.leafDs;
+      fieldPath = resolved.fieldPath;
+      if (fieldPath.length === 0) break;
     }
     if (!rootDs) continue;
 
@@ -2434,6 +2446,7 @@ export function resolveDeepExpression(
       rootDsConfigIndex: ci,
       nestedDs: leafDs !== rootDs ? leafDs : null,
       pathSegments,
+      fieldPath,
       formula: leafDs?.calculatedField?.expressionAsString ?? null,
       involvedDatasources: [],
       calculatedFieldChain: [],
@@ -2466,6 +2479,7 @@ export function resolveDeepExpression(
           rootDsConfigIndex: ci,
           nestedDs: resolved.leafDs !== resolved.rootDs ? resolved.leafDs : null,
           pathSegments: refSegments,
+          fieldPath: resolved.fieldPath,
           formula: resolved.leafDs?.calculatedField?.expressionAsString ?? null,
           involvedDatasources: [],
           calculatedFieldChain: [],
@@ -3133,7 +3147,7 @@ function buildFormatElementTree(element: any, prefix: string, configIndex: numbe
   };
 
   const baseName = element.name || element.elementType;
-  const excelRange = element.elementType === 'ExcelCell' ? element.attributes?.['ExcelRange'] : undefined;
+  const excelRange = getFormatElementExcelRange(element);
   // The parser already falls back to the named range when an Excel component
   // has no Name, so only append it when it adds information.
   const displayName = excelRange && excelRange !== baseName

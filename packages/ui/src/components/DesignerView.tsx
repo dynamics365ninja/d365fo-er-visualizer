@@ -35,8 +35,8 @@ import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { buildFormatBindingPresentation, groupFormatBindingsByCategory } from '../utils/format-binding-display';
 import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/theme-colors';
-import { ERDirection, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent, type ERFormatElement, type ERLabel } from '@er-visualizer/core';
-import { resolveLabel } from '../utils/label-resolver';
+import { ERDirection, getFormatElementExcelRange, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent, type ERFormatElement, type ERLabel } from '@er-visualizer/core';
+import { resolveLabel, buildLabelPool } from '../utils/label-resolver';
 import { parseXlsxBase64, colToLetter, type XlsxWorkbook, type XlsxCell as XlsxCellType, type XlsxMerge } from '../utils/xlsx-parser';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
@@ -1265,10 +1265,9 @@ function BindingTreeRows({
   ].filter(Boolean).join(' ');
 
   return (
-    <div className="mm-tree-node">
+    <div className="mm-tree-node" style={{ ['--mm-depth' as string]: depth }}>
       <div
         className={classes}
-        style={{ ['--mm-depth' as string]: depth }}
         role="treeitem"
         aria-expanded={hasChildren ? !isCollapsed : undefined}
         ref={isFocused ? focusRef : null}
@@ -2074,10 +2073,14 @@ const excelColors = {
   headerBg: 'var(--bg-secondary)',
   headerText: 'var(--text-secondary)',
   cellBorder: 'var(--border-subtle)',
-  rangeBg: 'rgba(33, 115, 70, 0.06)',
+  // Panel surfaces stay on the theme; the Excel green is kept for borders and
+  // accents only — green text on a green tint was unreadable in both themes.
+  rangeBg: 'var(--bg-secondary)',
   rangeBorder: '#217346',
-  headerSectionBg: 'rgba(33, 115, 70, 0.10)',
-  footerSectionBg: 'rgba(128, 128, 128, 0.08)',
+  rangeText: 'var(--text-primary)',
+  rangeMetaText: 'var(--text-secondary)',
+  headerSectionBg: 'var(--bg-secondary)',
+  footerSectionBg: 'var(--bg-secondary)',
   cellBg: 'var(--bg-primary)',
   dynamicValueColor: 'var(--format-type-string, #c586c0)',
   constantValueColor: 'var(--text-primary)',
@@ -2104,12 +2107,38 @@ function buildCellBindingMap(root: ERFormatElement, bm: BindingMap, labels?: ERL
 }
 
 // ── Excel Template Grid (renders parsed .xlsx with binding overlays) ──
+
+/** Marks an Excel preview that is only an intermediate step — F&O converts it to PDF. */
+function PdfOutputBadge() {
+  return (
+    <span
+      title={t.pdfConvertedFrom('Excel')}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '1px 8px',
+        borderRadius: 3,
+        border: '1px solid rgba(255,255,255,0.4)',
+        background: 'rgba(255,255,255,0.15)',
+        color: excelColors.sheetTabText,
+        fontSize: 11,
+        fontWeight: 700,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      📕 PDF
+    </span>
+  );
+}
+
 function ExcelTemplateGrid({
   workbook,
   filename,
   bindingMap,
   rootElement,
   labels,
+  pdfOutput,
   onSwitchToStructure,
   onElementClick,
 }: {
@@ -2118,6 +2147,7 @@ function ExcelTemplateGrid({
   bindingMap: BindingMap;
   rootElement: ERFormatElement;
   labels?: ERLabel[];
+  pdfOutput?: boolean;
   onSwitchToStructure: () => void;
   onElementClick?: (elementId: string) => void;
 }) {
@@ -2201,6 +2231,7 @@ function ExcelTemplateGrid({
       }}>
         <span style={{ fontSize: 14 }}>📄</span>
         <span>{t.excelTemplateView}: {filename}</span>
+        {pdfOutput && <PdfOutputBadge />}
         <button
           onClick={onSwitchToStructure}
           style={{
@@ -2429,8 +2460,9 @@ function collectSheetColumns(sheet: ExcelSheetData): string[] {
   return Array.from(cols).sort((a, b) => a.length - b.length || a.localeCompare(b));
 }
 
-function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, template, onNavigateToElement }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; template?: { filename: string; base64?: string }; onNavigateToElement?: (elementId: string) => void }) {
-  const labels = useAppStore(s => s.configurations[configIndex]?.solutionVersion?.solution?.labels);
+function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, template, onNavigateToElement, pdfOutput }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; template?: { filename: string; base64?: string }; onNavigateToElement?: (elementId: string) => void; pdfOutput?: boolean }) {
+  const configurations = useAppStore(s => s.configurations);
+  const labels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
   const previewOptions = useMemo<PreviewRenderOptions>(() => ({ placeholderMode: 'sample' }), []);
   const sheets = useMemo(() => collectExcelSheets(rootElement, bindingMap, labels, previewOptions), [rootElement, bindingMap, labels, previewOptions]);
   const [activeSheet, setActiveSheet] = useState(0);
@@ -2520,6 +2552,7 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
           bindingMap={bindingMap}
           rootElement={rootElement}
           labels={labels}
+          pdfOutput={pdfOutput}
           onSwitchToStructure={() => setViewMode('structure')}
           onElementClick={onNavigateToElement ? (elementId) => {
             setViewMode('structure');
@@ -2645,6 +2678,7 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
       }}>
         <span style={{ fontSize: 14 }}>📊</span>
         <span>{direction === ERDirection.Import ? t.excelInput : t.excelOutput} {t.excelWorkbook}</span>
+        {pdfOutput && <PdfOutputBadge />}
         {template && (
           <div style={{ display: 'flex', marginLeft: 8, border: '1px solid rgba(255,255,255,0.4)', borderRadius: 3, overflow: 'hidden' }}>
             <button
@@ -2859,6 +2893,7 @@ function ExcelSectionBlock({ section, onCellClick }: { section: ExcelSectionData
   return (
     <div style={{
       background: isHeader ? excelColors.headerSectionBg : excelColors.footerSectionBg,
+      borderLeft: `3px solid ${isHeader ? `${excelColors.rangeBorder}66` : 'var(--border-subtle)'}`,
       borderBottom: `1px solid ${excelColors.cellBorder}`,
     }}>
       <div style={{
@@ -2897,7 +2932,7 @@ function ExcelRangeBlock({ range, depth, onCellClick, selectedCell }: { range: E
         borderBottom: `1px solid ${excelColors.cellBorder}`,
       }}>
         <span style={{ fontSize: 13 }}>📐</span>
-        <span style={{ fontSize: 12, fontWeight: 600, color: excelColors.rangeBorder }}>{range.excelRange}</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: excelColors.rangeText }}>{range.excelRange}</span>
         {range.name !== range.excelRange && (
           <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>({range.name})</span>
         )}
@@ -2906,8 +2941,8 @@ function ExcelRangeBlock({ range, depth, onCellClick, selectedCell }: { range: E
             fontSize: 10,
             padding: '1px 6px',
             borderRadius: 3,
-            background: `${excelColors.rangeBorder}18`,
-            color: excelColors.rangeBorder,
+            border: `1px solid ${excelColors.rangeBorder}66`,
+            color: excelColors.rangeText,
             fontWeight: 600,
           }}>
             {repIcon} {range.replicationDirection === 'vertical' ? t.excelRepeatingVertical : t.excelRepeatingHorizontal}
@@ -2963,7 +2998,7 @@ function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellD
             }}>
               <span style={{
                 fontSize: 10,
-                color: excelColors.rangeBorder,
+                color: excelColors.rangeMetaText,
                 fontFamily: 'var(--font-mono, monospace)',
                 fontWeight: 600,
                 flexShrink: 0,
@@ -3098,23 +3133,39 @@ function parseDelimitedPreview(text: string): DelimitedPreviewData | null {
 }
 
 function FormatPreview({ rootElement, direction, bindingMap, configIndex, onNavigateToElement }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; onNavigateToElement?: (elementId: string) => void }) {
-  const info = detectFormatType(rootElement);
+  const isPdf = rootElement?.elementType === 'PDFFile';
+  const previewRoot = unwrapConverterRoot(rootElement);
+  const info = detectFormatType(previewRoot);
   const template = useAppStore(s => {
     const cfg = s.configurations[configIndex];
     if (!cfg || cfg.content.kind !== 'Format') return undefined;
     return (cfg.content as ERFormatContent).formatVersion.format.template;
   });
-
-  // Visual spreadsheet preview for Excel formats
-  if (info.label === 'Excel') {
-    return <ExcelVisualPreview rootElement={rootElement} direction={direction} bindingMap={bindingMap} configIndex={configIndex} template={template} onNavigateToElement={onNavigateToElement} />;
-  }
-
   const [placeholderMode, setPlaceholderMode] = useState<PreviewPlaceholderMode>('sample');
   const [csvFirstRowHeader, setCsvFirstRowHeader] = useState(true);
   const previewOptions = useMemo<PreviewRenderOptions>(() => ({ placeholderMode }), [placeholderMode]);
-  const preview = useMemo(() => generateFormatPreview(rootElement, bindingMap, previewOptions), [rootElement, bindingMap, previewOptions]);
+  const preview = useMemo(() => generateFormatPreview(previewRoot, bindingMap, previewOptions), [previewRoot, bindingMap, previewOptions]);
   const delimitedPreview = useMemo(() => parseDelimitedPreview(preview), [preview]);
+
+  // Visual spreadsheet preview for Excel formats (including Excel wrapped in a PDF converter)
+  if (info.label === 'Excel') {
+    return (
+      <ExcelVisualPreview
+        rootElement={previewRoot}
+        direction={direction}
+        bindingMap={bindingMap}
+        configIndex={configIndex}
+        template={template}
+        onNavigateToElement={onNavigateToElement}
+        pdfOutput={isPdf}
+      />
+    );
+  }
+
+  if (isPdf && previewRoot === rootElement) {
+    return <div style={{ padding: 16, fontSize: 12, color: 'var(--text-secondary)' }}>📕 {t.pdfNoSourceComponent}</div>;
+  }
+
   const showDelimitedTable = (info.label === 'Text / CSV' || info.label === 'Text') && delimitedPreview !== null;
   const tableHeaderCells = showDelimitedTable && delimitedPreview
     ? (csvFirstRowHeader
@@ -3142,6 +3193,11 @@ function FormatPreview({ rootElement, direction, bindingMap, configIndex, onNavi
       <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
         {direction === ERDirection.Import ? `📥 ${t.excelInput}` : `📤 ${t.excelOutput}`} — {t.previewDescription}
       </div>
+      {isPdf && (
+        <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+          📕 {t.pdfConvertedFrom(info.label)}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{locale === 'cs' ? 'Nevyřešené hodnoty:' : 'Unresolved values:'}</span>
         <button
@@ -3273,7 +3329,8 @@ function FormatPreview({ rootElement, direction, bindingMap, configIndex, onNavi
 }
 
 /** Build a file preview from the ER Format element tree using binding expressions. */
-function generateFormatPreview(root: ERFormatElement, bm: BindingMap, options: PreviewRenderOptions): string {
+function generateFormatPreview(rootElement: ERFormatElement, bm: BindingMap, options: PreviewRenderOptions): string {
+  const root = unwrapConverterRoot(rootElement);
   const info = detectFormatType(root);
   if (info.label === 'XML') return generateXmlPreview(root, 0, bm, options);
   if (info.label === 'Text / CSV' || info.label === 'Text') return generateTextPreview(root, bm, options);
@@ -3407,6 +3464,14 @@ interface FormatTypeInfo {
   bg: string;
 }
 
+/** The PDF converter component only wraps the component that actually produces the
+ *  document (usually an Excel template). Preview/structure logic must look through it. */
+function unwrapConverterRoot(rootElement: ERFormatElement): ERFormatElement {
+  if (rootElement?.elementType !== 'PDFFile') return rootElement;
+  const inner = rootElement.children?.find(c => c.elementType !== 'Unknown');
+  return inner ?? rootElement;
+}
+
 function detectFormatType(rootElement: any): FormatTypeInfo {
   const et = rootElement?.elementType ?? '';
   if (et === 'ExcelFile') return { label: 'Excel', icon: '📊', color: 'var(--surface-success-fg)', bg: 'var(--surface-success-bg)' };
@@ -3431,23 +3496,29 @@ function detectFormatType(rootElement: any): FormatTypeInfo {
 
 function FormatTypeBadge({ rootElement }: { rootElement: any }) {
   const info = detectFormatType(rootElement);
+  const inner = unwrapConverterRoot(rootElement);
+  const sourceLabel = inner !== rootElement ? detectFormatType(inner).label : null;
   return (
-    <span style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 5,
-      padding: '3px 10px',
-      borderRadius: 4,
-      background: info.bg,
-      color: info.color,
-      fontWeight: 700,
-      fontSize: 12,
-      letterSpacing: 0.5,
-      flexShrink: 0,
-      border: `1px solid ${info.color}44`,
-    }}>
+    <span
+      title={sourceLabel ? t.pdfConvertedFrom(sourceLabel) : undefined}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '3px 10px',
+        borderRadius: 4,
+        background: info.bg,
+        color: info.color,
+        fontWeight: 700,
+        fontSize: 12,
+        letterSpacing: 0.5,
+        flexShrink: 0,
+        border: `1px solid ${info.color}44`,
+      }}
+    >
       <span>{info.icon}</span>
       <span>{info.label}</span>
+      {sourceLabel && <span style={{ fontWeight: 500, opacity: 0.8 }}>← {sourceLabel}</span>}
     </span>
   );
 }
@@ -3518,7 +3589,8 @@ interface FormatElementTreeProps {
 
 function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, showAll, expandMode, expandVersion, selectedId, onSelect, resolveDatasource, registry, showTechnicalDetails, bindingFilter, treeIndex, selectedAncestors }: FormatElementTreeProps) {
   const [expanded, setExpanded] = useState(expandMode === 'all');
-  const labels = useAppStore(s => s.configurations[configIndex]?.solutionVersion?.solution?.labels);
+  const configurations = useAppStore(s => s.configurations);
+  const labels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
 
   useEffect(() => {
     setExpanded(expandMode === 'all');
@@ -3535,6 +3607,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
   const labelRef = element.attributes?.['Label'];
   const resolvedLabel = useMemo(() => resolveLabel(labelRef, labels), [labelRef, labels]);
   const labelText = resolvedLabel?.localized ?? resolvedLabel?.enUs ?? (resolvedLabel?.id ? resolvedLabel.id : undefined);
+  const excelRange = getFormatElementExcelRange(element);
 
   const matchesFilter = !filter || treeIndex.selfMatch.has(element.id);
   const descendantMatches = !filter || treeIndex.subtreeMatch.has(element.id);
@@ -3654,8 +3727,8 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
         </span>
 
         {/* ExcelRange address */}
-        {element.elementType === 'ExcelCell' && element.attributes?.['ExcelRange'] && (
-          <span className="fmt-meta" style={{ fontFamily: 'var(--font-mono, monospace)' }}>[{element.attributes['ExcelRange']}]</span>
+        {excelRange && excelRange !== element.name && (
+          <span className="fmt-meta" style={{ fontFamily: 'var(--font-mono, monospace)' }}>[{excelRange}]</span>
         )}
 
         {/* Resolved label */}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseERConfiguration, parseERConfigurations } from './xml-parser.js';
+import { getFormatElementDataType, getFormatElementExcelRange } from '../format/element-info.js';
 import type { ERExpression } from '../types/expressions.js';
 
 function buildSolutionEnvelope(contents: string, options?: { contentRefId?: string; contentRefIds?: string[] }) {
@@ -554,6 +555,14 @@ describe('parseERConfiguration', () => {
     const cell = range?.children[0];
     expect(cell?.elementType).toBe('ExcelCell');
     expect(cell?.name).toBe('Header_CompanyName_Value');
+
+    // Every Excel component must expose its range/sheet name and a data type;
+    // the designer shows both as properties.
+    expect(getFormatElementExcelRange(sheet!)).toBe('Sheet1');
+    expect(getFormatElementExcelRange(range!)).toBe('Header');
+    expect(getFormatElementExcelRange(cell!)).toBe('Header_CompanyName_Value');
+    expect(getFormatElementDataType(range!)).toBe('Void');
+    expect(getFormatElementDataType(cell!)).toBe('String');
   });
 
   it('recognizes import formats from DataImportSupport="1"', () => {

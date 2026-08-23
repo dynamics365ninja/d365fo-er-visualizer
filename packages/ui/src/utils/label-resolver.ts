@@ -76,3 +76,42 @@ export function resolveLabel(
     localizedLang: sameAsEnUs ? undefined : localized?.languageId,
   };
 }
+
+interface LabelBearingConfiguration {
+  solutionVersion?: { solution?: { labels?: ERLabel[] } };
+}
+
+/** Cached per configurations array — the format tree resolves labels row by row. */
+const labelPoolCache = new WeakMap<object, Map<number, ERLabel[]>>();
+
+/**
+ * Label texts a configuration can resolve: its own table first, then every other
+ * loaded configuration. A format or mapping references labels whose definition
+ * lives in the data model solution, so resolving against one file alone leaves
+ * the raw `@GER_...` id on screen.
+ */
+export function buildLabelPool(
+  configurations: readonly LabelBearingConfiguration[] | undefined,
+  configIndex: number,
+): ERLabel[] {
+  if (!configurations || configurations.length === 0) return [];
+
+  const cached = labelPoolCache.get(configurations);
+  const hit = cached?.get(configIndex);
+  if (hit) return hit;
+
+  const own = configurations[configIndex]?.solutionVersion?.solution?.labels ?? [];
+  const others: ERLabel[] = [];
+  configurations.forEach((cfg, index) => {
+    if (index === configIndex) return;
+    const labels = cfg?.solutionVersion?.solution?.labels;
+    if (labels?.length) others.push(...labels);
+  });
+  const pool = others.length > 0 ? [...own, ...others] : own;
+
+  const byIndex = cached ?? new Map<number, ERLabel[]>();
+  byIndex.set(configIndex, pool);
+  labelPoolCache.set(configurations, byIndex);
+  return pool;
+}
+

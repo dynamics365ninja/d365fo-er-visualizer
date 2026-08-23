@@ -248,7 +248,6 @@ export interface Translations {
   recentReloadHint: string;
   recentSessions: string;
   recentSessionTitle: (count: number) => string;
-  recentSessionReloadHint: string;
   recentSessionMergeHint: string;
   recentSessionReplaceHint: string;
   recentSessionFileHint: string;
@@ -409,6 +408,8 @@ export interface Translations {
   excelTemplateDropActive: string;
   excelTemplateDropInvalid: string;
   excelTemplateLoadBtn: string;
+  pdfConvertedFrom: (source: string) => string;
+  pdfNoSourceComponent: string;
   previewLabel: string;
   previewDescription: string;
 
@@ -654,10 +655,9 @@ const cs: Translations = {
 
   recentFiles: 'Nedávné soubory',
   noRecentFiles: 'Žádné nedávno otevřené soubory.',
-  recentReloadHint: 'Dvojklik pro znovunačtení souboru',
+  recentReloadHint: 'Znovu načíst soubor',
   recentSessions: 'Nedávné relace',
   recentSessionTitle: (count: number) => `Relace (${count} ${count === 1 ? 'soubor' : count >= 2 && count <= 4 ? 'soubory' : 'souborů'})`,
-  recentSessionReloadHint: 'Dvojklik pro načtení celé relace',
   recentSessionMergeHint: 'Přidat relaci do pracovní plochy',
   recentSessionReplaceHint: 'Nahradit pracovní plochu touto relací',
   recentSessionFileHint: 'Přidat konfiguraci do pracovní plochy',
@@ -815,6 +815,8 @@ const cs: Translations = {
   excelTemplateDropActive: 'Pusťte soubor .xlsx…',
   excelTemplateDropInvalid: 'Pouze soubory .xlsx',
   excelTemplateLoadBtn: 'Načíst šablonu (.xlsx)',
+  pdfConvertedFrom: (source: string) => `Výstup se převádí do PDF ze šablony ${source}`,
+  pdfNoSourceComponent: 'PDF převodník neobsahuje žádnou vnořenou komponentu, kterou by šlo zobrazit.',
   previewLabel: 'Náhled',
   previewDescription: 'Náhled struktury souboru — konstantní hodnoty jsou odvozeny z binding výrazů. Dynamické hodnoty (cesty datových zdrojů, funkce) jsou zobrazeny jako {zástupné}.',
 
@@ -1052,10 +1054,9 @@ const en: Translations = {
 
   recentFiles: 'Recent files',
   noRecentFiles: 'No recently opened files.',
-  recentReloadHint: 'Double-click to reload file',
+  recentReloadHint: 'Reload file',
   recentSessions: 'Recent sessions',
   recentSessionTitle: (count: number) => `Session (${count} ${count === 1 ? 'file' : 'files'})`,
-  recentSessionReloadHint: 'Double-click to load the whole session',
   recentSessionMergeHint: 'Add session to workspace',
   recentSessionReplaceHint: 'Replace workspace with this session',
   recentSessionFileHint: 'Add configuration to workspace',
@@ -1213,6 +1214,8 @@ const en: Translations = {
   excelTemplateDropActive: 'Release to load .xlsx…',
   excelTemplateDropInvalid: '.xlsx files only',
   excelTemplateLoadBtn: 'Load template (.xlsx)',
+  pdfConvertedFrom: (source: string) => `Output is converted to PDF from the ${source} template`,
+  pdfNoSourceComponent: 'The PDF converter contains no nested component that can be previewed.',
   previewLabel: 'Preview',
   previewDescription: 'File structure preview — constant values are resolved from binding expressions. Dynamic values (datasource paths, functions) are shown as {placeholders}.',
 

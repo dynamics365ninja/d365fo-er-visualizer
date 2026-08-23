@@ -3331,9 +3331,38 @@ body {
   position: relative;
 }
 
+/* Indentation rail: without a drawn hierarchy the nested paths read as a flat
+   list of rows that happen to start at different offsets. */
+.mm-tree-children::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 6px;
+  left: calc(20px + var(--mm-depth, 0) * 16px);
+  width: 1px;
+  background: color-mix(in srgb, var(--er-border-strong) 80%, transparent);
+  pointer-events: none;
+}
+
 .mm-tree-row {
   --mm-indent: calc(var(--mm-depth, 0) * 16px);
   margin-left: calc(12px + var(--mm-indent));
+}
+
+/* Elbow from the rail to the row, so a child visibly hangs off its parent. */
+.mm-tree-children > .mm-tree-node > .mm-tree-row::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background: color-mix(in srgb, var(--er-border-strong) 80%, transparent);
+  pointer-events: none;
+}
+
+.mm-tree-branch {
+  position: relative;
 }
 
 .mm-tree-head {
@@ -8432,6 +8461,30 @@ body {
   margin: 3px 6px;
   min-height: 28px;
   font-weight: 620;
+}
+/* Indentation rails, one per ancestor level — rows are flat siblings in the
+   DOM, so the hierarchy has to be drawn on the row itself. */
+.explorer-tree-shell .tree-node::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 8px;
+  width: calc(var(--depth, 0) * 16px);
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0 15px,
+    color-mix(in srgb, var(--ui-stroke-2) 70%, transparent) 15px 16px
+  );
+  pointer-events: none;
+}
+.explorer-tree-shell .tree-node.selected::before,
+.explorer-tree-shell .tree-node.ancestor::before {
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0 15px,
+    color-mix(in srgb, var(--accent) 48%, transparent) 15px 16px
+  );
 }
 .explorer-tree-shell .tree-node-section {
   color: var(--text-secondary);
