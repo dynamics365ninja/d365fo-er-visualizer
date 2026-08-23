@@ -95,3 +95,19 @@ describe('label reference helpers', () => {
     expect(looksLikeLabelRef('')).toBe(false);
   });
 });
+
+describe('harvested label pool', () => {
+  it('falls back to labels harvested from other F&O responses, own table wins', async () => {
+    const { buildLabelPool, registerHarvestedLabels, labelDisplayText } = await import('./label-resolver.js');
+    const cfg = { solutionVersion: { solution: { labels: [{ labelId: 'Own', labelValue: 'Vlastní', languageId: 'en-US' }] } } };
+    expect(registerHarvestedLabels([
+      { labelId: 'GER_LABEL:Fax', labelValue: 'Fax', languageId: 'en-US' },
+      { labelId: 'Own', labelValue: 'Z jiné odpovědi', languageId: 'en-US' },
+    ])).toBe(2);
+    // duplicate registration is a no-op
+    expect(registerHarvestedLabels([{ labelId: 'GER_LABEL:Fax', labelValue: 'Fax', languageId: 'en-US' }])).toBe(0);
+    const pool = buildLabelPool([cfg], 0);
+    expect(labelDisplayText('@"GER_LABEL:Fax"', pool, 'en-us')).toBe('Fax');
+    expect(labelDisplayText('@Own', pool, 'en-us')).toBe('Vlastní');
+  });
+});
