@@ -484,7 +484,7 @@ describe('downloadConfigXml', () => {
     // The extractor wraps bare payloads in `<ErFnoBundle Name="...">`
     // so the downstream parser has a fallback for the tab label.
     expect(result.xml).toContain(xml);
-    expect(result.xml).toMatch(/<ErFnoBundle Name="C">/);
+    expect(result.xml).toMatch(/<ErFnoBundle Name="C" SolutionId="cfg-1">/);
     expect(result.syntheticPath).toMatch(/^fno:\/\//);
     expect(posts[0].url).toContain(`/${ER_SERVICES.configurationStorage}/${op}`);
     const body = posts[0].body as Record<string, unknown>;

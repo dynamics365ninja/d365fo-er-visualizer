@@ -351,6 +351,17 @@ function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> 
     s => typeof s === 'string' && s.length > 0,
   ) ?? '';
 
+  // Solution identity. Custom services strip the ERSolution envelope, so the
+  // transport forwards the component's own GUID (`SolutionId`) and its
+  // inheritance parent (`Base`) on the bundle wrapper; a bare
+  // `ERSolutionVersion` fragment inside the bundle may carry `Base` too.
+  const asStr = (v: unknown): string | undefined => (typeof v === 'string' && v.length > 0 ? v : undefined);
+  const solutionId = asStr(doc['@_SolutionId']) ?? '';
+  const baseHint =
+    asStr(doc['@_Base']) ??
+    asStr((doc['ERSolutionVersion'] as Record<string, unknown> | undefined)?.['@_Base']) ??
+    asStr((doc['ERSolution'] as Record<string, unknown> | undefined)?.['@_Base']);
+
   // Minimal `ERSolutionVersion` envelope. Fields default to empty;
   // `parseSolutionVersion` tolerates missing attrs / ERSolution via its
   // `?? ''` / `?? '0'` fallbacks (except `Missing ERSolution element`,
@@ -364,9 +375,10 @@ function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> 
       '@_VersionStatus': '0',
       Solution: {
         ERSolution: {
-          '@_ID.': '',
+          '@_ID.': solutionId,
           '@_Name': solutionName,
           '@_Description': solutionDesc,
+          ...(baseHint ? { '@_Base': baseHint } : {}),
           Contents: { 'Ref.': [] },
           Labels: {
             ERClassList: {
@@ -606,7 +618,10 @@ function parseSolution(node: any): ERSolution {
 function parseBaseId(base: string | undefined): string | undefined {
   if (!base) return undefined;
   const match = base.match(/^\{[^}]+\}/);
-  return match ? match[0] : undefined;
+  if (match) return match[0];
+  // Tolerate a bare GUID without braces (seen in F&O custom-service payloads).
+  const bare = base.match(/^[0-9a-fA-F-]{36}/);
+  return bare ? `{${bare[0]}}` : undefined;
 }
 
 function parseBaseVersion(base: string | undefined): number | undefined {

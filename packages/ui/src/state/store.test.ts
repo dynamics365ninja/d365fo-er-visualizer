@@ -140,7 +140,7 @@ describe('addInheritedLabels', () => {
     useAppStore.setState({ configurations: [derived, format, unrelated] });
 
     useAppStore.getState().addInheritedLabels(
-      ['bbbb0000-0000-0000-0000-000000000002'],
+      { solutionIds: ['bbbb0000-0000-0000-0000-000000000002'] },
       [
         { labelId: 'Fax', labelValue: 'Fax', languageId: 'en-US' },
         { labelId: 'Fax', labelValue: 'Vlastní', languageId: 'cs' },

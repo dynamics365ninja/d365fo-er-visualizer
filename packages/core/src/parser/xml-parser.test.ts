@@ -1172,3 +1172,14 @@ describe('parseERConfigurations', () => {
     expect(configs[0]?.filePath).toBe('model.xml');
   });
 });
+
+describe('F&O bundle solution identity', () => {
+  it('propagates SolutionId and Base hints from the bundle wrapper into the synthetic ERSolution', () => {
+    const xml = `<ErFnoBundle Name="Derived format" Version="12" SolutionId="{11111111-1111-1111-1111-111111111111}" Base="{22222222-2222-2222-2222-222222222222},5">
+      <ERTextFormat Name="Derived format"><Contents.></Contents.></ERTextFormat>
+    </ErFnoBundle>`;
+    const [cfg] = parseERConfigurations(xml, 'fno://x/Derived format');
+    expect(cfg.solutionVersion.solution.id).toBe('{11111111-1111-1111-1111-111111111111}');
+    expect(cfg.solutionVersion.solution.baseSolutionId).toBe('{22222222-2222-2222-2222-222222222222}');
+  });
+});
