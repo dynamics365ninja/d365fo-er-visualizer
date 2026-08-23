@@ -807,6 +807,23 @@ describe('buildDownloadAttempts', () => {
       expect(descriptors).toContain('MyContainer');
       expect(descriptors).toContain(''); // empty string fallback always included
     });
+
+    it('omits heuristic descriptor fallbacks when descriptorNamesExclusive is set', () => {
+      const component: ErConfigSummary = {
+        componentType: 'ModelMapping',
+        solutionName: 'Invoice model',
+        configurationName: 'Invoice model mapping (SalesInvoice)',
+        parentDataModelGuid: 'dddddddd-0000-0000-0000-000000000004',
+        descriptorNameCandidates: ['SalesInvoice'],
+        descriptorNamesExclusive: true,
+        hasContent: true,
+      };
+      const attempts = buildDownloadAttempts(component);
+      const descriptors = attempts
+        .filter(a => a.operation === 'GetModelMappingByID')
+        .map(a => a.body._dataContainerDescriptorName);
+      expect(descriptors).toEqual(['SalesInvoice']);
+    });
   });
 });
 

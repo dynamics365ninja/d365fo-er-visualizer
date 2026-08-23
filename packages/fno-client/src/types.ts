@@ -157,6 +157,15 @@ export interface ErConfigSummary {
    * model author didn't move the mapping under a non-root container.
    */
   descriptorNameCandidates?: string[];
+  /**
+   * When true, `descriptorNameCandidates` is the complete list — the
+   * heuristic fallbacks (`configurationName`, `solutionName`, `''`) are
+   * not appended. Set it when the descriptor is known exactly (e.g. read
+   * from a Format's `ERModelDataSourceHandler/@DataContainerDescriptorName`),
+   * because the fallbacks resolve to a *different* mapping of the same
+   * DataModel rather than failing.
+   */
+  descriptorNamesExclusive?: boolean;
 }
 
 /** Result of downloading a configuration XML. */

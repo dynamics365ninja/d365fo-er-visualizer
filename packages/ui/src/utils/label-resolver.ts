@@ -37,19 +37,25 @@ export function resolveLabel(
   const trimmed = String(labelRef).trim();
   if (!trimmed) return null;
 
-  // Strip common reference decorations: leading '@', surrounding quotes,
-  // and the GER_LABEL: prefix used by D365 ER format references.
-  const id = trimmed
+  // Strip common reference decorations: leading '@' and surrounding quotes.
+  const bare = trimmed
     .replace(/^@/, '')
     .replace(/^"(.*)"$/, '$1')
-    .replace(/^GER_LABEL:/, '')
     .trim();
+  // D365 ER writes references as `@"GER_LABEL:Foo"`, but the label table stores
+  // the id either with or without that prefix depending on the export path.
+  const stripped = bare.replace(/^GER_LABEL:/, '').trim();
   const raw = trimmed;
-  if (!id) return { id: '', raw };
-  if (!labels || labels.length === 0) return { id, raw };
+  if (!bare) return { id: '', raw };
+  if (!labels || labels.length === 0) return { id: stripped, raw };
 
-  const pool = labels.filter(l => l.labelId === id);
-  if (pool.length === 0) return { id, raw };
+  let id = bare;
+  let pool = labels.filter(l => l.labelId === bare);
+  if (pool.length === 0 && stripped !== bare) {
+    id = stripped;
+    pool = labels.filter(l => l.labelId === stripped);
+  }
+  if (pool.length === 0) return { id: stripped, raw };
 
   const findByLang = (lang: string) =>
     pool.find(l => normalizeLang(l.languageId) === lang);

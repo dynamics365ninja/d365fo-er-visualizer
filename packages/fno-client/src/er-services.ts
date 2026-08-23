@@ -846,12 +846,15 @@ export function buildDownloadAttempts(
       const dmRev = component.parentDataModelRevisionGuid ?? '';
       const descriptorCandidates = Array.from(
         new Set(
-          [
-            ...(component.descriptorNameCandidates ?? []),
-            component.configurationName,
-            component.solutionName,
-            '',
-          ].map(s => (s ?? '').trim()),
+          (component.descriptorNamesExclusive
+            ? (component.descriptorNameCandidates ?? [])
+            : [
+                ...(component.descriptorNameCandidates ?? []),
+                component.configurationName,
+                component.solutionName,
+                '',
+              ]
+          ).map(s => (s ?? '').trim()),
         ),
       );
       for (const dm of [dmGuid, dmRev].filter(Boolean)) {
