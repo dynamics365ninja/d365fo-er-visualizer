@@ -143,6 +143,46 @@ export interface Translations {
   workspaceAdd: string;
   workspaceAddFiles: string;
   workspaceClose: string;
+  workspaceAvailable: string;
+  workspaceAvailableEmpty: string;
+  workspaceFilterPlaceholder: string;
+  workspaceReopenAll: string;
+  workspaceAddFromFno: string;
+  workspaceSourceFile: string;
+  workspaceSourceFno: string;
+  workspaceRemoveFromCache: string;
+  workspaceLinkedTo: (model: string) => string;
+  workspaceUnlinked: string;
+  workspaceClosedHint: string;
+  workspaceNoMatch: string;
+  depPromptTitle: string;
+  depPromptBodyFormat: (name: string) => string;
+  depPromptBodyMapping: (name: string) => string;
+  depPromptBodyModel: (name: string) => string;
+  depPromptBodyFno: (name: string) => string;
+  depPromptConfirm: string;
+  depPromptOnlyThis: string;
+  depPromptCancel: string;
+  fnoIngestTitle: string;
+  fnoIngestDone: string;
+  fnoIngestSummary: (done: number, total: number) => string;
+  fnoIngestFailed: (n: number) => string;
+  fnoIngestEmpty: (n: number) => string;
+  fnoIngestExplicit: string;
+  fnoIngestAuto: string;
+  fnoIngestStatusQueued: string;
+  fnoIngestStatusDownloading: string;
+  fnoIngestStatusDone: string;
+  fnoIngestStatusEmpty: string;
+  fnoIngestStatusFailed: string;
+  fnoIngestHint: string;
+  fnoIngestClose: string;
+  fnoIngestOpenWorkspace: string;
+  explorerUnlinked: string;
+  explorerLoading: string;
+  explorerAddConfigurations: string;
+  fnoFooterIdle: string;
+  fnoFooterDownloading: string;
   openInExplorerAction: string;
   explorerActionShort: string;
   noSelection: string;
@@ -554,6 +594,46 @@ const cs: Translations = {
   workspaceAdd: 'Přidat do pracovní plochy',
   workspaceAddFiles: 'Přidat soubory…',
   workspaceClose: 'Zavřít',
+  workspaceAvailable: 'K dispozici (zavřené / v mezipaměti)',
+  workspaceAvailableEmpty: 'Žádné další konfigurace v mezipaměti.',
+  workspaceFilterPlaceholder: 'Filtrovat konfigurace…',
+  workspaceReopenAll: 'Otevřít vše',
+  workspaceAddFromFno: 'Přidat z F&O…',
+  workspaceSourceFile: 'Soubor',
+  workspaceSourceFno: 'F&O',
+  workspaceRemoveFromCache: 'Odebrat z mezipaměti',
+  workspaceLinkedTo: (model: string) => `Model: ${model}`,
+  workspaceUnlinked: 'Bez načteného modelu',
+  workspaceClosedHint: 'Zavřené konfigurace zůstávají v mezipaměti prohlížeče a lze je kdykoli znovu otevřít.',
+  workspaceNoMatch: 'Filtru neodpovídá žádná konfigurace.',
+  depPromptTitle: 'Načíst také související konfigurace?',
+  depPromptBodyFormat: (name: string) => `Formát „${name}“ se opírá o datový model a jeho mapování. Bez nich neuvidíte vazby až na zdrojové tabulky.`,
+  depPromptBodyMapping: (name: string) => `Mapování „${name}“ patří k datovému modelu. Bez něj nelze zobrazit strukturu modelu.`,
+  depPromptBodyModel: (name: string) => `K modelu „${name}“ jsou v mezipaměti další konfigurace.`,
+  depPromptBodyFno: (name: string) => `K formátu „${name}“ jsem v aktuálním seznamu našel související konfigurace. Přidat je do výběru ke stažení?`,
+  depPromptConfirm: 'Načíst vybrané',
+  depPromptOnlyThis: 'Jen tuto konfiguraci',
+  depPromptCancel: 'Zrušit',
+  fnoIngestTitle: 'Stahování konfigurací z F&O',
+  fnoIngestDone: 'Stahování dokončeno',
+  fnoIngestSummary: (done: number, total: number) => `${done} z ${total} hotovo`,
+  fnoIngestFailed: (n: number) => `${n} selhalo`,
+  fnoIngestEmpty: (n: number) => `${n} bez obsahu`,
+  fnoIngestExplicit: 'vybráno',
+  fnoIngestAuto: 'závislost',
+  fnoIngestStatusQueued: 'Ve frontě',
+  fnoIngestStatusDownloading: 'Stahuji…',
+  fnoIngestStatusDone: 'Hotovo',
+  fnoIngestStatusEmpty: 'Bez vlastního XML',
+  fnoIngestStatusFailed: 'Selhalo',
+  fnoIngestHint: 'Datové modely a mapování se doplňují automaticky podle vazeb ve staženém XML.',
+  fnoIngestClose: 'Zavřít',
+  fnoIngestOpenWorkspace: 'Otevřít pracovní plochu',
+  explorerUnlinked: 'Nepřiřazeno',
+  explorerLoading: 'Načítám',
+  explorerAddConfigurations: 'Přidat konfigurace',
+  fnoFooterIdle: 'Vyberte konfigurace ke stažení',
+  fnoFooterDownloading: 'Stahování konfigurací…',
   openInExplorerAction: 'Otevřít v Exploreru',
   explorerActionShort: 'Explorer',
   noSelection: 'Není vybraný žádný prvek.',
@@ -957,6 +1037,46 @@ const en: Translations = {
   workspaceAdd: 'Add to workspace',
   workspaceAddFiles: 'Add files…',
   workspaceClose: 'Close',
+  workspaceAvailable: 'Available (closed / cached)',
+  workspaceAvailableEmpty: 'No further cached configurations.',
+  workspaceFilterPlaceholder: 'Filter configurations…',
+  workspaceReopenAll: 'Open all',
+  workspaceAddFromFno: 'Add from F&O…',
+  workspaceSourceFile: 'File',
+  workspaceSourceFno: 'F&O',
+  workspaceRemoveFromCache: 'Remove from cache',
+  workspaceLinkedTo: (model: string) => `Model: ${model}`,
+  workspaceUnlinked: 'No loaded model',
+  workspaceClosedHint: 'Closed configurations stay in the browser cache and can be reopened any time.',
+  workspaceNoMatch: 'No configuration matches the filter.',
+  depPromptTitle: 'Also load related configurations?',
+  depPromptBodyFormat: (name: string) => `Format "${name}" relies on a data model and its model mapping. Without them you cannot trace bindings down to source tables.`,
+  depPromptBodyMapping: (name: string) => `Mapping "${name}" belongs to a data model. Without it the model structure cannot be shown.`,
+  depPromptBodyModel: (name: string) => `More cached configurations belong to model "${name}".`,
+  depPromptBodyFno: (name: string) => `Related configurations for format "${name}" were found in the current list. Add them to the download selection?`,
+  depPromptConfirm: 'Load selected',
+  depPromptOnlyThis: 'Only this configuration',
+  depPromptCancel: 'Cancel',
+  fnoIngestTitle: 'Downloading configurations from F&O',
+  fnoIngestDone: 'Download finished',
+  fnoIngestSummary: (done: number, total: number) => `${done} of ${total} done`,
+  fnoIngestFailed: (n: number) => `${n} failed`,
+  fnoIngestEmpty: (n: number) => `${n} without content`,
+  fnoIngestExplicit: 'selected',
+  fnoIngestAuto: 'dependency',
+  fnoIngestStatusQueued: 'Queued',
+  fnoIngestStatusDownloading: 'Downloading…',
+  fnoIngestStatusDone: 'Done',
+  fnoIngestStatusEmpty: 'No own XML',
+  fnoIngestStatusFailed: 'Failed',
+  fnoIngestHint: 'Data models and mappings are resolved automatically from references in the downloaded XML.',
+  fnoIngestClose: 'Close',
+  fnoIngestOpenWorkspace: 'Open workspace',
+  explorerUnlinked: 'Unlinked',
+  explorerLoading: 'Loading',
+  explorerAddConfigurations: 'Add configurations',
+  fnoFooterIdle: 'Select configurations to download',
+  fnoFooterDownloading: 'Downloading configurations…',
   openInExplorerAction: 'Open in Explorer',
   explorerActionShort: 'Explorer',
   noSelection: 'No element selected.',

@@ -28,6 +28,35 @@ import { createFnoTransport } from './transport';
 
 const TOKEN_MIN_LIFETIME_MS = 60_000;
 
+// ── Download progress events ─────────────────────────────────────────────────
+// Every `downloadConfiguration` call reports its lifecycle here so the UI can
+// render a per-configuration progress log without threading callbacks through
+// the (large) ingest pipeline in FnoConnectPanel.
+
+export type FnoDownloadEvent =
+  | { type: 'start'; component: ErConfigSummary }
+  | { type: 'done'; component: ErConfigSummary; download: ErConfigDownload }
+  | { type: 'error'; component: ErConfigSummary; error: unknown };
+
+type DownloadListener = (event: FnoDownloadEvent) => void;
+const downloadListeners = new Set<DownloadListener>();
+
+/** Subscribe to download lifecycle events. Returns an unsubscribe function. */
+export function onFnoDownloadEvent(listener: DownloadListener): () => void {
+  downloadListeners.add(listener);
+  return () => downloadListeners.delete(listener);
+}
+
+function emitDownloadEvent(event: FnoDownloadEvent): void {
+  for (const listener of downloadListeners) {
+    try {
+      listener(event);
+    } catch (err) {
+      console.warn('[fno-session] download listener failed', err);
+    }
+  }
+}
+
 const tokenCache = new Map<string, AuthResult>();
 let sharedTransport: FnoTransport | null = null;
 
@@ -86,9 +115,16 @@ export const fnoSession = {
     component: ErConfigSummary,
     signal?: AbortSignal,
   ): Promise<ErConfigDownload> {
-    const auth = await ensureToken(conn, signal);
-    const download = await downloadConfigXml(transport(), conn, auth.accessToken, component, signal);
-    return download;
+    emitDownloadEvent({ type: 'start', component });
+    try {
+      const auth = await ensureToken(conn, signal);
+      const download = await downloadConfigXml(transport(), conn, auth.accessToken, component, signal);
+      emitDownloadEvent({ type: 'done', component, download });
+      return download;
+    } catch (error) {
+      emitDownloadEvent({ type: 'error', component, error });
+      throw error;
+    }
   },
 
   buildPath(conn: FnoConnection, component: ErConfigSummary): string {

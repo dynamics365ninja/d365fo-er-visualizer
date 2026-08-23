@@ -57,7 +57,7 @@ import {
 import { useAppStore, resolveDeepExpression } from '../state/store';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName, getEnumTypeLabel, getEnumSourceKind } from '../utils/enum-display';
-import { resolveLabel, buildLabelPool } from '../utils/label-resolver';
+import { resolveLabel, buildLabelPool, labelDisplayText } from '../utils/label-resolver';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -301,7 +301,7 @@ function formatSegmentForDisplay(segment: string): string {
 
 const ER_KEYWORDS = new Set(['true', 'false', 'null', 'empty', 'asc', 'desc']);
 
-function tokenizeERExpr(expr: string): ERToken[] {
+export function tokenizeERExpr(expr: string): ERToken[] {
   const tokens: ERToken[] = [];
   let i = 0;
   const n = expr.length;
@@ -359,6 +359,20 @@ function tokenizeERExpr(expr: string): ERToken[] {
         if (j < n) j++; // skip closing "
         tokens.push({ kind: 'label', raw: `@"${inner}"` });
         i = j; continue;
+      }
+      // Unquoted label reference: @GER_LABEL:Foo, @SYS12345, @Foo_Bar.
+      // ER exports write both the quoted and the bare form; without this
+      // branch the bare form fell through to the identifier tokenizer and
+      // "GER_LABEL" rendered as a clickable datasource.
+      if (j < n && /[A-Za-z_]/.test(expr[j])) {
+        let k = j;
+        while (k < n && /[A-Za-z0-9_]/.test(expr[k])) k++;
+        if (k < n && expr[k] === ':' && k + 1 < n && /[A-Za-z0-9_]/.test(expr[k + 1])) {
+          k++;
+          while (k < n && /[A-Za-z0-9_.\-]/.test(expr[k])) k++;
+        }
+        tokens.push({ kind: 'label', raw: expr.slice(i, k) });
+        i = k; continue;
       }
       let raw = '@';
       if (j < n && expr[j] === '.') {
@@ -920,6 +934,7 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
     ?? modelResult?.datasourceConfigIndex
     ?? directResult?.configIndex
     ?? effectiveCi;
+  const labelPool = buildLabelPool(configurations, resolvedDsConfigIndex);
 
   const normalizeExpr = (value: string) => value.replace(/\s+/g, '').toLowerCase();
   const showMappingExpression = Boolean(mappingExpr && normalizeExpr(mappingExpr) !== normalizeExpr(selected.expression));
@@ -1210,7 +1225,10 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
                     <div className="dd-workbench__summary-row"><span>{t.propName}</span><strong>{resolvedDs.name}</strong></div>
                     {targetIsDistinct && targetName && <div className="dd-workbench__summary-row"><span>{locale === 'cs' ? 'Cíl' : 'Target'}</span><strong>{targetName}</strong></div>}
                     {typeof resolvedDs.label === 'string' && resolvedDs.label && (
-                      <div className="dd-workbench__summary-row"><span>{t.propLabel}</span><strong>{resolvedDs.label}</strong></div>
+                      <div className="dd-workbench__summary-row">
+                        <span>{t.propLabel}</span>
+                        <strong title={resolvedDs.label}>{labelDisplayText(resolvedDs.label, labelPool) ?? resolvedDs.label}</strong>
+                      </div>
                     )}
                     {/* A user parameter has no formula behind it — its data type and
                         label are the whole answer to "where does this come from". */}

@@ -3,7 +3,7 @@ import { useAppStore } from '../state/store';
 import { ClickablePath } from './ClickablePath';
 import { ERDirection, getFormatElementDataType, getFormatElementExcelRange } from '@er-visualizer/core';
 import { getEnumTypeLabel } from '../utils/enum-display';
-import { resolveLabel, buildLabelPool } from '../utils/label-resolver';
+import { resolveLabel, buildLabelPool, looksLikeLabelRef } from '../utils/label-resolver';
 import { t, locale } from '../i18n';
 import {
   AppsListDetailRegular,
@@ -30,26 +30,40 @@ function LabelValue({ labelRef, configIndex }: { labelRef: string | null | undef
   if (!resolved) return <>–</>;
 
   const hasTranslations = Boolean(resolved.enUs || resolved.localized);
+  const primary = resolved.localized ?? resolved.enUs;
+
+  // Resolved: human text first, the technical id as a muted footnote.
+  // Unresolved: show the raw reference and say so, instead of pretending
+  // the id is the label.
+  if (!hasTranslations) {
+    const isRef = looksLikeLabelRef(resolved.raw);
+    return (
+      <div className="label-value label-value--unresolved">
+        <span className="label-value__text" title={resolved.raw}>{isRef ? resolved.id : resolved.raw}</span>
+        {isRef && (
+          <span className="label-value__missing" title={resolved.raw}>
+            {locale === 'cs' ? 'Text popisku není v načtených konfiguracích' : 'Label text not found in loaded configurations'}
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="label-value">
-      <span className="label-value__id" title={resolved.raw}>{resolved.raw}</span>
-      {hasTranslations && (
-        <div className="label-value__translations">
-          {resolved.enUs && (
-            <div className="label-value__translation">
-              <span className="label-value__lang">en-us</span>
-              <span className="label-value__text">{resolved.enUs}</span>
-            </div>
-          )}
-          {resolved.localized && (
-            <div className="label-value__translation">
-              <span className="label-value__lang">{resolved.localizedLang}</span>
-              <span className="label-value__text">{resolved.localized}</span>
-            </div>
-          )}
+      <span className="label-value__primary" title={resolved.raw}>{primary}</span>
+      <div className="label-value__translations">
+        {resolved.localized && resolved.enUs && (
+          <div className="label-value__translation">
+            <span className="label-value__lang">en-us</span>
+            <span className="label-value__text">{resolved.enUs}</span>
+          </div>
+        )}
+        <div className="label-value__translation label-value__translation--id">
+          <span className="label-value__lang">id</span>
+          <span className="label-value__id" title={resolved.raw}>{resolved.raw}</span>
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -27,154 +27,24 @@ import {
   DismissSquareMultipleRegular,
   FolderRegular,
   AppsListDetailRegular,
+  AddRegular,
 } from '@fluentui/react-icons';
 import { locale, t } from '../i18n';
 import { useAppStore, type TreeNode } from '../state/store';
 import { ERDirection } from '@er-visualizer/core';
-import type { ERConfiguration, ERModelMappingContent, ERFormatContent, ERDataModelContent } from '@er-visualizer/core';
-import { loadBrowserFiles } from '../utils/file-loading';
+import type { ERConfiguration } from '@er-visualizer/core';
+import { buildExplorerModelGroups, getBestVersion, type ExplorerModelGroup } from '../utils/model-hierarchy';
+import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
+import { buildLabelPool, labelDisplayText, looksLikeLabelRef } from '../utils/label-resolver';
 import { WorkspaceManager } from './WorkspaceManager';
+import { FnoIngestPanel } from './FnoIngestPanel';
 import {
   ArrowSyncRegular,
-  CloudArrowDownRegular,
   CheckmarkCircleRegular,
 } from '@fluentui/react-icons';
 
 type ConfigKind = 'DataModel' | 'ModelMapping' | 'Format';
 type SortMode = 'loadOrder' | 'nameAsc' | 'nameDesc';
-
-// ─── Model hierarchy helpers ─────────────────────────────────────────────────
-
-/** Normalize a solution GUID to lowercase without surrounding curly braces. */
-function normGuid(g: string | undefined): string {
-  return (g ?? '').replace(/^\{|\}$/g, '').toLowerCase();
-}
-
-/**
- * Returns the best version string to display for a configuration.
- * Priority:
- *  1. publicVersionNumber from the ERSolutionVersion envelope (set by
- *     `injectNameHint` to the listing version, e.g. 386 for a mapping).
- *     This beats the inner `ERModelMappingVersion.Number` which can be a
- *     descriptor-level sub-version (often 1) rather than the public version.
- *  2. ModelMapping: internal version.number from the XML body (present when
- *     the XML carries a real `ERSolutionVersion` envelope, e.g. offline files).
- *  3. solutionVersion.number  (integer attribute, always present as last resort)
- */
-function getBestVersion(cfg: ERConfiguration | undefined): string | undefined {
-  if (!cfg) return undefined;
-  if (cfg.solutionVersion.publicVersionNumber) return cfg.solutionVersion.publicVersionNumber;
-  if (cfg.content.kind === 'ModelMapping') {
-    const num = (cfg.content as ERModelMappingContent).version.number;
-    if (num > 0) return String(num);
-  }
-  if (cfg.solutionVersion.number > 0) return String(cfg.solutionVersion.number);
-  return undefined;
-}
-
-interface ExplorerModelGroup {
-  configIdx: number;
-  /** Direct non-DataModel children (mappings / formats). */
-  children: number[];
-  /** Derived DataModel children. */
-  subModels: ExplorerModelGroup[];
-}
-
-/**
- * Build a model-centric hierarchy from the loaded configurations.
- * Each DataModel acts as a container for its derived models (via the
- * solution-level `Base=` derivation) and for the ModelMappings / Formats
- * that target it. Note two distinct GUIDs are in play here:
- *  - `solutionVersion.solution.id` is the *solution wrapper* GUID (used only
- *    to resolve `Base=` derivation between configs of the same kind).
- *  - `content.version.model.id` is the DataModel *component*'s own GUID —
- *    this is what `ModelMapping.mapping.modelId` (and, transitively, a
- *    Format's embedded ModelMapping `modelId`) actually reference.
- * Mixing these up is why mappings/formats used to end up "unlinked" even
- * when their target model was loaded.
- * Returns root model groups + orphaned non-DataModel indices that
- * have no matching parent model in the loaded set.
- */
-function buildExplorerModelGroups(
-  configurations: ERConfiguration[],
-): { roots: ExplorerModelGroup[]; orphans: number[] } {
-  // DataModel component GUID (`<ERDataModel ID.=>`) → config index.
-  const modelIdToIdx = new Map<string, number>();
-  // Solution-wrapper GUID → config index, used only for `Base=` derivation.
-  const solutionIdToIdx = new Map<string, number>();
-
-  configurations.forEach((cfg, idx) => {
-    const solutionId = normGuid(cfg.solutionVersion.solution.id);
-    if (solutionId) solutionIdToIdx.set(solutionId, idx);
-    if (cfg.content.kind === 'DataModel') {
-      const modelId = normGuid((cfg.content as ERDataModelContent).version.model.id);
-      if (modelId) modelIdToIdx.set(modelId, idx);
-    }
-  });
-
-  /** Resolves the DataModel a given config belongs to, or undefined if none is loaded. */
-  const resolveParentModelIdx = (cfg: ERConfiguration): number | undefined => {
-    if (cfg.content.kind === 'ModelMapping') {
-      const modelId = normGuid((cfg.content as ERModelMappingContent).version.mapping.modelId);
-      return modelId ? modelIdToIdx.get(modelId) : undefined;
-    }
-    if (cfg.content.kind === 'Format') {
-      for (const embedded of (cfg.content as ERFormatContent).embeddedModelMappingVersions ?? []) {
-        const modelId = normGuid(embedded.mapping.modelId);
-        const idx = modelId ? modelIdToIdx.get(modelId) : undefined;
-        if (idx != null) return idx;
-      }
-      return undefined;
-    }
-    // DataModel → DataModel derivation uses the solution-level `Base=` reference.
-    const parentSolutionId = normGuid(cfg.solutionVersion.solution.baseSolutionId);
-    const parentIdx = parentSolutionId ? solutionIdToIdx.get(parentSolutionId) : undefined;
-    return parentIdx != null && configurations[parentIdx].content.kind === 'DataModel' ? parentIdx : undefined;
-  };
-
-  const childrenOf = new Map<number, number[]>();   // modelIdx → non-DM children
-  const subModelsOf = new Map<number, number[]>();  // modelIdx → derived DM children
-  const orphans: number[] = [];
-
-  configurations.forEach((cfg, idx) => {
-    const parentIdx = resolveParentModelIdx(cfg);
-    if (cfg.content.kind === 'DataModel') {
-      if (parentIdx != null) {
-        if (!subModelsOf.has(parentIdx)) subModelsOf.set(parentIdx, []);
-        subModelsOf.get(parentIdx)!.push(idx);
-      }
-      return;
-    }
-    if (parentIdx != null) {
-      if (!childrenOf.has(parentIdx)) childrenOf.set(parentIdx, []);
-      childrenOf.get(parentIdx)!.push(idx);
-    } else {
-      orphans.push(idx);
-    }
-  });
-
-  const buildGroup = (modelIdx: number, visited: Set<number>): ExplorerModelGroup => {
-    visited.add(modelIdx);
-    return {
-      configIdx: modelIdx,
-      children: childrenOf.get(modelIdx) ?? [],
-      subModels: (subModelsOf.get(modelIdx) ?? [])
-        .filter(idx => !visited.has(idx))
-        .map(idx => buildGroup(idx, visited)),
-    };
-  };
-
-  const rootModelIdxs = configurations
-    .map((cfg, idx) => ({ cfg, idx }))
-    .filter(({ cfg }) => cfg.content.kind === 'DataModel')
-    .filter(({ cfg }) => resolveParentModelIdx(cfg) == null)
-    .map(({ idx }) => idx);
-
-  return {
-    roots: rootModelIdxs.map(idx => buildGroup(idx, new Set())),
-    orphans,
-  };
-}
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -338,15 +208,24 @@ export function ConfigExplorer() {
   const configurations = useAppStore(s => s.configurations);
   const selectedNodeId = useAppStore(s => s.selectedNodeId);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
-  const removeConfiguration = useAppStore(s => s.removeConfiguration);
+  const removeConfiguration = useAppStore(s => s.closeConfigurationWithUndo);
   const removeAllConfigurations = useAppStore(s => s.removeAllConfigurations);
+  const requestLanding = useAppStore(s => s.requestLanding);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const openAddFiles = useCallback(() => {
+    void openFilesWithSystemDialog(loadXmlFileRef.current).then(result => {
+      if (result === null) fileInputRef.current?.click();
+    });
+  }, []);
   const selectNode = useAppStore(s => s.selectNode);
   const openTab = useAppStore(s => s.openTab);
   const openDrillDownTab = useAppStore(s => s.openDrillDownTab);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const explorerExpandCommand = useAppStore(s => s.explorerExpandCommand);
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
+  const loadXmlFileRef = React.useRef(loadXmlFile);
+  loadXmlFileRef.current = loadXmlFile;
   const pushToast = useAppStore(s => s.pushToast);
   const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
   const [expandMode, setExpandMode] = useState<'default' | 'all' | 'none'>('default');
@@ -513,28 +392,6 @@ export function ConfigExplorer() {
   const totalAll = kindCounts.DataModel + kindCounts.ModelMapping + kindCounts.Format;
   const isFiltering = filterQuery.trim().length > 0 || kindFilter.size < 3;
 
-  // ── Ingest progress helpers ──────────────────────────────────────────
-  const INGEST_STEPS = [
-    { key: 'prepare',  label: locale === 'cs' ? 'Příprava' : 'Preparing' },
-    { key: 'dm',       label: locale === 'cs' ? 'Stahuji datové modely' : 'Downloading data models' },
-    { key: 'fm',       label: locale === 'cs' ? 'Stahuji formáty a mapování' : 'Downloading formats & mappings' },
-    { key: 'mm',       label: locale === 'cs' ? 'Stahování mapování modelů' : 'Downloading model mappings' },
-    { key: 'finalize', label: locale === 'cs' ? 'Dokončuji' : 'Finalizing' },
-  ];
-
-  function getIngestStep(status: string): number {
-    const s = status.toLowerCase();
-    if (!status) return -1;
-    if (s.includes('připravu') || s.includes('prepar')) return 0;
-    if (s.includes('datamodel') || s.includes('datový') || s.includes('datové')) return 1;
-    if (s.includes('formát') || s.includes('format') || s.includes('konfigurace') || s.includes('configuration')) return 2;
-    if (s.includes('mapping') || s.includes('mapování')) return 3;
-    if (s.includes('dokonču') || s.includes('řeším') || s.includes('resolv') || s.includes('cross')) return 4;
-    return 2; // default to middle step
-  }
-
-  const ingestStep = fnoIngestStatus ? getIngestStep(fnoIngestStatus) : -1;
-
   if (treeNodes.length === 0) {
     return (
       <div
@@ -545,52 +402,29 @@ export function ConfigExplorer() {
         onDrop={handleDrop}
       >
         {fnoIngestStatus ? (
-          <div className="fno-ingest-card">
-            <div className="fno-ingest-card-header">
-              <div className="fno-ingest-card-icon">
-                <CloudArrowDownRegular fontSize={20} style={{ animation: 'fno-ingest-icon-float 2s ease-in-out infinite' }} />
-              </div>
-              <div>
-                <div className="fno-ingest-card-title">
-                  {locale === 'cs' ? 'Načítám konfigurace' : 'Loading configurations'}
-                </div>
-                <div className="fno-ingest-card-subtitle">
-                  {locale === 'cs' ? 'z Dynamics 365 F&O' : 'from Dynamics 365 F&O'}
-                </div>
-              </div>
-            </div>
-            <div className="fno-ingest-card-body">
-              <div className="fno-ingest-progress-track">
-                <div className="fno-ingest-progress-bar" />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {INGEST_STEPS.map((step, i) => (
-                  <div
-                    key={step.key}
-                    className={`fno-ingest-step ${
-                      i < ingestStep ? 'done' : i === ingestStep ? 'active' : ''
-                    }`}
-                  >
-                    {i < ingestStep ? (
-                      <CheckmarkCircleRegular fontSize={13} style={{ flexShrink: 0, color: 'var(--colorPaletteGreenBackground3, #107c10)' }} />
-                    ) : (
-                      <div className="fno-ingest-step-dot" />
-                    )}
-                    <span>{step.label}</span>
-                    {i === ingestStep && (
-                      <span style={{ fontSize: 10, color: 'var(--colorNeutralForeground3)', marginLeft: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 110 }}>
-                        {fnoIngestStatus}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <FnoIngestPanel variant="card" />
         ) : (
           <>
             <p style={{ marginBottom: 8 }}>{t.noConfigurationsLoaded}</p>
             <p style={{ fontSize: 11 }}>{t.loadXmlHint}</p>
+            <div className="explorer-empty-actions">
+              <Button appearance="primary" size="small" icon={<AddRegular />} onClick={openAddFiles}>{t.workspaceAddFiles}</Button>
+              <Button appearance="secondary" size="small" icon={<AppsListDetailRegular />} onClick={() => setWorkspaceOpen(true)}>{t.workspaceManager}</Button>
+            </div>
+            <WorkspaceManager open={workspaceOpen} onOpenChange={setWorkspaceOpen} onRequestFno={() => requestLanding('remote')} />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xml"
+              multiple
+              style={{ display: 'none' }}
+              onChange={e => {
+                void loadBrowserFiles(e.target.files, loadXmlFile).then(({ errors }) => {
+                  for (const err of errors) pushToast({ kind: 'error', message: err });
+                });
+                e.target.value = '';
+              }}
+            />
           </>
         )}
         {isDragging && <div className="explorer-dropzone-overlay">{t.landingDropRelease}</div>}
@@ -615,9 +449,7 @@ export function ConfigExplorer() {
             style={{ animation: 'spin 1.2s linear infinite' }}
           />
           <div className="fno-ingest-banner-text">
-            <div className="fno-ingest-banner-label">
-              {locale === 'cs' ? 'Načítám' : 'Loading'}
-            </div>
+            <div className="fno-ingest-banner-label">{t.explorerLoading}</div>
             <div className="fno-ingest-banner-status">{fnoIngestStatus}</div>
           </div>
           <div className="fno-ingest-progress-track" style={{ width: 48, flexShrink: 0 }}>
@@ -636,18 +468,18 @@ export function ConfigExplorer() {
         <Button
           appearance="subtle"
           size="small"
-          icon={<TextExpandRegular />}
-          aria-label={t.cmdExpandAll}
-          title={t.cmdExpandAll}
-          onClick={() => { setExpandMode('all'); setExpandVersion(v => v + 1); }}
+          icon={<AddRegular />}
+          aria-label={t.explorerAddConfigurations}
+          title={t.explorerAddConfigurations}
+          onClick={openAddFiles}
         />
         <Button
           appearance="subtle"
           size="small"
-          icon={<TextCollapseRegular />}
-          aria-label={t.cmdCollapseAll}
-          title={t.cmdCollapseAll}
-          onClick={() => { setExpandMode('none'); setExpandVersion(v => v + 1); }}
+          icon={<AppsListDetailRegular />}
+          aria-label={t.workspaceManager}
+          title={t.workspaceManager}
+          onClick={() => setWorkspaceOpen(true)}
         />
         <Menu>
           <MenuTrigger disableButtonEnhancement>
@@ -666,6 +498,12 @@ export function ConfigExplorer() {
                 onClick={() => setHierarchyView(v => !v)}
               >
                 {hierarchyView ? t.explorerViewFlat : t.explorerViewHierarchy}
+              </MenuItem>
+              <MenuItem icon={<TextExpandRegular />} onClick={() => { setExpandMode('all'); setExpandVersion(v => v + 1); }}>
+                {t.cmdExpandAll}
+              </MenuItem>
+              <MenuItem icon={<TextCollapseRegular />} onClick={() => { setExpandMode('none'); setExpandVersion(v => v + 1); }}>
+                {t.cmdCollapseAll}
               </MenuItem>
               <MenuDivider />
               <MenuItem icon={<ArrowSortRegular />} onClick={() => setSortMode('loadOrder')} disabled={sortMode === 'loadOrder'}>
@@ -689,7 +527,20 @@ export function ConfigExplorer() {
         </Menu>
       </div>
 
-      <WorkspaceManager open={workspaceOpen} onOpenChange={setWorkspaceOpen} />
+      <WorkspaceManager open={workspaceOpen} onOpenChange={setWorkspaceOpen} onRequestFno={() => requestLanding('remote')} />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xml"
+        multiple
+        style={{ display: 'none' }}
+        onChange={e => {
+          void loadBrowserFiles(e.target.files, loadXmlFile).then(({ errors }) => {
+            for (const err of errors) pushToast({ kind: 'error', message: err });
+          });
+          e.target.value = '';
+        }}
+      />
 
       <div className="explorer-toolbar config-explorer-toolbar">
         <div className="panel-filter-row explorer-toolbar-filter">
@@ -787,9 +638,7 @@ export function ConfigExplorer() {
                 ))}
                 {hasOrphans && (
                   <div className="explorer-orphan-section">
-                    <div className="explorer-orphan-header">
-                      {locale === 'cs' ? 'Nepřiřazeno' : 'Unlinked'}
-                    </div>
+                    <div className="explorer-orphan-header">{t.explorerUnlinked}</div>
                     {orphans.map(idx => {
                       const node = treeNodes[idx];
                       const cfg = configurations[idx];
@@ -923,6 +772,19 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
     onDoubleClick(node);
   }, [node, onDoubleClick]);
 
+  const configurations = useAppStore(s => s.configurations);
+  const rawLabel: string | undefined = node.type === 'file' || node.type === 'section'
+    ? undefined
+    : (typeof node.data?.label === 'string' ? node.data.label : undefined);
+  const resolvedLabel = React.useMemo(() => {
+    if (!rawLabel || node.configIndex == null) return undefined;
+    const text = labelDisplayText(rawLabel, buildLabelPool(configurations, node.configIndex));
+    if (!text || text === node.name) return undefined;
+    // An unresolved reference is noise, not information — hide it.
+    if (looksLikeLabelRef(rawLabel) && text === rawLabel) return undefined;
+    return text;
+  }, [rawLabel, configurations, node.configIndex, node.name]);
+
   const isSelected = node.id === selectedId;
   const isAncestor = !isSelected && selectedPathIds.has(node.id);
   const accentClass = getExplorerNodeAccentClass(node);
@@ -949,7 +811,10 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
           <span className="tree-chevron-placeholder" aria-hidden="true" />
         )}
         <span className="icon">{getExplorerNodeIcon(node)}</span>
-        <span className="tree-node-label">{node.name}</span>
+        <span className="tree-node-label" title={resolvedLabel ? `${node.name} — ${resolvedLabel}` : node.name}>
+          <span className="tree-node-name">{node.name}</span>
+          {resolvedLabel && <span className="tree-node-sublabel">{resolvedLabel}</span>}
+        </span>
         {version != null && version !== '' && node.type === 'file' && (
           <span className="tree-node-version-pill" title={`v${version}`}>v{version}</span>
         )}
