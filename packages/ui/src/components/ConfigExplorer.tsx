@@ -857,6 +857,19 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
 
   const isSelected = node.id === selectedId;
   const isAncestor = !isSelected && selectedPathIds.has(node.id);
+
+  // Selection can come from outside the explorer (designer rows, search,
+  // where-used). Ancestors expand above, but the row itself may sit far
+  // below the fold — bring it into view. `nearest` keeps a click inside the
+  // explorer from jumping the list around.
+  const rowRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (!isSelected) return;
+    const el = rowRef.current;
+    if (!el) return;
+    const frame = requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest' }));
+    return () => cancelAnimationFrame(frame);
+  }, [isSelected]);
   const accentClass = getExplorerNodeAccentClass(node);
   const sectionKindClass = node.type === 'section' && node.data?.sectionKind
     ? `tree-node-section-kind-${node.data.sectionKind}`
@@ -869,6 +882,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
   return (
     <>
       <div
+        ref={rowRef}
         className={`tree-node tree-node-${node.type} ${sectionClass} ${parentClass} ${sectionKindClass} ${accentClass} ${isSelected ? 'selected' : ''} ${isAncestor ? 'ancestor' : ''}`}
         data-depth={depth}
         style={{ paddingLeft: 8 + depth * 16, ['--depth' as string]: depth }}
