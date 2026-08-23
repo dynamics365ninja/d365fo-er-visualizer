@@ -92,6 +92,8 @@ export interface ERConfiguration {
   kind: ERComponentKind;
   solutionVersion: ERSolutionVersion;
   content: ERDataModelContent | ERModelMappingContent | ERFormatContent;
+  /** Non-fatal parser diagnostics (unknown element types, handlers, ...). */
+  warnings?: string[];
 }
 
 // Forward-declared version types (defined in their own modules)

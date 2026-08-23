@@ -6,6 +6,7 @@ import {
 } from '@fluentui/react-components';
 import { DismissRegular, CompassNorthwestRegular } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
+import { t, useLocale } from '../i18n';
 
 const useStyles = makeStyles({
   root: {
@@ -93,6 +94,7 @@ export function TabBar() {
   const activeTabId = useAppStore(s => s.activeTabId);
   const setActiveTab = useAppStore(s => s.setActiveTab);
   const closeTab = useAppStore(s => s.closeTab);
+  useLocale(); // re-render on language change so aria labels stay localized
 
   if (tabs.length === 0) return null;
 
@@ -131,7 +133,7 @@ export function TabBar() {
               appearance="transparent"
               size="small"
               icon={<DismissRegular />}
-              aria-label={`Close ${tab.label}`}
+              aria-label={t.closeTab(tab.label)}
               className={styles.closeBtn}
               onClick={e => {
                 e.stopPropagation();

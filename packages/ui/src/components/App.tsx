@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import {
   makeStyles,
@@ -7,7 +7,6 @@ import {
   mergeClasses,
   Button,
   Tooltip,
-  CounterBadge,
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbDivider,
@@ -30,7 +29,6 @@ import {
   LinkRegular,
   WarningRegular,
   CheckmarkCircleRegular,
-  FolderRegular,
   SearchRegular,
   AppsListDetailRegular,
 } from '@fluentui/react-icons';
@@ -359,6 +357,7 @@ export function App() {
   const [showRight, setShowRight] = useState(false);
   const [rightTab, setRightTab] = useState<'properties' | 'search' | 'where-used'>('properties');
   const [rightFullscreen, setRightFullscreen] = useState(false);
+  const [showPropsStrip, setShowPropsStrip] = useState(true);
   const [showLanding, setShowLanding] = useState(true);
   const landingRequest = useAppStore(s => s.landingRequest);
   useEffect(() => {
@@ -446,8 +445,15 @@ export function App() {
     }
   }, [showRight, rightTab]);
 
+  // Keep the latest landing state readable from the (stable) keydown handler.
+  const landingVisibleRef = useRef(isLandingVisible);
+  landingVisibleRef.current = isLandingVisible;
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Workspace shortcuts have nothing to act on while the landing page is
+      // shown (palette/panels are not mounted) — leave the browser's defaults.
+      if (landingVisibleRef.current) return;
       const mod = e.ctrlKey || e.metaKey;
       const target = e.target as HTMLElement | null;
       const inEditable = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || (target as HTMLElement).isContentEditable);
@@ -507,14 +513,17 @@ export function App() {
     { id: 'expand', group: t.cmdGroupTools, label: t.cmdExpandAll, action: () => requestExplorerExpand('all') },
   ], [navigateBack, navigateForward, toggleSearch, toggleProperties, cycleTheme, setShowTechnicalDetails, showTechnicalDetails, requestExplorerExpand, locale]);
 
+  // Entering a drill-down tab hides the side panels once; re-opening them
+  // while staying on that tab must survive unrelated tab-list changes.
+  const activeTabKind = openTabs.find(tab => tab.id === activeTabId)?.kind;
+  const isDrillDownActive = activeTabKind === 'drillDown';
   useEffect(() => {
-    const active = openTabs.find(tab => tab.id === activeTabId);
-    if (active?.kind === 'drillDown') {
+    if (isDrillDownActive) {
       setShowLeft(false);
       setShowRight(false);
       setRightFullscreen(false);
     }
-  }, [openTabs, activeTabId]);
+  }, [isDrillDownActive, activeTabId]);
 
   if (isLandingVisible) {
     return (
@@ -556,6 +565,8 @@ export function App() {
                   onCollapse={() => setRightFullscreen(false)}
                   onClose={() => { setShowRight(false); setRightFullscreen(false); }}
                   panelContentClass={styles.panelContent}
+                  showPropsStrip={showPropsStrip}
+                  setShowPropsStrip={setShowPropsStrip}
                 />
               </div>
             ) : (
@@ -599,6 +610,8 @@ export function App() {
                           onCollapse={() => setRightFullscreen(false)}
                           onClose={() => { setShowRight(false); setRightFullscreen(false); }}
                           panelContentClass={styles.panelContent}
+                          showPropsStrip={showPropsStrip}
+                          setShowPropsStrip={setShowPropsStrip}
                         />
                       </div>
                     </Panel>
@@ -650,6 +663,8 @@ function RightPanel({
   onCollapse,
   onClose,
   panelContentClass,
+  showPropsStrip,
+  setShowPropsStrip,
 }: {
   tab: 'properties' | 'search' | 'where-used';
   onTabChange: (tab: 'properties' | 'search' | 'where-used') => void;
@@ -658,9 +673,12 @@ function RightPanel({
   onCollapse: () => void;
   onClose: () => void;
   panelContentClass: string;
+  /** Lifted to the parent: RightPanel is mounted at two tree positions
+   * (docked / fullscreen), so local state would reset on every switch. */
+  showPropsStrip: boolean;
+  setShowPropsStrip: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const styles = useAppStyles();
-  const [showPropsStrip, setShowPropsStrip] = useState(true);
   return (
     <>
       <div className={styles.rightTabStrip} role="tablist">
@@ -694,7 +712,7 @@ function RightPanel({
           onClick={() => onTabChange('where-used')}
         >
           <span className={styles.rightTabIcon} aria-hidden><LinkRegular fontSize={13} /></span>
-          {locale === 'cs' ? 'Kde je použito' : 'Where Used'}
+          {t.whereUsedAction}
         </button>
         <div className={styles.rightTabSpacer} />
         <div className={styles.rightTabActions}>
@@ -876,14 +894,11 @@ function StatusBar({ warningsOpen, setWarningsOpen }: {
       {activeRelationship && (
         <span
           className={styles.chip}
-          title={locale === 'cs'
-            ? `Aktivní konfigurace je ${activeRelationship.kind === 'Format' ? 'formát' : 'mapování'} odvozený z modelu "${activeRelationship.parentName}"`
-            : `Active config is a ${activeRelationship.kind} derived from model "${activeRelationship.parentName}"`
-          }
+          title={t.statusDerivedFromModelTitle(activeRelationship.kind, activeRelationship.parentName)}
         >
           <LinkRegular fontSize={12} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
-            {locale === 'cs' ? 'model: ' : 'model: '}{activeRelationship.parentName}
+            {t.statusDerivedFromModel}{activeRelationship.parentName}
           </span>
         </span>
       )}
@@ -942,7 +957,7 @@ function StatusBar({ warningsOpen, setWarningsOpen }: {
       <span className={styles.chip}>
         {showTechnicalDetails ? t.technicalView : t.consultantView}
       </span>
-      {showTechnicalDetails && <span className={styles.info}>GUIDs: {registry.guidCount}</span>}
+      {showTechnicalDetails && <span className={styles.info}>{t.statusGuidCount(registry.guidCount)}</span>}
     </div>
   );
 }

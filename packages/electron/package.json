@@ -7,17 +7,57 @@
   "scripts": {
     "dev": "concurrently \"pnpm --filter @er-visualizer/ui exec vite --port 5173 --strictPort\" \"wait-on http://localhost:5173 && pnpm run build && electron .\"",
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.preload.json",
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "pnpm --filter @er-visualizer/ui build && pnpm run build && electron-builder",
+    "lint": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.preload.json --noEmit"
   },
   "dependencies": {
-    "@azure/msal-node": "^3.2.0",
-    "@er-visualizer/fno-client": "workspace:*",
-    "electron": "^33.0.0"
+    "@azure/msal-node": "^3.2.0"
   },
   "devDependencies": {
+    "@er-visualizer/fno-client": "workspace:*",
     "@types/node": "^25.6.0",
     "concurrently": "^9.1.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
     "typescript": "^5.7.0",
     "wait-on": "^8.0.0"
+  },
+  "description": "Desktop shell for the D365FO ER Visualizer",
+  "build": {
+    "appId": "com.dynamics365ninja.er-visualizer",
+    "productName": "D365FO ER Visualizer",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../ui/dist",
+        "to": "ui"
+      }
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development"
+    }
   }
 }

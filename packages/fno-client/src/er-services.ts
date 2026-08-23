@@ -35,7 +35,6 @@ export const ER_SERVICES = {
 export const ER_SERVICE_OPS: {
   listSolutions: readonly string[];
   listComponents: readonly string[];
-  getConfigurationXml: readonly string[];
 } = {
   listSolutions: [
     'getFormatSolutionsSubHierarchy',
@@ -45,11 +44,6 @@ export const ER_SERVICE_OPS: {
     'getFormatSolutionsSubHierarchy',
     'getConfigurations', 'GetConfigurations', 'getSolutionComponents',
     'getComponents', 'getConfigurationList', 'getSolutionConfigurations',
-  ],
-  getConfigurationXml: [
-    'GetEffectiveFormatMappingByID', 'GetModelMappingByID', 'GetDataModelByIDAndRevision',
-    'getConfigurationXml', 'GetConfigurationXml', 'getContent',
-    'getConfigurationContent', 'getXml', 'downloadConfiguration', 'getRevisionContent',
   ],
 };
 
@@ -1067,31 +1061,9 @@ export async function downloadConfigXml(
     );
   }
 
-  const xml = extractedXml;
-  if (!xml) {
-    // Log the raw shape so the caller can see what fields the service
-    // actually returned (field names differ between F&O versions).
-    try {
-      const unwrapped = unwrapServiceValue(raw, operation);
-      const keys = unwrapped && typeof unwrapped === 'object' && !Array.isArray(unwrapped)
-        ? Object.keys(unwrapped as Record<string, unknown>)
-        : Array.isArray(unwrapped) ? ['<array>', String(unwrapped.length)] : [typeof unwrapped];
-      console.warn('[fno-client] downloadConfigXml: no XML in response', {
-        operation,
-        configurationName: component.configurationName,
-        topLevelKeys: raw && typeof raw === 'object' ? Object.keys(raw as Record<string, unknown>) : [],
-        unwrappedKeys: keys,
-        raw,
-      });
-    } catch {
-      // ignore logging failures
-    }
-    throw new FnoSourceUnsupportedError(
-      `Custom service ${operation} returned a response without XML for "${component.configurationName}". ` +
-        `Open DevTools → Console → filter "[fno-client] downloadConfigXml" to see the response shape ` +
-        `so the XML field name can be added to the extractor.`,
-    );
-  }
+  // `success` is only set together with a non-null `extractedXml` above, so
+  // reaching this point guarantees we have XML.
+  const xml = extractedXml as string;
 
   // For `GetModelMappingByID` the XML payload wraps the inner content in
   // `<ERModelMappingVersion Number="N">` where N is the *descriptor-level*
@@ -1434,20 +1406,6 @@ export function classifyErNode(name: string, formatMappingGuid: unknown): ErComp
   if (/\bmapping\b/.test(lower)) return 'ModelMapping';
   if (/\bmodel\b/.test(lower)) return 'DataModel';
   return 'Unknown';
-}
-
-/** Recursively flatten a `DerivedSolutions` tree into a flat array. */
-export function flattenErHierarchy<T extends { DerivedSolutions?: unknown }>(rows: readonly T[]): T[] {
-  const out: T[] = [];
-  const walk = (node: T) => {
-    out.push(node);
-    const kids = (node as { DerivedSolutions?: unknown }).DerivedSolutions;
-    if (Array.isArray(kids)) {
-      for (const k of kids) walk(k as T);
-    }
-  };
-  for (const r of rows) walk(r);
-  return out;
 }
 
 interface RawErVersion {

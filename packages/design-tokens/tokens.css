@@ -9,8 +9,9 @@
  * each package layers on top (`--bg-primary`, `--color-surface`, …).
  *
  * Theme resolution, in precedence order:
- *   1. `:root[data-theme='light'|'dark']`  — explicit choice (the SPA's theme switch)
- *   2. `prefers-color-scheme`              — the OS preference (the site has no switch)
+ *   1. `:root[data-theme='light'|'dark']`  — explicit choice (the SPA's theme switch;
+ *                                             the site adopts it from the same-origin app)
+ *   2. `prefers-color-scheme`              — the OS preference (no explicit choice stored)
  *   3. light                               — the default
  */
 

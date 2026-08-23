@@ -1,11 +1,9 @@
-﻿import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
   Button,
   Tooltip,
   Divider,
   makeStyles,
-  tokens,
-  mergeClasses,
   shorthands,
 } from '@fluentui/react-components';
 import {
@@ -63,22 +61,6 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     paddingLeft: '4px',
   },
-  chip: {
-    fontFamily: tokens.fontFamilyBase,
-    fontSize: '11px',
-    fontWeight: 500,
-    letterSpacing: '0.02em',
-    padding: '2px 8px',
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground3,
-    color: tokens.colorNeutralForeground2,
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
-  },
-  chipTech: {
-    backgroundColor: tokens.colorBrandBackground2,
-    color: tokens.colorBrandForeground2,
-    ...shorthands.borderColor(tokens.colorBrandStroke2),
-  },
   hiddenInput: {
     display: 'none',
   },
@@ -115,8 +97,6 @@ export function Toolbar({ breadcrumb }: ToolbarProps) {
   const navigateBack = useAppStore(s => s.navigateBack);
   const navigateForward = useAppStore(s => s.navigateForward);
   const pushToast = useAppStore(s => s.pushToast);
-  const configs = useAppStore(s => s.configurations);
-  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reportLoadErrors = useCallback((errors: string[]) => {

@@ -7,6 +7,10 @@ const isDev = !app.isPackaged;
 
 function resolveRendererEntry(): string {
   const candidates = [
+    // Packaged build: electron-builder copies `packages/ui/dist` into
+    // `<Resources>/ui` via `extraResources` (see package.json "build").
+    ...(app.isPackaged ? [path.join(process.resourcesPath, 'ui', 'index.html')] : []),
+    // Unpackaged `electron .` after `pnpm --filter @er-visualizer/ui build`.
     path.resolve(import.meta.dirname, '../../ui/dist/index.html'),
     path.resolve(import.meta.dirname, '../ui/dist/index.html'),
     path.resolve(import.meta.dirname, '../ui/index.html'),

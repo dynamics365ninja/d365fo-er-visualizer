@@ -548,6 +548,49 @@ describe('parseERConfiguration', () => {
     expect(config.content.direction).toBe('Export');
   });
 
+  it('keeps unknown format element types as Unknown nodes and reports a warning', () => {
+    const xml = buildSolutionEnvelope(`
+      <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Format>
+          <ERTextFormat ID.="{FORMAT}" Name="Weird format">
+            <Root>
+              <ERTextFormatFileComponent ID.="{FILE}" Name="Report.xml">
+                <Contents.>
+                  <ERTextFormatFutureComponent ID.="{FUTURE}" Name="Mystery">
+                    <Contents.>
+                      <ERTextFormatString ID.="{STR}" Name="Inner" />
+                    </Contents.>
+                  </ERTextFormatFutureComponent>
+                  <ERTextFormatString ID.="{STR2}" Name="Sibling" />
+                </Contents.>
+              </ERTextFormatFileComponent>
+            </Root>
+          </ERTextFormat>
+        </Format>
+      </ERFormatVersion>
+      <ERFormatMappingVersion ID.="{FORMAT-MAP},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERFormatMapping ID.="{FORMAT-MAP}" Format="{FORMAT}" FormatVersion="{FORMAT},1" Name="Weird format mapping" />
+        </Mapping>
+      </ERFormatMappingVersion>
+    `, { contentRefIds: ['{FORMAT}', '{FORMAT-MAP}'] });
+
+    const config = parseERConfiguration(xml, 'unknown-element.xml');
+    if (config.content.kind !== 'Format') {
+      throw new Error('Expected format content');
+    }
+
+    const root = config.content.formatVersion.format.rootElement;
+    expect(root.children.map(c => c.name)).toEqual(['Mystery', 'Sibling']);
+    expect(root.children[0]?.elementType).toBe('Unknown');
+    expect(root.children[0]?.id).toBe('{FUTURE}');
+    expect(root.children[0]?.children[0]?.name).toBe('Inner');
+    expect(root.children[0]?.children[0]?.elementType).toBe('String');
+    expect(config.warnings).toEqual([
+      "Unknown format element type 'ERTextFormatFutureComponent' kept as 'Unknown'",
+    ]);
+  });
+
   it('parses PDF converter formats and labels Excel components by their range name', () => {
     const xml = buildSolutionEnvelope(`
       <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">

@@ -3,8 +3,9 @@
  *
  * The browser SPA cannot call D365 F&O directly because F&O does not send
  * CORS headers. This handler forwards the request server-side, preserving
- * the caller's bearer token, then returns the response with permissive CORS
- * headers so the SPA can read it.
+ * the caller's bearer token, then returns the response with CORS headers
+ * scoped to the site's own origin (plus `FNO_PROXY_ALLOWED_ORIGINS`) so the
+ * SPA can read it.
  *
  * The target URL is passed in the `X-Fno-Target-Url` header. Only hosts that
  * match the F&O SaaS DNS patterns are allowed — this prevents the function
@@ -25,14 +26,38 @@ function isAllowedTarget(url: URL): boolean {
   return ALLOWED_HOST_PATTERNS.some((re) => re.test(url.hostname));
 }
 
-function corsHeaders(origin: string | null): Record<string, string> {
+/**
+ * Origins allowed to call the proxy from a browser. The site's own origin is
+ * always allowed; additional origins (e.g. the Vite dev server, a preview
+ * deployment) come from the comma-separated `FNO_PROXY_ALLOWED_ORIGINS` env.
+ */
+function extraAllowedOrigins(): string[] {
+  return (process.env.FNO_PROXY_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((o) => o.trim().replace(/\/+$/, ''))
+    .filter((o) => o.length > 0);
+}
+
+function isAllowedOrigin(origin: string | null, selfOrigin: string): origin is string {
+  if (!origin) return false;
+  const normalized = origin.replace(/\/+$/, '');
+  return normalized === selfOrigin || extraAllowedOrigins().includes(normalized);
+}
+
+/**
+ * Same-origin requests (the staged SPA under /app) carry no `Origin` header on
+ * GET and need no ACAO at all; cross-origin callers get ACAO only when their
+ * origin is allowed. Preflight still answers with the method/header grants so
+ * the browser can report a clean CORS failure instead of a network error.
+ */
+function corsHeaders(origin: string | null, selfOrigin: string): Record<string, string> {
   return {
-    'Access-Control-Allow-Origin': origin ?? '*',
+    ...(isAllowedOrigin(origin, selfOrigin) ? { 'Access-Control-Allow-Origin': origin } : {}),
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers':
       'Authorization, Content-Type, Accept, X-Fno-Target-Url, X-Fno-Method',
     'Access-Control-Expose-Headers':
-      'Content-Type, Content-Length, X-Fno-Proxy-Upstream-Status, X-Fno-Proxy-Upstream-Location',
+      'Content-Type, X-Fno-Proxy-Upstream-Status, X-Fno-Proxy-Upstream-Location',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   };
@@ -40,7 +65,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
 
 async function handler(req: Request): Promise<Response> {
   const origin = req.headers.get('origin');
-  const cors = corsHeaders(origin);
+  const cors = corsHeaders(origin, new URL(req.url).origin);
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: cors });
@@ -108,11 +133,10 @@ async function handler(req: Request): Promise<Response> {
     return new Response(`Upstream error: ${msg}`, { status: 502, headers: cors });
   }
 
+  // Only the content type is forwarded. `fetch` already decompressed the
+  // upstream body, so its `Content-Length` / `Content-Encoding` would describe
+  // the wire form and corrupt the response; the runtime recomputes both.
   const responseHeaders = new Headers(cors);
-  const contentType = upstream.headers.get('content-type');
-  if (contentType) responseHeaders.set('Content-Type', contentType);
-  const contentLength = upstream.headers.get('content-length');
-  if (contentLength) responseHeaders.set('Content-Length', contentLength);
 
   // Diagnostic headers — visible in browser DevTools Network panel.
   responseHeaders.set('X-Fno-Proxy-Upstream-Status', String(upstream.status));
@@ -127,8 +151,12 @@ async function handler(req: Request): Promise<Response> {
       `This usually means the access token was rejected and F&O issued a ` +
       `login redirect. Check tenantId, clientId, and that the token audience ` +
       `matches envUrl.`;
+    responseHeaders.set('Content-Type', 'text/plain; charset=utf-8');
     return new Response(body, { status: 502, headers: responseHeaders });
   }
+
+  const contentType = upstream.headers.get('content-type');
+  if (contentType) responseHeaders.set('Content-Type', contentType);
 
   return new Response(upstream.body, {
     status: upstream.status,

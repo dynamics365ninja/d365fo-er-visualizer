@@ -19,13 +19,15 @@ import {
 import type { FluentIcon } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
 import { ThemeSwitch } from './ThemeSwitch';
-import { t, locale } from '../i18n';
+import { t } from '../i18n';
 
 interface ActivityBarProps {
   showLeft: boolean;
   showRight: boolean;
   rightTab: 'properties' | 'search' | 'where-used';
   whereUsedActive: boolean;
+  /** Optional count shown on the where-used button (e.g. number of usages). */
+  whereUsedBadge?: number;
   onToggleLeft: () => void;
   onToggleRight: () => void;
   onToggleSearch: () => void;
@@ -109,7 +111,7 @@ export function ActivityBar(props: ActivityBarProps) {
   const setShowTechnicalDetails = useAppStore(s => s.setShowTechnicalDetails);
 
   return (
-    <nav className={styles.root} aria-label="Activity Bar">
+    <nav className={styles.root} aria-label={t.activityBarLabel}>
       <ActivityButton
         Icon={HomeRegular}
         label={t.home}
@@ -129,14 +131,15 @@ export function ActivityBar(props: ActivityBarProps) {
         Icon={SearchRegular}
         label={t.search}
         onClick={props.onToggleSearch}
-        active={props.showRight && props.rightTab === 'search' && !props.whereUsedActive}
+        active={props.showRight && props.rightTab === 'search'}
         shortcut="Ctrl+F"
       />
       <ActivityButton
         Icon={LinkRegular}
-        label={locale === 'cs' ? 'Kde je použito' : 'Where Used'}
+        label={t.whereUsedAction}
         onClick={props.onToggleWhereUsed}
         active={props.whereUsedActive}
+        badge={props.whereUsedBadge}
         shortcut="Ctrl+U"
       />
       <ActivityButton

@@ -16,6 +16,16 @@ export default defineConfig({
     },
   },
   server: {
+    // The browser F&O transport posts to /api/fno, which is served by the Next
+    // marketing site (packages/site/app/api/fno/route.ts). In `pnpm dev` forward
+    // it there so the web F&O flow works locally — run `pnpm dev:site` alongside,
+    // or point FNO_DEV_PROXY_TARGET at a deployed instance.
+    proxy: {
+      '/api/fno': {
+        target: process.env.FNO_DEV_PROXY_TARGET ?? 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
     watch: {
       // Watch sibling workspace packages so HMR fires when er-services.ts etc. change.
       ignored: (p: string) => p.includes('node_modules') && !p.includes('@er-visualizer'),

@@ -203,6 +203,52 @@ function collectAncestorIds(nodes: TreeNode[], targetId: string | null): Set<str
   return new Set();
 }
 
+/**
+ * A hierarchy group is visible when the model itself, one of its direct
+ * children, or anything nested under a sub-model passes the kind + text filter.
+ * Shared by the top-level empty-state check and `ModelGroupSection` so the two
+ * never disagree.
+ */
+function groupHasVisibleContent(
+  group: ExplorerModelGroup,
+  configurations: ERConfiguration[],
+  treeNodes: TreeNode[],
+  filteredNodeIds: Set<string>,
+  kindFilter: Set<ConfigKind>,
+): boolean {
+  const modelNode = treeNodes[group.configIdx];
+  if (modelNode && kindFilter.has('DataModel') && filteredNodeIds.has(modelNode.id)) return true;
+  const childVisible = group.children.some(idx => {
+    const cfg = configurations[idx];
+    return !!cfg
+      && kindFilter.has(cfg.content.kind as ConfigKind)
+      && filteredNodeIds.has(treeNodes[idx]?.id ?? '');
+  });
+  if (childVisible) return true;
+  return group.subModels.some(sub => groupHasVisibleContent(sub, configurations, treeNodes, filteredNodeIds, kindFilter));
+}
+
+/** Apply the explorer sort mode to a model hierarchy (groups and their children alike). */
+function sortExplorerGroups(
+  groups: ExplorerModelGroup[],
+  treeNodes: TreeNode[],
+  sortNodes: (nodes: TreeNode[]) => TreeNode[],
+): ExplorerModelGroup[] {
+  const sortIndices = (indices: number[]): number[] => {
+    const nodes = indices.map(idx => treeNodes[idx]).filter((n): n is TreeNode => !!n);
+    const order = new Map(sortNodes(nodes).map((n, i) => [n.id, i]));
+    return [...indices].sort((a, b) =>
+      (order.get(treeNodes[a]?.id ?? '') ?? Number.MAX_SAFE_INTEGER) - (order.get(treeNodes[b]?.id ?? '') ?? Number.MAX_SAFE_INTEGER));
+  };
+  const sortGroups = (list: ExplorerModelGroup[]): ExplorerModelGroup[] => {
+    const byIdx = new Map(list.map(g => [g.configIdx, g]));
+    return sortIndices(list.map(g => g.configIdx))
+      .map(idx => byIdx.get(idx)!)
+      .map(g => ({ ...g, children: sortIndices(g.children), subModels: sortGroups(g.subModels) }));
+  };
+  return sortGroups(groups);
+}
+
 export function ConfigExplorer() {
   const treeNodes = useAppStore(s => s.treeNodes);
   const configurations = useAppStore(s => s.configurations);
@@ -213,11 +259,6 @@ export function ConfigExplorer() {
   const requestLanding = useAppStore(s => s.requestLanding);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const openAddFiles = useCallback(() => {
-    void openFilesWithSystemDialog(loadXmlFileRef.current).then(result => {
-      if (result === null) fileInputRef.current?.click();
-    });
-  }, []);
   const selectNode = useAppStore(s => s.selectNode);
   const openTab = useAppStore(s => s.openTab);
   const openDrillDownTab = useAppStore(s => s.openDrillDownTab);
@@ -227,6 +268,18 @@ export function ConfigExplorer() {
   const loadXmlFileRef = React.useRef(loadXmlFile);
   loadXmlFileRef.current = loadXmlFile;
   const pushToast = useAppStore(s => s.pushToast);
+  const openAddFiles = useCallback(() => {
+    void openFilesWithSystemDialog(loadXmlFileRef.current).then(result => {
+      // `null` means no Electron bridge — fall back to the browser file input.
+      if (result === null) {
+        fileInputRef.current?.click();
+        return;
+      }
+      for (const err of result.errors) {
+        pushToast({ kind: 'error', message: err });
+      }
+    });
+  }, [pushToast]);
   const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
   const [expandMode, setExpandMode] = useState<'default' | 'all' | 'none'>('default');
   const [expandVersion, setExpandVersion] = useState(0);
@@ -264,23 +317,33 @@ export function ConfigExplorer() {
     });
   }, []);
 
+  // dragenter/dragleave fire for every child the cursor crosses (including the
+  // overlay we render while dragging), so track depth instead of comparing targets.
+  const dragDepthRef = React.useRef(0);
+
+  const handleDragEnter = useCallback((event: React.DragEvent) => {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setIsDragging(true);
+  }, []);
+
   const handleDragOver = useCallback((event: React.DragEvent) => {
     if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'copy';
-    setIsDragging(true);
   }, []);
 
   const handleDragLeave = useCallback((event: React.DragEvent) => {
-    // Only clear when leaving the container itself (not moving to a child)
-    if (event.currentTarget === event.target) {
-      setIsDragging(false);
-    }
+    if (!event.dataTransfer.types.includes('Files')) return;
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDragging(false);
   }, []);
 
   const handleDrop = useCallback(async (event: React.DragEvent) => {
     if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
+    dragDepthRef.current = 0;
     setIsDragging(false);
     const { errors } = await loadBrowserFiles(event.dataTransfer.files, loadXmlFile);
     for (const err of errors) {
@@ -381,6 +444,18 @@ export function ConfigExplorer() {
     () => new Set(filteredTreeNodes.map(n => n.id)),
     [filteredTreeNodes],
   );
+  // Model-centric hierarchy, sorted with the same mode as the flat view.
+  const hierarchy = useMemo(() => {
+    if (!hierarchyView) return null;
+    const { roots, orphans } = buildExplorerModelGroups(configurations);
+    const orphanNodes = orphans.map(idx => treeNodes[idx]).filter((n): n is TreeNode => !!n);
+    const orphanOrder = new Map(sortNodes(orphanNodes).map((n, i) => [n.id, i]));
+    return {
+      roots: sortExplorerGroups(roots, treeNodes, sortNodes),
+      orphans: [...orphans].sort((a, b) =>
+        (orphanOrder.get(treeNodes[a]?.id ?? '') ?? 0) - (orphanOrder.get(treeNodes[b]?.id ?? '') ?? 0)),
+    };
+  }, [hierarchyView, configurations, treeNodes, sortNodes]);
 
   const totalVisible = useMemo(
     () => configurations.filter((cfg, idx) => {
@@ -397,6 +472,7 @@ export function ConfigExplorer() {
       <div
         className={`explorer-empty-state explorer-dropzone ${isDragging ? 'explorer-dropzone-dragging' : ''}`}
         style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+        onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -435,6 +511,7 @@ export function ConfigExplorer() {
   return (
     <div
       className={`explorer-tree-shell explorer-dropzone ${isDragging ? 'explorer-dropzone-dragging' : ''}`}
+      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -596,10 +673,10 @@ export function ConfigExplorer() {
         <div className="explorer-empty-state">
           <p>{t.noResults}</p>
         </div>
-      ) : hierarchyView ? (
+      ) : hierarchyView && hierarchy ? (
         <div className="explorer-sections explorer-hierarchy-view" role="tree" aria-label={t.configurations}>
           {(() => {
-            const { roots, orphans } = buildExplorerModelGroups(configurations);
+            const { roots, orphans } = hierarchy;
             const sharedProps = {
               configurations,
               treeNodes,
@@ -615,15 +692,8 @@ export function ConfigExplorer() {
               onDoubleClick: handleExplorerDoubleClick,
               onRemove: removeConfiguration,
             };
-            const hasAnyRootVisible = roots.some(r => {
-              const modelNode = treeNodes[r.configIdx];
-              if (!modelNode) return false;
-              if (kindFilter.has('DataModel') && filteredNodeIds.has(modelNode.id)) return true;
-              return r.children.some(idx => {
-                const cfg = configurations[idx];
-                return cfg && kindFilter.has(cfg.content.kind as ConfigKind) && filteredNodeIds.has(treeNodes[idx]?.id ?? '');
-              });
-            });
+            const hasAnyRootVisible = roots.some(r =>
+              groupHasVisibleContent(r, configurations, treeNodes, filteredNodeIds, kindFilter));
             const hasOrphans = orphans.some(idx => {
               const cfg = configurations[idx];
               return cfg && kindFilter.has(cfg.content.kind as ConfigKind) && filteredNodeIds.has(treeNodes[idx]?.id ?? '');
@@ -955,8 +1025,11 @@ function ModelGroupSection({
     return filteredNodeIds.has(treeNodes[idx]?.id ?? '');
   });
 
+  const visibleSubModels = group.subModels.filter(sub =>
+    groupHasVisibleContent(sub, configurations, treeNodes, filteredNodeIds, kindFilter));
+
   // Check if any nested content is visible before rendering the group at all.
-  const hasVisible = modelVisible || visibleChildren.length > 0 || group.subModels.length > 0;
+  const hasVisible = modelVisible || visibleChildren.length > 0 || visibleSubModels.length > 0;
   if (!hasVisible) return null;
 
   const sharedRowProps = (idx: number) => {
@@ -991,7 +1064,7 @@ function ModelGroupSection({
           {...sharedRowProps(group.configIdx)}
         />
       )}
-      {(visibleChildren.length > 0 || group.subModels.length > 0) && (
+      {(visibleChildren.length > 0 || visibleSubModels.length > 0) && (
         <div style={childIndent}>
           {visibleChildren.map(idx => {
             const node = treeNodes[idx];
@@ -1003,7 +1076,7 @@ function ModelGroupSection({
               />
             );
           })}
-          {group.subModels.map(subGroup => (
+          {visibleSubModels.map(subGroup => (
             <ModelGroupSection
               key={subGroup.configIdx}
               group={subGroup}

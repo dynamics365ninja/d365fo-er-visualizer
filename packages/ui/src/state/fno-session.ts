@@ -59,7 +59,7 @@ export interface FnoSessionStore {
   setDataModelChain: (chain: ErConfigSummary[]) => void;
 
   // ── Reset ──
-  resetBrowsingState: () => void;
+  /** Full reset (used by tests). */
   resetAll: () => void;
 }
 
@@ -125,16 +125,6 @@ export const useFnoSession = create<FnoSessionStore>((set, get) => ({
   setDataModelChain: (chain) => set({ dataModelChain: chain }),
 
   // Reset
-  resetBrowsingState: () => set({
-    activeSolution: null,
-    solutionPath: [],
-    components: [],
-    selected: new Map(),
-    rootDataModelByPath: new Map(),
-    allDataModelsSeen: new Map(),
-    dataModelChain: [],
-    solutionFilter: '',
-  }),
   resetAll: () => set({
     activeProfileId: null,
     connState: { kind: 'disconnected' },

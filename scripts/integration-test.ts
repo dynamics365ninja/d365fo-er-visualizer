@@ -6,8 +6,17 @@
  * Configuration (any of these methods):
  *   1. Config file: scripts/.fno-integration.json
  *      { "envUrl": "...", "tenantId": "...", "clientId": "...", "solutionName"?: "...", "configName"?: "..." }
- *   2. Environment variables: FNO_ENV_URL, FNO_TENANT_ID, FNO_CLIENT_ID
- *      Optional: FNO_SOLUTION_NAME, FNO_CONFIG_NAME
+ *   2. Environment variables (override the config file):
+ *      FNO_ENV_URL        F&O base URL, e.g. https://contoso.operations.dynamics.com (required)
+ *      FNO_TENANT_ID      Entra tenant ID or domain (required)
+ *      FNO_CLIENT_ID      Entra app registration (public client) ID (required)
+ *      FNO_SOLUTION_NAME  Solution to drill into (default: first listed)
+ *      FNO_CONFIG_NAME    Format/model configuration to download (default: first Format)
+ *      FNO_FILTER_TERM    Search term for the Step 14 structure-tree filter check (default: "Date")
+ *
+ * Side effects: when the target format embeds an Excel template, the script
+ * writes scripts/fixtures/template.b64 (+ the .xlsx) which the UI's
+ * xlsx-parser unit tests pick up; those tests are skipped when the file is absent.
  *
  * Run:
  *   pnpm run test:integration
@@ -27,7 +36,7 @@ import {
   LogLevel,
   type Configuration,
 } from '@azure/msal-node';
-import type { FnoConnection, FnoTransport, ErConfigSummary } from '../packages/fno-client/src/types.js';
+import { FnoHttpError, type FnoConnection, type FnoTransport, type ErConfigSummary } from '../packages/fno-client/src/types.js';
 import {
   listSolutions,
   listComponents,
@@ -108,10 +117,18 @@ Mobile & Desktop Applications redirect URI.
 // ─── Fetch-based FnoTransport ─────────────────────────────────────────────────
 
 function makeFetchTransport(): FnoTransport {
+  // Throw the library's own error type so `downloadConfigXml` / the listing
+  // helpers can tell a 400/404 ("try the next op") apart from auth/server
+  // failures exactly like the UI transports do.
   async function assertOk(res: Response, url: string): Promise<void> {
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new Error(`HTTP ${res.status} ${res.statusText} — ${url}\n${body.slice(0, 800)}`);
+      throw new FnoHttpError(
+        `HTTP ${res.status} ${res.statusText} — ${url}\n${body.slice(0, 800)}`,
+        res.status,
+        url,
+        body,
+      );
     }
   }
 

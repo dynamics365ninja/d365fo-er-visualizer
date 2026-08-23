@@ -61,7 +61,7 @@ export function ToastHost() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className={styles.host} role="region" aria-live="polite" aria-label="Notifications">
+    <div className={styles.host} role="region" aria-live="polite" aria-label={t.notificationsLabel}>
       {toasts.map(toast => (
         <MessageBar
           key={toast.id}

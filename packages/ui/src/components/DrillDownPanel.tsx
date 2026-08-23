@@ -9,7 +9,7 @@
  * resolved to its datasource. Clicking a formula or child datasource name
  * pushes a new frame. A breadcrumb bar lets you jump back to any prior frame.
  */
-import React, { useMemo, useState, useCallback, useLayoutEffect, useRef } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import {
   Dialog,
   DialogSurface,
@@ -35,16 +35,9 @@ import {
   TextCaseTitleRegular,
   SettingsRegular,
   CalculatorRegular,
-  BoxRegular,
-  LinkRegular,
-  DataBarVerticalRegular,
-  LocationRegular,
   TextQuoteRegular,
   ArrowShuffleRegular,
-  DocumentTextRegular,
-  WarningRegular,
   PinRegular,
-  TagRegular,
   BranchForkRegular,
   ArrowClockwiseRegular,
   ArrowLeftRegular,
@@ -56,7 +49,7 @@ import {
 } from '@fluentui/react-icons';
 import { useAppStore, resolveDeepExpression } from '../state/store';
 import { locale, t } from '../i18n';
-import { formatEnumDisplayName, getEnumTypeLabel, getEnumSourceKind } from '../utils/enum-display';
+import { formatEnumDisplayName } from '../utils/enum-display';
 import { resolveLabel, buildLabelPool, labelDisplayText } from '../utils/label-resolver';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -98,23 +91,6 @@ export function getDrillDownEffectiveResolutionInput({
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function DsTypeIcon({ ds }: { ds: any }) {
-  const common = { fontSize: 14 } as const;
-  if (ds.tableInfo)       return <TableRegular {...common} />;
-  if (ds.enumInfo) {
-    const kind = getEnumSourceKind(ds.enumInfo);
-    if (kind === 'DataModel') return <DocumentTextRegular {...common} />;
-    if (kind === 'Format')    return <TagRegular {...common} />;
-    return <TextCaseTitleRegular {...common} />;
-  }
-  if (ds.classInfo)       return <SettingsRegular {...common} />;
-  if (ds.calculatedField) return <CalculatorRegular {...common} />;
-  if (ds.type === 'Container') return <BoxRegular {...common} />;
-  if (ds.type === 'Join')      return <LinkRegular {...common} />;
-  if (ds.type === 'GroupBy')   return <DataBarVerticalRegular {...common} />;
-  return <PinRegular {...common} />;
-}
-
 function dsTypeBadge(ds: any): string {
   if (ds.tableInfo)       return 'table';
   if (ds.enumInfo)        return 'enum';
@@ -135,8 +111,6 @@ function localizeBadgeLabel(badge: string): string {
     object: 'Objekt',
     userparameter: 'Uživatelský parametr',
     importformat: 'Importní formát',
-    modelenum: 'Výčet modelu',
-    formatenum: 'Výčet formátu',
     unknown: 'Neznámé',
   };
   const en: Record<string, string> = {
@@ -150,8 +124,6 @@ function localizeBadgeLabel(badge: string): string {
     object: 'Object',
     userparameter: 'User parameter',
     importformat: 'Import format',
-    modelenum: 'Model enum',
-    formatenum: 'Format enum',
     unknown: 'Unknown',
   };
   const dict = locale === 'cs' ? cs : en;
@@ -168,13 +140,6 @@ function localizeDatasourceType(ds: any): string {
 
 function firstSegment(expr: string): string {
   return expr.split(/[.(]/)[0].replace(/['"]/g, '').trim();
-}
-
-function stripModel(expr: string): string {
-  let e = expr;
-  if (e.toLowerCase().startsWith('model.'))  e = e.slice(6);
-  if (e.toLowerCase().startsWith('model\\')) e = e.slice(6);
-  return e;
 }
 
 /** ER built-in function names — not datasource identifiers */
@@ -698,23 +663,9 @@ function ExpressionView({ expr, configIndex, onPush, currentFrameExpression }: E
   );
 }
 
-interface ExpressionPathTreeProps {
-  expr: string;
-  configIndex: number;
-  onPush: (f: Frame) => void;
-  currentFrameExpression?: string;
-  showHeader?: boolean;
-}
-
 // ─── Frame content ────────────────────────────────────────────────────────────
 
 interface FrameViewProps {
-  frame: Frame;
-  onPush: (newFrame: Frame) => void;
-  configurations: any[];
-}
-
-interface WizardFrameViewProps {
   frame: Frame;
   onPush: (newFrame: Frame) => void;
   configurations: any[];
@@ -731,7 +682,7 @@ interface WorkbenchPart {
   configIndex: number;
 }
 
-// Keep legacy views reachable for future re-use and migration.
+// Workbench-style frame view: expression parts on the left, details on the right.
 function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps) {
   const resolveModelPath = useAppStore(s => s.resolveModelPath);
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
@@ -1269,233 +1220,13 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
   );
 }
 
-function DsChildren({ children, configIndex, onPush }: {
-  children: any[];
-  configIndex: number;
-  onPush: (f: Frame) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  if (children.length === 0) return null;
-  return (
-    <div className="dd-ds-children">
-      <button
-        type="button"
-        className="dd-ds-children__toggle"
-        onClick={() => setOpen(o => !o)}
-        aria-expanded={open}
-      >
-        <span className={`tree-chevron ${open ? 'open' : ''}`} />
-        <BoxRegular fontSize={14} aria-hidden />
-        <span>{t.drillStepChildrenTitle}</span>
-        <span className="dd-ds-children__count">{children.length}</span>
-      </button>
-      {open && (
-        <div className="dd-ds-children__list">
-          {children.map((child: any, i: number) => (
-            <button
-              key={i}
-              type="button"
-              className="dd-ds-child dd-clickable"
-              onClick={() => onPush({ label: child.name, expression: child.name, configIndex })}
-              title={`${t.drillDown}: ${child.name}`}
-            >
-              <span className="dd-ds-icon"><DsTypeIcon ds={child} /></span>
-              <span className={`badge badge-${dsTypeBadge(child)}`}>{localizeDatasourceType(child)}</span>
-              <span className="dd-ds-name">{child.name}</span>
-              {child.tableInfo && <span className="dd-ds-target-inline">→ {child.tableInfo.tableName}</span>}
-              {child.enumInfo  && <span className="dd-ds-target-inline">→ {formatEnumDisplayName(child.enumInfo.enumName, child.enumInfo)}</span>}
-              {child.classInfo && <span className="dd-ds-target-inline">→ {child.classInfo.className}</span>}
-              <span className="dd-push-icon" aria-hidden>›</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Dependency chain from deep resolution ───────────────────────────────────
-
-function DepChain({ deepResult, onPush, fromCi, stepNumber }: {
-  deepResult: any;
-  onPush: (f: Frame) => void;
-  fromCi: number;
-  stepNumber?: number;
-}) {
-  const tables = deepResult.involvedDatasources.filter((d: any) => d.tableName);
-  const enums = deepResult.involvedDatasources.filter((d: any) => d.enumName);
-  const classes = deepResult.involvedDatasources.filter((d: any) => d.className);
-  const calcs = deepResult.calculatedFieldChain as { name: string; formula: string }[];
-  const primaryDsName = deepResult.nestedDs?.name ?? deepResult.rootDs?.name ?? '';
-
-  type InfluenceCard = {
-    key: string;
-    kind: 'calc' | 'table' | 'enum' | 'class';
-    name: string;
-    detail: string;
-    expression: string;
-    direct: boolean;
-    priority: 'high' | 'medium' | 'low';
-    count: number;
-  };
-
-  const rawCards = [
-    ...calcs.map((cf, idx) => ({
-      key: `calc-${cf.name}-${idx}`,
-      kind: 'calc' as const,
-      name: cf.name,
-      detail: cf.formula,
-      expression: cf.formula,
-      direct: idx === 0,
-      priority: idx === 0 ? 'high' as const : 'low' as const,
-      count: 1,
-    })),
-    ...tables.map((d: any, idx: number) => ({
-      key: `table-${d.name}-${idx}`,
-      kind: 'table' as const,
-      name: d.name,
-      detail: d.tableName,
-      expression: d.name,
-      direct: d.name === primaryDsName,
-      priority: d.name === primaryDsName ? 'medium' as const : 'low' as const,
-      count: 1,
-    })),
-    ...enums.map((d: any, idx: number) => ({
-      key: `enum-${d.name}-${idx}`,
-      kind: 'enum' as const,
-      name: d.name,
-      detail: formatEnumDisplayName(d.enumName, d),
-      expression: d.name,
-      direct: d.name === primaryDsName,
-      priority: d.name === primaryDsName ? 'medium' as const : 'low' as const,
-      count: 1,
-    })),
-    ...classes.map((d: any, idx: number) => ({
-      key: `class-${d.name}-${idx}`,
-      kind: 'class' as const,
-      name: d.name,
-      detail: d.className,
-      expression: d.name,
-      direct: d.name === primaryDsName,
-      priority: d.name === primaryDsName ? 'medium' as const : 'low' as const,
-      count: 1,
-    })),
-  ];
-
-  const dedupMap = new Map<string, InfluenceCard>();
-  for (const item of rawCards) {
-    const key = `${item.direct ? 'd' : 'i'}|${item.kind}|${item.name}|${item.detail}|${item.expression}`;
-    const existing = dedupMap.get(key);
-    if (existing) {
-      existing.count += 1;
-      continue;
-    }
-    dedupMap.set(key, { ...item, key });
-  }
-
-  const priorityRank: Record<InfluenceCard['priority'], number> = {
-    high: 0,
-    medium: 1,
-    low: 2,
-  };
-
-  const cards = Array.from(dedupMap.values()).sort((a, b) => {
-    const byPriority = priorityRank[a.priority] - priorityRank[b.priority];
-    if (byPriority !== 0) return byPriority;
-    return a.name.localeCompare(b.name);
-  });
-
-  const directCards = cards.filter(c => c.direct);
-  const indirectCards = cards.filter(c => !c.direct);
-
-  const sectionTitle = (direct: boolean) => {
-    if (direct) return locale === 'cs' ? 'Přímé vlivy' : 'Direct influences';
-    return locale === 'cs' ? 'Nepřímé vlivy' : 'Indirect influences';
-  };
-
-  const sectionHint = (direct: boolean) => {
-    if (direct) return locale === 'cs' ? 'Vstupují do právě zobrazené formule přímo.' : 'Used directly in the current formula.';
-    return locale === 'cs' ? 'Jsou navázané přes další výpočty nebo reference.' : 'Used transitively through other calculations or references.';
-  };
-
-  const kindBadge = (kind: InfluenceCard['kind']) => {
-    if (kind === 'calc') return t.drillLabelCalcField;
-    if (kind === 'table') return t.drillLabelTable;
-    if (kind === 'enum') return t.drillLabelEnum;
-    return t.drillLabelClass;
-  };
-
-  const priorityLabel = (priority: InfluenceCard['priority']) => {
-    if (priority === 'high') return locale === 'cs' ? 'vysoká priorita' : 'high priority';
-    if (priority === 'medium') return locale === 'cs' ? 'střední priorita' : 'medium priority';
-    return locale === 'cs' ? 'nízká priorita' : 'low priority';
-  };
-
-  const renderCards = (items: InfluenceCard[]) => {
-    if (items.length === 0) {
-      return (
-        <div className="dd-influence-empty">
-          {locale === 'cs' ? 'Žádné položky.' : 'No items.'}
-        </div>
-      );
-    }
-    return (
-      <div className="dd-influence-list">
-        {items.map(item => (
-          <button
-            key={item.key}
-            type="button"
-            className={`dd-influence-card dd-influence-card--${item.kind} dd-influence-card--${item.priority}`}
-            onClick={() => onPush({ label: item.name, expression: item.expression, configIndex: fromCi })}
-            title={`${t.drillDown}: ${item.name}`}
-          >
-            <span className={`badge badge-${item.kind}`}>{kindBadge(item.kind)}</span>
-            <span className="dd-influence-card__name">{item.name}</span>
-            {item.count > 1 && <span className="dd-influence-card__count">x{item.count}</span>}
-            <span className={`dd-influence-card__priority dd-influence-card__priority--${item.priority}`}>{priorityLabel(item.priority)}</span>
-            <span className="dd-influence-card__detail">{item.detail}</span>
-            <span className="dd-push-icon" aria-hidden>›</span>
-          </button>
-        ))}
-      </div>
-    );
-  };
-
-  return (
-    <section className="dd-step dd-dep-chain dd-layout-right">
-      <header className="dd-step__head">
-        {stepNumber !== undefined && <span className="dd-step__num" aria-hidden>{stepNumber}</span>}
-        <span className="dd-step__icon" aria-hidden><LinkRegular fontSize={14} /></span>
-        <span className="dd-step__title">{t.drillStepDepsTitle}</span>
-      </header>
-      <div className="dd-step__body">
-        <div className="dd-influence-section">
-          <div className="dd-influence-section__head">
-            <span className="dd-influence-section__title">{sectionTitle(true)}</span>
-            <span className="dd-influence-section__count">{directCards.length}</span>
-          </div>
-          <div className="dd-influence-section__hint">{sectionHint(true)}</div>
-          {renderCards(directCards)}
-        </div>
-
-        <div className="dd-influence-section">
-          <div className="dd-influence-section__head">
-            <span className="dd-influence-section__title">{sectionTitle(false)}</span>
-            <span className="dd-influence-section__count">{indirectCards.length}</span>
-          </div>
-          <div className="dd-influence-section__hint">{sectionHint(false)}</div>
-          {renderCards(indirectCards)}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Main DrillDownPanel ──────────────────────────────────────────────────────
+/** Delay before a single click opens the dialog — long enough to detect a double-click. */
+const DRILL_TRIGGER_CLICK_DELAY_MS = 250;
 
 /**
  * Clickable expression wrapper — single-click opens the drill-down analysis
- * in a Fluent Dialog popup, double-click opens it as its own tab.
+ * in a Fluent Dialog popup, double-click (or Ctrl/Cmd+click, Shift+Enter)
+ * opens it as its own tab.
  *
  * Usage:
  *   <DrillDownTrigger expression="model.Invoice.Amount" configIndex={0} elementName="Amount">
@@ -1512,6 +1243,11 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
   const trimmedExpr = expression?.trim() ?? '';
   const openDrillDownTab = useAppStore(s => s.openDrillDownTab);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => () => {
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+  }, []);
 
   React.useEffect(() => {
     if (!isDialogOpen) return;
@@ -1530,26 +1266,50 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
 
   const openAsTab = () => openDrillDownTab(trimmedExpr, configIndex, elementName);
 
+  // A modal opened on the first click would swallow the second one, so the
+  // single-click open is deferred briefly and cancelled by a double-click.
+  const cancelPendingOpen = () => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+  };
+
   return (
     <>
       <span
         role="button"
         tabIndex={0}
         className={`dd-trigger-expr ${className ?? ''}`}
-        onClick={(e) => { e.stopPropagation(); setIsDialogOpen(true); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (e.ctrlKey || e.metaKey) {
+            cancelPendingOpen();
+            openAsTab();
+            return;
+          }
+          if (e.detail > 1) return; // second click of a double-click
+          cancelPendingOpen();
+          clickTimerRef.current = setTimeout(() => {
+            clickTimerRef.current = null;
+            setIsDialogOpen(true);
+          }, DRILL_TRIGGER_CLICK_DELAY_MS);
+        }}
         onDoubleClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
+          cancelPendingOpen();
           setIsDialogOpen(false);
           openAsTab();
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            setIsDialogOpen(true);
+            if (e.shiftKey || e.ctrlKey || e.metaKey) openAsTab();
+            else setIsDialogOpen(true);
           }
         }}
-        title={t.drillClickToToggle}
+        title={`${t.drillClickToToggle} · ${t.drillOpenAsTab}`}
       >
         {children}
       </span>
@@ -2205,7 +1965,7 @@ function TreeFlowNode({ data }: { data: {
           <div className="ddt-node__actions" onClick={(event) => event.stopPropagation()}>
             {canDrill && (
               <button type="button" className="ddt-node__action" onClick={() => onDrill?.(node)}>
-                {locale === 'cs' ? 'Drill' : 'Drill'}
+                {t.drillDown}
               </button>
             )}
             {canCopy && (

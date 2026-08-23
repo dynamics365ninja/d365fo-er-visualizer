@@ -106,7 +106,7 @@ const faqs = [
   },
   {
     q: 'Are my ER files uploaded to a server?',
-    a: 'No. Parsing happens entirely in your browser. XML files you drag in never leave your machine. The only network traffic is to your own Finance & Operations environment when you use the live connection.',
+    a: 'No. Parsing happens entirely in your browser and XML files you drag in never leave your machine. When you use the live connection, requests to your Finance & Operations environment are relayed through this site\'s own stateless proxy (F&O does not send CORS headers); it forwards your bearer token and the response and stores nothing.',
   },
   {
     q: 'Which ER component types are supported?',
@@ -163,7 +163,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-6xl px-5 py-16 sm:py-24">
           <p className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted">
             <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-            Open source · Runs entirely in your browser
+            Open source · Your data stays in your browser
           </p>
 
           <h1 className="mt-6 max-w-3xl font-display text-4xl font-bold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">

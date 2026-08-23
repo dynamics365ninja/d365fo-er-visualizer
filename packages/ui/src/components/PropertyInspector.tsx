@@ -4,7 +4,7 @@ import { ClickablePath } from './ClickablePath';
 import { ERDirection, getFormatElementDataType, getFormatElementExcelRange } from '@er-visualizer/core';
 import { getEnumTypeLabel } from '../utils/enum-display';
 import { resolveLabel, buildLabelPool, looksLikeLabelRef } from '../utils/label-resolver';
-import { t, locale } from '../i18n';
+import { t } from '../i18n';
 import {
   AppsListDetailRegular,
   CursorHoverRegular,
@@ -42,7 +42,7 @@ function LabelValue({ labelRef, configIndex }: { labelRef: string | null | undef
         <span className="label-value__text" title={resolved.raw}>{isRef ? resolved.id : resolved.raw}</span>
         {isRef && (
           <span className="label-value__missing" title={resolved.raw}>
-            {locale === 'cs' ? 'Text popisku není v načtených konfiguracích' : 'Label text not found in loaded configurations'}
+            {t.labelTextNotFound}
           </span>
         )}
       </div>
@@ -111,24 +111,26 @@ function getNodeHeaderIcon(node: any): React.ReactNode {
 /** Node kind rendered as a coloured pill — the same three hues as everywhere else. */
 function getNodeKindBadge(node: any): { label: string; tone: 'model' | 'mapping' | 'format' | 'neutral' } {
   const kind = node?.data?.kind ?? node?.data?.content?.kind;
-  if (kind === 'DataModel') return { label: locale === 'cs' ? 'Datový model' : 'Data model', tone: 'model' };
-  if (kind === 'ModelMapping') return { label: locale === 'cs' ? 'Mapování modelu' : 'Model mapping', tone: 'mapping' };
-  if (kind === 'Format') return { label: locale === 'cs' ? 'Formát' : 'Format', tone: 'format' };
+  if (kind === 'DataModel') return { label: t.kindDataModel, tone: 'model' };
+  if (kind === 'ModelMapping') return { label: t.kindModelMapping, tone: 'mapping' };
+  if (kind === 'Format') return { label: t.kindFormat, tone: 'format' };
 
-  const byType: Record<string, { label: string; tone: 'model' | 'mapping' | 'format' | 'neutral' }> = {
-    container: { label: locale === 'cs' ? 'Kontejner' : 'Container', tone: 'model' },
-    field: { label: locale === 'cs' ? 'Pole' : 'Field', tone: 'model' },
-    enum: { label: locale === 'cs' ? 'Výčet' : 'Enumeration', tone: 'model' },
-    enumValue: { label: locale === 'cs' ? 'Hodnota výčtu' : 'Enum value', tone: 'model' },
-    datasource: { label: locale === 'cs' ? 'Datový zdroj' : 'Data source', tone: 'mapping' },
-    binding: { label: locale === 'cs' ? 'Vazba' : 'Binding', tone: 'mapping' },
-    mapping: { label: locale === 'cs' ? 'Mapování' : 'Mapping', tone: 'mapping' },
-    validation: { label: locale === 'cs' ? 'Validace' : 'Validation', tone: 'mapping' },
-    formatElement: { label: locale === 'cs' ? 'Prvek formátu' : 'Format element', tone: 'format' },
-    formatBinding: { label: locale === 'cs' ? 'Vazba formátu' : 'Format binding', tone: 'format' },
-    transformation: { label: locale === 'cs' ? 'Transformace' : 'Transformation', tone: 'format' },
+  const toneByType: Record<string, 'model' | 'mapping' | 'format'> = {
+    container: 'model',
+    field: 'model',
+    enum: 'model',
+    enumValue: 'model',
+    datasource: 'mapping',
+    binding: 'mapping',
+    mapping: 'mapping',
+    validation: 'mapping',
+    formatElement: 'format',
+    formatBinding: 'format',
+    transformation: 'format',
   };
-  return byType[node?.type] ?? { label: node?.type ?? '', tone: 'neutral' };
+  const type: string = node?.type ?? '';
+  const tone = toneByType[type];
+  return tone ? { label: t.nodeTypeLabel(type), tone } : { label: type ? t.nodeTypeLabel(type) : '', tone: 'neutral' };
 }
 
 /**
@@ -147,7 +149,6 @@ function whereUsedQueryFor(node: any): string | null {
 
 export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {}) {
   const selectedNode = useAppStore(s => s.selectedNode);
-  const registry = useAppStore(s => s.registry);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const configurations = useAppStore(s => s.configurations);
   const triggerWhereUsed = useAppStore(s => s.triggerWhereUsed);
@@ -237,6 +238,8 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
       {node.type === 'mapping' && data && <MappingProps data={data} showTechnicalDetails={showTechnicalDetails} configIndex={configIndex} />}
       {node.type === 'enum' && data && <EnumProps data={data} showTechnicalDetails={showTechnicalDetails} />}
       {node.type === 'transformation' && data && <TransformationProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
+      {node.type === 'enumValue' && data && <EnumValueProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
+      {node.type === 'section' && <SectionProps node={node} />}
 
     </div>
   );
@@ -277,7 +280,7 @@ function FileProps({ data, showTechnicalDetails }: { data: any; showTechnicalDet
       [t.propBase, sol.baseName ?? '–'],
       [t.propBaseGuid, sol.baseSolutionId ?? '–', 'guid'],
       [t.propKind, config.kind],
-      [t.propLabel + 's', t.propLabelsCount(sol.labels?.length ?? 0)],
+      [t.propLabels, t.propLabelsCount(sol.labels?.length ?? 0)],
     );
   }
 
@@ -307,7 +310,7 @@ function FieldProps({ data, configIndex, showTechnicalDetails }: { data: any; co
 
   if (showTechnicalDetails) {
     items.splice(0, 0,
-      [t.propType, fieldTypeNames[data.type] ?? `Unknown (${data.type})`],
+      [t.propType, fieldTypeNames[data.type] ?? t.propUnknownType(String(data.type))],
       [t.propTypeDescriptor, data.typeDescriptor ?? '–'],
       [t.propHost, data.isTypeDescriptorHost ? t.propYes : t.propNo],
     );
@@ -385,7 +388,7 @@ function BindingProps({ data, configIndex, showTechnicalDetails }: { data: any; 
 function ValidationProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   return (
     <div>
-      <PropGrid items={[['Path', <ClickablePath expression={data.path} configIndex={configIndex} mode="model-path" />]]} />
+      <PropGrid items={[[t.propModelPath, <ClickablePath expression={data.path} configIndex={configIndex} mode="model-path" />]]} />
       {data.conditions?.map((c: any, i: number) => (
         <div key={i} className="property-card">
           <div className="property-card-title">{t.propRule(i + 1)}</div>
@@ -507,11 +510,37 @@ function EnumProps({ data, showTechnicalDetails }: { data: any; showTechnicalDet
 }
 
 function TransformationProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
-  const items: [string, React.ReactNode, string?][] = [];
-  if (showTechnicalDetails) {
-    items.push(['Expression', <ClickablePath expression={data.expressionAsString} configIndex={configIndex} />]);
-  }
+  // The expression is what a transformation *is* — consultants need it too.
+  const items: [string, React.ReactNode, string?][] = [
+    [t.expression, <ClickablePath expression={data.expressionAsString} configIndex={configIndex} />],
+  ];
   if (showTechnicalDetails) items.unshift(['GUID', data.id, 'guid']);
+  return <PropGrid items={items} />;
+}
+
+/**
+ * Enum value nodes come in two shapes: format enum values (`{ id, name }`) and
+ * datasource enum values (`{ name, enumName }`); model enums may also carry a
+ * value/label/description. Show whatever is present.
+ */
+function EnumValueProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
+  const items: [string, React.ReactNode, string?][] = [
+    [t.propName, data.name ?? '–'],
+  ];
+  if (data.value !== undefined && data.value !== null) items.push([t.propValue, String(data.value)]);
+  if (data.enumName) items.push([t.pathEnum, data.enumName]);
+  if (data.label) items.push([t.propLabel, <LabelValue labelRef={data.label} configIndex={configIndex} />]);
+  if (data.description) items.push([t.propDescription, <LabelValue labelRef={data.description} configIndex={configIndex} />]);
+  if (showTechnicalDetails && data.id) items.unshift(['GUID', data.id, 'guid']);
+  return <PropGrid items={items} />;
+}
+
+function SectionProps({ node }: { node: any }) {
+  const children: any[] = node.children ?? [];
+  const items: [string, React.ReactNode, string?][] = [
+    [t.propChildren, `${children.length}`],
+  ];
+  if (node.data?.description) items.push([t.propDescription, String(node.data.description)]);
   return <PropGrid items={items} />;
 }
 
