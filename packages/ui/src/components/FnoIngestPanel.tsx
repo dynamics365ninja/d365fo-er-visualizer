@@ -37,13 +37,14 @@ function statusLabel(status: FnoIngestItem['status']): string {
     case 'done': return t.fnoIngestStatusDone;
     case 'empty': return t.fnoIngestStatusEmpty;
     case 'failed': return t.fnoIngestStatusFailed;
+    case 'skipped': return t.fnoIngestStatusSkipped;
   }
 }
 
 function StatusIcon({ status }: { status: FnoIngestItem['status'] }) {
   if (status === 'done') return <CheckmarkCircleFilled className="fno-ingest-row__icon fno-ingest-row__icon--done" fontSize={15} />;
   if (status === 'failed') return <DismissCircleFilled className="fno-ingest-row__icon fno-ingest-row__icon--failed" fontSize={15} />;
-  if (status === 'empty') return <SubtractCircleRegular className="fno-ingest-row__icon fno-ingest-row__icon--empty" fontSize={15} />;
+  if (status === 'empty' || status === 'skipped') return <SubtractCircleRegular className="fno-ingest-row__icon fno-ingest-row__icon--empty" fontSize={15} />;
   if (status === 'downloading') return <ArrowSyncRegular className="fno-ingest-row__icon fno-ingest-row__icon--active" fontSize={15} style={{ animation: 'spin 1.2s linear infinite' }} />;
   return <span className="fno-ingest-row__icon fno-ingest-row__dot" />;
 }

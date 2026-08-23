@@ -46,11 +46,22 @@ pnpm dev        # Vite dev server → http://localhost:5173
 
 Drag and drop one or more ER XML files onto the landing page, or click **Open files**.
 
+The browser F&O flow needs the `/api/fno` proxy, which lives in the Next.js site. In dev the Vite
+server proxies `/api/fno` to `FNO_DEV_PROXY_TARGET` (default `http://localhost:3000`), so run
+`pnpm dev:site` alongside `pnpm dev` when you want to connect to a live environment. Add
+`http://localhost:5173` to the site's `FNO_PROXY_ALLOWED_ORIGINS` if you call the proxy
+cross-origin (see [Deployment](#deployment)).
+
 ### Electron (native desktop)
 
 ```bash
 pnpm dev:electron   # Vite + Electron window; required for loopback MSAL sign-in
+pnpm --filter @er-visualizer/electron dist   # package with electron-builder → packages/electron/release/
 ```
+
+The packaged app bundles `packages/ui/dist` as an extra resource (`Resources/ui`), so `dist`
+builds the SPA first. Targets: dmg/zip (macOS), nsis (Windows), AppImage (Linux) — see the
+`build` section of `packages/electron/package.json`.
 
 ### Marketing site & documentation
 
@@ -66,9 +77,28 @@ same deployment under `/app`.
 ```bash
 pnpm build      # core → tsc, fno-client → tsc, ui → Vite bundle, electron → tsc, site → Next
 pnpm build:web  # production web deploy — SPA built with base /app/, staged into the site, then Next
-pnpm test       # Vitest — core XML parser + GUID registry
-pnpm --filter @er-visualizer/fno-client test   # fno-client ER service + path-key tests
+pnpm test       # Vitest — core (XML parser, GUID registry), fno-client (ER services, path keys, auth), ui (store, filters, xlsx)
+pnpm lint       # tsc --noEmit in every package
 ```
+
+The `ui` xlsx-parser tests need a real Excel template and are skipped unless
+`scripts/fixtures/template.b64` exists; the integration test below writes it.
+
+### Integration test
+
+`pnpm test:integration` runs `scripts/integration-test.ts` against a live F&O environment: it signs
+you in (loopback MSAL), lists solutions and components, downloads configurations and asserts the
+parser, version extraction and format-tree filtering on real data. Configure it with
+`scripts/.fno-integration.json` or environment variables (env wins):
+
+| Variable | Meaning |
+|---|---|
+| `FNO_ENV_URL` | F&O base URL, e.g. `https://contoso.operations.dynamics.com` (required) |
+| `FNO_TENANT_ID` | Entra tenant ID or domain (required) |
+| `FNO_CLIENT_ID` | Entra app registration (public client) ID (required) |
+| `FNO_SOLUTION_NAME` | Solution to drill into (default: first listed) |
+| `FNO_CONFIG_NAME` | Configuration to download (default: first Format) |
+| `FNO_FILTER_TERM` | Search term for the structure-tree filter check (default: `Date`) |
 
 ---
 
@@ -144,7 +174,10 @@ site's `public/app`, then `next build`.
 > replaced by the site package and its edge route.
 
 The proxy forwards only to `*.dynamics.com` over HTTPS and stores nothing; the target URL travels
-in the `X-Fno-Target-Url` header. No environment variable is needed for it.
+in the `X-Fno-Target-Url` header. CORS headers are only issued for the site's own origin and for
+origins listed in the optional `FNO_PROXY_ALLOWED_ORIGINS` (comma-separated, e.g.
+`http://localhost:5173,https://preview.example.com`); the same-origin SPA under `/app` needs
+nothing.
 
 ---
 

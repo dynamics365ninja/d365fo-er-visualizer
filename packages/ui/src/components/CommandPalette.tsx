@@ -105,6 +105,7 @@ export function CommandPalette({ open, onClose, extraCommands }: Props) {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const treeNodes = useAppStore(s => s.treeNodes);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
@@ -119,8 +120,8 @@ export function CommandPalette({ open, onClose, extraCommands }: Props) {
           id: `nav:${n.id}`,
           label: title,
           group: t.cmdGroupNav,
-          hint: n.type,
-          keywords: [n.type, n.name],
+          hint: t.nodeTypeLabel(n.type),
+          keywords: [n.type, t.nodeTypeLabel(n.type), n.name],
           action: () => navigateToTreeNode(n.id),
         });
         if (n.children) walk(n.children, depth + 1, [...trail, n.name]);
@@ -161,6 +162,12 @@ export function CommandPalette({ open, onClose, extraCommands }: Props) {
 
   useEffect(() => { setActiveIndex(0); }, [query]);
 
+  // Keep the keyboard-selected item visible while arrowing through a long list.
+  useEffect(() => {
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`);
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex]);
+
   const runActive = () => {
     const cmd = filtered[activeIndex];
     if (!cmd) return;
@@ -199,7 +206,7 @@ export function CommandPalette({ open, onClose, extraCommands }: Props) {
             appearance="underline"
             size="large"
           />
-          <div className={styles.list} role="listbox" aria-label={t.commandPalette}>
+          <div ref={listRef} className={styles.list} role="listbox" aria-label={t.commandPalette}>
             {grouped.length === 0 && (
               <div className={styles.empty}>{t.noResults}</div>
             )}
@@ -214,6 +221,7 @@ export function CommandPalette({ open, onClose, extraCommands }: Props) {
                       key={cmd.id}
                       type="button"
                       role="option"
+                      data-index={flatIndex}
                       aria-selected={active}
                       className={mergeClasses(styles.item, active && styles.itemActive)}
                       onMouseEnter={() => setActiveIndex(flatIndex)}

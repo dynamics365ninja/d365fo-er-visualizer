@@ -10,6 +10,7 @@ import {
   ArrowForwardRegular,
   BranchRegular,
 } from '@fluentui/react-icons';
+import { t } from '../i18n';
 
 export type PathTooltipKind = 'datasource' | 'model-mapping' | 'binding';
 export type PathTooltipRowIcon = 'table' | 'class' | 'enum' | 'calc' | 'link' | 'branch';
@@ -255,7 +256,7 @@ export function PathTooltipCard({ data, mouse }: PathTooltipCardProps) {
       {data.canNavigate && (
         <div className={styles.footer}>
           <ArrowForwardRegular fontSize={12} />
-          <span>Click to navigate</span>
+          <span>{t.tooltipClickToNavigate}</span>
         </div>
       )}
     </div>

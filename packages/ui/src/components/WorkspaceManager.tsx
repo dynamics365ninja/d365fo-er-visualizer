@@ -232,7 +232,11 @@ export function WorkspaceManager({
                   icon={<FolderOpenRegular />}
                   onClick={() => {
                     void openFilesWithSystemDialog(loadXmlFile).then(result => {
-                      if (result === null) fileInputRef.current?.click();
+                      if (result === null) {
+                        fileInputRef.current?.click();
+                        return;
+                      }
+                      for (const err of result.errors) pushToast({ kind: 'error', message: err });
                     });
                   }}
                 >

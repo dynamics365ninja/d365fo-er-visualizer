@@ -2,7 +2,7 @@
 
 ## Overview
 
-pnpm monorepo — five packages with a clear dependency direction:
+pnpm monorepo — six packages with a clear dependency direction:
 
 ```
 Electron shell (optional)        Next.js site (marketing + docs)
@@ -14,9 +14,12 @@ Electron shell (optional)        Next.js site (marketing + docs)
    @er-visualizer/core          ← XML parser · GUID registry · type system
         │
    @er-visualizer/fno-client    ← F&O API client (host-agnostic)
+
+   @er-visualizer/design-tokens ← CSS tokens + theme switch shared by UI and site
 ```
 
-The site depends on the UI only as a build artifact — no imports cross that boundary.
+The site depends on the UI only as a build artifact — no imports cross that boundary. The
+Electron shell imports `fno-client` for types only; at runtime it talks to the renderer over IPC.
 
 ---
 
@@ -26,9 +29,9 @@ The site depends on the UI only as a build artifact — no imports cross that bo
 
 Pure TypeScript library, no UI dependencies.
 
-- **XML parser** — `parseERConfiguration(xml, filePath)`: detects component kind, unwraps `ErFnoBundle` / bare-content / base64 payloads, resolves the correct version node, returns a fully-typed `ERConfiguration`.
+- **XML parser** — `parseERConfiguration(xml, filePath)`: detects component kind, unwraps `ErFnoBundle` / bare-content / base64 payloads, resolves the correct version node, returns a fully-typed `ERConfiguration`. `parseERConfigurations` additionally splits a bundle carrying a data model next to its mapping. Non-fatal findings (unknown format element types, unrecognised datasource handlers) are kept as `Unknown`/`Container` nodes and listed in `ERConfiguration.warnings`.
 - **Type system** — interfaces for every ER artifact: `ERDataModel`, `ERModelMapping`, `ERFormat`, `ERDatasource` (8 kinds), `ERBinding`, `ERFormatElement`, expression AST (`ERExprCall`, `ERExprIf`, `ERExprCase`, `ERExprBinaryOp`, …).
-- **GUID registry** — `indexConfiguration()` walks every loaded config in a single pass and builds a cross-reference index: `lookup()`, `findRefsTo()`, `findRefsFrom()`, `search()`.
+- **GUID registry** — `indexConfiguration()` walks every loaded config in a single pass and builds a cross-reference index. The UI uses `indexConfiguration()`, `lookup()` and `search()`; `findRefsTo()`, `findRefsFrom()`, `getAllEntries()`, `register()` and `addCrossRef()` are part of the public API (covered by unit tests) but currently have no caller in the app — the where-used feature in the store walks configurations directly.
 
 **Key design choices:**
 - Datasources use a flat interface with optional sub-objects (`tableInfo`, `enumInfo`, `classInfo`, …) — no class hierarchy, trivial JSON serialization.
@@ -37,7 +40,7 @@ Pure TypeScript library, no UI dependencies.
 
 ### `@er-visualizer/fno-client`
 
-Host-agnostic F&O API client. Network I/O is delegated to a `FnoTransport` so the same code runs in browser (`fetch`) and Electron (`node:https`).
+Host-agnostic F&O API client. Network I/O is delegated to a `FnoTransport` so the same code runs in the browser (`fetch` through the site's `/api/fno` proxy) and in Electron (IPC to the main process, which issues the request with Electron's `net.request`). Token acquisition is likewise behind an `AuthProvider` (`@azure/msal-browser` popup/redirect in the browser, `@azure/msal-node` over IPC in Electron).
 
 - **ER services** — calls F&O custom services under `/api/services` (not OData entities): solution/configuration tree enumeration, typed downloads for Format, ModelMapping, and DataModel.
 - **Path helpers** — `buildFnoPath` produces synthetic `fno://envHost/solution/config@version` URIs so live configs slot into the same workspace as on-disk XML.
@@ -95,7 +98,9 @@ CSS. See [Theming](#theming).
 
 Thin shell — `BrowserWindow` + `contextBridge`. Adds:
 - Native file-open dialogs via IPC.
-- Loopback MSAL flow (`@azure/msal-node` `acquireTokenInteractive`) for F&O sign-in in environments that block popup origins.
+- Loopback MSAL flow for F&O sign-in in environments that block popup origins: `@azure/msal-node` `getAuthCodeUrl` opens the system browser, an ephemeral `http://localhost:<port>/` listener receives the code, `acquireTokenByCode` exchanges it (5-minute timeout). Tokens are cached on disk, encrypted with `safeStorage` when available.
+- `fno:request` IPC — forwards HTTPS requests to `*.dynamics.com` hosts only (same allow-list as the site proxy).
+- Packaging — `electron-builder` (`pnpm --filter @er-visualizer/electron dist`); the renderer is shipped as `extraResources/ui` from `packages/ui/dist`.
 
 ---
 
@@ -193,7 +198,7 @@ values, because the tokens are not loaded at that point.
 | `fno-client` | tsc | `dist/` `.js` + `.d.ts` |
 | `ui` | Vite 6 | `dist/` SPA with code-split chunks |
 | `site` | Next 15 | `.next/` — prerendered pages + one edge route |
-| `electron` | tsc | `dist/main.js` + `dist/preload.js` |
+| `electron` | tsc (two tsconfigs) | `dist/main.js` (ESM) + `dist/preload.cjs` (CommonJS, sandboxed preload) |
 
 The web deployment is `pnpm build:web`: build the SPA with `APP_BASE=/app/`, stage it into
 `packages/site/public/app`, then `next build`. Vercel's root directory is `packages/site`.
@@ -204,5 +209,9 @@ Vite aliases `@er-visualizer/core` to the core source during dev for instant HMR
 
 ## Testing
 
-- **Vitest** (`core`): XML parser round-trips for all three component kinds; GUID registry registration, lookup, and cross-reference search.
-- **Vitest** (`fno-client`): ER service OData parsing, path-key building, auth scope helpers.
+- **Vitest** (`core`): XML parser round-trips for all three component kinds (bundles, bare content, base64 payloads, unknown element types); GUID registry registration, lookup, and cross-reference search.
+- **Vitest** (`fno-client`): `/api/services` custom-service response parsing (solution/component listing, operation-name fallbacks, XML download extraction), path-key building, auth scope/authority helpers.
+- **Vitest** (`ui`): store/session helpers, format tree filtering, xlsx template parsing (skipped unless `scripts/fixtures/template.b64` exists — the integration test writes it).
+- **Integration** (`pnpm test:integration`): `scripts/integration-test.ts` runs against a live F&O environment; see the README.
+
+`pnpm test` at the root runs all three Vitest suites; `pnpm lint` runs `tsc --noEmit` in every package.

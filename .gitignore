@@ -22,3 +22,6 @@ packages/ui/public/dev-samples/
 
 # Machine-local Claude Code settings (permission allowlist etc.)
 .claude/settings.local.json
+
+# electron-builder output
+packages/electron/release/

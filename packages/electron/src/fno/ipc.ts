@@ -18,13 +18,27 @@ import {
   type TokenCacheContext,
   LogLevel,
 } from '@azure/msal-node';
+import type { FnoConnection } from '@er-visualizer/fno-client';
 
-interface FnoConnection {
-  id: string;
-  displayName: string;
-  envUrl: string;
-  tenantId: string;
-  clientId: string;
+/** Interactive sign-in must complete within this window, otherwise the
+ * loopback listener is torn down and the renderer gets a clear error. */
+const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * Outbound allow-list for `fno:request`. Mirrors the web proxy
+ * (packages/site/app/api/fno/route.ts): HTTPS only, hosts under dynamics.com.
+ */
+const ALLOWED_HOST_PATTERNS = [/(^|\.)dynamics\.com$/i];
+
+function isAllowedTarget(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'https:') return false;
+  return ALLOWED_HOST_PATTERNS.some(re => re.test(url.hostname));
 }
 
 interface FnoAuthResult {
@@ -171,18 +185,18 @@ async function startLoopbackListener(): Promise<{
 
         if (error) {
           res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(`<h1>Přihlášení selhalo</h1><p>${escapeHtml(error)}: ${escapeHtml(errorDesc ?? '')}</p>`);
-          rejectCode?.(new Error(`${error}: ${errorDesc ?? ''}`));
+          res.end(`<h1>Sign-in failed</h1><p>${escapeHtml(error)}: ${escapeHtml(errorDesc ?? '')}</p>`);
+          rejectCode?.(new Error(`Sign-in failed: ${error}: ${errorDesc ?? ''}`));
           return;
         }
         if (!code) {
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end('<h1>D365FO ER Visualizer</h1><p>Probíhá přihlašování…</p>');
+          res.end('<h1>D365FO ER Visualizer</h1><p>Signing in…</p>');
           return;
         }
 
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end('<h1>Hotovo</h1><p>Můžete zavřít toto okno a vrátit se do aplikace.</p>');
+        res.end('<h1>Done</h1><p>You can close this window and return to the application.</p>');
         resolveCode?.({
           code,
           state,
@@ -213,7 +227,15 @@ async function startLoopbackListener(): Promise<{
               res(result);
             };
             rejectCode = rej;
-            signal?.addEventListener('abort', () => rej(new Error('Aborted')));
+            if (signal?.aborted) {
+              rej(signal.reason instanceof Error ? signal.reason : new Error('Sign-in aborted'));
+              return;
+            }
+            signal?.addEventListener(
+              'abort',
+              () => rej(signal.reason instanceof Error ? signal.reason : new Error('Sign-in aborted')),
+              { once: true },
+            );
           });
         },
         close: () => server.close(),
@@ -251,7 +273,16 @@ async function login(conn: FnoConnection): Promise<FnoAuthResult> {
       redirectUri: listener.redirectUri,
     });
     await shell.openExternal(authUrl);
-    const { code } = await listener.waitForCode(state);
+    const abort = new AbortController();
+    const timer = setTimeout(() => {
+      abort.abort(new Error(`Sign-in timed out after ${Math.round(LOGIN_TIMEOUT_MS / 60000)} minutes`));
+    }, LOGIN_TIMEOUT_MS);
+    let code: string;
+    try {
+      ({ code } = await listener.waitForCode(state, abort.signal));
+    } finally {
+      clearTimeout(timer);
+    }
     try {
       const tokenResult = await msal.acquireTokenByCode({
         code,
@@ -421,6 +452,9 @@ export function registerFnoIpc(): void {
     return true;
   });
   ipcMain.handle('fno:request', async (_evt, payload: FnoRequestPayload) => {
+    if (!isAllowedTarget(payload.url)) {
+      throw new Error(`Target host not allowed: ${payload.url}`);
+    }
     return fnoRequest(payload);
   });
 }

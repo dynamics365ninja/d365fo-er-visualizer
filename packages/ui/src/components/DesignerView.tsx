@@ -96,7 +96,7 @@ export function DesignerView() {
               <DataPieRegular fontSize={20} />
             </div>
             <div className="designer-empty-card__titles">
-              <div className="designer-empty-card__eyebrow">Designer Workspace</div>
+              <div className="designer-empty-card__eyebrow">{t.designerWorkspaceEyebrow}</div>
               <h2 className="designer-empty-card__title">{t.noSelection}</h2>
             </div>
           </div>
@@ -153,7 +153,7 @@ export function DesignerView() {
   if (config.kind === 'ModelMapping') return <MappingDesigner mapping={(config.content as ERModelMappingContent).version.mapping} configIndex={tab.configIndex} focusNode={activeNode} />;
   if (config.kind === 'Format') return <FormatDesigner config={config} configIndex={tab.configIndex} focusNode={activeNode} />;
 
-  return <div style={{ padding: 16 }}>Unsupported view for: {config.kind}</div>;
+  return <div style={{ padding: 16 }}>{t.designerUnsupportedView(config.kind)}</div>;
 }
 
 function FocusedNodeTab({ node }: { node: any }) {
@@ -176,16 +176,8 @@ function FocusedNodeTab({ node }: { node: any }) {
     );
   }
 
-  if (node.type === 'model' && config.kind === 'DataModel') {
-    return <ModelDesigner config={config} focusNode={focusNode} />;
-  }
-
   if (node.type === 'mapping' && node.configIndex != null) {
     return <MappingDesigner mapping={node.data} configIndex={node.configIndex} focusNode={focusNode} />;
-  }
-
-  if (node.type === 'format' && config.kind === 'Format') {
-    return <FormatDesigner config={config} configIndex={node.configIndex} focusNode={focusNode} />;
   }
 
   // After collapsing the redundant inner wrapper, the configuration
@@ -262,7 +254,7 @@ function FormatElementFocusTab({ node, configIndex }: { node: any; configIndex: 
                       {b.bindingDisplayLabel}
                     </span>
                     {showTechnicalDetails && b.promotedFromChild && b.rawElementType && (
-                      <span className="fmt-binding-origin">via {b.rawElementType}</span>
+                      <span className="fmt-binding-origin">{t.bindingVia} {b.rawElementType}</span>
                     )}
                     <div style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 11 }}>
                       <DrillDownTrigger
@@ -964,6 +956,8 @@ function buildBindingTree(bindings: any[]): BindingTreeNode[] {
   return roots;
 }
 
+const EMPTY_STRING_SET: ReadonlySet<string> = new Set();
+
 /** Every ancestor path of `path`, outermost first. */
 function bindingAncestorKeys(path: string): string[] {
   const segments = path.split('/');
@@ -1082,11 +1076,22 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
   }, [treeNodes, configIndex, selectNode]);
 
   // Every level starts closed, not just the roots — the tree opens as the user
-  // clicks down through it.
+  // clicks down through it. This runs once per mapping (not on every filter
+  // keystroke, which used to re-collapse everything and hide filter matches)
+  // and keeps the path to a focused binding open.
+  const collapseInitForRef = useRef<unknown>(null);
   useEffect(() => {
-    if (bindingTree.length === 0) return;
-    setCollapsedGroups(prev => prev.size > 0 ? prev : new Set(collapseAllKeys(bindingTree)));
-  }, [bindingTree, collapseAllKeys]);
+    if (collapseInitForRef.current === mm) return;
+    if (bindingTree.length === 0 || filter) return;
+    collapseInitForRef.current = mm;
+    const next = new Set(collapseAllKeys(bindingTree));
+    if (focusBindingPath) for (const key of bindingAncestorKeys(focusBindingPath)) next.delete(key);
+    setCollapsedGroups(next);
+  }, [mm, bindingTree, filter, collapseAllKeys, focusBindingPath]);
+
+  // While a text filter is active every match must be visible, so the
+  // user's manual collapse state is suspended (and restored when cleared).
+  const effectiveCollapsedGroups = filter ? EMPTY_STRING_SET : collapsedGroups;
 
   const totalShown = bindingTree.reduce((n, g) => n + g.count, 0);
 
@@ -1214,7 +1219,7 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
                     key={node.key}
                     node={node}
                     depth={0}
-                    collapsed={collapsedGroups}
+                    collapsed={effectiveCollapsedGroups}
                     onToggle={toggleGroup}
                     configIndex={configIndex}
                     focusBindingPath={focusBindingPath}
@@ -1227,7 +1232,7 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
         )}
 
         {view === 'datasources' && (
-          <GroupedDatasourceList ref={dsListRef} datasources={filteredDatasources} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusNode?.type === 'datasource' ? focusNode.name : undefined} />
+          <GroupedDatasourceList ref={dsListRef} datasources={filteredDatasources} filtering={Boolean(filter)} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusNode?.type === 'datasource' ? focusNode.name : undefined} />
         )}
       </div>
     </div>
@@ -1244,7 +1249,7 @@ function BindingTreeRows({
 }: {
   node: BindingTreeNode;
   depth: number;
-  collapsed: Set<string>;
+  collapsed: ReadonlySet<string>;
   onToggle: (key: string) => void;
   configIndex: number;
   focusBindingPath?: string;
@@ -1357,8 +1362,6 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const rootElement = fmt.rootElement;
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const selectNode = useAppStore(s => s.selectNode);
-  const resolveDatasource = useAppStore(s => s.resolveDatasource);
-  const registry = useAppStore(s => s.registry);
   const treeNodes = useAppStore(s => s.treeNodes);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const configurations = useAppStore(s => s.configurations);
@@ -1503,10 +1506,16 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
 
   const [collapsedBindingTypeGroups, setCollapsedBindingTypeGroups] = useState<Set<string>>(new Set());
 
+  // Collapse the type groups once per format; a text filter suspends the
+  // collapse state so matches are always visible.
+  const bindingGroupsInitForRef = useRef<unknown>(null);
   useEffect(() => {
-    if (groupedBindingsByType.length === 0) return;
-    setCollapsedBindingTypeGroups(prev => prev.size > 0 ? prev : new Set(groupedBindingsByType.map(group => group.elementType)));
-  }, [groupedBindingsByType]);
+    if (bindingGroupsInitForRef.current === config) return;
+    if (groupedBindingsByType.length === 0 || filter) return;
+    bindingGroupsInitForRef.current = config;
+    setCollapsedBindingTypeGroups(new Set(groupedBindingsByType.map(group => group.elementType)));
+  }, [config, groupedBindingsByType, filter]);
+  const effectiveCollapsedBindingTypeGroups = filter ? EMPTY_STRING_SET : collapsedBindingTypeGroups;
 
   const toggleBindingTypeGroup = useCallback((elementType: string) => {
     setCollapsedBindingTypeGroups(prev => {
@@ -1709,6 +1718,10 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
               }}
             />
           )}
+          {/* The preview and embedded-mapping views have their own content
+              (the mapping designer carries its own filter), so the text
+              filter is only offered where it actually filters something. */}
+          {view !== 'preview' && view !== 'embedded-mapping' && (
           <div className="filter-field">
             <svg className="filter-field__icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.4"/>
@@ -1734,6 +1747,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
               </button>
             )}
           </div>
+          )}
         </div>
       </div>
 
@@ -1753,8 +1767,6 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
               expandVersion={structureExpandVersion}
               selectedId={selectedElementId}
               onSelect={handleSelectFormatElement}
-              resolveDatasource={resolveDatasource}
-              registry={registry}
               showTechnicalDetails={showTechnicalDetails}
               bindingFilter={structureBindingFilter}
               treeIndex={treeIndex}
@@ -1795,12 +1807,12 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
                 : groupedBindingsByType.map(group => (
                     <div key={group.elementType} className="mm-group">
                       <div className="mm-group-header" onClick={() => toggleBindingTypeGroup(group.elementType)}>
-                        <span className={`tree-chevron ${!collapsedBindingTypeGroups.has(group.elementType) ? 'open' : ''}`} />
+                        <span className={`tree-chevron ${!effectiveCollapsedBindingTypeGroups.has(group.elementType) ? 'open' : ''}`} />
                         <span className="mm-group-name">{showTechnicalDetails ? group.elementType : getConsultantFormatTypeLabel(group.elementType)}</span>
                         <span className="mm-group-count">{group.rows.length}</span>
                       </div>
-                      {!collapsedBindingTypeGroups.has(group.elementType) && group.rows.map(row => (
-                        <FormatElementBindingGroup key={row.componentId} row={row} configIndex={configIndex} onNavigate={revealFormatElementInExplorer} onReveal={revealFormatElementInExplorer} showTechnicalDetails={showTechnicalDetails} />
+                      {!effectiveCollapsedBindingTypeGroups.has(group.elementType) && group.rows.map(row => (
+                        <FormatElementBindingGroup key={row.componentId} row={row} configIndex={configIndex} onReveal={revealFormatElementInExplorer} showTechnicalDetails={showTechnicalDetails} />
                       ))}
                     </div>
                   ))}
@@ -1808,7 +1820,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
           )}
 
           {view === 'datasources' && (
-            <GroupedDatasourceList ref={dsListRef} datasources={filteredDatasources} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusNode?.type === 'datasource' ? focusNode.name : undefined} />
+            <GroupedDatasourceList ref={dsListRef} datasources={filteredDatasources} filtering={Boolean(filter)} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusNode?.type === 'datasource' ? focusNode.name : undefined} />
           )}
 
           <div style={{ display: view === 'preview' ? 'contents' : 'none' }}>
@@ -1903,8 +1915,12 @@ function sampleValueForElement(el: ERFormatElement): string {
   if (/(zip|psc|postal)/.test(lower)) return pickByHash(['11000', '60200', '70200'], seed);
   if (/(country|stat)/.test(lower)) return pickByHash(['CZ', 'SK', 'DE'], seed);
 
-  if (el.elementType === 'String') return `Sample(${name || 'Value'})`;
   return `Sample(${name || 'Value'})`;
+}
+
+/** True for the synthetic `Sample(...)` placeholders produced by sampleValueForElement. */
+function isSamplePlaceholder(value: string): boolean {
+  return /^Sample\(.*\)$/.test(value);
 }
 
 /** Format an element's preview value: constant from binding expression or configurable unresolved fallback.
@@ -2318,9 +2334,7 @@ function ExcelTemplateGrid({
                   const xlsxBg = cellStyle?.fillType === 'solid' && cellStyle.fgColor
                     ? `#${cellStyle.fgColor.slice(-6)}`
                     : undefined;
-                  // Border helpers
-                  const borderStyle = (side?: string) =>
-                    side && side !== 'none' ? `1px solid ${excelColors.cellBorder}` : `1px solid ${excelColors.cellBorder}`;
+                  const borderStyle = () => `1px solid ${excelColors.cellBorder}`;
 
                   return (
                     <td
@@ -2328,13 +2342,13 @@ function ExcelTemplateGrid({
                       colSpan={colSpan > 1 ? colSpan : undefined}
                       rowSpan={rowSpan > 1 ? rowSpan : undefined}
                       title={hasBinding
-                        ? `${binding.name}${binding.label ? ` — ${binding.label}` : ''}\n${binding.value}${onElementClick ? '\n🔍 Kliknutím přejít do struktury' : ''}`
+                        ? `${binding.name}${binding.label ? ` — ${binding.label}` : ''}\n${binding.value}${onElementClick ? `\n🔍 ${t.excelCellGoToStructure}` : ''}`
                         : xlsxCell?.value || undefined}
                       onClick={hasBinding && onElementClick ? () => onElementClick(binding.elementId) : undefined}
                       style={{
                         padding: '1px 3px',
-                        borderRight: borderStyle(cellStyle?.borderRight),
-                        borderBottom: borderStyle(cellStyle?.borderBottom),
+                        borderRight: borderStyle(),
+                        borderBottom: borderStyle(),
                         borderTop: cellStyle?.borderTop && cellStyle.borderTop !== 'none' ? `1px solid ${excelColors.cellBorder}` : undefined,
                         borderLeft: cellStyle?.borderLeft && cellStyle.borderLeft !== 'none' ? `1px solid ${excelColors.cellBorder}` : undefined,
                         background: xlsxBg ?? excelColors.cellBg,
@@ -2453,12 +2467,17 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
   const effectiveBase64 = droppedBase64 ?? template?.base64 ?? null;
 
   // Parse xlsx whenever effectiveBase64 becomes available
+  // Leaving the preview while the workbook is still parsing must not set
+  // state on an unmounted component (the effect itself re-runs on every
+  // state change, so a per-run flag would cancel the in-flight parse).
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   useEffect(() => {
     if (!effectiveBase64 || xlsxData || xlsxLoading || xlsxError) return;
     setXlsxLoading(true);
     parseXlsxBase64(effectiveBase64)
-      .then(wb => { setXlsxData(wb); setXlsxLoading(false); })
-      .catch(err => { setXlsxError(String(err)); setXlsxLoading(false); });
+      .then(wb => { if (!mountedRef.current) return; setXlsxData(wb); setXlsxLoading(false); })
+      .catch(err => { if (!mountedRef.current) return; setXlsxError(String(err)); setXlsxLoading(false); });
   }, [effectiveBase64, xlsxData, xlsxLoading, xlsxError]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -2821,8 +2840,8 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
         gap: 12,
         flexShrink: 0,
       }}>
-        <span><span style={{ color: excelColors.dynamicValueColor, fontStyle: 'italic' }}>{'{dynamic}'}</span> = {t.excelLegendDynamic}</span>
-        <span><span style={{ fontWeight: 600 }}>constant</span> = {t.excelLegendConstant}</span>
+        <span><span style={{ color: excelColors.dynamicValueColor, fontStyle: 'italic' }}>Sample(…)</span> = {t.excelLegendDynamic}</span>
+        <span><span style={{ fontWeight: 600 }}>{t.excelLegendConstantWord}</span> = {t.excelLegendConstant}</span>
       </div>
 
       {/* Sheet tabs at bottom */}
@@ -2945,7 +2964,9 @@ function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellD
       gap: 0,
     }}>
       {cells.map((cell, i) => {
-        const isDynamic = cell.value.startsWith('{') && cell.value.endsWith('}');
+        // Values rendered as Sample(...) stand in for data-bound cells; anything
+        // else is a constant derived from the binding expression.
+        const isDynamic = isSamplePlaceholder(cell.value);
         const hasDistinctAddress = cell.excelRange && cell.excelRange !== cell.name;
         const isSelected = selectedCell?.excelRange === cell.excelRange && selectedCell?.name === cell.name;
         return (
@@ -3542,8 +3563,6 @@ interface FormatElementTreeProps {
   expandVersion: number;
   selectedId: string | null;
   onSelect: (id: string) => void;
-  resolveDatasource: (name: string, ci: number) => any;
-  registry: any;
   showTechnicalDetails: boolean;
   bindingFilter?: 'all' | 'bound' | 'unbound';
   treeIndex: FormatTreeIndex;
@@ -3551,7 +3570,7 @@ interface FormatElementTreeProps {
   selectedAncestors: Set<string>;
 }
 
-function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, showAll, expandMode, expandVersion, selectedId, onSelect, resolveDatasource, registry, showTechnicalDetails, bindingFilter, treeIndex, selectedAncestors }: FormatElementTreeProps) {
+function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, showAll, expandMode, expandVersion, selectedId, onSelect, showTechnicalDetails, bindingFilter, treeIndex, selectedAncestors }: FormatElementTreeProps) {
   const [expanded, setExpanded] = useState(expandMode === 'all');
   const configurations = useAppStore(s => s.configurations);
   const labels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
@@ -3717,7 +3736,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
 
         {/* Transformation */}
         {transformation && (
-          <span className="fmt-transform" title={`Transform: ${transformation.expressionAsString}`}>
+          <span className="fmt-transform" title={`${t.propTransform}: ${transformation.expressionAsString}`}>
             🔄 {transformation.name}
           </span>
         )}
@@ -3771,7 +3790,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
                 <div key={`${category.key}-${i}`} className="fmt-binding-detail-row">
                   <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'}`}>{b.bindingDisplayLabel}</span>
                   {showTechnicalDetails && b.promotedFromChild && b.rawElementType && (
-                    <span className="fmt-binding-origin">via {b.rawElementType}</span>
+                    <span className="fmt-binding-origin">{t.bindingVia} {b.rawElementType}</span>
                   )}
                   <span className="fmt-binding-formula">
                     <DrillDownTrigger
@@ -3807,8 +3826,6 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
           expandVersion={expandVersion}
           selectedId={selectedId}
           onSelect={onSelect}
-          resolveDatasource={resolveDatasource}
-          registry={registry}
           showTechnicalDetails={showTechnicalDetails}
           bindingFilter={bindingFilter}
           treeIndex={treeIndex}
@@ -3823,10 +3840,9 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
 
 // ── Grouped binding card: shows element header + all its bindings inline ──
 
-function FormatElementBindingGroup({ row, configIndex, onNavigate: _onNavigate, onReveal, showTechnicalDetails }: {
+function FormatElementBindingGroup({ row, configIndex, onReveal, showTechnicalDetails }: {
   row: any;
   configIndex: number;
-  onNavigate: (elementId: string) => void;
   onReveal?: (elementId: string) => void;
   showTechnicalDetails: boolean;
 }) {
@@ -3849,7 +3865,7 @@ function FormatElementBindingGroup({ row, configIndex, onNavigate: _onNavigate, 
           </span>
         )}
         <span className="fmt-bind-card-name" title={row.elementName}>{row.elementName}</span>
-        <span className="fmt-bind-card-count" title={`${totalBindings} binding${totalBindings === 1 ? '' : 's'}`}>
+        <span className="fmt-bind-card-count" title={t.bindingCount(totalBindings)}>
           {totalBindings}
         </span>
         {onReveal && (
@@ -3877,7 +3893,7 @@ function FormatElementBindingGroup({ row, configIndex, onNavigate: _onNavigate, 
                 {binding.bindingDisplayLabel}
               </span>
               {showTechnicalDetails && binding.promotedFromChild && binding.rawElementType && (
-                <span className="fmt-binding-origin">via {binding.rawElementType}</span>
+                <span className="fmt-binding-origin">{t.bindingVia} {binding.rawElementType}</span>
               )}
               <span className="fmt-bind-row-arrow" aria-hidden="true">←</span>
               <span className="fmt-bind-row-expr">
@@ -4004,7 +4020,7 @@ function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: n
         <div className="focused-detail-card">
           <div className="focused-detail-card__head">
             <span className="focused-detail-card__title">{locale === 'cs' ? 'Vlastnosti datového zdroje' : 'Datasource properties'}</span>
-            <span className="focused-detail-card__badge">{datasource.type ?? 'Datasource'}</span>
+            <span className="focused-detail-card__badge">{datasource.type ?? t.nodeTypeLabel('datasource')}</span>
           </div>
           <div className="focused-detail-grid">
             {rows.map(([label, value], index) => (
@@ -4152,7 +4168,7 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
   let targetLabel: string | null = null;
   if (ds.tableInfo) {
     targetLabel = ds.tableInfo.tableName;
-    if (showTechnicalDetails && ds.tableInfo.isCrossCompany) targetLabel += ' (cross-company)';
+    if (showTechnicalDetails && ds.tableInfo.isCrossCompany) targetLabel += ` (${t.dsCrossCompany})`;
     if (showTechnicalDetails && ds.tableInfo.selectedFields?.length) targetLabel += ` [${ds.tableInfo.selectedFields.join(', ')}]`;
   } else if (ds.enumInfo) {
     targetLabel = formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo);
@@ -4185,7 +4201,7 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
           {ds.children?.length > 0 && (
             <span
               className="ds-row-toggle"
-              title={`${ds.children.length} nested datasource${ds.children.length > 1 ? 's' : ''}`}
+              title={t.dsNestedCount(ds.children.length)}
               onClick={e => { e.stopPropagation(); setExpanded(p => !p); }}
             >
               {ds.children.length} <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
@@ -4224,7 +4240,7 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
                     setShowGroupedFields(value => !value);
                   }}
                 >
-                  <span className="fmt-ds-label">Group By</span>
+                  <span className="fmt-ds-label">{t.dsGroupBy}</span>
                   <span className="ds-row-groupby-count">{groupByFields.length}</span>
                   <span className={`tree-chevron ${showGroupedFields ? 'open' : ''}`} />
                 </button>
@@ -4257,7 +4273,7 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
                     setShowAggregatedFields(value => !value);
                   }}
                 >
-                  <span className="fmt-ds-label">Aggregated</span>
+                  <span className="fmt-ds-label">{t.dsAggregated}</span>
                   <span className="ds-row-groupby-count">{aggregatedFields.length}</span>
                   <span className={`tree-chevron ${showAggregatedFields ? 'open' : ''}`} />
                 </button>
@@ -4323,7 +4339,9 @@ const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandle, {
   configIndex: number;
   navigateToTreeNode: (nodeId: string) => void;
   focusDsName?: string;
-}>(function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode, focusDsName }, ref) {
+  /** True while a text filter is applied — every group is shown expanded. */
+  filtering?: boolean;
+}>(function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode, focusDsName, filtering }, ref) {
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
@@ -4343,13 +4361,21 @@ const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandle, {
     return sorted;
   }, [datasources, showTechnicalDetails]);
 
+  // Initial collapse (all groups except the focused one) runs when the list
+  // target changes — not on every `datasources` change, which happens on each
+  // filter keystroke and used to wipe the user's expand state.
+  const groupsRef = useRef(groups);
+  groupsRef.current = groups;
+  const groupsInitKey = groups.length === 0 ? '' : 'ready';
   useEffect(() => {
-    if (groups.length === 0) return;
+    const current = groupsRef.current;
+    if (current.length === 0) return;
     const focusGroupType = focusDsName
-      ? groups.find(([, items]) => items.some((ds: any) => containsDatasourceName(ds, focusDsName)))?.[0]
+      ? current.find(([, items]) => items.some((ds: any) => containsDatasourceName(ds, focusDsName)))?.[0]
       : undefined;
-    setCollapsedGroups(new Set(groups.map(([type]) => type).filter(t => t !== focusGroupType)));
-  }, [focusDsName, groups]);
+    setCollapsedGroups(new Set(current.map(([type]) => type).filter(t => t !== focusGroupType)));
+  }, [focusDsName, configIndex, groupsInitKey]);
+  const effectiveCollapsedGroups = filtering ? EMPTY_STRING_SET : collapsedGroups;
 
   const toggleGroup = useCallback((type: string) => {
     setCollapsedGroups(prev => {
@@ -4375,7 +4401,7 @@ const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandle, {
   return (
     <div>
       {groups.map(([type, items]) => {
-        const isCollapsed = collapsedGroups.has(type);
+        const isCollapsed = effectiveCollapsedGroups.has(type);
         return (
           <div key={type}>
             <div

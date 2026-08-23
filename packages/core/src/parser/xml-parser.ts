@@ -425,6 +425,19 @@ export function parseERConfigurations(xml: string, filePath: string): ERConfigur
   }
 }
 
+/**
+ * Non-fatal diagnostics collected while parsing a single configuration
+ * (unknown format element types, unrecognised datasource handlers, ...).
+ * Reset at the start of every `buildConfiguration` call and attached to the
+ * resulting `ERConfiguration.warnings` when non-empty. The parser is
+ * synchronous and single-threaded, so a module-level buffer is safe.
+ */
+let parseWarnings: string[] = [];
+
+function pushParseWarning(message: string): void {
+  if (!parseWarnings.includes(message)) parseWarnings.push(message);
+}
+
 function buildConfiguration(
   root: any,
   kind: string,
@@ -432,6 +445,7 @@ function buildConfiguration(
   filePath: string,
 ): ERConfiguration {
   let content: ERDataModelContent | ERModelMappingContent | ERFormatContent;
+  parseWarnings = [];
 
   switch (kind) {
     case 'DataModel':
@@ -456,7 +470,15 @@ function buildConfiguration(
       throw new Error(`Unknown ER component kind`);
   }
 
-  return { filePath, kind: kind as ERComponentKind, solutionVersion, content };
+  const warnings = parseWarnings;
+  parseWarnings = [];
+  return {
+    filePath,
+    kind: kind as ERComponentKind,
+    solutionVersion,
+    content,
+    ...(warnings.length > 0 ? { warnings } : {}),
+  };
 }
 
 function resolveSolutionRoot(xml: string, filePath: string): any {
@@ -1108,8 +1130,11 @@ function parseDatasourceItem(node: any): ERDatasource {
     ds.type = 'Class';
     ds.classInfo = { className: getAttr(c, 'ClassName') ?? '' };
   } else if (valueSource['ERObjectDataSourceHandler']) {
+    // D365 F&O designer distinguishes "Dynamics 365 for Operations\Object"
+    // (an instance of an X++ class, wired by the caller) from "...\Class"
+    // (static class members). Both carry `ClassName`; only the type differs.
     const c = valueSource['ERObjectDataSourceHandler'];
-    ds.type = 'Class';
+    ds.type = 'Object';
     ds.classInfo = { className: getAttr(c, 'ClassName') ?? '' };
   } else if (valueSource['ERUserParameterDataSourceHandler']) {
     const u = valueSource['ERUserParameterDataSourceHandler'];
@@ -1151,18 +1176,15 @@ function parseDatasourceItem(node: any): ERDatasource {
     const l = valueSource['ERLookupDataSourceHandler'];
     ds.calculatedField = { expressionAsString: getAttr(l, 'ExpressionAsString') ?? '' };
   } else {
-    // Fallback: derive a readable type from the first unrecognized ValueSource child key
+    // Fallback: an unrecognised ValueSource handler. Treat it as a container so
+    // the tree still renders, but record a warning so the gap is visible.
     const keys = Object.keys(valueSource).filter(k => !k.startsWith('@_'));
     if (keys.length > 0) {
-      // Strip 'ER' prefix and 'Handler'/'DataSource' suffix for a human-readable type
       const rawKey = keys[0];
-      const readable = rawKey
-        .replace(/^ER/, '')
-        .replace(/DataSourceHandler$/, '')
-        .replace(/DataSource$/, '')
-        .replace(/Handler$/, '');
-      // Use as type only if it looks like a known category, otherwise 'Container'
-      ds.type = (readable === 'GroupByFunction' ? 'GroupBy' : 'Container') as any;
+      ds.type = rawKey === 'ERModelGroupByFunction' ? 'GroupBy' : 'Container';
+      pushParseWarning(
+        `Unrecognised datasource handler '${rawKey}' on '${ds.name}' mapped to '${ds.type}'`,
+      );
     }
   }
 
@@ -1435,11 +1457,16 @@ function parseFormatElement(node: any, type: ERFormatElementType): ERFormatEleme
   if (contentsNode) {
     // Parse child format elements
     for (const [key, val] of Object.entries(contentsNode)) {
+      if (key.startsWith('@_') || key === '#text') continue;
       const elementType = formatElementTypeMap[key];
-      if (elementType) {
-        for (const child of asArray(val)) {
-          children.push(parseFormatElement(child, elementType));
-        }
+      if (!elementType) {
+        // Unknown component type: keep the node (name, attributes, children)
+        // as `Unknown` instead of dropping the whole subtree silently.
+        pushParseWarning(`Unknown format element type '${key}' kept as 'Unknown'`);
+      }
+      for (const child of asArray(val)) {
+        if (child === null || typeof child !== 'object') continue;
+        children.push(parseFormatElement(child, elementType ?? 'Unknown'));
       }
     }
   }

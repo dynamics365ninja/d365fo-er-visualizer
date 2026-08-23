@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildFnoPath, extractHostFromFnoPath, isFnoPath } from './path-key';
+import { buildFnoPath } from './path-key';
 
 describe('buildFnoPath', () => {
   it('produces a stable fno:// scheme with host + solution + config name', () => {
@@ -33,17 +33,5 @@ describe('buildFnoPath', () => {
       solutionName: 'A',
       configurationName: 'B',
     })).toMatch(/^fno:\/\/bad-url-without-host\/A\/B\.xml$/);
-  });
-});
-
-describe('isFnoPath / extractHostFromFnoPath', () => {
-  it('recognises fno:// paths', () => {
-    expect(isFnoPath('fno://host/x/y.xml')).toBe(true);
-    expect(isFnoPath('MyConfig.xml')).toBe(false);
-  });
-
-  it('extracts the host segment', () => {
-    expect(extractHostFromFnoPath('fno://host1.dyn.com/sol/conf.xml')).toBe('host1.dyn.com');
-    expect(extractHostFromFnoPath('not-an-fno-path.xml')).toBeNull();
   });
 });

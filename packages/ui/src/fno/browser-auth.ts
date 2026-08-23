@@ -24,9 +24,6 @@ import {
 
 const pool = new Map<string, PublicClientApplication>();
 
-/** Set while an interactive redirect is pending, so the caller can stay quiet. */
-const REDIRECT_PENDING_KEY = 'er-visualizer.fnoRedirectPending';
-
 function appKey(conn: FnoConnection): string {
   return `${conn.tenantId}::${conn.clientId}`;
 }
@@ -65,7 +62,6 @@ async function getOrCreate(conn: FnoConnection): Promise<PublicClientApplication
   try {
     const redirectResult = await app.handleRedirectPromise();
     if (redirectResult) {
-      sessionStorage.removeItem(REDIRECT_PENDING_KEY);
       console.info('[BrowserAuthProvider] completed sign-in via redirect');
     }
   } catch (err) {
@@ -152,10 +148,9 @@ export class BrowserAuthProvider implements AuthProvider {
       try {
         const silent = await app.acquireTokenSilent({ account: accounts[0], scopes });
         return resultToAuth(silent, conn.envUrl);
-      } catch (err) {
-        if (!(err instanceof InteractionRequiredAuthError)) {
-          // fall through to interactive
-        }
+      } catch {
+        // Every silent-token failure (InteractionRequiredAuthError, expired
+        // refresh token, network, ...) falls through to the interactive flow.
       }
     }
     try {
@@ -169,7 +164,6 @@ export class BrowserAuthProvider implements AuthProvider {
         // the whole tab instead — it works wherever a popup does not, and
         // `handleRedirectPromise` above finishes the sign-in on the way back.
         console.warn('[BrowserAuthProvider] popup unusable, falling back to redirect');
-        sessionStorage.setItem(REDIRECT_PENDING_KEY, conn.id);
         await app.acquireTokenRedirect({ scopes, prompt: 'select_account' });
         // acquireTokenRedirect navigates away; this never resolves normally.
         return new Promise<AuthResult>(() => {});

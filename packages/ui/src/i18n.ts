@@ -174,6 +174,7 @@ export interface Translations {
   fnoIngestStatusDownloading: string;
   fnoIngestStatusDone: string;
   fnoIngestStatusEmpty: string;
+  fnoIngestStatusSkipped: string;
   fnoIngestStatusFailed: string;
   fnoIngestHint: string;
   fnoIngestClose: string;
@@ -366,6 +367,11 @@ export interface Translations {
   fnoLoadingFailed: (msg: string) => string;
   fnoDownloadFailed: (name: string, msg: string) => string;
   fnoLoadedCount: (n: number) => string;
+  fnoIngestAborted: (message: string) => string;
+  excelCellGoToStructure: string;
+  statusDerivedFromModel: string;
+  statusDerivedFromModelTitle: (kind: string, parentName: string) => string;
+  statusGuidCount: (n: number) => string;
   fnoMappingNotAvailable: (names: string[]) => string;
   fnoMappingNoDataModel: string;
 
@@ -490,6 +496,11 @@ export interface Translations {
   fnoStatusLateDM: string;
   fnoSkippedDerived: (name: string) => string;
   fnoSelectedCount: (n: number) => string;
+  fnoSelectedCountLabel: string;
+  treeCollapseNode: string;
+  treeExpandNode: string;
+  fnoPickModelHint: string;
+  fnoNoConfigurationsHint: string;
   fnoFilterModels: string;
   fnoBack: string;
   fnoRetry: string;
@@ -503,6 +514,31 @@ export interface Translations {
   structureFilterBound: string;
   structureFilterUnbound: string;
   whereUsedAction: string;
+
+  // Audit fixes (a11y labels, former inline ternaries)
+  designerWorkspaceEyebrow: string;
+  designerUnsupportedView: (kind: string) => string;
+  excelLegendConstantWord: string;
+  dsCrossCompany: string;
+  dsNestedCount: (n: number) => string;
+  dsGroupBy: string;
+  dsAggregated: string;
+  bindingCount: (n: number) => string;
+  bindingVia: string;
+  searchNoResultsInScope: string;
+  pathSegmentDatasource: string;
+  tooltipClickToNavigate: string;
+  activityBarLabel: string;
+  propLabels: string;
+  propUnknownType: (type: string) => string;
+  labelTextNotFound: string;
+  kindDataModel: string;
+  kindModelMapping: string;
+  kindFormat: string;
+  nodeTypeLabel: (type: string) => string;
+  closeTab: (label: string) => string;
+  notificationsLabel: string;
+  drillOpenAsTab: string;
 }
 
 // ─── Translation dictionaries ─────────────────────────────────────────────
@@ -625,6 +661,7 @@ const cs: Translations = {
   fnoIngestStatusDownloading: 'Stahuji…',
   fnoIngestStatusDone: 'Hotovo',
   fnoIngestStatusEmpty: 'Bez vlastního XML',
+  fnoIngestStatusSkipped: 'Přeskočeno',
   fnoIngestStatusFailed: 'Selhalo',
   fnoIngestHint: 'Datové modely a mapování se doplňují automaticky podle vazeb ve staženém XML.',
   fnoIngestClose: 'Zavřít',
@@ -813,6 +850,11 @@ const cs: Translations = {
   fnoLoadingFailed: (msg: string) => `Načítání selhalo: ${msg}`,
   fnoDownloadFailed: (name: string, msg: string) => `Stažení „${name}" selhalo: ${msg}`,
   fnoLoadedCount: (n: number) => `Načteno ${n} konfigurací z F&O.`,
+  fnoIngestAborted: (message: string) => `Stahování z F&O bylo přerušeno: ${message}`,
+  excelCellGoToStructure: 'Kliknutím přejít do struktury',
+  statusDerivedFromModel: 'model: ',
+  statusDerivedFromModelTitle: (kind, parentName) => `Aktivní konfigurace je ${kind === 'Format' ? 'formát' : 'mapování'} odvozený z modelu „${parentName}“`,
+  statusGuidCount: (n) => `GUIDů: ${n}`,
   fnoMappingNotAvailable: (names: string[]) => `ModelMapping nelze stáhnout pro: ${names.join(', ')}. Vazby formátových elementů jsou i přesto dostupné přes FormatMapping.`,
   fnoMappingNoDataModel: 'ModelMapping se nestahoval — ve staženém formátu nebyl nalezen žádný GUID datového modelu, takže není podle čeho mapování dohledat. Vyber navíc příslušný datový model (nebo jeho mapování) ve stromu.',
 
@@ -937,6 +979,11 @@ const cs: Translations = {
   fnoStatusLateDM: 'Řeším DataModely z křížových odkazů mapování…',
   fnoSkippedDerived: (name: string) => `„${name}" nemá vlastní XML (odvozená konfigurace) — přeskočeno.`,
   fnoSelectedCount: (n: number) => `${n} vybráno (napříč úrovněmi)`,
+  fnoSelectedCountLabel: 'vybráno (napříč úrovněmi)',
+  treeCollapseNode: 'Sbalit',
+  treeExpandNode: 'Rozbalit',
+  fnoPickModelHint: 'Vyber vlevo datový model a projdi jeho konfigurace.',
+  fnoNoConfigurationsHint: 'V tomto prostředí nebyly nalezeny žádné ER konfigurace. Přihlas se do F&O a v Organization administration → Electronic reporting → Configuration providers → Microsoft (Active) → Repositories → LCS → Open → Import naimportuj konfigurace z Lifecycle Services. Poté se připoj znovu. (Detaily: DevTools → Console → filtr „[fno-client]“.)',
   fnoFilterModels: 'Filtrovat modely…',
   fnoBack: '← Zpět',
   fnoRetry: 'Zkusit znovu',
@@ -950,6 +997,48 @@ const cs: Translations = {
   structureFilterBound: 'Svázané',
   structureFilterUnbound: 'Nesvázané',
   whereUsedAction: 'Kde je použito',
+
+  // Audit fixes (a11y labels, former inline ternaries)
+  designerWorkspaceEyebrow: 'Pracovní plocha designeru',
+  designerUnsupportedView: (kind) => `Nepodporovaný pohled pro: ${kind}`,
+  excelLegendConstantWord: 'konstanta',
+  dsCrossCompany: 'napříč společnostmi',
+  dsNestedCount: (n) => `${n} vnořených datových zdrojů`,
+  dsGroupBy: 'Seskupit podle',
+  dsAggregated: 'Agregované',
+  bindingCount: (n) => `${n} ${n === 1 ? 'vazba' : n < 5 ? 'vazby' : 'vazeb'}`,
+  bindingVia: 'přes',
+  searchNoResultsInScope: 'V tomto rozsahu nic nenalezeno.',
+  pathSegmentDatasource: 'Zdroj',
+  tooltipClickToNavigate: 'Kliknutím přejít',
+  activityBarLabel: 'Panel aktivit',
+  propLabels: 'Popisky',
+  propUnknownType: (type: string) => `Neznámý (${type})`,
+  labelTextNotFound: 'Text popisku není v načtených konfiguracích',
+  kindDataModel: 'Datový model',
+  kindModelMapping: 'Mapování modelu',
+  kindFormat: 'Formát',
+  nodeTypeLabel: (type: string) => ({
+    file: 'Soubor',
+    solution: 'Řešení',
+    model: 'Model',
+    container: 'Kontejner',
+    field: 'Pole',
+    mapping: 'Mapování',
+    datasource: 'Datový zdroj',
+    binding: 'Vazba',
+    validation: 'Validace',
+    format: 'Formát',
+    formatElement: 'Prvek formátu',
+    formatBinding: 'Vazba formátu',
+    enum: 'Výčet',
+    enumValue: 'Hodnota výčtu',
+    transformation: 'Transformace',
+    section: 'Sekce',
+  } as Record<string, string>)[type] ?? type,
+  closeTab: (label: string) => `Zavřít ${label}`,
+  notificationsLabel: 'Oznámení',
+  drillOpenAsTab: 'Otevřít jako záložku',
 };
 
 const en: Translations = {
@@ -1068,6 +1157,7 @@ const en: Translations = {
   fnoIngestStatusDownloading: 'Downloading…',
   fnoIngestStatusDone: 'Done',
   fnoIngestStatusEmpty: 'No own XML',
+  fnoIngestStatusSkipped: 'Skipped',
   fnoIngestStatusFailed: 'Failed',
   fnoIngestHint: 'Data models and mappings are resolved automatically from references in the downloaded XML.',
   fnoIngestClose: 'Close',
@@ -1252,6 +1342,11 @@ const en: Translations = {
   fnoLoadingFailed: (msg: string) => `Loading failed: ${msg}`,
   fnoDownloadFailed: (name: string, msg: string) => `Download of "${name}" failed: ${msg}`,
   fnoLoadedCount: (n: number) => `Loaded ${n} configuration${n === 1 ? '' : 's'} from F&O.`,
+  fnoIngestAborted: (message: string) => `F&O download was aborted: ${message}`,
+  excelCellGoToStructure: 'Click to jump to the structure',
+  statusDerivedFromModel: 'model: ',
+  statusDerivedFromModelTitle: (kind, parentName) => `Active config is a ${kind === 'Format' ? 'format' : 'mapping'} derived from model "${parentName}"`,
+  statusGuidCount: (n) => `GUIDs: ${n}`,
   fnoMappingNotAvailable: (names: string[]) => `ModelMapping could not be downloaded for: ${names.join(', ')}. Format element bindings are still available via FormatMapping.`,
   fnoMappingNoDataModel: 'No ModelMapping was attempted — the downloaded format carries no data model GUID, so there is nothing to resolve a mapping against. Select the data model (or its mapping) in the tree as well.',
 
@@ -1376,6 +1471,11 @@ const en: Translations = {
   fnoStatusLateDM: 'Resolving DataModels from mapping cross-references…',
   fnoSkippedDerived: (name: string) => `"${name}" has no own XML (derived configuration) — skipped.`,
   fnoSelectedCount: (n: number) => `${n} selected (across levels)`,
+  fnoSelectedCountLabel: 'selected (across levels)',
+  treeCollapseNode: 'Collapse',
+  treeExpandNode: 'Expand',
+  fnoPickModelHint: 'Select a Data Model on the left to browse its configurations.',
+  fnoNoConfigurationsHint: 'No ER configurations found in this environment. Sign in to F&O and go to Organization administration → Electronic reporting → Configuration providers → Microsoft (Active) → Repositories → LCS → Open → Import to pull configurations from Lifecycle Services. Then reconnect here. (Details: DevTools → Console → filter "[fno-client]".)',
   fnoFilterModels: 'Filter models…',
   fnoBack: '← Back',
   fnoRetry: 'Retry',
@@ -1389,6 +1489,48 @@ const en: Translations = {
   structureFilterBound: 'Bound',
   structureFilterUnbound: 'Unbound',
   whereUsedAction: 'Where used',
+
+  // Audit fixes (a11y labels, former inline ternaries)
+  designerWorkspaceEyebrow: 'Designer Workspace',
+  designerUnsupportedView: (kind) => `Unsupported view for: ${kind}`,
+  excelLegendConstantWord: 'constant',
+  dsCrossCompany: 'cross-company',
+  dsNestedCount: (n) => `${n} nested datasource${n === 1 ? '' : 's'}`,
+  dsGroupBy: 'Group By',
+  dsAggregated: 'Aggregated',
+  bindingCount: (n) => `${n} binding${n === 1 ? '' : 's'}`,
+  bindingVia: 'via',
+  searchNoResultsInScope: 'No results in this scope.',
+  pathSegmentDatasource: 'DS',
+  tooltipClickToNavigate: 'Click to navigate',
+  activityBarLabel: 'Activity bar',
+  propLabels: 'Labels',
+  propUnknownType: (type: string) => `Unknown (${type})`,
+  labelTextNotFound: 'Label text not found in loaded configurations',
+  kindDataModel: 'Data model',
+  kindModelMapping: 'Model mapping',
+  kindFormat: 'Format',
+  nodeTypeLabel: (type: string) => ({
+    file: 'File',
+    solution: 'Solution',
+    model: 'Model',
+    container: 'Container',
+    field: 'Field',
+    mapping: 'Mapping',
+    datasource: 'Data source',
+    binding: 'Binding',
+    validation: 'Validation',
+    format: 'Format',
+    formatElement: 'Format element',
+    formatBinding: 'Format binding',
+    enum: 'Enumeration',
+    enumValue: 'Enum value',
+    transformation: 'Transformation',
+    section: 'Section',
+  } as Record<string, string>)[type] ?? type,
+  closeTab: (label: string) => `Close ${label}`,
+  notificationsLabel: 'Notifications',
+  drillOpenAsTab: 'Open as tab',
 };
 
 export let t: Translations = locale === 'cs' ? cs : en;

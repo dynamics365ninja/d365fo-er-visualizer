@@ -1,22 +1,12 @@
+import { getElectronApi } from '../fno/electron-bridge';
+import { locale } from '../i18n';
+
 type LoadXmlFile = (xml: string, filePath: string) => void;
-
-type ElectronOpenFile = {
-  path: string;
-  content: string;
-};
-
-type ElectronAPI = {
-  openFileDialog: () => Promise<ElectronOpenFile[] | null>;
-};
 
 export type FileLoadResult = {
   loaded: number;
   errors: string[];
 };
-
-function getElectronApi(): ElectronAPI | undefined {
-  return (window as Window & { electronAPI?: ElectronAPI }).electronAPI;
-}
 
 async function ingestXmlFiles(
   files: Array<{ name: string; content: string }>,
@@ -27,7 +17,7 @@ async function ingestXmlFiles(
 
   for (const file of files) {
     if (!file.name.toLowerCase().endsWith('.xml')) {
-      errors.push(`${file.name} – není XML soubor`);
+      errors.push(`${file.name} – ${locale === 'cs' ? 'není XML soubor' : 'is not an XML file'}`);
       continue;
     }
 

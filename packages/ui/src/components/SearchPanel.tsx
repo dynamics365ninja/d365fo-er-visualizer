@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  SearchRegular,
-  MapRegular,
   DocumentRegular,
   ArrowRightRegular,
   TextExpandRegular,
@@ -9,13 +7,10 @@ import {
 } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
 import type { TreeNode } from '../state/store';
-import type { WhereUsedEntry } from '../state/store';
 import type { GUIDEntry } from '@er-visualizer/core';
 import { locale, t, useLocale } from '../i18n';
 import { getFormatTypeThemeColor } from '../utils/theme-colors';
 import { ExpandCollapseSlider } from './ExpandCollapseSlider';
-
-type Mode = 'search' | 'where-used';
 
 type SearchResultEntry = {
   target: string;
@@ -55,17 +50,6 @@ function getSearchResultDedupeKey(r: SearchResultEntry): string {
     return `formula|${r.sourceConfigPath}|${r.sourceComponent}|${r.sourceContext}`;
   }
   return `${r.sourceConfigPath}|${r.target}|${r.sourceComponent}|${r.sourceContext}`;
-}
-
-const GUID_REGEX = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
-
-function resolveGuidsInText(text: string, lookup: (guid: string) => GUIDEntry | undefined): string {
-  if (!text) return text;
-  return text.replace(GUID_REGEX, guid => {
-    const entry = lookup(guid);
-    if (entry?.name) return `${entry.name} (${guid.slice(0, 8)}…)`;
-    return guid;
-  });
 }
 
 type NestedResult = { entry: SearchResultEntry; children: SearchResultEntry[] };
@@ -143,65 +127,6 @@ function Highlight({ text, query }: { text: string | undefined | null; query: st
   );
 }
 
-function buildMatchSnippet(text: string | undefined | null, query: string, radius = 28): { value: string; truncated: boolean } {
-  const full = (text ?? '').trim();
-  if (!full) return { value: '', truncated: false };
-
-  const q = query.trim().toLowerCase();
-  if (!q) {
-    if (full.length <= 96) return { value: full, truncated: false };
-    return { value: `${full.slice(0, 96)}…`, truncated: true };
-  }
-
-  const idx = full.toLowerCase().indexOf(q);
-  if (idx < 0) {
-    if (full.length <= 96) return { value: full, truncated: false };
-    return { value: `${full.slice(0, 96)}…`, truncated: true };
-  }
-
-  const start = Math.max(0, idx - radius);
-  const end = Math.min(full.length, idx + q.length + radius);
-  const raw = full.slice(start, end);
-  const value = `${start > 0 ? '…' : ''}${raw}${end < full.length ? '…' : ''}`;
-  return { value, truncated: start > 0 || end < full.length };
-}
-
-function PreviewSnippet({
-  text,
-  query,
-  className,
-}: {
-  text: string;
-  query: string;
-  className: string;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const snippet = useMemo(() => buildMatchSnippet(text, query), [text, query]);
-  const shown = expanded || !snippet.truncated ? text : snippet.value;
-
-  return (
-    <div className={className}>
-      <span className="search-preview-inline-text">
-        <Highlight text={shown} query={query} />
-      </span>
-      {snippet.truncated && (
-        <button
-          type="button"
-          className="search-preview-inline-toggle"
-          onClick={event => {
-            event.stopPropagation();
-            setExpanded(v => !v);
-          }}
-        >
-          {expanded
-            ? (locale === 'cs' ? 'Zkrátit náhled výrazu' : 'Show shorter snippet')
-            : (locale === 'cs' ? 'Zobrazit celý výraz' : 'Show full expression')}
-        </button>
-      )}
-    </div>
-  );
-}
-
 function ExamplePalette({
   title,
   examples,
@@ -266,7 +191,6 @@ export function SearchPanel() {
   const activeWhereUsedRefKey = useAppStore(s => s.activeWhereUsedRefKey);
   const setActiveWhereUsedRefKey = useAppStore(s => s.setActiveWhereUsedRefKey);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
-  const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
   const treeNodes = useAppStore(s => s.treeNodes);
   const configurations = useAppStore(s => s.configurations);
   const whereUsedTrigger = useAppStore(s => s.whereUsedTrigger);
@@ -308,10 +232,6 @@ export function SearchPanel() {
     executeSearch();
   }, [executeSearch]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleSearch();
-  }, [handleSearch]);
-
   useEffect(() => {
     if (!whereUsedTrigger) return;
     setMode('where-used');
@@ -347,6 +267,13 @@ export function SearchPanel() {
 
     return () => window.clearTimeout(handle);
   }, [executeWhereUsed, mode, whereUsedQuery]);
+
+  // Datasources the where-used scan found but nothing references — the old
+  // per-datasource card surfaced these as "dead"; keep that signal inline.
+  const deadDatasources = useMemo(
+    () => whereUsedResults.filter(e => e.entityType !== 'TextMatch' && e.modelPaths.length === 0 && e.formatUsages.length === 0),
+    [whereUsedResults],
+  );
 
   const whereUsedFileGroups = useMemo(() => {
     const refs: Reference[] = [];
@@ -402,6 +329,23 @@ export function SearchPanel() {
     }
     return Array.from(map.entries());
   }, [whereUsedResults, treeNodes, navigateToTreeNode]);
+
+  // Resolving a hit to its tree node walks the whole tree, so do it exactly
+  // once per result set here; the grouped list below reuses the map.
+  const navigableSearch = useMemo(() => {
+    const seen = new Set<string>();
+    const nodeByResult = new Map<SearchResultEntry, TreeNode>();
+    const results = (searchResults as SearchResultEntry[]).filter(r => {
+      const key = getSearchResultDedupeKey(r);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      const node = findNodeForSearchResult(r, configurations, treeNodes, registry);
+      if (!node) return false;
+      nodeByResult.set(r, node);
+      return true;
+    });
+    return { results, nodeByResult };
+  }, [searchResults, configurations, treeNodes, registry]);
 
   const currentQuery = mode === 'search' ? searchQuery : whereUsedQuery;
   const trimmedCurrentQuery = currentQuery.trim();
@@ -476,14 +420,7 @@ export function SearchPanel() {
             {searchResults.length > 0 && (
               <>
                 {(() => {
-                  // Deduplicate and filter to only navigable results (same logic as SearchResultGroup)
-                  const seen = new Set<string>();
-                  const navigableResults = (searchResults as SearchResultEntry[]).filter(r => {
-                    const key = getSearchResultDedupeKey(r);
-                    if (seen.has(key)) return false;
-                    seen.add(key);
-                    return findNodeForSearchResult(r, configurations, treeNodes, registry) !== null;
-                  });
+                  const navigableResults = navigableSearch.results;
                   // Apply scope filter
                   const scopedResults = searchScope === 'all' ? navigableResults : navigableResults.filter(r => {
                     const kind = (configurations.find(c => c.filePath === r.sourceConfigPath) as any)?.kind ?? '';
@@ -532,16 +469,22 @@ export function SearchPanel() {
                         </div>
                       </div>
                       <div className="search-panel__results">
-                        <SearchResultsGrouped
-                          results={capped}
-                          totalCount={totalNested}
-                          query={searchQuery}
-                          expandSignal={searchExpandSignal}
-                          configurations={configurations}
-                          treeNodes={treeNodes}
-                          registry={registry}
-                          navigateToTreeNode={navigateToTreeNode}
-                        />
+                        {scopedResults.length === 0 ? (
+                          <div className="search-panel__empty">
+                            {navigableResults.length === 0 ? t.noResults : t.searchNoResultsInScope}
+                          </div>
+                        ) : (
+                          <SearchResultsGrouped
+                            results={capped}
+                            nodeByResult={navigableSearch.nodeByResult}
+                            totalCount={totalNested}
+                            query={searchQuery}
+                            expandSignal={searchExpandSignal}
+                            configurations={configurations}
+                            registry={registry}
+                            navigateToTreeNode={navigateToTreeNode}
+                          />
+                        )}
                       </div>
                     </>
                   );
@@ -620,7 +563,20 @@ export function SearchPanel() {
               );
             })()}
 
-            {whereUsedFileGroups.length === 0 && trimmedCurrentQuery && (
+            {deadDatasources.length > 0 && trimmedCurrentQuery && (
+              <div className="wu-empty search-panel__dead-datasources">
+                {deadDatasources.map(e => (
+                  <div key={`${e.datasource.configIndex}|${e.datasource.parentPath ?? ''}|${e.datasource.name}`}>
+                    <strong>{t.deadDatasource}:</strong>{' '}
+                    <Highlight text={e.datasource.name} query={whereUsedQuery} />
+                    {' '}<span className="search-panel__dead-datasources-config">({e.datasource.configName})</span>
+                    {' — '}{t.deadDatasourceDesc}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {whereUsedFileGroups.length === 0 && deadDatasources.length === 0 && trimmedCurrentQuery && (
               <div className="search-panel__empty">{t.noResultsFor(whereUsedQuery)}</div>
             )}
           </>
@@ -632,20 +588,22 @@ export function SearchPanel() {
 
 function SearchResultsGrouped({
   results,
+  nodeByResult,
   totalCount,
   query,
   expandSignal,
   configurations,
-  treeNodes,
   registry,
   navigateToTreeNode,
 }: {
+  /** Already deduplicated and filtered to navigable hits. */
   results: SearchResultEntry[];
+  /** Tree node for each result, resolved once by the panel. */
+  nodeByResult: Map<SearchResultEntry, TreeNode>;
   totalCount: number;
   query: string;
   expandSignal: { version: number; expanded: boolean };
   configurations: Array<{ filePath: string }>;
-  treeNodes: TreeNode[];
   registry: { lookup: (guid: string) => GUIDEntry | undefined };
   navigateToTreeNode: (nodeId: string) => void;
 }) {
@@ -681,10 +639,9 @@ function SearchResultsGrouped({
             fileName={fileName}
             configKind={kind}
             items={items}
+            nodeByResult={nodeByResult}
             query={query}
             expandSignal={expandSignal}
-            configurations={configurations}
-            treeNodes={treeNodes}
             registry={registry}
             navigateToTreeNode={navigateToTreeNode}
           />
@@ -851,10 +808,9 @@ function SearchResultGroup({
   fileName,
   configKind,
   items,
+  nodeByResult,
   query,
   expandSignal,
-  configurations,
-  treeNodes,
   registry,
   navigateToTreeNode,
 }: {
@@ -862,36 +818,22 @@ function SearchResultGroup({
   fileName: string;
   configKind: string;
   items: SearchResultEntry[];
+  nodeByResult: Map<SearchResultEntry, TreeNode>;
   query: string;
   expandSignal: { version: number; expanded: boolean };
-  configurations: Array<{ filePath: string }>;
-  treeNodes: TreeNode[];
   registry: { lookup: (guid: string) => GUIDEntry | undefined };
   navigateToTreeNode: (nodeId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
 
-  // Deduplicate and pre-filter to only navigable items
+  // Items arrive deduplicated and navigable; the node lookup was done once by
+  // the panel so no row (or group) walks the tree again.
   const deduped = useMemo(() => {
-    const seen = new Set<string>();
-    // Resolving a result to its tree node walks the whole tree. Do it once here
-    // and hand the node to the row — the row used to repeat the same walk on
-    // every render, so a 500-hit result set scanned the tree 1000+ times.
-    const nodeByResult = new Map<SearchResultEntry, TreeNode>();
-    const navigable = items.filter(r => {
-      const key = getSearchResultDedupeKey(r);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      const node = findNodeForSearchResult(r, configurations, treeNodes, registry);
-      if (!node) return false;
-      nodeByResult.set(r, node);
-      return true;
-    });
     // Suppress "Binding for …" and "Format binding expression:" sub-hits that already
     // have a parent "Binding: …" / "Format binding to component:" entry in the same group.
-    const nested = nestBindingResults(navigable);
+    const nested = nestBindingResults(items.filter(r => nodeByResult.has(r)));
     return nested.map(n => ({ entry: n.entry, node: nodeByResult.get(n.entry)! }));
-  }, [items, configurations, treeNodes, registry]);
+  }, [items, nodeByResult]);
 
   useEffect(() => {
     if (expandSignal.version > 0) setExpanded(expandSignal.expanded);
@@ -1018,171 +960,6 @@ function toLocalizedBindingKind(label: string): string {
   if (trimmed === 'binding') return 'Vazba';
   if (trimmed.startsWith('binding ')) return `Vazba ${label.slice('binding'.length).trim()}`;
   return label;
-}
-
-function getAreaTitle(area: ReferenceArea): string {
-  if (area === 'mapping') {
-    return locale === 'cs' ? 'Mapování a vazby' : 'Mappings and bindings';
-  }
-  return locale === 'cs' ? 'Použití ve formátu' : 'Format usages';
-}
-
-function WhereUsedCard({ entry, query, scope, expandSignal, navigateToTreeNode, findDatasourceNode, treeNodes, activeRefKey, onReferenceOpen }: {
-  entry: WhereUsedEntry;
-  query: string;
-  scope: 'all' | 'mapping' | 'format';
-  expandSignal: { version: number; expanded: boolean };
-  navigateToTreeNode: (nodeId: string) => void;
-  findDatasourceNode: (name: string, ci: number, parentPath?: string) => string | null;
-  treeNodes: TreeNode[];
-  activeRefKey: string | null;
-  onReferenceOpen: (key: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(true);
-
-  useEffect(() => {
-    if (expandSignal.version > 0) setExpanded(expandSignal.expanded);
-  }, [expandSignal.version, expandSignal.expanded]);
-
-  const entityBadgeColor = getWhereUsedBadgeClass(entry.entityType);
-
-  const navigateToDs = () => {
-    const nodeId = findDatasourceNode(
-      entry.datasource.name,
-      entry.datasource.configIndex,
-      entry.datasource.parentPath,
-    );
-    if (nodeId) navigateToTreeNode(nodeId);
-  };
-
-  const navigateToFormatElement = (configIndex: number, elementId: string) => {
-    const node = findTreeNodeByMatch(
-      treeNodes,
-      candidate => candidate.type === 'formatElement'
-        && candidate.configIndex === configIndex
-        && candidate.data?.id === elementId,
-    );
-    if (node) navigateToTreeNode(node.id);
-  };
-
-  const navigateToBinding = (configIndex: number, path: string, treeNodeId?: string) => {
-    if (treeNodeId) {
-      navigateToTreeNode(treeNodeId);
-      return;
-    }
-    const configRoot = treeNodes[configIndex];
-    if (!configRoot) return;
-    const node = findTreeNodeByMatch(
-      configRoot.children ?? [],
-      candidate => candidate.type === 'binding' && candidate.data?.path === path,
-    );
-    if (node) navigateToTreeNode(node.id);
-  };
-
-  const references: Reference[] = useMemo(() => {
-    const dsName = entry.datasource.name;
-    const mp: Reference[] = entry.modelPaths.map(m => ({
-      area: 'mapping' as const,
-      kind: 'binding' as const,
-      configIndex: m.configIndex,
-      configName: m.configName,
-      location: entry.entityType === 'TextMatch'
-        ? m.path.split(/[./]/).filter(Boolean)
-        : [dsName, ...m.path.split('.').filter(Boolean)],
-      kindLabel: m.kindLabel ?? 'binding',
-      preview: m.expr,
-      shortLocation: m.path,
-      onOpen: () => navigateToBinding(m.configIndex, m.path, m.treeNodeId),
-    }));
-    const fu: Reference[] = entry.formatUsages.map(f => {
-      const loc = f.elementPath && f.elementPath.length > 0 ? f.elementPath : [f.elementName];
-      return {
-        area: 'format' as const,
-        kind: 'formatElement' as const,
-        configIndex: f.configIndex,
-        configName: f.configName,
-        location: loc,
-        kindLabel: f.elementType,
-        preview: f.expression,
-        shortLocation: f.elementName,
-        onOpen: () => navigateToFormatElement(f.configIndex, f.elementId),
-        kindColor: getFormatTypeThemeColor(f.elementType),
-      };
-    });
-    return [...mp, ...fu];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entry, treeNodes]);
-
-  // Group by configIndex + configName only (area shown per-row, not per-group)
-  const fileGroups = useMemo(() => {
-    const map = new Map<string, { configName: string; refs: Reference[] }>();
-    for (const r of references) {
-      const key = `${r.configIndex}|${r.configName}`;
-      const bucket = map.get(key);
-      if (bucket) bucket.refs.push(r);
-      else map.set(key, { configName: r.configName, refs: [r] });
-    }
-    return Array.from(map.entries());
-  }, [references]);
-
-  const visibleCount = scope === 'all'
-    ? references.length
-    : references.filter(r => r.area === scope).length;
-  const isTextMatch = entry.entityType === 'TextMatch';
-
-  return (
-    <div className="search-result-group wu-entity-group">
-      <button
-        type="button"
-        className="search-result-group-header wu-entity-header"
-        onClick={() => setExpanded(e => !e)}
-        aria-expanded={expanded}
-      >
-        <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
-        <span className={`badge ${entityBadgeColor} badge-tiny`}>
-          {isTextMatch ? 'text' : entry.entityType}
-        </span>
-        <span className="search-result-group-name">
-          {isTextMatch
-            ? <>&quot;<Highlight text={entry.entityName} query={query} />&quot;</>
-            : <Highlight text={entry.entityName} query={query} />}
-        </span>
-        {!isTextMatch && (
-          <span
-            className="wu-entity-ds-chip"
-            onClick={e => { e.stopPropagation(); navigateToDs(); }}
-            title={t.navigateToDatasource}
-          >
-            ← <Highlight text={entry.datasource.name} query={query} />
-          </span>
-        )}
-        <span className="search-result-group-count">{visibleCount}</span>
-      </button>
-
-      {expanded && (
-        <div className="search-result-group-body">
-          {references.length === 0 ? (
-            <div className="wu-empty" style={{ padding: '6px 16px' }}>
-              <strong>{t.deadDatasource}:</strong> {t.deadDatasourceDesc}
-            </div>
-          ) : (
-            fileGroups.map(([key, { configName, refs }]) => (
-              <FileReferenceGroup
-                key={key}
-                configName={configName}
-                references={refs}
-                scope={scope}
-                query={query}
-                expandSignal={expandSignal}
-                activeRefKey={activeRefKey}
-                onReferenceOpen={onReferenceOpen}
-              />
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function FileReferenceGroup({
@@ -1500,29 +1277,5 @@ function extractExpressionFromContext(sourceContext: string): string | null {
   const separatorIndex = sourceContext.indexOf(': ');
   if (separatorIndex === -1) return null;
   return sourceContext.slice(separatorIndex + 2).trim() || null;
-}
-
-function getWhereUsedBadgeClass(entityType: WhereUsedEntry['entityType']): string {
-  switch (entityType) {
-    case 'Table':
-      return 'badge-table';
-    case 'Enum':
-      return 'badge-enum';
-    case 'Class':
-      return 'badge-class';
-    case 'CalculatedField':
-      return 'badge-calc';
-    case 'UserParameter':
-      return 'badge-param';
-    case 'GroupBy':
-    case 'Join':
-    case 'Container':
-    case 'Object':
-      return 'badge-success';
-    case 'TextMatch':
-      return 'badge-info';
-    default:
-      return 'badge-xml';
-  }
 }
 

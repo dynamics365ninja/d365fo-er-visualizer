@@ -344,7 +344,7 @@ const useStyles = makeStyles({
     width: '100%',
     textAlign: 'left',
     font: 'inherit',
-    color: 'var(--er-text-secondary)',
+    color: 'var(--er-text-muted)',
     backgroundColor: 'transparent',
     cursor: 'pointer',
     ':hover': {
@@ -365,59 +365,6 @@ const useStyles = makeStyles({
     textAlign: 'center',
     color: 'var(--er-text-subtle)',
     fontSize: '12px',
-  },
-  // ── F&O ingest overlay ──
-  ingestOverlay: {
-    position: 'fixed',
-    inset: 0,
-    zIndex: 9999,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'color-mix(in srgb, var(--er-bg) 78%, transparent)',
-    backdropFilter: 'blur(4px)',
-  },
-  ingestCard: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-    padding: '24px',
-    width: '380px',
-    maxWidth: 'calc(100vw - 32px)',
-    borderRadius: 'var(--er-radius-xl)',
-    ...shorthands.border('1px', 'solid', 'var(--er-border)'),
-    backgroundColor: 'var(--er-surface)',
-    boxShadow: 'var(--er-shadow-3)',
-  },
-  ingestHead: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-  },
-  ingestIcon: {
-    width: '40px',
-    height: '40px',
-    flexShrink: 0,
-    borderRadius: 'var(--er-radius-lg)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'var(--er-accent-soft)',
-    color: 'var(--er-accent)',
-  },
-  ingestTitle: {
-    fontFamily: 'var(--er-font-display)',
-    fontSize: '15px',
-    fontWeight: 700,
-  },
-  ingestSub: {
-    fontSize: '12px',
-    color: 'var(--er-text-muted)',
-  },
-  ingestSteps: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '9px',
   },
 });
 
@@ -471,8 +418,13 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const [loading, setLoading] = useState(false);
   const [sourceTab, setSourceTab] = useState<'local' | 'remote'>('local');
   const landingRequest = useAppStore(s => s.landingRequest);
+  // One-shot: honour each request exactly once (tracked by its version), so a
+  // later plain "Home" click does not keep re-opening the remembered tab.
+  const consumedLandingVersionRef = useRef(0);
   useEffect(() => {
-    if (landingRequest) setSourceTab(landingRequest.tab);
+    if (!landingRequest || landingRequest.version === consumedLandingVersionRef.current) return;
+    consumedLandingVersionRef.current = landingRequest.version;
+    setSourceTab(landingRequest.tab);
   }, [landingRequest]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -605,6 +557,9 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
                   multiple
                   accept=".xml"
                   style={{ display: 'none' }}
+                  // The input sits inside the clickable dropzone: without this the
+                  // programmatic .click() bubbles back into handleOpenFiles forever.
+                  onClick={e => e.stopPropagation()}
                   onChange={e => { processFiles(e.target.files); e.target.value = ''; }}
                 />
                 {loading ? (

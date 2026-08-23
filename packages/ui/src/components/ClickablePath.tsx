@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore, resolveDeepExpression } from '../state/store';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { PathTooltipCard, type PathTooltipData, type PathTooltipRow } from './PathTooltipCard';
@@ -195,6 +195,10 @@ function SmartSegment({ segment, configIndex, interactive, highlight, resolveDat
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const configurations = useAppStore(s => s.configurations);
 
+  useEffect(() => () => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current);
+  }, []);
+
   const canResolve = interactive && (segment.kind === 'identifier'
     || segment.kind === 'model-path'
     || (segment.kind === 'literal' && !!segment.lookupText));
@@ -259,12 +263,6 @@ function SmartSegment({ segment, configIndex, interactive, highlight, resolveDat
         };
       }
 
-      if (segment.text === 'model') {
-        resolvedRef.current = null;
-        setResolved(null);
-        return null;
-      }
-
       resolvedRef.current = null;
       setResolved(null);
       return null;
@@ -281,7 +279,7 @@ function SmartSegment({ segment, configIndex, interactive, highlight, resolveDat
           else if (ds.enumInfo) rows.push({ icon: 'enum', label: t.pathEnum, value: formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo), mono: true });
           else if (ds.classInfo) rows.push({ icon: 'class', label: t.pathClass, value: ds.classInfo.className, mono: true });
           else if (ds.calculatedField) rows.push({ icon: 'calc', label: t.pathCalcField, value: ds.calculatedField.expressionAsString ?? '', mono: true });
-          else rows.push({ label: 'DS', value: `${ds.name} (${ds.type})` });
+          else rows.push({ label: t.pathSegmentDatasource, value: `${ds.name} (${ds.type})` });
         }
         const navId = mapResult.bindingTreeNodeId ?? mapResult.datasourceTreeNodeId;
         const r = { treeNodeId: navId, type: 'model-mapping' };
@@ -354,21 +352,11 @@ function SmartSegment({ segment, configIndex, interactive, highlight, resolveDat
     // Stop propagation to prevent parent row from handling the click
     e.stopPropagation();
 
-    // Use ref for immediate access (survives mouseLeave race)
+    // Use ref for immediate access (survives mouseLeave race); the handler is
+    // only attached once the segment has resolved to a tree node.
     const r = resolvedRef.current;
-    if (r?.treeNodeId) {
-      navigateToTreeNode(r.treeNodeId);
-      return;
-    }
-    // If ref is empty, try resolving now as a fallback
-    if (canResolve) {
-      doResolve();
-      const freshR = resolvedRef.current;
-      if (freshR?.treeNodeId) {
-        navigateToTreeNode(freshR.treeNodeId);
-      }
-    }
-  }, [navigateToTreeNode, canResolve, doResolve]);
+    if (r?.treeNodeId) navigateToTreeNode(r.treeNodeId);
+  }, [navigateToTreeNode]);
 
   const colorMap: Record<string, string> = {
     identifier: 'var(--syn-identifier)',

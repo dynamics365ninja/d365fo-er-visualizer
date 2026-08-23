@@ -3,7 +3,6 @@ import {
   FluentProvider,
   webLightTheme,
   webDarkTheme,
-  Toaster,
   type Theme,
 } from '@fluentui/react-components';
 import { useAppStore } from '../state/store';
@@ -57,8 +56,6 @@ const sharedOverrides: Partial<Theme> = {
 const darkTheme: Theme = { ...webDarkTheme, ...sharedOverrides };
 const lightTheme: Theme = { ...webLightTheme, ...sharedOverrides };
 
-export const TOASTER_ID = 'er-visualizer-toaster';
-
 export function FluentRoot() {
   const resolvedTheme = useAppStore(s => s.resolvedTheme);
   const syncSystemTheme = useAppStore(s => s.syncSystemTheme);
@@ -88,7 +85,6 @@ export function FluentRoot() {
   return (
     <FluentProvider theme={theme} style={{ width: '100%', height: '100%', background: 'transparent' }}>
       <App />
-      <Toaster toasterId={TOASTER_ID} position="bottom-end" />
     </FluentProvider>
   );
 }

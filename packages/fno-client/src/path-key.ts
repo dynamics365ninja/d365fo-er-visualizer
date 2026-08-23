@@ -37,19 +37,6 @@ export function buildFnoPath(input: BuildFnoPathInput): string {
   return `fno://${host}/${solution}/${config}${version}.xml`;
 }
 
-/** Return true if `filePath` was produced by `buildFnoPath`. */
-export function isFnoPath(filePath: string): boolean {
-  return filePath.startsWith('fno://');
-}
-
-/** Parse the host (envUrl host) from a synthetic fno path. Returns null if invalid. */
-export function extractHostFromFnoPath(filePath: string): string | null {
-  if (!isFnoPath(filePath)) return null;
-  const rest = filePath.slice('fno://'.length);
-  const slash = rest.indexOf('/');
-  return slash === -1 ? rest : rest.slice(0, slash);
-}
-
 function extractHost(envUrl: string): string {
   try {
     const u = new URL(envUrl);

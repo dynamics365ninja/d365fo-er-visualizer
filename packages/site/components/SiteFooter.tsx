@@ -19,7 +19,7 @@ export function SiteFooter() {
           </div>
           <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted">
             An open-source workspace for reading Dynamics 365 Finance &amp; Operations Electronic
-            Reporting configurations. Free, MIT-licensed, and runs entirely in your browser.
+            Reporting configurations. Free, MIT-licensed, and your files never leave your browser.
           </p>
         </div>
 

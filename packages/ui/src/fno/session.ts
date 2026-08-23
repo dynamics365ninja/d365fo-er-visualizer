@@ -114,15 +114,19 @@ export const fnoSession = {
     conn: FnoConnection,
     component: ErConfigSummary,
     signal?: AbortSignal,
+    opts?: { silent?: boolean },
   ): Promise<ErConfigDownload> {
-    emitDownloadEvent({ type: 'start', component });
+    // Scout/probe downloads (GUID discovery) are internal plumbing — they are
+    // never loaded into the workspace, so keep them out of the ingest log.
+    const emit = opts?.silent ? () => {} : emitDownloadEvent;
+    emit({ type: 'start', component });
     try {
       const auth = await ensureToken(conn, signal);
       const download = await downloadConfigXml(transport(), conn, auth.accessToken, component, signal);
-      emitDownloadEvent({ type: 'done', component, download });
+      emit({ type: 'done', component, download });
       return download;
     } catch (error) {
-      emitDownloadEvent({ type: 'error', component, error });
+      emit({ type: 'error', component, error });
       throw error;
     }
   },

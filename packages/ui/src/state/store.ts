@@ -82,7 +82,7 @@ export interface RecentFile {
   bundlePath?: string;
 }
 
-export type FnoIngestItemStatus = 'queued' | 'downloading' | 'done' | 'empty' | 'failed';
+export type FnoIngestItemStatus = 'queued' | 'downloading' | 'done' | 'empty' | 'failed' | 'skipped';
 
 /** One row of the structured F&O download log shown in the ingest dialog. */
 export interface FnoIngestItem {
@@ -133,15 +133,6 @@ function loadJSON<T>(key: string, fallback: T): T {
     return JSON.parse(raw) as T;
   } catch {
     return fallback;
-  }
-}
-
-function saveJSON(key: string, value: unknown): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Ignore storage failures (quota, private mode, etc.)
   }
 }
 
@@ -440,14 +431,12 @@ export interface AppState {
   // Toasts
   pushToast: (toast: Omit<Toast, 'id' | 'createdAt'>) => string;
   dismissToast: (id: string) => void;
-  clearToasts: () => void;
 
   // Tree expansion (global, persisted)
   /** Broadcast an expand/collapse command to the explorer tree (non-persistent UX signal). */
   requestExplorerExpand: (mode: 'all' | 'none' | 'default') => void;
 
   // Recent files
-  addRecentFile: (file: Omit<RecentFile, 'openedAt'>) => void;
   removeRecentFile: (path: string) => void;
   clearRecentFiles: () => void;
   /** Re-load a recent file from its cached XML content. Returns true on success. */
@@ -751,13 +740,20 @@ function collectConfigurationWarnings(configurations: ERConfiguration[]): Config
         'nulldatetime', 'sessiontoday', 'sessionnow', 'datevalue',
         'datetimevalue', 'adddays', 'dayofyear',
         // Math
-        'abs', 'round', 'rounddown', 'roundup', 'power', 'mod',
-        'int64value', 'intvalue', 'int64value', 'numbervalue', 'value',
+        'abs', 'round', 'rounddown', 'roundup', 'power', 'mod', 'min', 'max',
+        'int64value', 'intvalue', 'numbervalue', 'value', 'floor', 'ceiling',
         // List/collection
         'where', 'orderby', 'reverse', 'filter', 'first', 'firstornull',
-        'count', 'sum', 'sumif', 'allitems', 'allitemsquery', 'emptylist',
-        'list', 'listjoin', 'split', 'index', 'isempty', 'enumerate',
-        'enumerateinternal', 'distinct', 'listoffields',
+        'count', 'sum', 'sumif', 'sumifs', 'countif', 'countifs', 'allitems',
+        'allitemsquery', 'emptylist', 'list', 'listjoin', 'split', 'splitlist',
+        'index', 'isempty', 'enumerate', 'enumerateinternal', 'distinct',
+        'listoffields', 'lastornull', 'last', 'isemptyornull', 'addtolist',
+        'nullcontainer', 'isnullorempty', 'fromexcel', 'getenumvaluebyname',
+        'formatdata', 'datetimeformat', 'settext', 'numbervalue', 'valueinlarge',
+        'isnull', 'iif', 'dayofweek', 'addmonths', 'addyears', 'month', 'year',
+        'day', 'hour', 'minute', 'second', 'datevalue', 'currencyformat',
+        'newguid', 'ordinal', 'dateformatlocalization', 'getcurrentcompany',
+        'getcurrentuserid', 'getcurrentusername', 'getsessiontoday',
         // Conversion
         'convertcurrency', 'getdefaultcurrency', 'cn_getcurrency',
         // Other
@@ -767,10 +763,18 @@ function collectConfigurationWarnings(configurations: ERConfiguration[]): Config
       let brokenRefs = 0;
       const brokenExpressions: string[] = [];
       for (const b of fmtMap.bindings) {
+        // Validation bindings carry a display label ("Mapping validations"),
+        // not an expression — their real conditions live in the nested rules.
+        if (b.propertyName === 'Validation') continue;
         const expr = (b.expressionAsString ?? '').trim();
         if (!expr) continue;
-        const root = expr.split(/[.(\[]/)[0].replace(/['"]/g, '').trim();
-        if (!root || root.startsWith('"') || /^\d/.test(root) || root === '@' || root.toLowerCase() === 'model') continue;
+        const rawRoot = expr.split(/[.(\[]/)[0].trim();
+        // Double-quoted string literals, numbers, parameters (@) and the model
+        // root are never datasource references — check BEFORE stripping quotes.
+        // (Single quotes wrap identifiers in ER: '$Company'.Name.)
+        if (!rawRoot || /^["\d@]/.test(rawRoot) || rawRoot.toLowerCase() === 'model') continue;
+        const root = rawRoot.replace(/'/g, '').trim();
+        if (!root || root.toLowerCase() === 'model') continue;
         if (erBuiltins.has(root.toLowerCase())) continue;
         if (!dsNames.has(root)) {
           brokenRefs++;
@@ -917,7 +921,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Surface as a toast instead of letting a window error propagate.
       const message = e instanceof Error ? e.message : String(e);
       const fileName = filePath.split(/[\\/]/).pop() ?? filePath;
-      get().pushToast({ kind: 'error', message: `Chyba při načítání ${fileName}: ${message}` });
+      get().pushToast({ kind: 'error', message: locale === 'cs' ? `Chyba při načítání ${fileName}: ${message}` : `Failed to load ${fileName}: ${message}` });
       throw e;
     }
   },
@@ -982,6 +986,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       canNavigateForward: false,
       recentSessions: nextRecentSessions,
     });
+    // Search / where-used results carry config indices that just shifted —
+    // recompute them against the new registry instead of showing stale hits.
+    const after = get();
+    if (after.searchQuery.trim()) after.executeSearch();
+    if (after.whereUsedQuery.trim()) after.executeWhereUsed();
   },
 
   closeConfigurationWithUndo: (index: number) => {
@@ -1039,7 +1048,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   endFnoIngest: () => {
     const progress = get().fnoIngestProgress;
-    set({ fnoIngestProgress: { ...progress, active: false, finishedAt: Date.now() } });
+    const now = Date.now();
+    // Anything still queued/downloading when the batch ends was never loaded
+    // (e.g. the flow aborted early) — say so instead of leaving it "queued".
+    const items = progress.items.map(i =>
+      i.status === 'queued' || i.status === 'downloading'
+        ? { ...i, status: 'skipped' as const, finishedAt: now }
+        : i,
+    );
+    set({ fnoIngestProgress: { ...progress, items, active: false, finishedAt: now } });
   },
 
   removeAllConfigurations: () => {
@@ -1067,6 +1084,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       canNavigateBack: false,
       canNavigateForward: false,
       searchPanelMode: 'search',
+      searchQuery: '',
+      searchResults: [],
       whereUsedQuery: '',
       whereUsedResults: [],
       whereUsedScope: 'all',
@@ -1380,7 +1399,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     return id;
   },
   dismissToast: (id: string) => set({ toasts: get().toasts.filter(t => t.id !== id) }),
-  clearToasts: () => set({ toasts: [] }),
 
   // ─── Tree expansion ───
   requestExplorerExpand: (mode) => {
@@ -1389,14 +1407,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   // ─── Recent files ───
-  addRecentFile: (file) => {
-    const candidate: RecentFile[] = [
-      { ...file, openedAt: Date.now() },
-      ...get().recentFiles.filter(r => r.path !== file.path),
-    ].slice(0, MAX_RECENT_FILES);
-    const next = saveRecentFiles(candidate);
-    set({ recentFiles: next });
-  },
   removeRecentFile: (path: string) => {
     const next = saveRecentFiles(get().recentFiles.filter(r => r.path !== path));
     const nextCachedPaths = new Set(get().cachedPaths);
@@ -1412,23 +1422,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   reloadRecentFile: async (path: string) => {
     const entry = get().recentFiles.find(r => r.path === path);
     if (!entry) return false;
-    // Avoid reloading a config that's already loaded under the same path.
-    const alreadyLoaded = get().configurations.some(c => c.filePath === entry.path);
-    if (alreadyLoaded) return true;
-    const content = await readFileContent(path);
-    if (!content) {
-      get().pushToast({
-        kind: 'warning',
-        message: `Obsah „${entry.name}“ už není v mezipaměti, otevřete soubor znovu ručně.`,
-      });
-      return false;
-    }
-    try {
-      get().loadXmlFile(content, entry.path);
-      return true;
-    } catch {
-      return false;
-    }
+    // Same cache lookup as loadCachedFile: bundled extracts live under the
+    // bundle's path, so the entry's own path is never in the cache.
+    return get().loadCachedFile(path, entry.solutionName ?? entry.name);
   },
 
   // ─── Recent sessions ───
@@ -1454,7 +1450,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (available.length === 0) {
       get().pushToast({
         kind: 'warning',
-        message: `Obsah relace už není v mezipaměti, otevřete soubory znovu ručně.`,
+        message: locale === 'cs'
+          ? 'Obsah relace už není v mezipaměti, otevřete soubory znovu ručně.'
+          : 'The session content is no longer cached, please open the files again.',
       });
       return false;
     }
@@ -1498,7 +1496,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (missing.length > 0) {
       get().pushToast({
         kind: 'warning',
-        message: `Některé soubory v relaci nebyly načteny (chybí mezipaměť): ${missing.join(', ')}.`,
+        message: locale === 'cs'
+          ? `Některé soubory v relaci nebyly načteny (chybí mezipaměť): ${missing.join(', ')}.`
+          : `Some files in the session were not loaded (not cached): ${missing.join(', ')}.`,
       });
     }
     return loaded > 0;
