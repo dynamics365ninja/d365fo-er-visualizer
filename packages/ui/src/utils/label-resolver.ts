@@ -1,4 +1,5 @@
 import type { ERLabel } from '@er-visualizer/core';
+import { getLocale } from '../i18n';
 
 export interface ResolvedLabel {
   /** Normalised label id (without @ prefix, quotes or the `GER_LABEL:` module prefix). */
@@ -17,10 +18,9 @@ function normalizeLang(lang: string): string {
   return lang.toLowerCase();
 }
 
-/** Detects the preferred user language tag (lower-cased, e.g. "cs-cz", "en-us"). */
+/** Preferred language for label texts — the app's language switch, not the browser's. */
 export function getUserLanguageTag(): string {
-  if (typeof navigator === 'undefined') return 'en-us';
-  return normalizeLang(navigator.language || 'en-us');
+  return getLocale() === 'cs' ? 'cs' : 'en-us';
 }
 
 /**
