@@ -262,18 +262,13 @@ function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> 
 
   if (Object.keys(contents).length === 0) return null;
 
-  // Aggregate every ERClassList fragment in the bundle into a single
-  // merged ERLabel array. F&O's `GetEffectiveFormatMappingByID` returns
-  // the label dictionary as *separate* ERClassList documents (one per
-  // language pack), and without them `resolveLabel` has no translations
-  // to map `@GER_LABEL:Foo` references to human-readable text, so all
-  // names in the visualizer come out empty.
+  // `GetEffectiveFormatMappingByID` ships the whole label dictionary as an
+  // `ERClassList` sibling of the format fragments. Without it `resolveLabel`
+  // has no translations and every name renders as a raw `@GER_LABEL:` id.
   const aggregatedLabels: unknown[] = [];
   const classLists = (doc as Record<string, unknown>)['ERClassList'];
   for (const cl of Array.isArray(classLists) ? classLists : classLists ? [classLists] : []) {
     if (!cl || typeof cl !== 'object') continue;
-    // Each ERClassList has either `Contents.` or `Contents` holding the
-    // ERLabel array.
     const clContents =
       (cl as Record<string, unknown>)['Contents.'] ??
       (cl as Record<string, unknown>)['Contents'];

@@ -244,6 +244,31 @@ describe('parseERConfiguration', () => {
     expect(container?.items[0]?.label).toBe('@"GER_LABEL:Amount"');
   });
 
+  it('harvests the label pack F&O returns alongside the format fragments', () => {
+    // GetEffectiveFormatMappingByID ships the whole dictionary as an ERClassList
+    // sibling of ERFormatMapping; the ERSolution envelope that normally holds it
+    // is stripped, so without this the model tree shows raw @GER_LABEL ids.
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<ErFnoBundle Name="Model">
+  <ERDataModel ID.="{MODEL}" Name="Model">
+    <Contents.>
+      <ERDataContainerDescriptor ID.="{CONT}" Name="Reports" IsRoot="1" Label="@&quot;GER_LABEL:Amount&quot;" />
+    </Contents.>
+  </ERDataModel>
+  <ERClassList>
+    <Contents.>
+      <ERLabel LabelId="GER_LABEL:Amount" LabelValue="Amount" LanguageId="en-us" />
+      <ERLabel LabelId="GER_LABEL:Amount" LabelValue="Částka" LanguageId="cs" />
+    </Contents.>
+  </ERClassList>
+</ErFnoBundle>`;
+    const config = parseERConfiguration(xml, 'fno-label-pack.xml');
+    expect(config.solutionVersion.solution.labels).toEqual([
+      { labelId: 'GER_LABEL:Amount', labelValue: 'Amount', languageId: 'en-us' },
+      { labelId: 'GER_LABEL:Amount', labelValue: 'Částka', languageId: 'cs' },
+    ]);
+  });
+
   it('rejects incomplete format XML before parsing content', () => {
     const xml = buildSolutionEnvelope(`
       <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">

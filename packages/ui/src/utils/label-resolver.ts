@@ -163,10 +163,9 @@ let labelPoolCache = new WeakMap<object, Map<number, ERLabel[]>>();
 
 /**
  * Labels harvested from F&O responses that are NOT loaded as configurations
- * (scout/probe downloads, ancestor models, label packs returned alongside a
- * different component). F&O custom services return the dictionary
- * inconsistently per operation, so every response is a potential source.
- * Lowest priority in the pool — a configuration's own table always wins.
+ * (scout/probe downloads, ancestor models). Only the format response ships the
+ * dictionary, so every response is a potential source. Lowest priority in the
+ * pool — a configuration's own table always wins.
  */
 const harvestedLabels: ERLabel[] = [];
 const harvestedKeys = new Set<string>();
@@ -187,16 +186,10 @@ export function registerHarvestedLabels(labels: readonly ERLabel[]): number {
   return added;
 }
 
-/** Number of labels currently in the harvested pool (diagnostics). */
-export function harvestedLabelCount(): number {
-  return harvestedLabels.length;
-}
-
 /**
  * Label texts a configuration can resolve: its own table first, then every other
- * loaded configuration. A format or mapping references labels whose definition
- * lives in the data model solution, so resolving against one file alone leaves
- * the raw `@GER_...` id on screen.
+ * loaded configuration. Only the format response carries the dictionary, so a
+ * data model resolved against its own table alone shows raw `@GER_...` ids.
  */
 export function buildLabelPool(
   configurations: readonly LabelBearingConfiguration[] | undefined,
