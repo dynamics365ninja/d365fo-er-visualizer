@@ -66,3 +66,24 @@ describe('tokenizeERExpr label references', () => {
     expect(tokens).toEqual([{ kind: 'other', raw: '@.Amount' }]);
   });
 });
+
+import { shouldShowFullExpression } from './DrillDownPanel';
+
+describe('shouldShowFullExpression', () => {
+  it('shows the card for a bare label reference', () => {
+    // The card is the only place ExpressionView translates labels, so hiding it
+    // left a lone @"GER_LABEL:Foo" rendered as a raw id.
+    expect(shouldShowFullExpression('@"GER_LABEL:Foo"')).toBe(true);
+    expect(shouldShowFullExpression('@GER_LABEL:Foo')).toBe(true);
+  });
+
+  it('still shows the card for functions and compound expressions', () => {
+    expect(shouldShowFullExpression('CONCATENATE(@GER_LABEL:Foo, " ")')).toBe(true);
+    expect(shouldShowFullExpression('model.Amount <> ""')).toBe(true);
+  });
+
+  it('hides the card for a bare path already covered by the breadcrumb', () => {
+    expect(shouldShowFullExpression("'001_System'.TaxTransactionLines")).toBe(false);
+    expect(shouldShowFullExpression('model.Invoice.Amount')).toBe(false);
+  });
+});

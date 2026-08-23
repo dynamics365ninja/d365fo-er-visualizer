@@ -233,7 +233,7 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
       {node.type === 'datasource' && data && <DatasourceProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
       {node.type === 'binding' && data && <BindingProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
       {node.type === 'validation' && data && <ValidationProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
-      {node.type === 'formatElement' && data && <FormatElementProps data={data} showTechnicalDetails={showTechnicalDetails} />}
+      {node.type === 'formatElement' && data && <FormatElementProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
       {node.type === 'formatBinding' && data && <FormatBindingProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
       {node.type === 'mapping' && data && <MappingProps data={data} showTechnicalDetails={showTechnicalDetails} configIndex={configIndex} />}
       {node.type === 'enum' && data && <EnumProps data={data} showTechnicalDetails={showTechnicalDetails} />}
@@ -403,13 +403,15 @@ function ValidationProps({ data, configIndex, showTechnicalDetails }: { data: an
   );
 }
 
-function FormatElementProps({ data, showTechnicalDetails }: { data: any; showTechnicalDetails: boolean }) {
+function FormatElementProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const excelRange = getFormatElementExcelRange(data);
+  const labelRef = data.attributes?.['Label'];
   const items: [string, React.ReactNode, string?][] = [
     [t.propDataType, getFormatElementDataType(data)],
     [t.propChildren, `${data.children?.length ?? 0}`],
   ];
-  if (excelRange) items.splice(1, 0, [t.propExcelRange, excelRange]);
+  if (labelRef) items.unshift([t.propLabel, <LabelValue labelRef={labelRef} configIndex={configIndex} />]);
+  if (excelRange) items.splice(labelRef ? 2 : 1, 0, [t.propExcelRange, excelRange]);
   if (showTechnicalDetails) {
     items.unshift(['GUID', data.id, 'guid']);
     items.splice(1, 0, [t.propType, data.elementType]);
