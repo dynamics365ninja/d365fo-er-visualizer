@@ -52,6 +52,7 @@ import {
 import { parseERConfiguration, ERComponentKind } from '../packages/core/src/index.js';
 import { buildFormatBindingPresentation } from '../packages/ui/src/utils/format-binding-display.js';
 import { buildFormatTreeIndex, visibleFormatElementIds } from '../packages/ui/src/utils/format-tree-filter.js';
+import { resolveLabel, isLabelResolved } from '../packages/ui/src/utils/label-resolver.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -2802,6 +2803,113 @@ async function main(): Promise<void> {
     }
   } else {
     console.log('  (skipped — configName not set)');
+  }
+  console.log();
+
+  // ─── Step 15: Label dictionary coverage ───────────────────────────────────
+  // Only the format response carries the ER label dictionary; data model and
+  // mapping responses reference labels they never define. Guards that the
+  // merged pool still resolves every `@GER_` reference.
+  console.log('─── Step 15: Label dictionary coverage');
+  try {
+    const labelRefRegex = /(?:Label|Description|Name)\.?="@([^"]+)"/g;
+    const collectLabelRefs = (xml: string): Set<string> => {
+      const refs = new Set<string>();
+      for (const m of xml.matchAll(labelRefRegex)) {
+        const ref = m[1]?.trim();
+        // Only ids that look like label references, not free text.
+        if (ref && /^[A-Za-z_][\w.]*(:[\w.\-]+)?$/.test(ref.replace(/^"|"$/g, ''))) {
+          refs.add(`@${ref}`);
+        }
+      }
+      return refs;
+    };
+
+    const probe15: { title: string; component: ErConfigSummary }[] = [];
+    const targetFmt15 =
+      components.find(c => c.configurationName === cfg.configName && c.hasContent) ??
+      rootComponents.find(c => c.configurationName === cfg.configName && c.hasContent);
+    if (targetFmt15) probe15.push({ title: `Format "${targetFmt15.configurationName}"`, component: targetFmt15 });
+    if (step9DmGuid && step9DmGuid !== 'name-based' && cfg.solutionName) {
+      probe15.push({
+        title: `DataModel (guid ${step9DmGuid})`,
+        component: {
+          solutionName: cfg.solutionName,
+          configurationName: cfg.solutionName,
+          componentType: 'DataModel',
+          configurationGuid: step9DmGuid,
+          hasContent: true,
+        },
+      });
+      probe15.push({
+        title: `ModelMapping (default descriptor of ${step9DmGuid})`,
+        component: {
+          solutionName: cfg.solutionName,
+          configurationName: `${cfg.solutionName} mapping`,
+          componentType: 'ModelMapping',
+          parentDataModelGuid: step9DmGuid,
+          hasContent: true,
+        },
+      });
+    }
+
+    let anyLabelsReturned = false;
+    const pool15: { labelId: string; labelValue: string; languageId: string }[] = [];
+    const perComponent15: { title: string; refs: Set<string> }[] = [];
+    for (const { title, component } of probe15) {
+      try {
+        const dl15 = await downloadConfigXml(transport, conn, token, component);
+        const xml15 = dl15.xml;
+        const classListCount = (xml15.match(/<ERClassList\b/g) ?? []).length;
+        const labelNodeCount = (xml15.match(/<ERLabel\b/g) ?? []).length;
+        const refs = collectLabelRefs(xml15);
+        const parsed15 = parseERConfiguration(xml15, 'step15.xml');
+        const table15 = parsed15.solutionVersion.solution.labels;
+        if (table15.length > 0) anyLabelsReturned = true;
+        pool15.push(...table15);
+        perComponent15.push({ title, refs });
+
+        const langs = new Set(table15.map(l => l.languageId));
+        console.log(`  ${title}`);
+        console.log(`    payload: ${xml15.length} chars | <ERClassList>: ${classListCount} | <ERLabel>: ${labelNodeCount}`);
+        console.log(`    own label table: ${table15.length} entries in ${langs.size} language(s) | label refs in payload: ${refs.size}`);
+      } catch (e15) {
+        console.log(`  ${title}: ✗ ${e15 instanceof Error ? e15.message.slice(0, 160) : e15}`);
+      }
+    }
+
+    check(
+      'Step 15: at least one ER custom-service response carries the label dictionary',
+      anyLabelsReturned,
+      anyLabelsReturned ? 'ERLabel entries present' : 'no <ERLabel> in any response',
+    );
+
+    // Cross-resolve against the merged pool — that is what the designer uses.
+    // AOT labels (@SYS…, @GLS…, @Module:Id) live in the F&O label store, never
+    // in the ER dictionary, so they are reported but not asserted.
+    console.log(`\n  15b: cross-resolution against the merged pool (${pool15.length} labels)`);
+    const isErLabel = (ref: string) => /^@"?GER_/i.test(ref);
+    let erRefsCovered = perComponent15.length > 0;
+    for (const { title, refs } of perComponent15) {
+      if (refs.size === 0) {
+        console.log(`    ${title}: no label refs`);
+        continue;
+      }
+      const erRefs = [...refs].filter(isErLabel);
+      const aotRefs = [...refs].filter(r => !isErLabel(r));
+      const unresolved = erRefs.filter(r => !isLabelResolved(resolveLabel(r, pool15, 'en-us')));
+      console.log(`    ${title}: ER labels ${erRefs.length - unresolved.length}/${erRefs.length} resolvable` +
+        (unresolved.length > 0 ? ` — missing sample: ${unresolved.slice(0, 5).join(', ')}` : '') +
+        (aotRefs.length > 0 ? ` | AOT labels (not in ER dictionary): ${aotRefs.length} e.g. ${aotRefs.slice(0, 3).join(', ')}` : ''));
+      if (unresolved.length > 0) erRefsCovered = false;
+    }
+    check(
+      'Step 15: merged label pool resolves every ER label reference',
+      erRefsCovered,
+      erRefsCovered ? 'all @GER_ refs covered' : 'some @GER_ refs have no definition in any response',
+    );
+  } catch (err15) {
+    console.log(`  ⚠ Step 15 failed: ${err15 instanceof Error ? err15.message.slice(0, 200) : err15}`);
   }
   console.log();
 

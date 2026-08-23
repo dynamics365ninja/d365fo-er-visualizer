@@ -62,8 +62,8 @@ function emitDownloadEvent(event: FnoDownloadEvent): void {
 /**
  * Pull the label dictionary out of every F&O response — including silent
  * scout/probe/ancestor downloads that are never loaded as configurations —
- * into the shared label pool, and log how many labels each operation
- * returned so it is visible which services carry the dictionary.
+ * into the shared pool. Only the format response carries it; data model and
+ * mapping responses reference labels they never define.
  */
 function harvestLabels(component: ErConfigSummary, xml: string): void {
   try {
