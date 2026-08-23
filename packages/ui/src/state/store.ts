@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type {
   ERConfiguration,
+  ERLabel,
   ERComponentKind,
   ERDataModelContent,
   ERModelMappingContent,
@@ -411,6 +412,13 @@ export interface AppState {
   rebuildDerivedState: () => void;
   setShowTechnicalDetails: (show: boolean) => void;
   setFnoIngestStatus: (status: string) => void;
+  /**
+   * Merge label texts inherited from an ancestor data model (which is NOT
+   * loaded into the workspace) into the configurations whose inheritance
+   * chain passes through it — `targetSolutionIds` are the direct inheritors,
+   * their loaded descendants are included automatically.
+   */
+  addInheritedLabels: (targetSolutionIds: readonly string[], labels: readonly ERLabel[]) => void;
   setThemeMode: (mode: ThemeMode) => void;
   /** Advance the switch: system → light → dark → system. */
   cycleTheme: () => void;
@@ -1194,6 +1202,38 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setFnoIngestStatus: (status: string) => set({ fnoIngestStatus: status }),
+
+  addInheritedLabels: (targetSolutionIds, labels) => {
+    if (labels.length === 0 || targetSolutionIds.length === 0) return;
+    const norm = (g: string | undefined) => (g ?? '').replace(/^\{|\}$/g, '').toLowerCase();
+    const configs = get().configurations;
+    // Direct inheritors plus every loaded configuration derived from them.
+    const targets = new Set(targetSolutionIds.map(norm).filter(Boolean));
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const cfg of configs) {
+        const id = norm(cfg.solutionVersion?.solution?.id);
+        const base = norm(cfg.solutionVersion?.solution?.baseSolutionId);
+        if (id && base && targets.has(base) && !targets.has(id)) { targets.add(id); grew = true; }
+      }
+    }
+    let changed = false;
+    const next = configs.map(cfg => {
+      const solution = cfg.solutionVersion?.solution;
+      if (!solution || !targets.has(norm(solution.id))) return cfg;
+      const own = solution.labels ?? [];
+      const seen = new Set(own.map(l => `${l.labelId}\u0000${l.languageId}`));
+      const added = labels.filter(l => !seen.has(`${l.labelId}\u0000${l.languageId}`));
+      if (added.length === 0) return cfg;
+      changed = true;
+      return {
+        ...cfg,
+        solutionVersion: { ...cfg.solutionVersion, solution: { ...solution, labels: [...own, ...added] } },
+      };
+    });
+    if (changed) set({ configurations: next });
+  },
 
   setThemeMode: (mode: ThemeMode) => {
     persistThemeMode(mode);

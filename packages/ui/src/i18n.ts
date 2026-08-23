@@ -490,6 +490,7 @@ export interface Translations {
   fnoStatusDownloadingDM: (n: number) => string;
   fnoStatusDownloadingFM: (n: number) => string;
   fnoStatusResolvingDM: string;
+  fnoStatusResolvingLabels: string;
   fnoStatusScanMappings: string;
   fnoStatusDownloadingMM: string;
   fnoStatusDownloadingMMCount: (n: number) => string;
@@ -973,6 +974,7 @@ const cs: Translations = {
   fnoStatusDownloadingDM: (n: number) => `Stahuji DataModely (${n})…`,
   fnoStatusDownloadingFM: (n: number) => `Stahuji formáty a mapování (${n})…`,
   fnoStatusResolvingDM: 'Řeším odkazované DataModely…',
+  fnoStatusResolvingLabels: 'Dohledávám labely z nadřazených modelů…',
   fnoStatusScanMappings: 'Stahuji konfigurace a hledám mapování…',
   fnoStatusDownloadingMM: 'Stahuji ModelMapping…',
   fnoStatusDownloadingMMCount: (n: number) => `Stahuji Model Mappings (${n})…`,
@@ -1465,6 +1467,7 @@ const en: Translations = {
   fnoStatusDownloadingDM: (n: number) => `Downloading DataModels (${n})…`,
   fnoStatusDownloadingFM: (n: number) => `Downloading Formats & Mappings (${n})…`,
   fnoStatusResolvingDM: 'Resolving referenced DataModels…',
+  fnoStatusResolvingLabels: 'Resolving labels from ancestor models…',
   fnoStatusScanMappings: 'Downloading configurations & scanning for mappings…',
   fnoStatusDownloadingMM: 'Downloading Model Mappings…',
   fnoStatusDownloadingMMCount: (n: number) => `Downloading Model Mappings (${n})…`,

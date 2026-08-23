@@ -55,6 +55,7 @@ import type {
   FnoConnection,
 } from '@er-visualizer/fno-client';
 import { FnoHttpError, FnoEmptyContentError } from '@er-visualizer/fno-client';
+import { parseERConfigurations } from '@er-visualizer/core';
 import { t } from '../i18n';
 import { useAppStore } from '../state/store';
 import { useFnoProfiles, newProfileId } from '../state/fno-profiles';
@@ -456,6 +457,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   const listRequestSeqRef = useRef(0);
   const setFnoIngestStatus = useAppStore(s => s.setFnoIngestStatus);
   const beginFnoIngest = useAppStore(s => s.beginFnoIngest);
+  const addInheritedLabels = useAppStore(s => s.addInheritedLabels);
   const endFnoIngest = useAppStore(s => s.endFnoIngest);
   const [depPrompt, setDepPrompt] = useState<(DependencyPromptRequest & { candidates: Array<{ key: string; kind: 'DataModel' | 'ModelMapping' | 'Format'; name: string; meta?: string; comp: ErConfigSummary }> }) | null>(null);
   const setIngestStatus = useCallback((status: string) => {
@@ -855,6 +857,63 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     }
     setSelected(next);
   }, [filteredComponents, isComponentDownloadable, selected, setSelected]);
+
+  const resolveInheritedLabels = useCallback(async () => {
+    if (!activeProfile) return;
+    const norm = (g: string | undefined) => (g ?? '').replace(/^\{|\}$/g, '').toLowerCase();
+    const isGuid = (g: string) => g.length > 0 && g !== ZERO_GUID_LOWER;
+    const loaded = useAppStore.getState().configurations;
+    const loadedIds = new Set(loaded.map(c => norm(c.solutionVersion?.solution?.id)).filter(isGuid));
+    // baseGuid → solution ids whose inheritance chain passes through it.
+    const inheritors = new Map<string, Set<string>>();
+    const queue: string[] = [];
+    for (const cfg of loaded) {
+      const id = norm(cfg.solutionVersion?.solution?.id);
+      const base = norm(cfg.solutionVersion?.solution?.baseSolutionId);
+      if (!isGuid(id) || !isGuid(base) || loadedIds.has(base)) continue;
+      if (!inheritors.has(base)) { inheritors.set(base, new Set()); queue.push(base); }
+      inheritors.get(base)!.add(id);
+    }
+    if (queue.length === 0) return;
+    setIngestStatus(t.fnoStatusResolvingLabels);
+    const visited = new Set<string>();
+    const MAX_ANCESTORS = 8;
+    while (queue.length > 0 && visited.size < MAX_ANCESTORS) {
+      const guid = queue.shift()!;
+      if (visited.has(guid)) continue;
+      visited.add(guid);
+      const targets = inheritors.get(guid) ?? new Set<string>();
+      const listingDm = Array.from(allDataModelsSeen.values()).find(
+        m => norm(m.configurationGuid) === guid || norm(m.revisionGuid) === guid,
+      );
+      const spec: ErConfigSummary = {
+        solutionName: listingDm?.solutionName ?? listingDm?.configurationName ?? `DataModel ${guid}`,
+        configurationName: listingDm?.configurationName ?? `DataModel ${guid}`,
+        componentType: 'DataModel',
+        configurationGuid: guid,
+        hasContent: true,
+        versionNumbers: [50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+      };
+      try {
+        const dl = await fnoSession.downloadConfiguration(activeProfile, spec, undefined, { silent: true });
+        for (const parsed of parseERConfigurations(dl.xml, dl.syntheticPath)) {
+          const solution = parsed.solutionVersion?.solution;
+          const labels = solution?.labels ?? [];
+          if (labels.length > 0) addInheritedLabels(Array.from(targets), labels);
+          // Keep climbing: whoever inherits from this model also inherits from its base.
+          const nextBase = norm(solution?.baseSolutionId);
+          if (isGuid(nextBase) && !loadedIds.has(nextBase) && !visited.has(nextBase)) {
+            if (!inheritors.has(nextBase)) { inheritors.set(nextBase, new Set()); queue.push(nextBase); }
+            for (const tId of targets) inheritors.get(nextBase)!.add(tId);
+          }
+        }
+      } catch (err) {
+        // Ancestor not downloadable (no content / legacy ops unavailable) —
+        // the derived configuration still works, only its labels stay raw.
+        console.info('[fno-ui] inherited labels: ancestor not available', { guid, err });
+      }
+    }
+  }, [activeProfile, allDataModelsSeen, addInheritedLabels, setIngestStatus]);
 
   const handleLoadSelected = useCallback(async () => {
     if (!activeProfile) return;
@@ -2873,6 +2932,13 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         }
       }
 
+
+      // ── Final pass: labels inherited from ancestor data models ──
+      // Derived models/formats reference labels that are defined in a base
+      // DataModel further up the `Base` chain. Those ancestors are deliberately
+      // not loaded into the workspace, so fetch their XML quietly and merge only
+      // the label table into the configurations that inherit from them.
+      await resolveInheritedLabels();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.error('[fno-ui] ingest aborted', e);
@@ -2889,7 +2955,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       pushToast({ kind: 'success', message: t.fnoLoadedCount(ok) });
       onFilesLoaded?.();
     }
-  }, [activeProfile, selected, allDataModelsSeen, solutions, solutionPath, loadXmlFile, pushToast, beginFnoIngest, endFnoIngest]);
+  }, [activeProfile, selected, allDataModelsSeen, solutions, solutionPath, loadXmlFile, pushToast, beginFnoIngest, endFnoIngest, resolveInheritedLabels]);
 
   // ── Helper: type badge ──────────────────────────────────────────────────
   const TypeBadge = ({ type }: { type: ErComponentType }) => {
