@@ -412,6 +412,17 @@ export function tokenizeERExpr(expr: string): ERToken[] {
   return tokens;
 }
 
+/**
+ * Whether the workbench should render the "Expression" card for a selection.
+ * Bare paths are already spelled out by the breadcrumb, but label references
+ * need it — that card is the only place `ExpressionView` translates them.
+ */
+export function shouldShowFullExpression(expr: string): boolean {
+  const kind = classifyExpr(expr);
+  if (kind === 'er-function' || kind === 'compound' || expr.includes('(')) return true;
+  return tokenizeERExpr(expr).some(tok => tok.kind === 'label');
+}
+
 function uniqueDsTokens(tokens: ERToken[]): UniqueDsToken[] {
   const unique = new Map<string, UniqueDsToken>();
 
@@ -919,16 +930,12 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
   }, [selected.expression, selected.label]);
 
   /**
-   * A selection that is more than a bare path — a function call, comparison or
-   * boolean expression. The left column truncates it to one line and the
-   * breadcrumb only covers paths, so without this the full text of the very
-   * expression being drilled was nowhere on screen.
+   * A selection that is more than a bare path — a function call, comparison,
+   * boolean expression or label reference. The left column truncates it to one
+   * line and the breadcrumb only covers paths, so without this the full text of
+   * the very expression being drilled was nowhere on screen.
    */
-  const selectedExpressionKind = classifyExpr(selected.expression);
-  const showFullExpression =
-    selectedExpressionKind === 'er-function' ||
-    selectedExpressionKind === 'compound' ||
-    selected.expression.includes('(');
+  const showFullExpression = shouldShowFullExpression(selected.expression);
 
   /**
    * Model references used by a *compound* expression (the root `IF(...)`, a
