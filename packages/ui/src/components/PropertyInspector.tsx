@@ -3,7 +3,7 @@ import { useAppStore } from '../state/store';
 import { ClickablePath } from './ClickablePath';
 import { ERDirection, getFormatElementDataType, getFormatElementExcelRange } from '@er-visualizer/core';
 import { getEnumTypeLabel } from '../utils/enum-display';
-import { resolveLabel } from '../utils/label-resolver';
+import { resolveLabel, buildLabelPool } from '../utils/label-resolver';
 import { t, locale } from '../i18n';
 import {
   AppsListDetailRegular,
@@ -23,9 +23,9 @@ function getFormatDirectionLabel(direction: ERDirection | undefined): string {
 
 function LabelValue({ labelRef, configIndex }: { labelRef: string | null | undefined; configIndex: number }) {
   const configurations = useAppStore(s => s.configurations);
+  const labels = React.useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
   if (!labelRef) return <>–</>;
 
-  const labels = configurations[configIndex]?.solutionVersion?.solution?.labels;
   const resolved = resolveLabel(labelRef, labels);
   if (!resolved) return <>–</>;
 

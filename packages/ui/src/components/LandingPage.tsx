@@ -712,7 +712,6 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
                                   className={mergeClasses(styles.sessionFileRow, styles.sessionFileButton)}
                                   title={cached ? `${t.recentSessionFileHint} — ${f.path}` : f.path}
                                   onClick={openOne}
-                                  onDoubleClick={openOne}
                                 >
                                   <KindIcon kind={f.kind} />
                                   {f.name}
@@ -774,7 +773,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
                       <div
                         key={rf.path}
                         className={styles.item}
-                        title={canReload ? t.recentReloadHint : rf.path}
+                        title={rf.path}
                         style={{ opacity: canReload ? 1 : 0.75 }}
                       >
                         <KindIcon kind={rf.kind} size={16} />

@@ -57,7 +57,7 @@ import {
 import { useAppStore, resolveDeepExpression } from '../state/store';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName, getEnumTypeLabel, getEnumSourceKind } from '../utils/enum-display';
-import { resolveLabel } from '../utils/label-resolver';
+import { resolveLabel, buildLabelPool } from '../utils/label-resolver';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -626,7 +626,8 @@ interface ExpressionViewProps {
 
 function ExpressionView({ expr, configIndex, onPush, currentFrameExpression }: ExpressionViewProps) {
   const tokens = useMemo(() => tokenizeERExpr(prettifyERExpr(expr)), [expr]);
-  const labels = useAppStore(s => s.configurations[configIndex]?.solutionVersion?.solution?.labels);
+  const configurations = useAppStore(s => s.configurations);
+  const labels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
 
   const buildSegmentExpression = (segments: string[], upto: number): string => (
     segments
@@ -923,10 +924,16 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
   const normalizeExpr = (value: string) => value.replace(/\s+/g, '').toLowerCase();
   const showMappingExpression = Boolean(mappingExpr && normalizeExpr(mappingExpr) !== normalizeExpr(selected.expression));
 
-  const targetName = resolvedDs?.tableInfo?.tableName
+  // The trailing segments of the path are fields on the entity, not datasources,
+  // so without them the panel showed the table but never which column it reads.
+  const resolvedFieldPath = deepResult?.fieldPath?.join('.') ?? '';
+  const resolvedEntityName = resolvedDs?.tableInfo?.tableName
     ?? (resolvedDs?.enumInfo ? formatEnumDisplayName(resolvedDs.enumInfo.enumName, resolvedDs.enumInfo) : null)
     ?? resolvedDs?.classInfo?.className
     ?? null;
+  const targetName = resolvedEntityName && resolvedFieldPath
+    ? `${resolvedEntityName}.${resolvedFieldPath}`
+    : resolvedEntityName;
   const targetIsDistinct = Boolean(
     targetName
     && (!resolvedDs?.name || normalizeExpr(String(targetName)) !== normalizeExpr(String(resolvedDs.name)))
@@ -1700,7 +1707,51 @@ function buildTreeNode(
     return buildDsNode(ctx, id, direct.datasource, configIndex, expression, visited, depth);
   }
 
-  return buildDsNode(ctx, id, resolvedDs, deep?.rootDsConfigIndex ?? configIndex, expression, visited, depth);
+  const dsNode = buildDsNode(
+    ctx, id, resolvedDs, deep?.rootDsConfigIndex ?? configIndex,
+    expression, visited, depth, deep?.fieldPath ?? [],
+  );
+  appendPathPrefixNodes(ctx, dsNode, id, deep?.pathSegments ?? [], configIndex, resolvedDs, visited, depth);
+  return dsNode;
+}
+
+/** A datasource whose own definition explains where its value comes from. */
+function hasOwnDefinition(ds: any): boolean {
+  return Boolean(ds?.calculatedField?.expressionAsString || ds?.userParamInfo || ds?.groupByInfo);
+}
+
+/**
+ * A path like `Parameters.'$SourceJournal'.'$InvoiceDate'` runs through intermediate
+ * calculated fields, and each one decides which record the next hop reads from.
+ * Only the leaf used to be expanded, so `$SourceJournal` never appeared in the tree.
+ */
+function appendPathPrefixNodes(
+  ctx: TreeBuildContext,
+  parent: TreeExprNode,
+  id: string,
+  segments: string[],
+  configIndex: number,
+  leafDs: any,
+  visited: Set<string>,
+  depth: number,
+): void {
+  if (segments.length < 2) return;
+
+  let added = false;
+  for (let i = 1; i < segments.length; i++) {
+    const prefix = segments.slice(0, i).map(formatSegmentForExpression).join('.');
+    const prefixDeep = resolveDeepExpression(prefix, ctx.configurations, configIndex);
+    const prefixDs = prefixDeep?.nestedDs ?? prefixDeep?.rootDs;
+    if (!prefixDs || prefixDs === leafDs || !hasOwnDefinition(prefixDs)) continue;
+
+    const child = buildTreeNode(
+      ctx, `${id}-path${i}`, prefix, prefixDeep?.rootDsConfigIndex ?? configIndex,
+      new Set(visited), depth + 1,
+    );
+    if (child) { parent.children.push(child); added = true; }
+  }
+
+  if (added) parent.children = dedupeTreeChildren(parent.children);
 }
 
 function buildDsNode(
@@ -1711,8 +1762,13 @@ function buildDsNode(
   expression: string,
   visited: Set<string>,
   depth: number,
+  fieldPath: string[] = [],
 ): TreeExprNode {
   const sameLabel = (a?: string, b?: string): boolean => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+  // Trailing segments are fields on the entity, not datasources — without them a
+  // binding such as `model.InvoiceLines.ItemId` only ever showed the table.
+  const fieldSuffix = fieldPath.length > 0 ? fieldPath.join('.') : '';
+  const qualify = (entity: string): string => (fieldSuffix ? `${entity}.${fieldSuffix}` : entity);
 
   const dsNode: TreeExprNode = {
     id: `${id}-ds`,
@@ -1737,7 +1793,7 @@ function buildDsNode(
   };
 
   if (ds.tableInfo) {
-    const tableName = ds.tableInfo.tableName;
+    const tableName = qualify(ds.tableInfo.tableName);
     dsNode.badge = 'table';
     dsNode.sublabel = !sameLabel(tableName, ds.name) ? tableName : undefined;
     dsNode.leafType = 'table';
@@ -1748,7 +1804,7 @@ function buildDsNode(
       });
     }
   } else if (ds.enumInfo) {
-    const enumDisplay = formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo);
+    const enumDisplay = qualify(formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo));
     dsNode.badge = 'enum';
     dsNode.sublabel = !sameLabel(enumDisplay, ds.name) ? enumDisplay : undefined;
     dsNode.leafType = 'enum';
@@ -1759,7 +1815,7 @@ function buildDsNode(
       });
     }
   } else if (ds.classInfo) {
-    const className = ds.classInfo.className;
+    const className = qualify(ds.classInfo.className);
     dsNode.badge = 'class';
     dsNode.sublabel = !sameLabel(className, ds.name) ? className : undefined;
     dsNode.leafType = 'class';
@@ -1866,16 +1922,29 @@ export function buildWorkbenchParts(options: {
   const { expression, label, configIndex, configurations, resolveModelPath, resolveDatasource } = options;
 
   const root = buildExpressionTree({ expression, configIndex, configurations, resolveModelPath, resolveDatasource });
+  // Index the whole tree, not just its top row: the prefixes of a path resolve to
+  // nodes nested under the leaf, and without them those rows carried no formula.
   const resolutionByExpression = new Map<string, TreeExprNode>();
-  for (const child of root.children) {
-    if (child.expression) resolutionByExpression.set(child.expression, child);
-  }
+  const indexNode = (node: TreeExprNode): void => {
+    if (node.expression && !resolutionByExpression.has(node.expression)) {
+      resolutionByExpression.set(node.expression, node);
+    }
+    for (const child of node.children) indexNode(child);
+  };
+  for (const child of root.children) indexNode(child);
 
   const parts: WorkbenchPart[] = [{ id: 'root', expression, label, depth: 0, badge: 'root', configIndex }];
   const seen = new Set<string>([expression]);
 
   const walk = (node: TreeExprNode, depth: number): void => {
+    let childDepth = depth;
     if (node.expression) {
+      childDepth = depth + 1;
+      if (seen.has(node.expression)) {
+        for (const child of node.children) walk(child, childDepth);
+        return;
+      }
+      seen.add(node.expression);
       parts.push({
         id: node.id,
         expression: node.expression,
@@ -1886,7 +1955,6 @@ export function buildWorkbenchParts(options: {
         configIndex: node.configIndex ?? configIndex,
       });
     }
-    const childDepth = node.expression ? depth + 1 : depth;
     for (const child of node.children) walk(child, childDepth);
   };
 
