@@ -864,53 +864,69 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     const isGuid = (g: string) => g.length > 0 && g !== ZERO_GUID_LOWER;
     const loaded = useAppStore.getState().configurations;
     const loadedIds = new Set(loaded.map(c => norm(c.solutionVersion?.solution?.id)).filter(isGuid));
-    // baseGuid → solution ids whose inheritance chain passes through it.
-    const inheritors = new Map<string, Set<string>>();
+    // Inheritors are tracked by file path: F&O downloads may carry no
+    // solution GUID in their synthetic envelope, but every configuration
+    // has a unique path in the workspace.
+    type Inheritor = { filePath: string; kind: 'Format' | 'DataModel' | 'ModelMapping' };
+    const inheritors = new Map<string, Inheritor[]>();
     const queue: string[] = [];
     for (const cfg of loaded) {
-      const id = norm(cfg.solutionVersion?.solution?.id);
       const base = norm(cfg.solutionVersion?.solution?.baseSolutionId);
-      if (!isGuid(id) || !isGuid(base) || loadedIds.has(base)) continue;
-      if (!inheritors.has(base)) { inheritors.set(base, new Set()); queue.push(base); }
-      inheritors.get(base)!.add(id);
+      if (!isGuid(base) || loadedIds.has(base)) continue;
+      if (!inheritors.has(base)) { inheritors.set(base, []); queue.push(base); }
+      inheritors.get(base)!.push({ filePath: cfg.filePath, kind: cfg.kind as Inheritor['kind'] });
     }
     if (queue.length === 0) return;
     setIngestStatus(t.fnoStatusResolvingLabels);
     const visited = new Set<string>();
     const MAX_ANCESTORS = 8;
+    const allVersions = [50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
     while (queue.length > 0 && visited.size < MAX_ANCESTORS) {
       const guid = queue.shift()!;
       if (visited.has(guid)) continue;
       visited.add(guid);
-      const targets = inheritors.get(guid) ?? new Set<string>();
-      const listingDm = Array.from(allDataModelsSeen.values()).find(
+      const targets = inheritors.get(guid) ?? [];
+      const listingMatch = Array.from(allDataModelsSeen.values()).find(
         m => norm(m.configurationGuid) === guid || norm(m.revisionGuid) === guid,
       );
-      const spec: ErConfigSummary = {
-        solutionName: listingDm?.solutionName ?? listingDm?.configurationName ?? `DataModel ${guid}`,
-        configurationName: listingDm?.configurationName ?? `DataModel ${guid}`,
-        componentType: 'DataModel',
-        configurationGuid: guid,
-        hasContent: true,
-        versionNumbers: [50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
-      };
+      // The Base of a derived format is usually another format; the root
+      // format's Base is the data model. Try the inheritor's own kind first.
+      const kinds: Array<'Format' | 'DataModel'> = listingMatch
+        ? ['DataModel']
+        : targets.some(x => x.kind === 'Format') ? ['Format', 'DataModel'] : ['DataModel'];
+      let download: Awaited<ReturnType<typeof fnoSession.downloadConfiguration>> | null = null;
+      for (const kind of kinds) {
+        const spec: ErConfigSummary = {
+          solutionName: listingMatch?.solutionName ?? listingMatch?.configurationName ?? `${kind} ${guid}`,
+          configurationName: listingMatch?.configurationName ?? `${kind} ${guid}`,
+          componentType: kind,
+          configurationGuid: guid,
+          revisionGuid: kind === 'Format' ? guid : undefined,
+          hasContent: true,
+          versionNumbers: kind === 'DataModel' ? allVersions : undefined,
+        };
+        try {
+          download = await fnoSession.downloadConfiguration(activeProfile, spec, undefined, { silent: true });
+          break;
+        } catch (err) {
+          console.info('[fno-ui] inherited labels: ancestor not available as', kind, { guid, err });
+        }
+      }
+      if (!download) continue;
       try {
-        const dl = await fnoSession.downloadConfiguration(activeProfile, spec, undefined, { silent: true });
-        for (const parsed of parseERConfigurations(dl.xml, dl.syntheticPath)) {
+        for (const parsed of parseERConfigurations(download.xml, download.syntheticPath)) {
           const solution = parsed.solutionVersion?.solution;
           const labels = solution?.labels ?? [];
-          if (labels.length > 0) addInheritedLabels(Array.from(targets), labels);
-          // Keep climbing: whoever inherits from this model also inherits from its base.
+          if (labels.length > 0) addInheritedLabels({ filePaths: targets.map(x => x.filePath) }, labels);
+          // Keep climbing: whoever inherits from this one also inherits from its base.
           const nextBase = norm(solution?.baseSolutionId);
           if (isGuid(nextBase) && !loadedIds.has(nextBase) && !visited.has(nextBase)) {
-            if (!inheritors.has(nextBase)) { inheritors.set(nextBase, new Set()); queue.push(nextBase); }
-            for (const tId of targets) inheritors.get(nextBase)!.add(tId);
+            if (!inheritors.has(nextBase)) { inheritors.set(nextBase, []); queue.push(nextBase); }
+            inheritors.get(nextBase)!.push(...targets);
           }
         }
       } catch (err) {
-        // Ancestor not downloadable (no content / legacy ops unavailable) —
-        // the derived configuration still works, only its labels stay raw.
-        console.info('[fno-ui] inherited labels: ancestor not available', { guid, err });
+        console.info('[fno-ui] inherited labels: ancestor XML not parseable', { guid, err });
       }
     }
   }, [activeProfile, allDataModelsSeen, addInheritedLabels, setIngestStatus]);

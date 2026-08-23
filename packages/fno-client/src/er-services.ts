@@ -1076,12 +1076,19 @@ export async function downloadConfigXml(
     ?? component.version
     ?? extractVersionFromXml(xml)
     ?? (successBody?._revisionNumber != null ? String(successBody._revisionNumber) : undefined);
-  const finalXml = injectNameHint(xml, component.configurationName, finalVersion);
   const {
     guids: referencedDataModelGuids,
     revisions: referencedDataModelRevisions,
     baseOnlyGuids: referencedBaseOnlyGuids,
-  } = extractReferencedDataModelGuids(finalXml);
+  } = extractReferencedDataModelGuids(xml);
+  // Carry the solution identity into the bundle so the parser can populate
+  // the synthetic ERSolution (custom services strip the envelope): the
+  // component's own ERSolution GUID and its inheritance parent (`Base=`).
+  const baseHint = extractBaseHint(xml);
+  const finalXml = injectNameHint(xml, component.configurationName, finalVersion, {
+    solutionId: component.configurationGuid,
+    base: baseHint,
+  });
 
   return {
     xml: finalXml,
@@ -1286,25 +1293,42 @@ function extractXmlFromServiceResult(raw: unknown, operationName: string): strin
  * has a reliable display name fallback. Returns the XML unchanged if the
  * payload already has a proper `ERSolutionVersion` envelope.
  */
-function injectNameHint(xml: string, name: string, version?: string): string {
+/** First `Base="{guid},N"` / `Base="{guid}"` attribute in the payload, verbatim. */
+export function extractBaseHint(xml: string): string | undefined {
+  const m = xml.match(/\bBase\s*=\s*"(\{?[0-9a-fA-F-]{36}\}?(?:,\d+)?)"/);
+  if (!m) return undefined;
+  return /^\{?0{8}-/.test(m[1]) ? undefined : m[1];
+}
+
+function escapeXmlAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function injectNameHint(
+  xml: string,
+  name: string,
+  version?: string,
+  identity?: { solutionId?: string; base?: string },
+): string {
   if (!name) return xml;
   const trimmed = xml.replace(/^\uFEFF/, '').replace(/^\s*<\?xml[^?]*\?>\s*/i, '');
   // Only rewrap F&O custom-service payloads. If the doc already has
   // the proper envelope, leave it alone.
   if (/^<\s*ERSolutionVersion[\s>]/i.test(trimmed)) return xml;
-  const escaped = name
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-  const versionAttr = version
-    ? ` Version="${version.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`
-    : '';
+  const escaped = escapeXmlAttr(name);
+  const versionAttr = version ? ` Version="${escapeXmlAttr(version)}"` : '';
+  const idAttr = identity?.solutionId ? ` SolutionId="${escapeXmlAttr(identity.solutionId)}"` : '';
+  const baseAttr = identity?.base ? ` Base="${escapeXmlAttr(identity.base)}"` : '';
+  const attrs = `Name="${escaped}"${versionAttr}${idAttr}${baseAttr}`;
   if (/^<\s*ErFnoBundle[\s>]/i.test(trimmed)) {
-    // Splice the attribute into the opening tag.
-    return trimmed.replace(/^<\s*ErFnoBundle(\s|>)/i, `<ErFnoBundle Name="${escaped}"${versionAttr}$1`);
+    // Splice the attributes into the opening tag.
+    return trimmed.replace(/^<\s*ErFnoBundle(\s|>)/i, `<ErFnoBundle ${attrs}$1`);
   }
-  return `<ErFnoBundle Name="${escaped}"${versionAttr}>${trimmed}</ErFnoBundle>`;
+  return `<ErFnoBundle ${attrs}>${trimmed}</ErFnoBundle>`;
 }
 
 /** Walk `value` recursively, collecting every string that is (or decodes to) XML. Deduplicates. */

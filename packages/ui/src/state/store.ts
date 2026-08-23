@@ -418,7 +418,7 @@ export interface AppState {
    * chain passes through it — `targetSolutionIds` are the direct inheritors,
    * their loaded descendants are included automatically.
    */
-  addInheritedLabels: (targetSolutionIds: readonly string[], labels: readonly ERLabel[]) => void;
+  addInheritedLabels: (targets: { solutionIds?: readonly string[]; filePaths?: readonly string[] }, labels: readonly ERLabel[]) => void;
   setThemeMode: (mode: ThemeMode) => void;
   /** Advance the switch: system → light → dark → system. */
   cycleTheme: () => void;
@@ -1203,12 +1203,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setFnoIngestStatus: (status: string) => set({ fnoIngestStatus: status }),
 
-  addInheritedLabels: (targetSolutionIds, labels) => {
-    if (labels.length === 0 || targetSolutionIds.length === 0) return;
+  addInheritedLabels: ({ solutionIds = [], filePaths = [] }, labels) => {
+    if (labels.length === 0 || (solutionIds.length === 0 && filePaths.length === 0)) return;
     const norm = (g: string | undefined) => (g ?? '').replace(/^\{|\}$/g, '').toLowerCase();
     const configs = get().configurations;
-    // Direct inheritors plus every loaded configuration derived from them.
-    const targets = new Set(targetSolutionIds.map(norm).filter(Boolean));
+    // Direct inheritors (by solution GUID or, for F&O downloads whose
+    // synthetic envelope may lack a GUID, by file path) plus every loaded
+    // configuration derived from them.
+    const targets = new Set(solutionIds.map(norm).filter(Boolean));
+    const targetPaths = new Set(filePaths);
+    for (const cfg of configs) {
+      if (targetPaths.has(cfg.filePath)) {
+        const id = norm(cfg.solutionVersion?.solution?.id);
+        if (id) targets.add(id);
+      }
+    }
     let grew = true;
     while (grew) {
       grew = false;
@@ -1221,7 +1230,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     let changed = false;
     const next = configs.map(cfg => {
       const solution = cfg.solutionVersion?.solution;
-      if (!solution || !targets.has(norm(solution.id))) return cfg;
+      if (!solution) return cfg;
+      if (!targets.has(norm(solution.id)) && !targetPaths.has(cfg.filePath)) return cfg;
       const own = solution.labels ?? [];
       const seen = new Set(own.map(l => `${l.labelId}\u0000${l.languageId}`));
       const added = labels.filter(l => !seen.has(`${l.labelId}\u0000${l.languageId}`));
