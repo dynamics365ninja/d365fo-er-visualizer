@@ -1980,7 +1980,7 @@ function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLa
     const labelRef = el.attributes?.['Label'];
     if (!labelRef) return undefined;
     const resolved = resolveLabel(labelRef, labels);
-    return resolved?.enUs ?? resolved?.localized ?? undefined;
+    return resolved?.localized ?? resolved?.enUs ?? undefined;
   };
 
   const collectCells = (el: ERFormatElement): ExcelCellData[] => {
@@ -2454,7 +2454,7 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
   const configurations = useAppStore(s => s.configurations);
   const labels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
   const previewOptions = useMemo<PreviewRenderOptions>(() => ({ placeholderMode: 'sample' }), []);
-  const sheets = useMemo(() => collectExcelSheets(rootElement, bindingMap, labels, previewOptions), [rootElement, bindingMap, labels, previewOptions]);
+  const sheets = useMemo(() => collectExcelSheets(rootElement, bindingMap, labels, previewOptions), [rootElement, bindingMap, labels, previewOptions, locale]);
   const [activeSheet, setActiveSheet] = useState(0);
   const [selectedCell, setSelectedCell] = useState<ExcelCellData | null>(null);
   // Default to template view when template is available (even filename-only — shows drop zone)
@@ -3590,7 +3590,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
 
   // Resolve label for this element
   const labelRef = element.attributes?.['Label'];
-  const resolvedLabel = useMemo(() => resolveLabel(labelRef, labels), [labelRef, labels]);
+  const resolvedLabel = useMemo(() => resolveLabel(labelRef, labels), [labelRef, labels, locale]);
   const labelText = resolvedLabel?.localized ?? resolvedLabel?.enUs ?? (resolvedLabel?.id ? resolvedLabel.id : undefined);
   const excelRange = getFormatElementExcelRange(element);
 

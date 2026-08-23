@@ -853,7 +853,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
     // An unresolved reference is noise, not information — hide it.
     if (looksLikeLabelRef(rawLabel) && text === rawLabel) return undefined;
     return text;
-  }, [rawLabel, configurations, node.configIndex, node.name]);
+  }, [rawLabel, configurations, node.configIndex, node.name, locale]);
 
   const isSelected = node.id === selectedId;
   const isAncestor = !isSelected && selectedPathIds.has(node.id);

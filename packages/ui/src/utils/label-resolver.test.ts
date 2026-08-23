@@ -79,6 +79,18 @@ describe('resolveLabel GER_LABEL references', () => {
     const table = [{ labelId: 'Foo', languageId: 'de', labelValue: 'Betrag' }];
     expect(labelDisplayText('@GER_LABEL:Foo', table, 'cs-cz')).toBe('Betrag');
   });
+
+  it('follows the app language switch rather than the browser locale', async () => {
+    const { setLocale } = await import('../i18n');
+    const table = [
+      { labelId: 'Foo', languageId: 'en-US', labelValue: 'Amount' },
+      { labelId: 'Foo', languageId: 'cs', labelValue: 'Částka' },
+    ];
+    setLocale('cs');
+    expect(labelDisplayText('@GER_LABEL:Foo', table)).toBe('Částka');
+    setLocale('en');
+    expect(labelDisplayText('@GER_LABEL:Foo', table)).toBe('Amount');
+  });
 });
 
 describe('label reference helpers', () => {
