@@ -418,6 +418,8 @@ export interface AppState {
    * chain passes through it — `targetSolutionIds` are the direct inheritors,
    * their loaded descendants are included automatically.
    */
+  /** Re-issue the configurations array so label-dependent views re-resolve against the (grown) harvested pool. */
+  refreshLabelPool: () => void;
   addInheritedLabels: (targets: { solutionIds?: readonly string[]; filePaths?: readonly string[] }, labels: readonly ERLabel[]) => void;
   setThemeMode: (mode: ThemeMode) => void;
   /** Advance the switch: system → light → dark → system. */
@@ -1202,6 +1204,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setFnoIngestStatus: (status: string) => set({ fnoIngestStatus: status }),
+
+  refreshLabelPool: () => set(state => ({ configurations: [...state.configurations] })),
 
   addInheritedLabels: ({ solutionIds = [], filePaths = [] }, labels) => {
     if (labels.length === 0 || (solutionIds.length === 0 && filePaths.length === 0)) return;

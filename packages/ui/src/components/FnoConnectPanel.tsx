@@ -2955,6 +2955,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // not loaded into the workspace, so fetch their XML quietly and merge only
       // the label table into the configurations that inherit from them.
       await resolveInheritedLabels();
+      // Labels harvested from any response during this batch (scouts,
+      // ancestors, sibling label packs) become visible everywhere.
+      useAppStore.getState().refreshLabelPool();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.error('[fno-ui] ingest aborted', e);

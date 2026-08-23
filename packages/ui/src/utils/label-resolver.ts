@@ -159,7 +159,38 @@ interface LabelBearingConfiguration {
 }
 
 /** Cached per configurations array — the format tree resolves labels row by row. */
-const labelPoolCache = new WeakMap<object, Map<number, ERLabel[]>>();
+let labelPoolCache = new WeakMap<object, Map<number, ERLabel[]>>();
+
+/**
+ * Labels harvested from F&O responses that are NOT loaded as configurations
+ * (scout/probe downloads, ancestor models, label packs returned alongside a
+ * different component). F&O custom services return the dictionary
+ * inconsistently per operation, so every response is a potential source.
+ * Lowest priority in the pool — a configuration's own table always wins.
+ */
+const harvestedLabels: ERLabel[] = [];
+const harvestedKeys = new Set<string>();
+
+/** Adds labels to the shared pool; returns how many were new. */
+export function registerHarvestedLabels(labels: readonly ERLabel[]): number {
+  let added = 0;
+  for (const l of labels) {
+    if (!l.labelId) continue;
+    const key = `${l.labelId}\u0000${l.languageId}`;
+    if (harvestedKeys.has(key)) continue;
+    harvestedKeys.add(key);
+    harvestedLabels.push(l);
+    added += 1;
+  }
+  // Pools built before this call are stale.
+  if (added > 0) labelPoolCache = new WeakMap();
+  return added;
+}
+
+/** Number of labels currently in the harvested pool (diagnostics). */
+export function harvestedLabelCount(): number {
+  return harvestedLabels.length;
+}
 
 /**
  * Label texts a configuration can resolve: its own table first, then every other
@@ -184,7 +215,9 @@ export function buildLabelPool(
     const labels = cfg?.solutionVersion?.solution?.labels;
     if (labels?.length) others.push(...labels);
   });
-  const pool = others.length > 0 ? [...own, ...others] : own;
+  const pool = others.length > 0 || harvestedLabels.length > 0
+    ? [...own, ...others, ...harvestedLabels]
+    : own;
 
   const byIndex = cached ?? new Map<number, ERLabel[]>();
   byIndex.set(configIndex, pool);

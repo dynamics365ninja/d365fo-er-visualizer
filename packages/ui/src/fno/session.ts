@@ -23,7 +23,9 @@ import {
   type FnoConnection,
   type FnoTransport,
 } from '@er-visualizer/fno-client';
+import { parseERConfigurations } from '@er-visualizer/core';
 import { getAuthProvider } from './auth-factory';
+import { registerHarvestedLabels } from '../utils/label-resolver';
 import { createFnoTransport } from './transport';
 
 const TOKEN_MIN_LIFETIME_MS = 60_000;
@@ -54,6 +56,28 @@ function emitDownloadEvent(event: FnoDownloadEvent): void {
     } catch (err) {
       console.warn('[fno-session] download listener failed', err);
     }
+  }
+}
+
+/**
+ * Pull the label dictionary out of every F&O response — including silent
+ * scout/probe/ancestor downloads that are never loaded as configurations —
+ * into the shared label pool, and log how many labels each operation
+ * returned so it is visible which services carry the dictionary.
+ */
+function harvestLabels(component: ErConfigSummary, xml: string): void {
+  try {
+    const parsed = parseERConfigurations(xml, `fno-harvest://${component.configurationName}`);
+    const labels = parsed.flatMap(c => c.solutionVersion?.solution?.labels ?? []);
+    const added = registerHarvestedLabels(labels);
+    console.info('[fno-ui] labels in response', {
+      component: component.configurationName,
+      type: component.componentType,
+      labelsInResponse: labels.length,
+      newInPool: added,
+    });
+  } catch (err) {
+    console.info('[fno-ui] labels: response not parseable for harvesting', { component: component.configurationName, err });
   }
 }
 
@@ -123,6 +147,7 @@ export const fnoSession = {
     try {
       const auth = await ensureToken(conn, signal);
       const download = await downloadConfigXml(transport(), conn, auth.accessToken, component, signal);
+      harvestLabels(component, download.xml);
       emit({ type: 'done', component, download });
       return download;
     } catch (error) {
