@@ -25,13 +25,17 @@ This tool parses the full ER XML bundle, merges cross-references across all load
 | 📂 **XML & live ingestion** | Parse raw ER XML bundles from disk (drag-and-drop) or pull directly from a live F&O environment via MSAL + ER custom services |
 | 🌳 **Visual designers** | Interactive node-graph views for DataModel, ModelMapping, and Format — powered by React Flow |
 | 🔍 **Search & where-used** | Full-text search across all loaded configurations; trace any element to every format binding, model binding, or datasource that references it |
-| 🧩 **Expression drill-down** | Split workbench: expression tree on the left, mapping/datasource resolution on the right — navigate through calculated fields to concrete sources |
+| 🧩 **Expression drill-down** | Split workbench: expression tree on the left, mapping/datasource resolution on the right — navigate through calculated fields to concrete sources. A second view renders the whole breakdown as a React Flow tree |
 | 🏷️ **Property inspector** | Context-aware property grid for any selected node — files, containers, fields, datasources, bindings, format elements |
 | 🔗 **Clickable paths** | Identifiers in ER expressions are hyperlinks; hovering shows a tooltip card with the resolved source |
-| 🌐 **F&O server browser** | Connect to a live environment, browse the ER solution hierarchy, multi-select configurations across drill levels, and ingest them in one click |
-| ⌨️ **Command palette** | `Ctrl/⌘+K` jump-to-anything across configurations, tabs, and panel actions |
+| 📊 **Excel & PDF preview** | Excel-based formats render the workbook with its original layout and named ranges — click a cell to jump to the bound format element. PDF-converter formats preview the Excel component they wrap; an `.xlsx` template can be dropped in when the export carries none |
+| 🏷️ **Label resolution** | `@GER_LABEL:…` references are resolved to their text — from the configuration's own dictionary, from any other loaded configuration, and from labels harvested out of every F&O response (including ancestor models that are never loaded) |
+| 🗂️ **Workspace manager** | See exactly which configurations are loaded (grouped by data model), add or close individual entries, and re-open ones closed earlier. Adding a format or mapping offers its related model + mapping |
+| 💾 **Recent files & sessions** | Loaded XML is cached in the browser's IndexedDB, so the landing page can re-open a previous file or a whole session without re-picking the files |
+| 🌐 **F&O server browser** | Connect to a live environment, browse the ER solution hierarchy, multi-select configurations across drill levels, and ingest them in one click. Connection profiles are remembered (no secrets) |
+| ⌨️ **Command palette** | `Ctrl/⌘+K` jump-to-anything across configurations, tabs, and panel actions; `Alt+←/→` walk the navigation history |
 | 🖥️ **Electron shell** | Optional native desktop app with native file-open dialogs and loopback MSAL sign-in |
-| 🌍 **Czech / English UI** | `cs` and `en` — auto-detected from OS locale |
+| 🌍 **Czech / English UI** | `cs` and `en` — detected from the browser locale, switchable from the toolbar and remembered |
 
 ---
 
@@ -77,8 +81,9 @@ same deployment under `/app`.
 ```bash
 pnpm build      # core → tsc, fno-client → tsc, ui → Vite bundle, electron → tsc, site → Next
 pnpm build:web  # production web deploy — SPA built with base /app/, staged into the site, then Next
-pnpm test       # Vitest — core (XML parser, GUID registry), fno-client (ER services, path keys, auth), ui (store, filters, xlsx)
-pnpm lint       # tsc --noEmit in every package
+pnpm test       # Vitest — core (XML parser, GUID registry), fno-client (ER services, path keys, auth),
+                #          ui (store, format-tree filter, drill-down resolution, label resolver, xlsx)
+pnpm lint       # tsc --noEmit in every TypeScript package
 ```
 
 The `ui` xlsx-parser tests need a real Excel template and are skipped unless
@@ -119,6 +124,7 @@ d365fo-er-visualizer/
 │   ├── core/          # XML parser, TS types, GUID registry
 │   ├── fno-client/    # Host-agnostic F&O API client — MSAL helpers, ER service calls
 │   ├── ui/            # React + Vite SPA — designer, explorer, inspector, F&O panel
+│   ├── design-tokens/ # CSS tokens + theme switch shared by the SPA and the site
 │   ├── site/          # Next.js marketing site + docs; hosts the SPA at /app and /api/fno
 │   └── electron/      # Electron shell — native file dialogs + loopback MSAL
 ├── docs/              # Architecture notes
@@ -138,8 +144,11 @@ d365fo-er-visualizer/
 | Build | Vite 6 (UI), Next 15 (site), tsc (core / fno-client / electron) |
 | UI | React 19 + Fluent UI v9 |
 | Graph | React Flow (`@xyflow/react`) |
+| Layout | `react-resizable-panels` |
 | State | Zustand 5 |
 | XML | fast-xml-parser 4 |
+| Excel templates | JSZip (xlsx unpacked and rendered in the browser) |
+| Local cache | IndexedDB (`er-visualizer` / `file-content`) for recent files and sessions |
 | Auth | `@azure/msal-browser` (web) / `@azure/msal-node` (Electron) |
 | Site | Next 15 (App Router) + Tailwind 4 + MDX |
 | Testing | Vitest 3 |

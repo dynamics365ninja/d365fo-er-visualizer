@@ -33,8 +33,10 @@ The result lists every place that consumes it:
 - **Model bindings** — model paths filled from it
 - **Datasources** — datasources defined in terms of it, including calculated fields that wrap it
 
-Results are summarised as occurrences across files, so you can see immediately whether a change is
-contained in one format or spreads across the whole solution.
+Results are grouped by the file they were found in, so you can see immediately whether a change is
+contained in one format or spreads across the whole solution. An **All / Mappings / Format** scope
+toggle above the results narrows them to one side of the trace — useful when a table is read by a
+dozen mapping bindings but you only care about which output elements change.
 
 ## The workflow this is for
 
@@ -67,5 +69,7 @@ are available as commands rather than buttons.
 | `Ctrl+U` | Where used |
 | `Ctrl+J` | Properties panel |
 | `Ctrl+K` | Command palette |
+| `Alt+←` / `Alt+→` | Back / forward through the places you have navigated to |
 
-On macOS, use `⌘` in place of `Ctrl`.
+On macOS, use `⌘` in place of `Ctrl`. The back and forward steps are also the two arrow buttons at
+the left end of the toolbar.

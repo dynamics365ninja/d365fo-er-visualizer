@@ -55,18 +55,23 @@ const features = [
   },
   {
     title: 'Expression drill-down',
-    body: 'Split workbench: the expression tree on the left, its resolution on the right. Click through calculated fields until you reach the concrete table, class, or enum.',
+    body: 'Split workbench: the expression tree on the left, its resolution on the right. Identifiers inside ER formulas are hyperlinks with a tooltip card for the resolved source, so you click through calculated fields to the concrete table, class, or enum instead of copying GUIDs between files.',
     href: '/docs/expression-drill-down',
   },
   {
-    title: 'Clickable paths',
-    body: 'Identifiers inside ER formulas are hyperlinks. Hovering shows a tooltip card with the resolved source, so you stop copying GUIDs between files.',
-    href: '/docs/expression-drill-down',
-  },
-  {
-    title: 'Excel template preview',
-    body: 'Formats built on Excel templates render with their original layout and named ranges — click a cell to jump to the format element bound to it.',
+    title: 'Excel and PDF preview',
+    body: 'Formats built on Excel templates render with their original layout and named ranges — click a cell to jump to the element bound to it. PDF formats preview the component they convert.',
     href: '/docs/designers',
+  },
+  {
+    title: 'Readable labels',
+    body: 'ER stores names as label references. The visualizer pools the dictionaries of everything loaded — and the ones it passes on the way to ancestor models — so models and mappings read in words, not ids.',
+    href: '/docs/designers',
+  },
+  {
+    title: 'Workspace and recents',
+    body: 'See exactly what is loaded, grouped by data model, and add or close entries one at a time. Files are cached in your browser, so a previous file or a whole session re-opens in one click.',
+    href: '/docs/loading-configurations',
   },
   {
     title: 'F&O server browser',
@@ -102,11 +107,11 @@ const steps = [
 const faqs = [
   {
     q: 'Does the visualizer modify my ER configurations?',
-    a: 'No. It is a read-only analyzer. Files loaded from disk are parsed in memory, and configurations pulled from Finance & Operations are downloaded only — nothing is ever written back to the environment.',
+    a: 'No. It is a read-only analyzer. Files loaded from disk are parsed in your browser, and configurations pulled from Finance & Operations are downloaded only — nothing is ever written back to the environment.',
   },
   {
     q: 'Are my ER files uploaded to a server?',
-    a: 'No. Parsing happens entirely in your browser and XML files you drag in never leave your machine. When you use the live connection, requests to your Finance & Operations environment are relayed through this site\'s own stateless proxy (F&O does not send CORS headers); it forwards your bearer token and the response and stores nothing.',
+    a: 'No. Parsing happens entirely in your browser and XML files you drag in never leave your machine. So the app can offer you a recent file or session again, their content is cached in your own browser — you can clear it from the landing page at any time, and it is never uploaded. When you use the live connection, requests to your Finance & Operations environment are relayed through this site\'s own stateless proxy (F&O does not send CORS headers); it forwards your bearer token and the response and stores nothing.',
   },
   {
     q: 'Which ER component types are supported?',
@@ -322,7 +327,9 @@ export default function HomePage() {
             </h2>
             <p className="mt-5 leading-relaxed text-muted">
               Every XML file you open is parsed by code running in your own browser tab. There is no
-              upload, no account, and no server-side storage of configuration content.
+              upload, no account, and no server-side storage of configuration content. What you
+              load is cached in your own browser so recent files and sessions can be re-opened —
+              local to your machine, and clearable from the landing page.
             </p>
             <p className="mt-4 leading-relaxed text-muted">
               The live F&amp;O connection signs you in with your own Entra application registration

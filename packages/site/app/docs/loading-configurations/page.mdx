@@ -57,21 +57,40 @@ tool tries to complete the picture without you having to hunt for the dependenci
 ## The Explorer
 
 The Explorer shows every loaded configuration as a tree: configuration → containers, datasources,
-or format elements → their children. It has three controls worth knowing:
+or format elements → their children. It has four controls worth knowing:
 
 - **Filter** — narrows the tree to nodes matching what you type.
 - **Filter by kind** — restricts the tree to one component type when you have many files loaded.
 - **Sort** — load order, name ascending, or name descending.
+- **Model hierarchy / flat list** — the hierarchy view groups each data model with the mappings and
+  formats built on it, instead of listing every configuration side by side. On a workspace with a
+  dozen files it is usually the view you want.
 
 There is also an expand/collapse control for opening the tree to a chosen depth, which is a fast
 way to get an overview of a format's element hierarchy without clicking through it.
 
+## The workspace manager
+
+The **Workspace manager** (the icon button in the Explorer header, and an entry in its overflow menu) is the full picture of what
+is loaded: every configuration grouped by its data model, with its kind and whether it came from a
+file or from an environment. From there you can add more files, jump to the F&O download panel,
+close individual entries, or re-add something you closed earlier.
+
+When you add a format or a model mapping back, it offers the related data model and mapping in the
+same step — that is normally what you actually wanted, and it saves a second trip.
+
 ## What happens to your files
 
-Nothing leaves your browser. Files are read with the browser's file APIs and parsed in memory;
-there is no upload step and no server-side copy. Closing the tab discards the workspace — the tool
-keeps your preferences (theme, language, view mode, connection profiles) in local storage, but not
-configuration content.
+Nothing leaves your browser. Files are read with the browser's file APIs and parsed by code running
+in your tab; there is no upload step and no server-side copy.
+
+Configuration XML **is** kept locally, though, so the app can offer it back to you: the full content
+of every file you load goes into your browser's IndexedDB storage, and the landing page uses it to
+re-open a recent file — or a whole previous session — without you picking the files again. It is the
+same browser-local storage that holds your preferences (theme, language, view mode, connection
+profiles); nothing about it is sent anywhere. **Clear recent files** on the landing page empties
+the cache — removing a single entry drops just that file — and clearing the site's data in your
+browser removes all of it.
 
 ## Files that will not load
 

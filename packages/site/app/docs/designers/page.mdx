@@ -58,9 +58,22 @@ so a large format stays readable.
 Formats built on an Excel template get an extra view: the workbook renders with its original
 layout — merged cells, column widths, sheet tabs — and its named ranges highlighted. Clicking a
 cell that belongs to a named range jumps to the format element bound to it, which turns "which
-element writes this cell?" into a single click.
+element writes this cell?" into a single click. A toggle in the top-right switches between the
+template view and the structure view.
 
-Word, PDF, XML, CSV, and plain-text formats render as the element tree only.
+Not every export carries the template file itself. When it does not, the template view shows a drop
+zone instead — drop the `.xlsx` in and the preview renders from your local copy. The file is used
+for rendering only; like everything else, it stays in your browser.
+
+### PDF formats
+
+A `PDFFile` element is a converter, not a document: the actual layout comes from the component it
+wraps, which is normally an Excel format. The designer looks through the converter and previews that
+component, marked with a badge saying the output is converted to PDF — so a PDF format is read the
+same way as the Excel one behind it. If a PDF converter has no source component, the view says so
+rather than showing an empty canvas.
+
+Word, XML, CSV, and plain-text formats render as the element tree only.
 
 ## Reading the graph
 
@@ -72,6 +85,12 @@ A few conventions run through all three designers:
   Explorer selection, and vice versa.
 - **Technical view adds identifiers** — GUIDs, raw expression strings, and component references
   appear on nodes and in the Properties panel when technical view is on.
+- **Labels are resolved to text** — ER stores names as label references such as
+  `@GER_LABEL:Something`, and the dictionary that translates them ships only with the format
+  configuration. The visualizer pools the dictionaries of everything you have loaded — and, when you
+  ingest from an environment, the ones it sees in passing while resolving ancestor models — so
+  models and mappings show readable names too. Label text follows the interface language; where no
+  translation is found, the raw reference is shown unchanged.
 
 ## Panels around the canvas
 
