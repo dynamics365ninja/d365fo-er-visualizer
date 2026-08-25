@@ -30,7 +30,8 @@ Electron shell imports `fno-client` for types only; at runtime it talks to the r
 Pure TypeScript library, no UI dependencies.
 
 - **XML parser** — `parseERConfiguration(xml, filePath)`: detects component kind, unwraps `ErFnoBundle` / bare-content / base64 payloads, resolves the correct version node, returns a fully-typed `ERConfiguration`. `parseERConfigurations` additionally splits a bundle carrying a data model next to its mapping. Non-fatal findings (unknown format element types, unrecognised datasource handlers) are kept as `Unknown`/`Container` nodes and listed in `ERConfiguration.warnings`.
-- **Type system** — interfaces for every ER artifact: `ERDataModel`, `ERModelMapping`, `ERFormat`, `ERDatasource` (8 kinds), `ERBinding`, `ERFormatElement`, expression AST (`ERExprCall`, `ERExprIf`, `ERExprCase`, `ERExprBinaryOp`, …).
+- **Type system** — interfaces for every ER artifact: `ERDataModel`, `ERModelMapping`, `ERFormat`, `ERDatasource` (8 kinds), `ERBinding`, `ERFormatElement`, `ERLabel` (the solution's label dictionary), expression AST (`ERExprCall`, `ERExprIf`, `ERExprCase`, `ERExprBinaryOp`, …).
+- **Format element info** — `getFormatElementDataType()` and `getFormatElementExcelRange()` (`format/element-info.ts`): the two per-element facts the UI needs everywhere, derived from the raw element attributes in one place instead of in each view.
 - **GUID registry** — `indexConfiguration()` walks every loaded config in a single pass and builds a cross-reference index. The UI uses `indexConfiguration()`, `lookup()` and `search()`; `findRefsTo()`, `findRefsFrom()`, `getAllEntries()`, `register()` and `addCrossRef()` are part of the public API (covered by unit tests) but currently have no caller in the app — the where-used feature in the store walks configurations directly.
 
 **Key design choices:**
@@ -59,11 +60,35 @@ React 19 SPA (Vite 6 + Fluent UI v9).
 | `treeNodes` | Explorer tree hierarchy |
 | `selectedNode` | Currently selected tree node |
 | `openTabs` / `activeTabId` | Designer tabs |
-| `whereUsedResults` | Result of the last where-used trace |
+| `whereUsedResults` / `whereUsedScope` | Result of the last where-used trace, and the all / mapping / format scope filter over it |
 | `showTechnicalDetails` | Technical/consultant mode (persisted) |
 | `themeMode` / `resolvedTheme` | Preference (`system` by default, persisted only when explicit) and what it resolves to |
+| `navigationHistory` / `navigationForward` | Back/forward stacks behind `Alt+←` / `Alt+→` |
+| `recentFiles` / `recentSessions` / `cachedPaths` | Metadata of previously loaded files and sessions (localStorage) and which of them still have XML in the IndexedDB cache |
+| `toasts` | Transient notifications, including the undo affordance after closing a configuration |
+| `warnings` | Non-fatal parse findings surfaced per configuration |
+| `fnoIngestStatus` / `fnoIngestProgress` | Free-text phase label plus the structured per-configuration download log |
 
-**Key actions:** `loadXmlFile` · `selectNode` · `resolveDatasource` · `resolveBinding` · `whereUsed` · `setFnoIngestStatus`
+**Key actions:** `loadXmlFile` · `selectNode` · `resolveDatasource` · `resolveBinding` · `resolveModelPath` · `whereUsed` · `loadCachedFile` / `loadRecentSession` · `closeConfigurationWithUndo` · `addInheritedLabels` / `refreshLabelPool` · `beginFnoIngest` / `updateFnoIngestItem` / `endFnoIngest`
+
+**Persistence** — `utils/content-cache.ts` keeps full XML payloads in IndexedDB (`er-visualizer` /
+`file-content`); localStorage is too small (~5 MB) for several F&O format exports and holds only
+metadata (`recentFiles.v1`, `recentSessions.v1`), preferences and F&O connection profiles
+(`state/fno-profiles.ts` — profiles carry no secrets). Nothing is sent anywhere: the cache is
+local to the browser. `WorkspaceManager` is the UI over it — what is loaded (grouped by data
+model), what can be re-added from the cache, and `DependencyPromptDialog` offering the related
+model + mapping when a format or mapping is added back.
+
+**Labels** — `utils/label-resolver.ts` turns `@GER_LABEL:…` references into text. The pool for a
+configuration is its own dictionary first, then every other loaded configuration, then a process-wide
+pool harvested by `fno/session.ts` from *every* F&O response — including scout, probe and ancestor
+downloads that are never loaded as configurations, since only the format response ships the
+dictionary. The preferred language follows the app's language switch, not the browser.
+
+**Excel templates** — `utils/xlsx-parser.ts` unpacks the `.xlsx` template embedded in a format
+(JSZip) and reads sheets, merged cells, column widths and named ranges, so `DesignerView` can render
+the workbook next to the element tree. When the export carries no template the same view accepts one
+dropped in by the user.
 
 **Theming** — the rules live in `@er-visualizer/design-tokens/theme` (re-exported by `src/theme.ts`)
 next to the CSS that encodes the same precedence, and the marketing site imports the very same
@@ -141,7 +166,10 @@ loadXmlFile() in Zustand store
 | 3 — Model Mappings | `GetModelMappingByID` per DataModel GUID; batched, first-success skips siblings |
 | 4 — Late DataModels | GUIDs discovered inside ModelMapping XML fetched in a final follow-up pass |
 
-Progress is exposed via `fnoIngestStatus` (a label string in the store) and rendered as a fullscreen modal on the landing page and a compact in-tree banner in ConfigExplorer.
+Progress is exposed twice: `fnoIngestStatus` (a free-text phase label, mapped back onto the five
+steps by `activeIngestStep()`) and `fnoIngestProgress` (a structured per-configuration log — queued
+/ downloading / done / empty / failed / skipped, with elapsed time). `FnoIngestPanel` renders both,
+as a fullscreen dialog on the landing page and a compact in-tree card in ConfigExplorer.
 
 ---
 
@@ -152,6 +180,15 @@ All three use `@xyflow/react`:
 - **ModelDesigner** — BFS left-to-right layout of containers; edges for type references.
 - **MappingDesigner** — Three columns: datasources → bindings → validations.
 - **FormatDesigner** — Hierarchical element tree with binding status badges and category-grouped bindings.
+
+Excel-based formats get a second view next to the element tree: the workbook rendered with its
+original layout, merged cells and named ranges, where clicking a named cell selects the format
+element bound to it. A `PDFFile` root is only a converter — the designer looks through it to the
+component that actually produces the document (usually the Excel one), previews that, and marks the
+result with a "converted to PDF" badge.
+
+The **DrillDownPanel** has two modes, remembered in localStorage: the *workbench* (frame stack +
+breadcrumb) and a *tree* view that lays the whole expression breakdown out as a React Flow graph.
 
 Non-root explorer items open a **FocusedNodeTab** — a properties-only detail view instead of the full designer.
 
@@ -211,7 +248,7 @@ Vite aliases `@er-visualizer/core` to the core source during dev for instant HMR
 
 - **Vitest** (`core`): XML parser round-trips for all three component kinds (bundles, bare content, base64 payloads, unknown element types); GUID registry registration, lookup, and cross-reference search.
 - **Vitest** (`fno-client`): `/api/services` custom-service response parsing (solution/component listing, operation-name fallbacks, XML download extraction), path-key building, auth scope/authority helpers.
-- **Vitest** (`ui`): store/session helpers, format tree filtering, xlsx template parsing (skipped unless `scripts/fixtures/template.b64` exists — the integration test writes it).
+- **Vitest** (`ui`): store/session helpers, format tree filtering, drill-down expression breakdown and resolution, label reference normalisation and pool precedence, xlsx template parsing (skipped unless `scripts/fixtures/template.b64` exists — the integration test writes it).
 - **Integration** (`pnpm test:integration`): `scripts/integration-test.ts` runs against a live F&O environment; see the README.
 
 `pnpm test` at the root runs all three Vitest suites; `pnpm lint` runs `tsc --noEmit` in every package.

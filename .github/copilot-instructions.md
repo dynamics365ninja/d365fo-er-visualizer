@@ -5,10 +5,12 @@ This is a pnpm monorepo for visualizing and generating Dynamics 365 Finance & Op
 ## Workspace Structure
 
 - `packages/core/` — XML parser, GUID registry, TypeScript type definitions for all ER components
-- `packages/ui/` — React + Vite SPA (ConfigExplorer, DesignerView, PropertyInspector)
+- `packages/ui/` — React + Vite SPA (ConfigExplorer, DesignerView, PropertyInspector, DrillDownPanel)
+- `packages/fno-client/` — F&O client for the ER custom services under `/api/services` (not OData entities)
+- `packages/site/` — Next.js marketing site + user documentation; hosts the SPA at `/app` and the `/api/fno` edge proxy
+- `packages/design-tokens/` — CSS tokens and the theme switch shared by the SPA and the site
 - `packages/electron/` — Optional Electron shell for desktop use
-- `packages/fno-client/` — F&O OData/custom-service client for live API access
-- `scripts/` — PowerShell scripts for ER format generation/transformation
+- `scripts/` — `stage-app.mjs` (stages the SPA into the site) and `integration-test.ts` (live F&O integration test)
 - `docs/architecture.md` — Full system architecture documentation
 
 ## ER Configuration XML Structure
