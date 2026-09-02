@@ -3273,10 +3273,18 @@ function buildTreeForConfig(config: ERConfiguration, index: number, allConfigura
       children.push(...(inner.children ?? []));
     } else {
       // Multiple definitions — keep each visible under its own node so the
-      // user can tell the DataContainerDescriptor roots apart.
-      children.push(...definitions.map((definition, di) =>
-        buildMappingTree(definition, `${prefix}-mapping-${di}`, index, mm.number, allConfigurations),
-      ));
+      // user can tell the DataContainerDescriptor roots apart, and mark the
+      // one the loaded format actually binds to.
+      const usedDefinition = selectMappingDefinition(mm, allConfigurations);
+      const usedSuffix = locale === 'cs' ? '  ✓ použito načteným formátem' : '  ✓ used by loaded format';
+      children.push(...definitions.map((definition, di) => {
+        const node = buildMappingTree(definition, `${prefix}-mapping-${di}`, index, mm.number, allConfigurations);
+        if (definition === usedDefinition) {
+          node.icon = '⭐';
+          node.name += usedSuffix;
+        }
+        return node;
+      }));
     }
   }
 
@@ -3367,11 +3375,21 @@ function buildTreeForConfig(config: ERConfiguration, index: number, allConfigura
     const fmtDsNodes = fmtMap.formatMapping.datasources.map((ds, di) =>
       buildDatasourceTree(ds, `${prefix}-fmtds-${di}`, index, allConfigurations),
     );
-    const embeddedMappingNodes = fc.embeddedModelMappingVersions.flatMap((version, embeddedIndex) =>
-      getMappingDefinitions(version).map((definition, di) =>
-        buildMappingTree(definition, `${prefix}-embedded-mapping-${embeddedIndex}-${di}`, index, version.number, allConfigurations),
-      ),
-    );
+    const embeddedMappingNodes = fc.embeddedModelMappingVersions.flatMap((version, embeddedIndex) => {
+      const embeddedDefinitions = getMappingDefinitions(version);
+      const usedDefinition = embeddedDefinitions.length > 1
+        ? selectMappingDefinition(version, allConfigurations)
+        : null;
+      const usedSuffix = locale === 'cs' ? '  ✓ použito načteným formátem' : '  ✓ used by loaded format';
+      return embeddedDefinitions.map((definition, di) => {
+        const node = buildMappingTree(definition, `${prefix}-embedded-mapping-${embeddedIndex}-${di}`, index, version.number, allConfigurations);
+        if (usedDefinition && definition === usedDefinition) {
+          node.icon = '⭐';
+          node.name += usedSuffix;
+        }
+        return node;
+      });
+    });
 
     children.push(
       { id: `${prefix}-fmt-structure`, name: formatSectionLabels.outputStructure, icon: '📂', type: 'section', children: [formatTree] },

@@ -1041,7 +1041,7 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
    * The resolved datasource is just the model container — saying "Data source:
    * model" answers nothing. List the concrete D365FO sources instead: either
    * the ones referenced by the mapping formula, or (for container-level paths
-   * with no formula) every datasource of the matching mapping definition.
+   * with no formula) the sources used by the bindings under the selected path.
    */
   const resolvedDsIsModelOnly = Boolean(
     resolvedDs
@@ -1061,80 +1061,15 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
 
   const underlyingSources = useMemo((): UnderlyingSource[] => {
     if (!resolvedDsIsModelOnly) return [];
-    const out = new Map<string, UnderlyingSource>();
-    const add = (src: UnderlyingSource) => {
-      const badge = src.badge === 'userparameter' ? 'param' : src.badge;
-      const key = `${badge}::${src.name}::${src.detail ?? ''}`;
-      if (!out.has(key)) out.set(key, { ...src, badge, key });
-    };
-
-    // 1. Sources referenced by the mapping formula of the selected path.
-    if (mappingExpr) {
-      const tree = buildExpressionTree({
-        expression: mappingExpr,
-        configIndex: mappingCi,
-        configurations,
-        resolveModelPath,
-        resolveDatasource,
-      });
-      const walk = (node: TreeExprNode): void => {
-        if ((node.kind === 'datasource' || node.kind === 'calcfield' || node.kind === 'leaf')
-            && node.badge !== 'ds' && node.badge !== 'mapping' && node.badge !== 'model') {
-          add({
-            key: '',
-            name: node.label,
-            detail: node.sublabel,
-            badge: node.badge,
-            expression: node.expression,
-            configIndex: node.configIndex ?? mappingCi,
-          });
-        }
-        node.children.forEach(walk);
-      };
-      tree.children.forEach(walk);
-    }
-
-    // 2. Container-level path without a formula — list the datasources of the
-    //    mapping definition that matches the loaded format.
-    if (out.size === 0) {
-      const dsDetail = (ds: any): string | undefined =>
-        ds?.tableInfo?.tableName
-        ?? (ds?.enumInfo ? formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo) : undefined)
-        ?? ds?.classInfo?.className
-        ?? ds?.userParamInfo?.extendedDataTypeName
-        ?? (ds?.calculatedField?.expressionAsString ? String(ds.calculatedField.expressionAsString) : undefined);
-      configurations.forEach((config: any, ci: number) => {
-        const versions: any[] = config.content.kind === 'ModelMapping'
-          ? [config.content.version]
-          : config.content.kind === 'Format'
-            ? (config.content.embeddedModelMappingVersions ?? [])
-            : [];
-        const walkDs = (ds: any, pathPrefix: string): void => {
-          if (ds?.type === 'DataModel' || ds?.modelInfo) return;
-          const path = pathPrefix ? `${pathPrefix}.${ds.name}` : String(ds.name ?? '');
-          if (ds?.type === 'Container') {
-            // Containers such as "Tables" only group the real sources — list their children.
-            for (const child of ds.children ?? []) walkDs(child, path);
-            return;
-          }
-          add({
-            key: '',
-            name: ds.name,
-            detail: dsDetail(ds),
-            badge: dsTypeBadge(ds),
-            expression: path,
-            configIndex: ci,
-          });
-        };
-        for (const version of versions) {
-          const definition = selectMappingDefinition(version, configurations);
-          for (const ds of definition?.datasources ?? []) walkDs(ds, '');
-        }
-      });
-    }
-
-    return Array.from(out.values());
-  }, [resolvedDsIsModelOnly, mappingExpr, mappingCi, configurations, resolveModelPath, resolveDatasource]);
+    return collectUnderlyingSources({
+      mappingExpression: mappingExpr,
+      mappingConfigIndex: mappingCi,
+      selectedModelPath: cleanSelectedExpr,
+      configurations,
+      resolveModelPath,
+      resolveDatasource,
+    });
+  }, [resolvedDsIsModelOnly, mappingExpr, mappingCi, cleanSelectedExpr, configurations, resolveModelPath, resolveDatasource]);
 
   const virtualWindow = useMemo(() => {
     const visibleCount = Math.ceil(Math.max(1, listViewportHeight) / TREE_ITEM_ESTIMATED_HEIGHT);
@@ -1764,6 +1699,128 @@ function buildDsNode(
   }
 
   return dsNode;
+}
+
+/**
+ * Concrete D365FO sources behind a model-only resolution: either the sources
+ * referenced by the mapping formula, or (for container-level paths without a
+ * formula) the sources used by the bindings under the selected model path.
+ * Exported for tests.
+ */
+export function collectUnderlyingSources(options: {
+  mappingExpression: string | null;
+  mappingConfigIndex: number;
+  selectedModelPath: string;
+  configurations: any[];
+  resolveModelPath: (p: string) => any;
+  resolveDatasource: (n: string, ci: number) => any;
+}): Array<{ key: string; name: string; detail?: string; badge: string; expression?: string; configIndex: number }> {
+  const {
+    mappingExpression, mappingConfigIndex, selectedModelPath,
+    configurations, resolveModelPath, resolveDatasource,
+  } = options;
+
+  type Source = { key: string; name: string; detail?: string; badge: string; expression?: string; configIndex: number };
+  const out = new Map<string, Source>();
+  const add = (src: Source) => {
+    const badge = src.badge === 'userparameter' ? 'param' : src.badge;
+    const key = `${badge}::${src.name}::${src.detail ?? ''}`;
+    if (!out.has(key)) out.set(key, { ...src, badge, key });
+  };
+
+  const collectFromExpression = (expression: string, configIndex: number): void => {
+    const tree = buildExpressionTree({
+      expression,
+      configIndex,
+      configurations,
+      resolveModelPath,
+      resolveDatasource,
+    });
+    const walk = (node: TreeExprNode): void => {
+      if ((node.kind === 'datasource' || node.kind === 'calcfield' || node.kind === 'leaf')
+          && node.badge !== 'ds' && node.badge !== 'mapping' && node.badge !== 'model') {
+        add({
+          key: '',
+          name: node.label,
+          detail: node.sublabel,
+          badge: node.badge,
+          expression: node.expression,
+          configIndex: node.configIndex ?? configIndex,
+        });
+      }
+      node.children.forEach(walk);
+    };
+    tree.children.forEach(walk);
+  };
+
+  // 1. Sources referenced by the mapping formula of the selected path.
+  if (mappingExpression) {
+    collectFromExpression(mappingExpression, mappingConfigIndex);
+  }
+
+  // 2. Container-level path without a formula — list only the sources used by
+  //    the mapping bindings *under the selected model path*, not every
+  //    datasource of the definition.
+  if (out.size === 0) {
+    const splitPathSegments = (path: string): string[] => {
+      const segments: string[] = [];
+      let current = '';
+      let quote: string | null = null;
+      for (const ch of path) {
+        if (quote) {
+          if (ch === quote) quote = null;
+          else current += ch;
+          continue;
+        }
+        if (ch === "'" || ch === '"') { quote = ch; continue; }
+        if (ch === '.' || ch === '/' || ch === '\\') {
+          if (current.trim()) segments.push(current.trim().toLowerCase());
+          current = '';
+          continue;
+        }
+        current += ch;
+      }
+      if (current.trim()) segments.push(current.trim().toLowerCase());
+      return segments;
+    };
+
+    const selectedSegments = splitPathSegments(selectedModelPath)
+      .filter(seg => seg !== 'model' && seg !== 'data');
+    const matchesSelectedPath = (bindingPath: unknown): boolean => {
+      if (selectedSegments.length === 0) return true;
+      const bindingSegments = splitPathSegments(String(bindingPath ?? ''))
+        .filter(seg => seg !== 'data');
+      // Allow wrapper roots (e.g. "Invoice.") on either side by trying
+      // shifted starts, mirroring resolveModelPath.
+      for (let start = 0; start < selectedSegments.length; start++) {
+        const candidate = selectedSegments.slice(start);
+        if (candidate.length <= bindingSegments.length
+            && candidate.every((seg, i) => bindingSegments[i] === seg)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    configurations.forEach((config: any, ci: number) => {
+      const versions: any[] = config.content.kind === 'ModelMapping'
+        ? [config.content.version]
+        : config.content.kind === 'Format'
+          ? (config.content.embeddedModelMappingVersions ?? [])
+          : [];
+      for (const version of versions) {
+        const definition = selectMappingDefinition(version, configurations);
+        const bindings = ((definition?.bindings ?? []) as any[])
+          .filter(binding => matchesSelectedPath(binding?.path));
+        for (const binding of bindings.slice(0, 80)) {
+          const expression = String(binding?.expressionAsString ?? '').trim();
+          if (expression) collectFromExpression(expression, ci);
+        }
+      }
+    });
+  }
+
+  return Array.from(out.values());
 }
 
 /**
