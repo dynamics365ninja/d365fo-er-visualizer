@@ -46,7 +46,7 @@ import {
   FlowRegular,
   AppsListDetailRegular,
 } from '@fluentui/react-icons';
-import { useAppStore, resolveDeepExpression } from '../state/store';
+import { useAppStore, resolveDeepExpression, selectMappingDefinition } from '../state/store';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { resolveLabel, buildLabelPool, labelDisplayText } from '../utils/label-resolver';
@@ -109,6 +109,7 @@ function localizeBadgeLabel(badge: string): string {
     join: 'Spojení',
     object: 'Objekt',
     userparameter: 'Uživatelský parametr',
+    param: 'Uživatelský parametr',
     importformat: 'Importní formát',
     unknown: 'Neznámé',
   };
@@ -122,6 +123,7 @@ function localizeBadgeLabel(badge: string): string {
     join: 'Join',
     object: 'Object',
     userparameter: 'User parameter',
+    param: 'User parameter',
     importformat: 'Import format',
     unknown: 'Unknown',
   };
@@ -1035,6 +1037,105 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
     return entries;
   }, [locale, resolvedDs]);
 
+  /**
+   * The resolved datasource is just the model container — saying "Data source:
+   * model" answers nothing. List the concrete D365FO sources instead: either
+   * the ones referenced by the mapping formula, or (for container-level paths
+   * with no formula) every datasource of the matching mapping definition.
+   */
+  const resolvedDsIsModelOnly = Boolean(
+    resolvedDs
+    && !resolvedDs.tableInfo && !resolvedDs.enumInfo && !resolvedDs.classInfo
+    && !resolvedDs.calculatedField && !resolvedDs.userParamInfo && !resolvedDs.groupByInfo
+    && (resolvedDs.type === 'DataModel' || resolvedDs.modelInfo),
+  );
+
+  interface UnderlyingSource {
+    key: string;
+    name: string;
+    detail?: string;
+    badge: string;
+    expression?: string;
+    configIndex: number;
+  }
+
+  const underlyingSources = useMemo((): UnderlyingSource[] => {
+    if (!resolvedDsIsModelOnly) return [];
+    const out = new Map<string, UnderlyingSource>();
+    const add = (src: UnderlyingSource) => {
+      const badge = src.badge === 'userparameter' ? 'param' : src.badge;
+      const key = `${badge}::${src.name}::${src.detail ?? ''}`;
+      if (!out.has(key)) out.set(key, { ...src, badge, key });
+    };
+
+    // 1. Sources referenced by the mapping formula of the selected path.
+    if (mappingExpr) {
+      const tree = buildExpressionTree({
+        expression: mappingExpr,
+        configIndex: mappingCi,
+        configurations,
+        resolveModelPath,
+        resolveDatasource,
+      });
+      const walk = (node: TreeExprNode): void => {
+        if ((node.kind === 'datasource' || node.kind === 'calcfield' || node.kind === 'leaf')
+            && node.badge !== 'ds' && node.badge !== 'mapping' && node.badge !== 'model') {
+          add({
+            key: '',
+            name: node.label,
+            detail: node.sublabel,
+            badge: node.badge,
+            expression: node.expression,
+            configIndex: node.configIndex ?? mappingCi,
+          });
+        }
+        node.children.forEach(walk);
+      };
+      tree.children.forEach(walk);
+    }
+
+    // 2. Container-level path without a formula — list the datasources of the
+    //    mapping definition that matches the loaded format.
+    if (out.size === 0) {
+      const dsDetail = (ds: any): string | undefined =>
+        ds?.tableInfo?.tableName
+        ?? (ds?.enumInfo ? formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo) : undefined)
+        ?? ds?.classInfo?.className
+        ?? ds?.userParamInfo?.extendedDataTypeName
+        ?? (ds?.calculatedField?.expressionAsString ? String(ds.calculatedField.expressionAsString) : undefined);
+      configurations.forEach((config: any, ci: number) => {
+        const versions: any[] = config.content.kind === 'ModelMapping'
+          ? [config.content.version]
+          : config.content.kind === 'Format'
+            ? (config.content.embeddedModelMappingVersions ?? [])
+            : [];
+        const walkDs = (ds: any, pathPrefix: string): void => {
+          if (ds?.type === 'DataModel' || ds?.modelInfo) return;
+          const path = pathPrefix ? `${pathPrefix}.${ds.name}` : String(ds.name ?? '');
+          if (ds?.type === 'Container') {
+            // Containers such as "Tables" only group the real sources — list their children.
+            for (const child of ds.children ?? []) walkDs(child, path);
+            return;
+          }
+          add({
+            key: '',
+            name: ds.name,
+            detail: dsDetail(ds),
+            badge: dsTypeBadge(ds),
+            expression: path,
+            configIndex: ci,
+          });
+        };
+        for (const version of versions) {
+          const definition = selectMappingDefinition(version, configurations);
+          for (const ds of definition?.datasources ?? []) walkDs(ds, '');
+        }
+      });
+    }
+
+    return Array.from(out.values());
+  }, [resolvedDsIsModelOnly, mappingExpr, mappingCi, configurations, resolveModelPath, resolveDatasource]);
+
   const virtualWindow = useMemo(() => {
     const visibleCount = Math.ceil(Math.max(1, listViewportHeight) / TREE_ITEM_ESTIMATED_HEIGHT);
     const start = Math.max(0, Math.floor(listScrollTop / TREE_ITEM_ESTIMATED_HEIGHT) - TREE_OVERSCAN);
@@ -1202,6 +1303,38 @@ function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps)
                       </div>
                     )}
                   </div>
+                  {underlyingSources.length > 0 && (
+                    <div className="dd-underlying">
+                      <div className="dd-underlying__head">
+                        {locale === 'cs' ? 'Tabulky a datové zdroje D365FO' : 'D365FO tables and data sources'}
+                      </div>
+                      <ul className="dd-underlying__list">
+                        {underlyingSources.map((src) => (
+                          <li key={src.key} className="dd-underlying__item">
+                            <span className={`badge badge-${src.badge}`}>{localizeBadgeLabel(src.badge)}</span>
+                            {src.expression ? (
+                              <button
+                                type="button"
+                                className="dd-underlying__link"
+                                onClick={() => pushWithContext({
+                                  label: src.name,
+                                  expression: src.expression!,
+                                  configIndex: src.configIndex,
+                                })}
+                              >
+                                {src.name}
+                              </button>
+                            ) : (
+                              <span className="dd-underlying__name">{src.name}</span>
+                            )}
+                            {src.detail && src.detail !== src.name && (
+                              <span className="dd-underlying__detail" title={src.detail}>{src.detail}</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   {datasourceDefinitionEntries.map((entry) => (
                     <div key={entry.key} className="dd-ds-formula">
                       <div className="dd-ds-formula__label">
