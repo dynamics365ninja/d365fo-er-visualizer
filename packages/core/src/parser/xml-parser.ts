@@ -740,10 +740,29 @@ function parseContainer(node: any): ERDataContainerDescriptor {
 // ─── Model Mapping ───
 
 function parseModelMappingVersion(root: any): ERModelMappingVersion {
-  const vNode = selectVersionNode(root, 'ERModelMappingVersion');
-  if (!vNode) throw new Error('Missing ERModelMappingVersion element');
+  const nodes = selectReferencedVersionNodes(root, 'ERModelMappingVersion');
+  if (nodes.length === 0) throw new Error('Missing ERModelMappingVersion element');
 
-  return parseModelMappingVersionNode(vNode);
+  const primaryNode = selectVersionNode(root, 'ERModelMappingVersion');
+  const primary = parseModelMappingVersionNode(primaryNode);
+  if (nodes.length === 1) return primary;
+
+  // A solution may store each DataContainerDescriptor definition as its own
+  // ERModelMappingVersion component (sibling version nodes). Merge the
+  // definitions of every referenced component so consumers can pick the one
+  // matching a format's descriptor instead of seeing only the first node.
+  const seen = new Set<string>();
+  const mappings: ERModelMapping[] = [];
+  for (const node of nodes) {
+    const version = node === primaryNode ? primary : parseModelMappingVersionNode(node);
+    for (const mapping of version.mappings ?? [version.mapping]) {
+      const key = mapping.id || `${mapping.name}::${mapping.dataContainerDescriptor}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      mappings.push(mapping);
+    }
+  }
+  return { ...primary, mappings };
 }
 
 function parseModelMappingVersionNode(vNode: any): ERModelMappingVersion {
