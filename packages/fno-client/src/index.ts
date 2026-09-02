@@ -20,3 +20,4 @@ export {
   extractReferencedDataModelGuids,
   pickDisplayVersion,
 } from './er-services';
+export { DEFAULT_SEED_MODELS } from './seed-models';

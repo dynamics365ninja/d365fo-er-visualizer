@@ -563,13 +563,16 @@ interface MappingSource {
 
 function getDatasourcePoolsForConfig(config: ERConfiguration): any[][] {
   if (config.content.kind === 'ModelMapping') {
-    return [(config.content as ERModelMappingContent).version.mapping.datasources];
+    const version = (config.content as ERModelMappingContent).version;
+    return getMappingDefinitions(version).map(mapping => mapping.datasources);
   }
 
   if (config.content.kind === 'Format') {
     const content = config.content as ERFormatContent;
     return [
-      ...content.embeddedModelMappingVersions.map(version => version.mapping.datasources),
+      ...content.embeddedModelMappingVersions.flatMap(version =>
+        getMappingDefinitions(version).map(mapping => mapping.datasources),
+      ),
       content.formatMappingVersion.formatMapping.datasources,
     ].filter(pool => pool.length > 0);
   }
@@ -577,25 +580,98 @@ function getDatasourcePoolsForConfig(config: ERConfiguration): any[][] {
   return [];
 }
 
-function getMappingSourcesForConfig(config: ERConfiguration, configIndex: number): MappingSource[] {
+/** All mapping definitions of a model-mapping version (older cached data may miss `mappings`). */
+function getMappingDefinitions(version: any): any[] {
+  if (Array.isArray(version?.mappings) && version.mappings.length > 0) return version.mappings;
+  return version?.mapping ? [version.mapping] : [];
+}
+
+/**
+ * DataContainerDescriptor names referenced by the `model` datasources of a
+ * format mapping — i.e. which mapping definition the format actually binds to.
+ */
+function collectModelDescriptorNames(datasources: any[], out: Set<string>): void {
+  for (const ds of datasources ?? []) {
+    const name = ds?.modelInfo?.dataContainerDescriptorName?.trim();
+    if (name) out.add(name.toLowerCase());
+    if (ds?.children?.length) collectModelDescriptorNames(ds.children, out);
+  }
+}
+
+function getFormatDescriptorNames(content: ERFormatContent): Set<string> {
+  const out = new Set<string>();
+  collectModelDescriptorNames(content.formatMappingVersion.formatMapping.datasources, out);
+  return out;
+}
+
+/** Descriptor names referenced by every loaded format configuration. */
+function getAllFormatDescriptorNames(configurations: ERConfiguration[]): Set<string> {
+  const out = new Set<string>();
+  for (const config of configurations) {
+    if (config.content.kind !== 'Format') continue;
+    for (const name of getFormatDescriptorNames(config.content as ERFormatContent)) out.add(name);
+  }
+  return out;
+}
+
+/**
+ * Order mapping definitions so the one whose `DataContainerDescriptor` matches
+ * a format's `model` datasource comes first, instead of always taking the
+ * first definition in the file.
+ */
+function orderMappingDefinitions(definitions: any[], preferredDescriptors: ReadonlySet<string>): any[] {
+  if (definitions.length <= 1 || preferredDescriptors.size === 0) return definitions;
+  const matches = (m: any) => preferredDescriptors.has((m?.dataContainerDescriptor ?? '').trim().toLowerCase());
+  return [...definitions].sort((left, right) => Number(matches(right)) - Number(matches(left)));
+}
+
+/**
+ * Pick the mapping definition of a model-mapping version that matches one of
+ * the loaded formats (falls back to the first definition). Exported for the
+ * designer views.
+ */
+export function selectMappingDefinition(version: any, configurations: ERConfiguration[]): any {
+  const definitions = getMappingDefinitions(version);
+  if (definitions.length <= 1) return definitions[0] ?? version?.mapping;
+  return orderMappingDefinitions(definitions, getAllFormatDescriptorNames(configurations))[0];
+}
+
+function getMappingSourcesForConfig(
+  config: ERConfiguration,
+  configIndex: number,
+  preferredDescriptors?: ReadonlySet<string>,
+): MappingSource[] {
   if (config.content.kind === 'ModelMapping') {
-    const mapping = (config.content as ERModelMappingContent).version.mapping;
-    return [{ mapping, configIndex, configName: config.solutionVersion.solution.name }];
+    const version = (config.content as ERModelMappingContent).version;
+    const definitions = orderMappingDefinitions(getMappingDefinitions(version), preferredDescriptors ?? new Set());
+    return definitions.map(mapping => ({
+      mapping,
+      configIndex,
+      configName: config.solutionVersion.solution.name,
+    }));
   }
 
   if (config.content.kind === 'Format') {
-    return (config.content as ERFormatContent).embeddedModelMappingVersions.map(version => ({
-      mapping: version.mapping,
-      configIndex,
-      configName: `${config.solutionVersion.solution.name} • ${version.mapping.name}`,
-    }));
+    const content = config.content as ERFormatContent;
+    // Prefer the definition the format's own `model` datasource points at.
+    const ownDescriptors = getFormatDescriptorNames(content);
+    return content.embeddedModelMappingVersions.flatMap(version =>
+      orderMappingDefinitions(getMappingDefinitions(version), ownDescriptors).map(mapping => ({
+        mapping,
+        configIndex,
+        configName: `${config.solutionVersion.solution.name} • ${mapping.name}`,
+      })),
+    );
   }
 
   return [];
 }
 
 function getAllMappingSources(configurations: ERConfiguration[]): MappingSource[] {
-  return configurations.flatMap((config, configIndex) => getMappingSourcesForConfig(config, configIndex));
+  const preferredDescriptors = getAllFormatDescriptorNames(configurations);
+  return configurations.flatMap((config, configIndex) =>
+    getMappingSourcesForConfig(config, configIndex, preferredDescriptors),
+  );
 }
 
 function findNodeById(nodes: TreeNode[], id: string): TreeNode | null {
@@ -1768,11 +1844,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       return out;
     }
 
+    const preferredDescriptors = getAllFormatDescriptorNames(state.configurations);
     for (let ci = 0; ci < state.configurations.length; ci++) {
       const config = state.configurations[ci];
       const configName = config.solutionVersion.solution.name;
 
-      for (const source of getMappingSourcesForConfig(config, ci)) {
+      for (const source of getMappingSourcesForConfig(config, ci, preferredDescriptors)) {
         const mm = source.mapping;
         const matchingDs = collectMatchingDs(mm.datasources);
 
@@ -2039,22 +2116,23 @@ function collectExpressionTextMatches(state: AppState, query: string): WhereUsed
     const configName = config.solutionVersion.solution.name;
 
     if (config.content.kind === 'ModelMapping') {
-      const mm = (config.content as ERModelMappingContent).version.mapping;
-      for (const b of mm.bindings ?? []) {
-        const expr = b.expressionAsString ?? '';
-        if (expr && re.test(expr)) {
-          modelPaths.push({
-            path: b.path,
-            expr,
-            configIndex: ci,
-            configName,
-          });
+      for (const mm of getMappingDefinitions((config.content as ERModelMappingContent).version)) {
+        for (const b of mm.bindings ?? []) {
+          const expr = b.expressionAsString ?? '';
+          if (expr && re.test(expr)) {
+            modelPaths.push({
+              path: b.path,
+              expr,
+              configIndex: ci,
+              configName,
+            });
+          }
         }
+        // Datasource-level expressions (calc fields, user params, groupBy aggregations)
+        scanDatasourceExpressions(mm.datasources ?? [], re, ci, configName, state, modelPaths);
+        // Validations
+        scanValidations(mm.validations ?? [], re, ci, configName, modelPaths);
       }
-      // Datasource-level expressions (calc fields, user params, groupBy aggregations)
-      scanDatasourceExpressions(mm.datasources ?? [], re, ci, configName, state, modelPaths);
-      // Validations
-      scanValidations(mm.validations ?? [], re, ci, configName, modelPaths);
     } else if (config.content.kind === 'Format') {
       const fc = config.content as ERFormatContent;
       const fmtMap = fc.formatMappingVersion.formatMapping;
@@ -2084,19 +2162,21 @@ function collectExpressionTextMatches(state: AppState, query: string): WhereUsed
       scanDatasourceExpressions(fmtMap.datasources ?? [], re, ci, configName, state, modelPaths);
       // Embedded model mappings inside format configs
       for (const version of fc.embeddedModelMappingVersions ?? []) {
-        for (const b of version.mapping?.bindings ?? []) {
-          const expr = b.expressionAsString ?? '';
-          if (expr && re.test(expr)) {
-            modelPaths.push({
-              path: b.path,
-              expr,
-              configIndex: ci,
-              configName,
-            });
+        for (const mapping of getMappingDefinitions(version)) {
+          for (const b of mapping.bindings ?? []) {
+            const expr = b.expressionAsString ?? '';
+            if (expr && re.test(expr)) {
+              modelPaths.push({
+                path: b.path,
+                expr,
+                configIndex: ci,
+                configName,
+              });
+            }
           }
+          scanDatasourceExpressions(mapping.datasources ?? [], re, ci, configName, state, modelPaths);
+          scanValidations(mapping.validations ?? [], re, ci, configName, modelPaths);
         }
-        scanDatasourceExpressions(version.mapping?.datasources ?? [], re, ci, configName, state, modelPaths);
-        scanValidations(version.mapping?.validations ?? [], re, ci, configName, modelPaths);
       }
     }
   }
@@ -3037,8 +3117,9 @@ function countGroupedBindings(node: BindingGroupNode): number {
 }
 
 function buildGroupedBindingSections(node: BindingGroupNode, prefix: string, level: number): TreeNode[] {
+  // Keep insertion order (= order of appearance in the ER configuration)
+  // instead of sorting alphabetically.
   const sections = Array.from(node.children.entries())
-    .sort(([left], [right]) => left.localeCompare(right))
     .map(([segment, childNode], index) => {
       const total = countGroupedBindings(childNode);
       const childPrefix = `${prefix}-${level}-${index}`;
@@ -3051,7 +3132,7 @@ function buildGroupedBindingSections(node: BindingGroupNode, prefix: string, lev
         data: { sectionKind: 'bindingGroup', sectionKey: segment, sectionLevel: level },
         children: [
           ...buildGroupedBindingSections(childNode, childPrefix, level + 1),
-          ...childNode.bindings.sort((left, right) => left.name.localeCompare(right.name)),
+          ...childNode.bindings,
         ],
       };
     });
@@ -3115,10 +3196,12 @@ function buildMappingTree(mapping: any, prefix: string, configIndex: number, ver
   }));
 
   const versionSuffix = versionNumber != null && versionNumber > 0 ? `  (v${versionNumber})` : '';
+  const descriptor = (mapping.dataContainerDescriptor ?? '').trim();
+  const descriptorSuffix = descriptor && descriptor !== mapping.name ? ` [${descriptor}]` : '';
 
   return {
     id: prefix,
-    name: `${mappingSectionLabels.title}: ${mapping.name}${versionSuffix}`,
+    name: `${mappingSectionLabels.title}: ${mapping.name}${descriptorSuffix}${versionSuffix}`,
     icon: '🔗',
     type: 'mapping',
     configIndex,
@@ -3184,8 +3267,17 @@ function buildTreeForConfig(config: ERConfiguration, index: number, allConfigura
 
   if (config.content.kind === 'ModelMapping') {
     const mm = (config.content as ERModelMappingContent).version;
-    const inner = buildMappingTree(mm.mapping, `${prefix}-mapping`, index, mm.number, allConfigurations);
-    children.push(...(inner.children ?? []));
+    const definitions = getMappingDefinitions(mm);
+    if (definitions.length === 1) {
+      const inner = buildMappingTree(definitions[0], `${prefix}-mapping`, index, mm.number, allConfigurations);
+      children.push(...(inner.children ?? []));
+    } else {
+      // Multiple definitions — keep each visible under its own node so the
+      // user can tell the DataContainerDescriptor roots apart.
+      children.push(...definitions.map((definition, di) =>
+        buildMappingTree(definition, `${prefix}-mapping-${di}`, index, mm.number, allConfigurations),
+      ));
+    }
   }
 
   const displayName = sol.name;
@@ -3275,8 +3367,10 @@ function buildTreeForConfig(config: ERConfiguration, index: number, allConfigura
     const fmtDsNodes = fmtMap.formatMapping.datasources.map((ds, di) =>
       buildDatasourceTree(ds, `${prefix}-fmtds-${di}`, index, allConfigurations),
     );
-    const embeddedMappingNodes = fc.embeddedModelMappingVersions.map((version, embeddedIndex) =>
-      buildMappingTree(version.mapping, `${prefix}-embedded-mapping-${embeddedIndex}`, index, version.number, allConfigurations),
+    const embeddedMappingNodes = fc.embeddedModelMappingVersions.flatMap((version, embeddedIndex) =>
+      getMappingDefinitions(version).map((definition, di) =>
+        buildMappingTree(definition, `${prefix}-embedded-mapping-${embeddedIndex}-${di}`, index, version.number, allConfigurations),
+      ),
     );
 
     children.push(

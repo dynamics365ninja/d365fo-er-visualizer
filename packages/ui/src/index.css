@@ -2473,6 +2473,18 @@ body {
   border-color: var(--er-border-strong);
 }
 
+/* Expandable rows must be visibly different from plain leaf rows — a subtle
+   accent tint plus a stronger left edge marks "this one opens". */
+.mm-tree-row.mm-tree-expandable {
+  background: color-mix(in srgb, var(--accent) 7%, var(--er-surface));
+  border-left: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.mm-tree-row.mm-tree-expandable:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--er-surface));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--er-border-strong));
+}
+
 .mm-tree-branch-name {
   flex: 1;
   min-width: 0;

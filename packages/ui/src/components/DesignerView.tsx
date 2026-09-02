@@ -26,7 +26,7 @@ import {
   TextBulletListSquareRegular,
 } from '@fluentui/react-icons';
 import '@xyflow/react/dist/style.css';
-import { useAppStore, resolveDeepExpression } from '../state/store';
+import { useAppStore, resolveDeepExpression, selectMappingDefinition } from '../state/store';
 import { ClickablePath } from './ClickablePath';
 import { DrillDownBody, DrillDownTrigger } from './DrillDownPanel';
 import { PropertyInspector } from './PropertyInspector';
@@ -150,7 +150,7 @@ export function DesignerView() {
   }
 
   if (config.kind === 'DataModel') return <ModelDesigner config={config} focusNode={activeNode} />;
-  if (config.kind === 'ModelMapping') return <MappingDesigner mapping={(config.content as ERModelMappingContent).version.mapping} configIndex={tab.configIndex} focusNode={activeNode} />;
+  if (config.kind === 'ModelMapping') return <MappingDesigner mapping={selectMappingDefinition((config.content as ERModelMappingContent).version, configs)} configIndex={tab.configIndex} focusNode={activeNode} />;
   if (config.kind === 'Format') return <FormatDesigner config={config} configIndex={tab.configIndex} focusNode={activeNode} />;
 
   return <div style={{ padding: 16 }}>{t.designerUnsupportedView(config.kind)}</div>;
@@ -189,7 +189,7 @@ function FocusedNodeTab({ node }: { node: any }) {
   }
   if (node.type === 'file' && config.kind === 'ModelMapping' && node.configIndex != null) {
     const mappingContent = config.content as { version?: { mapping?: unknown } };
-    const mapping = mappingContent.version?.mapping;
+    const mapping = mappingContent.version ? selectMappingDefinition(mappingContent.version, configs) : undefined;
     if (mapping) {
       return <MappingDesigner mapping={mapping} configIndex={node.configIndex} focusNode={focusNode} />;
     }
@@ -949,12 +949,12 @@ function buildBindingTree(bindings: any[]): BindingTreeNode[] {
   for (const b of bindings) ensure(b.path).binding = b;
 
   const tally = (node: BindingTreeNode): number => {
-    node.children.sort((a, b) => a.name.localeCompare(b.name));
+    // Children keep insertion order — i.e. the order in which the paths
+    // appear in the ER configuration — instead of an alphabetical sort.
     node.count = (node.binding ? 1 : 0) + node.children.reduce((sum, c) => sum + tally(c), 0);
     return node.count;
   };
   for (const root of roots) tally(root);
-  roots.sort((a, b) => a.name.localeCompare(b.name));
   return roots;
 }
 
@@ -1117,6 +1117,20 @@ function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; co
           {locale === 'cs' ? 'Mapování modelu' : 'Model mapping'}
         </span>
         <div className="fmt-header-stats">
+          {(mm.dataContainerDescriptor || mm.name) && (
+            <span
+              className="fmt-stat"
+              title={locale === 'cs'
+                ? 'Definice mapování (DataContainerDescriptor — kořenový kontejner datového modelu)'
+                : 'Mapping definition (DataContainerDescriptor — root container of the data model)'}
+            >
+              {locale === 'cs' ? 'Definice' : 'Definition'}: {
+                mm.name && mm.dataContainerDescriptor && mm.name !== mm.dataContainerDescriptor
+                  ? `${mm.name} (${mm.dataContainerDescriptor})`
+                  : (mm.dataContainerDescriptor || mm.name)
+              }
+            </span>
+          )}
           <span className="fmt-stat">{t.bindings}: {mm.bindings.length}</span>
           <span className="fmt-stat">{t.dataSources}: {mm.datasources.length}</span>
           {mm.validations?.length > 0 && (
@@ -1268,6 +1282,7 @@ function BindingTreeRows({
   const classes = [
     'mm-tree-row',
     binding ? 'mm-binding-row' : 'mm-tree-branch',
+    hasChildren ? 'mm-tree-expandable' : '',
     isFocused ? 'search-match' : '',
     navFlash ? 'nav-flash' : '',
   ].filter(Boolean).join(' ');
@@ -1298,7 +1313,12 @@ function BindingTreeRows({
             <span className="mm-tree-toggle mm-tree-toggle--leaf" aria-hidden />
           )}
           <span className={binding ? 'mm-binding-name' : 'mm-tree-branch-name'}>{node.name}</span>
-          {hasChildren && <span className="mm-group-count">{node.count}</span>}
+          {hasChildren && (
+            <span
+              className="mm-group-count"
+              title={locale === 'cs' ? `Počet vazeb v této větvi: ${node.count}` : `Number of bindings in this branch: ${node.count}`}
+            >{node.count}</span>
+          )}
           {binding && (
             <DrillDownTrigger
               expression={binding.expressionAsString}
@@ -1387,8 +1407,9 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
     configurations.forEach((cfg, idx) => {
       if (idx === configIndex) return;
       if (cfg.content.kind !== 'ModelMapping') return;
-      const mm = (cfg.content as ERModelMappingContent).version.mapping;
-      if (hasImportFormatDatasource(mm.datasources ?? [], normalizedFormatId)) {
+      const version = (cfg.content as ERModelMappingContent).version;
+      const definitions: any[] = (version as any).mappings?.length ? (version as any).mappings : [version.mapping];
+      if (definitions.some(mm => hasImportFormatDatasource(mm?.datasources ?? [], normalizedFormatId))) {
         result.push({ name: cfg.solutionVersion.solution.name, configIdx: idx });
       }
     });
@@ -3938,19 +3959,26 @@ function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: n
 
     const sources: Array<{ sourceName: string; sourceConfigIndex: number; bindings: any[] }> = [];
     if (cfg.content.kind === 'ModelMapping') {
-      sources.push({
-        sourceName: cfg.solutionVersion.solution.name,
-        sourceConfigIndex: configIndex,
-        bindings: cfg.content.version.mapping.bindings ?? [],
-      });
+      const version = cfg.content.version as any;
+      const definitions: any[] = version.mappings?.length ? version.mappings : [version.mapping];
+      for (const mapping of definitions) {
+        sources.push({
+          sourceName: cfg.solutionVersion.solution.name,
+          sourceConfigIndex: configIndex,
+          bindings: mapping?.bindings ?? [],
+        });
+      }
     }
     if (cfg.content.kind === 'Format') {
       for (const version of cfg.content.embeddedModelMappingVersions ?? []) {
-        sources.push({
-          sourceName: `${cfg.solutionVersion.solution.name} • ${version.mapping.name}`,
-          sourceConfigIndex: configIndex,
-          bindings: version.mapping.bindings ?? [],
-        });
+        const definitions: any[] = (version as any).mappings?.length ? (version as any).mappings : [version.mapping];
+        for (const mapping of definitions) {
+          sources.push({
+            sourceName: `${cfg.solutionVersion.solution.name} • ${mapping?.name ?? ''}`,
+            sourceConfigIndex: configIndex,
+            bindings: mapping?.bindings ?? [],
+          });
+        }
       }
     }
 

@@ -146,18 +146,20 @@ export class GUIDRegistry {
         componentKind: ck,
       });
 
-      // Model reference
-      this.addCrossRef({
-        target: c.version.mapping.modelId,
-        targetType: 'GUID',
-        sourceConfigPath: fp,
-        sourceComponent: c.version.mapping.name,
-        sourceContext: 'Model mapping references data model',
-      });
+      for (const mapping of c.version.mappings ?? [c.version.mapping]) {
+        // Model reference
+        this.addCrossRef({
+          target: mapping.modelId,
+          targetType: 'GUID',
+          sourceConfigPath: fp,
+          sourceComponent: mapping.name,
+          sourceContext: 'Model mapping references data model',
+        });
 
-      this.indexDatasources(c.version.mapping.datasources, fp);
-      this.indexBindings(c.version.mapping.bindings, fp, c.version.mapping.name);
-      this.indexValidations(c.version.mapping.validations, fp);
+        this.indexDatasources(mapping.datasources, fp);
+        this.indexBindings(mapping.bindings, fp, mapping.name);
+        this.indexValidations(mapping.validations, fp);
+      }
     }
 
     if (c.kind === 'Format') {

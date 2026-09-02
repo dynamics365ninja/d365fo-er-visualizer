@@ -16,6 +16,12 @@ export interface FnoConnection {
   lastUsedAt?: number;
   /** Creation time (ms since epoch). */
   createdAt: number;
+  /**
+   * Extra root DataModel names to probe in addition to the built-in
+   * `DEFAULT_SEED_MODELS` list when enumerating ER solutions. Persisted with
+   * the profile so custom models are found automatically on the next load.
+   */
+  extraRoots?: string[];
 }
 
 /** ER solution row returned from `ERSolutionEntity`. */
