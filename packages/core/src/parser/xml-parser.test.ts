@@ -510,6 +510,39 @@ describe('parseERConfiguration', () => {
     expect(config.content.version.mapping.name).toBe('Invoice');
   });
 
+  it('merges definitions from sibling ERModelMappingVersion components', () => {
+    const versionNode = (id: string, name: string, descriptor: string) => `
+      <ERModelMappingVersion ID.="{${id}},1" DateTime="2026-04-14T12:00:00" Description="${name}" Number="1">
+        <Mapping>
+          <ERModelMapping ID.="{${id}}" Name="${name}" DataContainerDescriptor="${descriptor}" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1">
+            <Binding>
+              <ERDataContainerBinding>
+                <Contents.>
+                  <ERDataContainerPathBinding ExpressionAsString="\"x\"" Path="${descriptor}/Value" />
+                </Contents.>
+              </ERDataContainerBinding>
+            </Binding>
+          </ERModelMapping>
+        </Mapping>
+      </ERModelMappingVersion>
+    `;
+    const xml = buildSolutionEnvelope(
+      versionNode('MAP-A', 'Commercial invoice', 'TMSCommercialInvoice')
+      + versionNode('MAP-B', 'Customer invoice', 'InvoiceCustomer')
+      + versionNode('MAP-C', 'Sales invoice', 'SalesInvoice'),
+      { contentRefIds: ['{MAP-A}', '{MAP-B}', '{MAP-C}'] },
+    );
+
+    const config = parseERConfiguration(xml, 'sibling-versions.xml');
+    if (config.content.kind !== 'ModelMapping') {
+      throw new Error('Expected model mapping content');
+    }
+
+    expect(config.content.version.mappings.map(m => m.dataContainerDescriptor))
+      .toEqual(['TMSCommercialInvoice', 'InvoiceCustomer', 'SalesInvoice']);
+    expect(config.content.version.mappings[2]?.bindings[0]?.path).toBe('SalesInvoice/Value');
+  });
+
   it('treats bundles with model mapping plus format refs as format configurations', () => {
     const xml = buildSolutionEnvelope(`
       <ERModelMappingVersion ID.="{FORMAT-MAP-DS},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
