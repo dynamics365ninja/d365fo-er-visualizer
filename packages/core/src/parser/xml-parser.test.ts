@@ -472,6 +472,44 @@ describe('parseERConfiguration', () => {
     expect(config.content.version.mapping.name).toBe('Old mapping');
   });
 
+  it('parses every ERModelMapping definition of a single mapping version', () => {
+    const xml = buildSolutionEnvelope(`
+      <ERModelMappingVersion ID.="{MAP},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERModelMapping ID.="{DEF-A}" Name="Invoice" DataContainerDescriptor="Invoice" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1">
+            <Binding>
+              <ERDataContainerBinding>
+                <Contents.>
+                  <ERDataContainerPathBinding ExpressionAsString="\"a\"" Path="Invoice/Value" />
+                </Contents.>
+              </ERDataContainerBinding>
+            </Binding>
+          </ERModelMapping>
+          <ERModelMapping ID.="{DEF-B}" Name="Payment" DataContainerDescriptor="Payment" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1">
+            <Binding>
+              <ERDataContainerBinding>
+                <Contents.>
+                  <ERDataContainerPathBinding ExpressionAsString="\"b\"" Path="Payment/Value" />
+                </Contents.>
+              </ERDataContainerBinding>
+            </Binding>
+          </ERModelMapping>
+        </Mapping>
+      </ERModelMappingVersion>
+    `, { contentRefId: '{MAP}' });
+
+    const config = parseERConfiguration(xml, 'multi-definition.xml');
+    if (config.content.kind !== 'ModelMapping') {
+      throw new Error('Expected model mapping content');
+    }
+
+    expect(config.content.version.mappings).toHaveLength(2);
+    expect(config.content.version.mappings.map(m => m.dataContainerDescriptor)).toEqual(['Invoice', 'Payment']);
+    expect(config.content.version.mappings[1]?.bindings[0]?.path).toBe('Payment/Value');
+    // `mapping` stays the first definition for backwards compatibility.
+    expect(config.content.version.mapping.name).toBe('Invoice');
+  });
+
   it('treats bundles with model mapping plus format refs as format configurations', () => {
     const xml = buildSolutionEnvelope(`
       <ERModelMappingVersion ID.="{FORMAT-MAP-DS},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">

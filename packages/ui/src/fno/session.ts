@@ -121,7 +121,10 @@ export const fnoSession = {
     options?: { extraRoots?: readonly string[] },
   ): Promise<ErSolutionSummary[]> {
     const auth = await ensureToken(conn, signal);
-    return listSolutions(transport(), conn, auth.accessToken, signal, options);
+    // Merge roots persisted on the profile with call-time extras.
+    const extraRoots = [...(conn.extraRoots ?? []), ...(options?.extraRoots ?? [])];
+    return listSolutions(transport(), conn, auth.accessToken, signal,
+      extraRoots.length > 0 ? { ...options, extraRoots } : options);
   },
 
   async listComponents(

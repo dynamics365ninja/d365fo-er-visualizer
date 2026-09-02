@@ -16,7 +16,6 @@ import {
   DialogTitle,
   DialogBody,
   DialogContent,
-  DialogActions,
   Button,
 } from '@fluentui/react-components';
 import {
@@ -498,11 +497,13 @@ function getDrillValidationContext(
 
   const mappings: any[] = [];
   if (config.content?.kind === 'ModelMapping') {
-    mappings.push(config.content.version.mapping);
+    const version = config.content.version;
+    mappings.push(...(version?.mappings?.length ? version.mappings : [version?.mapping].filter(Boolean)));
   }
   if (config.content?.kind === 'Format') {
     for (const version of config.content.embeddedModelMappingVersions ?? []) {
-      if (version?.mapping) mappings.push(version.mapping);
+      if (version?.mappings?.length) mappings.push(...version.mappings);
+      else if (version?.mapping) mappings.push(version.mapping);
     }
   }
 
@@ -1339,7 +1340,7 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
                   appearance="subtle"
                   size="small"
                   icon={<DismissRegular />}
-                  aria-label={t.back}
+                  aria-label={t.dismiss}
                   onClick={() => setIsDialogOpen(false)}
                 />
               }
@@ -1357,11 +1358,6 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
                 variant="dialog"
               />
             </DialogContent>
-            <DialogActions>
-              <Button appearance="primary" onClick={() => setIsDialogOpen(false)}>
-                {t.back}
-              </Button>
-            </DialogActions>
           </DialogBody>
         </DialogSurface>
       </Dialog>
@@ -2325,18 +2321,18 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
             {!atRoot && (
               <button
                 type="button"
-                className="dd-hero__btn dd-hero__btn--ghost"
-                onClick={restart}
-                title={t.drillRestart}
-              ><ArrowClockwiseRegular fontSize={13} /> {t.drillRestart}</button>
-            )}
-            {!atRoot && (
-              <button
-                type="button"
                 className="dd-hero__btn"
                 onClick={() => setStack(s => s.slice(0, -1))}
                 title={t.back}
               ><ArrowLeftRegular fontSize={13} /> {t.back}</button>
+            )}
+            {!atRoot && (
+              <button
+                type="button"
+                className="dd-hero__btn dd-hero__btn--ghost"
+                onClick={restart}
+                title={t.drillRestart}
+              ><ArrowClockwiseRegular fontSize={13} /> {t.drillRestart}</button>
             )}
             {onPopOut && (
               <button

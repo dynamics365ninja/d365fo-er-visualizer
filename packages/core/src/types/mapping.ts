@@ -6,7 +6,14 @@ export interface ERModelMappingVersion {
   dateTime: string;
   description: string;
   number: number;
+  /** First mapping definition (kept for backwards compatibility). */
   mapping: ERModelMapping;
+  /**
+   * All mapping definitions of this version. A single `ERModelMappingVersion`
+   * can carry several `ERModelMapping` definitions, each rooted in a different
+   * `DataContainerDescriptor`.
+   */
+  mappings: ERModelMapping[];
 }
 
 export interface ERModelMapping {

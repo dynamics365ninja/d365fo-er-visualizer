@@ -750,14 +750,19 @@ function parseModelMappingVersionNode(vNode: any): ERModelMappingVersion {
   const idAttr = getAttr(vNode, 'ID.') ?? '';
   const id = idAttr.split(',')[0];
 
-  const mappingNode = vNode['Mapping']?.['ERModelMapping'];
+  // One version may carry several ERModelMapping definitions, each rooted in
+  // a different DataContainerDescriptor. Parse them all.
+  const mappingNodes = asArray(vNode['Mapping']?.['ERModelMapping']);
+  if (mappingNodes.length === 0) throw new Error('Missing ERModelMapping element');
+  const mappings = mappingNodes.map(parseModelMapping);
 
   return {
     id,
     dateTime: getAttr(vNode, 'DateTime') ?? '',
     description: getAttr(vNode, 'Description') ?? '',
     number: parseInt(getAttr(vNode, 'Number') ?? '0', 10),
-    mapping: parseModelMapping(mappingNode),
+    mapping: mappings[0],
+    mappings,
   };
 }
 

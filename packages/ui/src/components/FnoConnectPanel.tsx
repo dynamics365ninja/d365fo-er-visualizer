@@ -563,6 +563,12 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       list.sort((a, b) => (a.solutionName ?? '').localeCompare(b.solutionName ?? '', undefined, { sensitivity: 'base', numeric: true }));
       console.info('[fno-odata] listSolutions(extraRoot) returned', list.length, 'solutions', list);
       setSolutions(list);
+      // If the custom root actually produced hits, persist it on the profile
+      // so it is probed automatically on every future load.
+      const rootHit = list.some(s => s.solutionName === root || s.rootSolutionName === root);
+      if (rootHit && !(activeProfile.extraRoots ?? []).includes(root)) {
+        upsert({ ...activeProfile, extraRoots: [...(activeProfile.extraRoots ?? []), root] });
+      }
       if (list.length === 0) {
         pushToast({
           kind: 'warning',
@@ -575,7 +581,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     } finally {
       setLoadingSolutions(false);
     }
-  }, [activeProfile, customRoot, pushToast]);
+  }, [activeProfile, customRoot, pushToast, upsert]);
 
   const handleDisconnect = useCallback(async () => {
     if (!activeProfile) return;

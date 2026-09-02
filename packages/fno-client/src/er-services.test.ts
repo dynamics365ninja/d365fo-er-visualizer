@@ -17,6 +17,7 @@ import {
   extractReferencedDataModelGuids,
   pickDisplayVersion,
 } from './er-services';
+import { DEFAULT_SEED_MODELS } from './seed-models';
 import { FnoHttpError, FnoSourceUnsupportedError, FnoEmptyContentError } from './types';
 import type { FnoConnection, FnoTransport, ErConfigSummary } from './types';
 
@@ -417,6 +418,26 @@ describe('listSolutions', () => {
     expect(names).toContain('Microsoft');
     expect(names).not.toContain('MS.Format');
     expect(names).not.toContain('MS tax model mapping');
+  });
+
+  it('probes extraRoots in addition to the built-in DEFAULT_SEED_MODELS list', async () => {
+    const CUSTOM = 'Contoso custom model';
+    expect(DEFAULT_SEED_MODELS).not.toContain(CUSTOM);
+    const probedParents: string[] = [];
+    const { transport } = makeTransport({
+      post: (_url, body) => {
+        const parent = (body as { _parentSolutionName?: string } | undefined)?._parentSolutionName;
+        if (parent) probedParents.push(parent);
+        return parent === CUSTOM
+          ? [{ Name: CUSTOM, FormatMappingGUID: '00000000-0000-0000-0000-000000000000' }]
+          : [];
+      },
+    });
+    const solutions = await listSolutions(transport, conn, 'tok', undefined, { extraRoots: [` ${CUSTOM} `, ''] });
+    expect(probedParents).toContain(CUSTOM);
+    // Built-in seeds are still probed alongside the custom root.
+    expect(probedParents).toContain(SEED);
+    expect(solutions.find(s => s.solutionName === CUSTOM)).toBeTruthy();
   });
 });
 
