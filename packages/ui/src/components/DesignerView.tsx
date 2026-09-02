@@ -46,6 +46,27 @@ function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   return t.formatDirectionUnknown;
 }
 
+/**
+ * The definition to render for a ModelMapping config: prefer the definition the
+ * user actually selected in the explorer (the mapping node itself or any node
+ * under it), falling back to the one the loaded format binds to.
+ */
+function resolveActiveMappingDefinition(version: any, configs: any[], activeNode: any): any {
+  if (activeNode?.type === 'mapping' && activeNode.data) return activeNode.data;
+  const definitions: any[] = Array.isArray(version?.mappings) && version.mappings.length > 0
+    ? version.mappings
+    : (version?.mapping ? [version.mapping] : []);
+  // Multi-definition tree ids look like "cfg-2-mapping-1-binding-5".
+  const match = typeof activeNode?.id === 'string'
+    ? activeNode.id.match(/^cfg-\d+-mapping-(\d+)(?:-|$)/)
+    : null;
+  if (match) {
+    const definition = definitions[Number(match[1])];
+    if (definition) return definition;
+  }
+  return selectMappingDefinition(version, configs);
+}
+
 function getNodeHeaderIcon(node: any): React.ReactNode {
   const kind = node?.data?.kind ?? node?.data?.content?.kind;
   const nodeType = node?.type;
@@ -150,7 +171,7 @@ export function DesignerView() {
   }
 
   if (config.kind === 'DataModel') return <ModelDesigner config={config} focusNode={activeNode} />;
-  if (config.kind === 'ModelMapping') return <MappingDesigner mapping={selectMappingDefinition((config.content as ERModelMappingContent).version, configs)} configIndex={tab.configIndex} focusNode={activeNode} />;
+  if (config.kind === 'ModelMapping') return <MappingDesigner mapping={resolveActiveMappingDefinition((config.content as ERModelMappingContent).version, configs, activeNode)} configIndex={tab.configIndex} focusNode={activeNode} />;
   if (config.kind === 'Format') return <FormatDesigner config={config} configIndex={tab.configIndex} focusNode={activeNode} />;
 
   return <div style={{ padding: 16 }}>{t.designerUnsupportedView(config.kind)}</div>;
@@ -189,7 +210,7 @@ function FocusedNodeTab({ node }: { node: any }) {
   }
   if (node.type === 'file' && config.kind === 'ModelMapping' && node.configIndex != null) {
     const mappingContent = config.content as { version?: { mapping?: unknown } };
-    const mapping = mappingContent.version ? selectMappingDefinition(mappingContent.version, configs) : undefined;
+    const mapping = mappingContent.version ? resolveActiveMappingDefinition(mappingContent.version, configs, focusNode) : undefined;
     if (mapping) {
       return <MappingDesigner mapping={mapping} configIndex={node.configIndex} focusNode={focusNode} />;
     }

@@ -1758,6 +1758,13 @@ export function collectUnderlyingSources(options: {
     collectFromExpression(mappingExpression, mappingConfigIndex);
   }
 
+  // 1b. Format bindings are often formulas themselves (IF(model.a, model.b, …))
+  //     with no single mapping binding behind them — walk the selected
+  //     expression directly, expanding each model reference it contains.
+  if (out.size === 0 && /[(<>=+\-*\s]/.test(selectedModelPath.trim())) {
+    collectFromExpression(selectedModelPath, mappingConfigIndex);
+  }
+
   // 2. Container-level path without a formula — list only the sources used by
   //    the mapping bindings *under the selected model path*, not every
   //    datasource of the definition.
