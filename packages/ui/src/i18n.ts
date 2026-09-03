@@ -130,6 +130,8 @@ export interface Translations {
   explorerResultsCount: (visible: number, total: number) => string;
   explorerMoreActions: string;
   explorerOpenInTab: string;
+  explorerActiveMapping: string;
+  explorerActiveMappingHint: string;
   detailOverview: string;
   attributes: string;
   drillSteps: (n: number) => string;
@@ -235,6 +237,44 @@ export interface Translations {
   drillLegendClickable: string;
   drillLegendFunction: string;
   drillLegendLiteral: string;
+  drillZoomIn: string;
+  drillZoomInto: (name: string) => string;
+  drillCurrentPart: string;
+  drillUsedDataTitle: string;
+  drillUsedDataHint: string;
+  drillUsedDataEmpty: string;
+  drillHowFilledTitle: string;
+  drillHowFilledHint: string;
+  lineageTitle: string;
+  lineageHint: string;
+  lineageFormulaLabel: string;
+  lineageExpand: string;
+  lineageCollapse: string;
+  lineageShowInPath: (name: string) => string;
+  lineageOpenSegment: (path: string) => string;
+  lineagePeekTitle: string;
+  lineagePeekEmpty: string;
+  lineagePeekClose: string;
+  lineageStageOrigin: string;
+  lineageStageModelPath: string;
+  lineageStageMapping: string;
+  lineageStageSource: string;
+  lineageStageFormula: string;
+  lineageStageUserParam: string;
+  lineageStageGroupBy: string;
+  lineageStageEntity: string;
+  lineageStageUnresolved: string;
+  drillFormulaMapping: string;
+  drillFocusModelPath: string;
+  drillFocusExpression: string;
+  drillOriginalExpression: string;
+  drillForward: string;
+  drillSourcePropsTitle: string;
+  drillHowFilledHintSingle: string;
+  drillHowFilledHintMany: string;
+  drillSourceDetailTitle: string;
+  drillSourceTarget: string;
+  drillUserParameterNote: string;
   // Results / counts
   searchResultCount: (n: number) => string;
   propChildren: string;
@@ -618,6 +658,8 @@ const cs: Translations = {
   explorerResultsCount: (v, t) => `Zobrazeno ${v} z ${t}`,
   explorerMoreActions: 'Další akce',
   explorerOpenInTab: 'Otevřít v záložce',
+  explorerActiveMapping: 'aktivní',
+  explorerActiveMappingHint: 'Tuto definici modelu používá načtený formát',
   detailOverview: 'Přehled výběru',
   attributes: 'Atributy',
   drillSteps: (n: number) => `${n} krok${n === 1 ? '' : n < 5 ? 'y' : 'ů'}`,
@@ -724,6 +766,44 @@ const cs: Translations = {
   drillLegendClickable: 'Klikatelný odkaz',
   drillLegendFunction: 'ER funkce',
   drillLegendLiteral: 'Literál',
+  drillZoomIn: 'Zoom-in',
+  drillZoomInto: (name: string) => `Zoom-in do „${name}"`,
+  drillCurrentPart: 'Rozebíraná část',
+  drillUsedDataTitle: 'Použitá data z D365FO',
+  drillUsedDataHint: 'Tabulky, pole a parametry, ze kterých se hodnota tohoto výrazu nakonec čte. Kliknutím na položku se ukáže její místo v cestě hodnoty níže.',
+  drillUsedDataEmpty: 'Výraz nečte žádnou tabulku ani pole — jde o konstantu, funkci nebo hodnotu z nadřazeného prvku.',
+  drillHowFilledTitle: 'Jak se hodnota naplní',
+  drillHowFilledHint: 'Vzorce, kterými vzniká hodnota tohoto kroku. Klikni na kteroukoli část vzorce a propadneš se do ní.',
+  lineageTitle: 'Cesta hodnoty',
+  lineageHint: 'Celý řetězec od výrazu ve formátu až k poli v D365FO. Zvýrazněné části výrazů lze rozkliknout — cesta se rozbalí až k danému zdroji.',
+  lineageFormulaLabel: 'Vzorec',
+  lineageExpand: 'Rozbalit',
+  lineageCollapse: 'Sbalit',
+  lineageShowInPath: (name: string) => `Ukázat ${name} v cestě hodnoty`,
+  lineageOpenSegment: (path: string) => `Zobrazit, co vrací ${path}`,
+  lineagePeekTitle: 'Vybraná část výrazu',
+  lineagePeekEmpty: 'Tato část výrazu nevede k žádnému datovému zdroji — je to jen mezikrok v cestě.',
+  lineagePeekClose: 'Zpět na celý výraz',
+  lineageStageOrigin: 'Výraz formátu',
+  lineageStageModelPath: 'Cesta v modelu',
+  lineageStageMapping: 'Vazba v mapování modelu',
+  lineageStageSource: 'Datový zdroj',
+  lineageStageFormula: 'Vypočtené pole',
+  lineageStageUserParam: 'Parametr uživatele',
+  lineageStageGroupBy: 'Seskupení',
+  lineageStageEntity: 'AX objekt',
+  lineageStageUnresolved: 'Nerozpoznaná reference',
+  drillFormulaMapping: 'Mapování modelu',
+  drillFocusModelPath: 'Cesta v modelu',
+  drillFocusExpression: 'Výraz',
+  drillOriginalExpression: 'Původní výraz',
+  drillForward: 'Vpřed',
+  drillSourcePropsTitle: 'Vlastnosti zdroje',
+  drillHowFilledHintSingle: 'Vzorec z mapování modelu, kterým se tato cesta naplní daty.',
+  drillHowFilledHintMany: 'Výraz používá více cest do modelu. U každé cesty je vzorec, kterým se v mapování naplní — klikni na cestu nebo na část vzorce a pokračuj hlouběji.',
+  drillSourceDetailTitle: 'Detail zdroje hodnoty',
+  drillSourceTarget: 'Čte se z',
+  drillUserParameterNote: 'Hodnotu zadává uživatel při spuštění reportu — nepochází z modelu ani z tabulky.',
 
   // Results / counts
   searchResultCount: (n: number) => `Výsledky: ${n}`,
@@ -1115,6 +1195,8 @@ const en: Translations = {
   explorerResultsCount: (v, t) => `Showing ${v} of ${t}`,
   explorerMoreActions: 'More actions',
   explorerOpenInTab: 'Open in tab',
+  explorerActiveMapping: 'active',
+  explorerActiveMappingHint: 'This model definition is the one the loaded format uses',
   detailOverview: 'Selection Overview',
   attributes: 'Attributes',
   drillSteps: (n: number) => `${n} step${n === 1 ? '' : 's'}`,
@@ -1220,6 +1302,44 @@ const en: Translations = {
   drillLegendClickable: 'Clickable reference',
   drillLegendFunction: 'ER function',
   drillLegendLiteral: 'Literal',
+  drillZoomIn: 'Zoom in',
+  drillZoomInto: (name: string) => `Zoom in to "${name}"`,
+  drillCurrentPart: 'Part being analysed',
+  drillUsedDataTitle: 'D365FO data used',
+  drillUsedDataHint: 'Tables, fields and parameters this expression finally reads from. Click an item to reveal where it sits in the value path below.',
+  drillUsedDataEmpty: 'This expression reads no table or field — it is a constant, a function, or a value from the parent element.',
+  drillHowFilledTitle: 'How the value is filled',
+  drillHowFilledHint: 'The formulas that produce this step\'s value. Click any part of a formula to drill into it.',
+  lineageTitle: 'Value path',
+  lineageHint: 'The whole chain from the format expression down to the field in D365FO. Highlighted parts of a formula are clickable — the path expands down to that source.',
+  lineageFormulaLabel: 'Formula',
+  lineageExpand: 'Expand',
+  lineageCollapse: 'Collapse',
+  lineageShowInPath: (name: string) => `Show ${name} in the value path`,
+  lineageOpenSegment: (path: string) => `Show what ${path} returns`,
+  lineagePeekTitle: 'Selected part of the expression',
+  lineagePeekEmpty: 'This part of the path does not lead to a data source of its own — it is only an intermediate hop.',
+  lineagePeekClose: 'Back to the whole expression',
+  lineageStageOrigin: 'Format expression',
+  lineageStageModelPath: 'Model path',
+  lineageStageMapping: 'Binding in model mapping',
+  lineageStageSource: 'Data source',
+  lineageStageFormula: 'Calculated field',
+  lineageStageUserParam: 'User parameter',
+  lineageStageGroupBy: 'Grouping',
+  lineageStageEntity: 'AX object',
+  lineageStageUnresolved: 'Unresolved reference',
+  drillFormulaMapping: 'Model mapping',
+  drillFocusModelPath: 'Model path',
+  drillFocusExpression: 'Expression',
+  drillOriginalExpression: 'Original expression',
+  drillForward: 'Forward',
+  drillSourcePropsTitle: 'Source properties',
+  drillHowFilledHintSingle: 'The model-mapping formula that fills this path with data.',
+  drillHowFilledHintMany: 'The expression uses several model paths. Each one has the formula that fills it in the mapping — click a path or part of a formula to go deeper.',
+  drillSourceDetailTitle: 'Value source detail',
+  drillSourceTarget: 'Read from',
+  drillUserParameterNote: 'Filled in by the user when the report runs — it comes from neither the model nor a table.',
 
   searchResultCount: (n: number) => `Results: ${n}`,
   propChildren: 'Children',

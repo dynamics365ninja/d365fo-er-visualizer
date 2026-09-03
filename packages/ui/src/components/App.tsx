@@ -7,10 +7,6 @@ import {
   mergeClasses,
   Button,
   Tooltip,
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbDivider,
-  BreadcrumbButton,
   Popover,
   PopoverTrigger,
   PopoverSurface,
@@ -20,8 +16,6 @@ import {
   Spinner,
 } from '@fluentui/react-components';
 import {
-  HomeRegular,
-  ChevronRightRegular,
   ExpandUpRightRegular,
   ArrowMinimizeRegular,
   ArrowSyncRegular,
@@ -249,12 +243,6 @@ const useAppStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     padding: '0 4px',
-  },
-});
-
-const useBreadcrumbStyles = makeStyles({
-  root: {
-    minWidth: 0,
   },
 });
 
@@ -551,9 +539,7 @@ export function App() {
         onOpenPalette={() => setPaletteOpen(true)}
       />
       <div className={styles.workarea}>
-          <Toolbar
-            breadcrumb={<AppBreadcrumb onOpenHome={() => { setShowLanding(true); }} />}
-          />
+          <Toolbar />
           <div className={styles.main}>
             {showRight && rightFullscreen ? (
               <div className={mergeClasses(styles.sidebar, styles.sidebarRight, styles.sidebarRightFullscreen)}>
@@ -804,40 +790,6 @@ function RightPanel({
         </div>
       )}
     </>
-  );
-}
-
-// ────────────────────────── Breadcrumb ──────────────────────────
-
-function AppBreadcrumb({ onOpenHome }: { onOpenHome: () => void }) {
-  const styles = useBreadcrumbStyles();
-  const openTabs = useAppStore(s => s.openTabs);
-  const activeTabId = useAppStore(s => s.activeTabId);
-  const configurations = useAppStore(s => s.configurations);
-  const active = openTabs.find(tab => tab.id === activeTabId);
-  if (!active) return null;
-
-  const parts: string[] = [];
-  const cfg = configurations[active.configIndex];
-  if (cfg) parts.push(cfg.solutionVersion.solution.name);
-  if (active.label && active.label !== parts[0]) parts.push(active.label);
-
-  return (
-    <Breadcrumb className={styles.root} size="small">
-      <BreadcrumbItem>
-        <BreadcrumbButton icon={<HomeRegular />} onClick={onOpenHome} aria-label={t.breadcrumbHome} />
-      </BreadcrumbItem>
-      {parts.map((part, i) => (
-        <React.Fragment key={i}>
-          <BreadcrumbDivider>
-            <ChevronRightRegular />
-          </BreadcrumbDivider>
-          <BreadcrumbItem>
-            <BreadcrumbButton current={i === parts.length - 1}>{part}</BreadcrumbButton>
-          </BreadcrumbItem>
-        </React.Fragment>
-      ))}
-    </Breadcrumb>
   );
 }
 

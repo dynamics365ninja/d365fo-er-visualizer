@@ -11,6 +11,19 @@ export interface XlsxWorkbook {
   sheets: XlsxSheet[];
   /** Named ranges: uppercased name → normalized first-cell ref (e.g. "CONTACTINFO_LABEL" → "B3") */
   definedNames: Map<string, string>;
+  /**
+   * Named ranges with their full extent, so a multi-cell range can be
+   * highlighted as one area instead of just its anchor cell.
+   */
+  definedRanges: Map<string, XlsxArea>;
+}
+
+/** A rectangular block of cells, 1-based and inclusive on both ends. */
+export interface XlsxArea {
+  startCol: number;
+  startRow: number;
+  endCol: number;
+  endRow: number;
 }
 
 export interface XlsxSheet {
@@ -76,7 +89,7 @@ export async function parseXlsxBase64(base64: string): Promise<XlsxWorkbook> {
   const sharedStrings = await readSharedStrings(zip);
 
   // 2. Read workbook.xml to get sheet names & rIds, and defined names
-  const { sheetMeta, definedNames } = await readWorkbookData(zip);
+  const { sheetMeta, definedNames, definedRanges } = await readWorkbookData(zip);
 
   // 3. Read workbook.xml.rels to map rIds to file paths
   const relMap = await readRels(zip, 'xl/_rels/workbook.xml.rels');
@@ -98,7 +111,7 @@ export async function parseXlsxBase64(base64: string): Promise<XlsxWorkbook> {
     sheets.push(parseSheet(meta.name, sheetXml, sharedStrings, styles));
   }
 
-  return { sheets, definedNames };
+  return { sheets, definedNames, definedRanges };
 }
 
 // ─── Internals ────────────────────────────────────────────────────────────
@@ -143,9 +156,9 @@ async function readSharedStrings(zip: JSZip): Promise<string[]> {
   return strings;
 }
 
-async function readWorkbookData(zip: JSZip): Promise<{ sheetMeta: { name: string; sheetId: string; rId: string }[]; definedNames: Map<string, string> }> {
+async function readWorkbookData(zip: JSZip): Promise<{ sheetMeta: { name: string; sheetId: string; rId: string }[]; definedNames: Map<string, string>; definedRanges: Map<string, XlsxArea> }> {
   const file = zip.file('xl/workbook.xml');
-  if (!file) return { sheetMeta: [], definedNames: new Map() };
+  if (!file) return { sheetMeta: [], definedNames: new Map(), definedRanges: new Map() };
   const xml = await file.async('text');
 
   const sheetTags = parseXmlTags(xml, 'sheet');
@@ -157,24 +170,35 @@ async function readWorkbookData(zip: JSZip): Promise<{ sheetMeta: { name: string
 
   // Parse <definedName> elements — content is like "Sheet1!$B$3" or "Sheet1!$B$3:$D$5"
   const definedNames = new Map<string, string>();
+  const definedRanges = new Map<string, XlsxArea>();
   const defSection = extractSection(xml, 'definedNames');
   if (defSection) {
     const defTags = parseXmlTags(defSection, 'definedName');
     for (const d of defTags) {
       const name = d.attrs['name'];
       if (!name) continue;
-      // Normalize: strip sheet prefix, dollar signs, take top-left cell
-      // e.g. "Sheet1!$B$3:$D$5" → "B3"
+      // Normalize: strip sheet prefix and dollar signs.
+      // e.g. "Sheet1!$B$3:$D$5" → anchor "B3", area B3:D5
       const raw = d.inner.trim();
       const cellPart = raw.split('!').pop() ?? raw; // after "Sheet1!"
-      const topLeft = cellPart.split(':')[0]!.replace(/\$/g, '').toUpperCase();
-      if (/^[A-Z]+\d+$/.test(topLeft)) {
-        definedNames.set(name.toUpperCase(), topLeft);
-      }
+      const bounds = cellPart.split(':').map(part => part.replace(/\$/g, '').toUpperCase());
+      const topLeft = bounds[0]!;
+      if (!/^[A-Z]+\d+$/.test(topLeft)) continue;
+      definedNames.set(name.toUpperCase(), topLeft);
+
+      const bottomRight = bounds[1] && /^[A-Z]+\d+$/.test(bounds[1]) ? bounds[1] : topLeft;
+      const start = cellRefToCoords(topLeft);
+      const end = cellRefToCoords(bottomRight);
+      definedRanges.set(name.toUpperCase(), {
+        startCol: Math.min(start.col, end.col),
+        startRow: Math.min(start.row, end.row),
+        endCol: Math.max(start.col, end.col),
+        endRow: Math.max(start.row, end.row),
+      });
     }
   }
 
-  return { sheetMeta, definedNames };
+  return { sheetMeta, definedNames, definedRanges };
 }
 
 async function readRels(zip: JSZip, path: string): Promise<Map<string, string>> {

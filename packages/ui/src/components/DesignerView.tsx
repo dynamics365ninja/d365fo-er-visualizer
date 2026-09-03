@@ -38,7 +38,7 @@ import { buildFormatTreeIndex, type FormatTreeIndex } from '../utils/format-tree
 import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/theme-colors';
 import { ERDirection, getFormatElementExcelRange, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent, type ERFormatElement, type ERLabel } from '@er-visualizer/core';
 import { resolveLabel, buildLabelPool } from '../utils/label-resolver';
-import { parseXlsxBase64, colToLetter, type XlsxWorkbook, type XlsxCell as XlsxCellType, type XlsxMerge } from '../utils/xlsx-parser';
+import { parseXlsxBase64, colToLetter, type XlsxWorkbook, type XlsxCell as XlsxCellType, type XlsxMerge, type XlsxArea } from '../utils/xlsx-parser';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -2101,23 +2101,35 @@ function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLa
   return sheets;
 }
 
+/**
+ * Both Excel previews reproduce a spreadsheet whose cell colours come from the
+ * workbook itself and are authored for white paper. Rendering them on a dark
+ * theme surface put dark text on a dark background, so the sheet area keeps a
+ * fixed light palette in both themes — like a print preview. Only the
+ * surrounding chrome (toolbar, legend, sheet tabs) follows the theme.
+ */
+const excelPaper = {
+  cellBg: '#ffffff',
+  cellText: '#1a1a1a',
+  mutedText: '#5f6368',
+  headerBg: '#f3f3f3',
+  headerText: '#5f6368',
+  cellBorder: '#d4d4d4',
+  gridBg: '#e9e9e9',
+  sectionBg: '#f7f7f7',
+  rangeBg: '#eef4f0',
+  dynamicText: '#8a3fa0',
+};
+
+/** Theme-aware chrome around the paper: ribbon, sheet tabs, range accents. */
 const excelColors = {
   sheetTab: '#217346',
   sheetTabText: '#fff',
-  headerBg: 'var(--bg-secondary)',
-  headerText: 'var(--text-secondary)',
   cellBorder: 'var(--border-subtle)',
-  // Panel surfaces stay on the theme; the Excel green is kept for borders and
-  // accents only — green text on a green tint was unreadable in both themes.
-  rangeBg: 'var(--bg-secondary)',
+  // The Excel green is kept for borders and accents only — green text on a
+  // green tint was unreadable in both themes.
   rangeBorder: '#217346',
-  rangeText: 'var(--text-primary)',
-  rangeMetaText: 'var(--text-secondary)',
-  headerSectionBg: 'var(--bg-secondary)',
-  footerSectionBg: 'var(--bg-secondary)',
   cellBg: 'var(--bg-primary)',
-  dynamicValueColor: 'var(--format-type-string, #c586c0)',
-  constantValueColor: 'var(--text-primary)',
 };
 
 // ── Build cell-address → binding map from format tree ──
@@ -2186,6 +2198,8 @@ function ExcelTemplateGrid({
   onElementClick?: (elementId: string) => void;
 }) {
   const [activeSheet, setActiveSheet] = useState(0);
+  /** Cell the pointer is over — drives the highlight of the cell and its named area. */
+  const [hoveredRef, setHoveredRef] = useState<string | null>(null);
   const previewOptions = useMemo<PreviewRenderOptions>(() => ({ placeholderMode: 'sample' }), []);
   const cellBindings = useMemo(() => buildCellBindingMap(rootElement, bindingMap, labels, previewOptions), [rootElement, bindingMap, labels, previewOptions]);
 
@@ -2198,6 +2212,28 @@ function ExcelTemplateGrid({
     }
     return map;
   }, [workbook.definedNames]);
+
+  /**
+   * Every cell covered by a named range, mapped to that range. A named range
+   * can span several cells, so hovering any of them highlights the whole area
+   * rather than the single cell under the pointer.
+   */
+  const cellRefToArea = useMemo(() => {
+    const map = new Map<string, { name: string; area: XlsxArea }>();
+    for (const [name, area] of workbook.definedRanges ?? []) {
+      const width = area.endCol - area.startCol + 1;
+      const height = area.endRow - area.startRow + 1;
+      // A runaway whole-column range would paint the entire sheet.
+      if (width * height > 2000) continue;
+      for (let row = area.startRow; row <= area.endRow; row++) {
+        for (let col = area.startCol; col <= area.endCol; col++) {
+          const ref = colToLetter(col) + row;
+          if (!map.has(ref)) map.set(ref, { name, area });
+        }
+      }
+    }
+    return map;
+  }, [workbook.definedRanges]);
 
   const sheet = workbook.sheets[Math.min(activeSheet, workbook.sheets.length - 1)];
   if (!sheet) return null;
@@ -2249,6 +2285,22 @@ function ExcelTemplateGrid({
 
   const totalCells = sheet.rows.reduce((s, r) => s + r.cells.length, 0);
 
+  // Hover highlight: a named area wins over the single cell, because that is
+  // the unit an ER binding actually writes into.
+  const hovered = hoveredRef ? cellRefToArea.get(hoveredRef) : undefined;
+  const hoveredCell = hoveredRef ? refToCoords(hoveredRef) : null;
+  const highlightArea: XlsxArea | null = hovered
+    ? hovered.area
+    : hoveredCell
+      ? { startCol: hoveredCell.col, startRow: hoveredCell.row, endCol: hoveredCell.col, endRow: hoveredCell.row }
+      : null;
+  /** True when the cell (or the merge it anchors) overlaps the highlighted area. */
+  const isHighlighted = (col: number, row: number, colSpan: number, rowSpan: number): boolean => (
+    !!highlightArea
+    && col <= highlightArea.endCol && col + colSpan - 1 >= highlightArea.startCol
+    && row <= highlightArea.endRow && row + rowSpan - 1 >= highlightArea.startRow
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-secondary)' }}>
       {/* Toolbar */}
@@ -2283,12 +2335,14 @@ function ExcelTemplateGrid({
           📊 {t.excelStructureView}
         </button>
         <span style={{ marginLeft: 'auto', fontWeight: 400, fontSize: 11, opacity: 0.8 }}>
-          {t.excelTemplateCells(totalCells)}{sheet.merges.length > 0 ? `, ${t.excelTemplateMerged(sheet.merges.length)}` : ''}
+          {hoveredRef
+            ? `${hovered ? `${hovered.name} · ${colToLetter(hovered.area.startCol)}${hovered.area.startRow}:${colToLetter(hovered.area.endCol)}${hovered.area.endRow}` : hoveredRef}`
+            : `${t.excelTemplateCells(totalCells)}${sheet.merges.length > 0 ? `, ${t.excelTemplateMerged(sheet.merges.length)}` : ''}`}
         </span>
       </div>
 
       {/* Grid */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div style={{ flex: 1, overflow: 'auto', background: excelPaper.gridBg }} onMouseLeave={() => setHoveredRef(null)}>
         <table style={{
           borderCollapse: 'collapse',
           fontSize: 11,
@@ -2301,9 +2355,9 @@ function ExcelTemplateGrid({
               <th style={{
                 width: 32,
                 minWidth: 32,
-                background: excelColors.headerBg,
-                borderRight: `1px solid ${excelColors.cellBorder}`,
-                borderBottom: `1px solid ${excelColors.cellBorder}`,
+                background: excelPaper.headerBg,
+                borderRight: `1px solid ${excelPaper.cellBorder}`,
+                borderBottom: `1px solid ${excelPaper.cellBorder}`,
                 position: 'sticky',
                 top: 0,
                 left: 0,
@@ -2314,13 +2368,15 @@ function ExcelTemplateGrid({
                   width: colWidth(col),
                   minWidth: colWidth(col),
                   padding: '2px 4px',
-                  background: excelColors.headerBg,
-                  color: excelColors.headerText,
+                  background: highlightArea && col >= highlightArea.startCol && col <= highlightArea.endCol
+                    ? 'color-mix(in srgb, var(--accent) 30%, ' + excelPaper.headerBg + ')'
+                    : excelPaper.headerBg,
+                  color: excelPaper.headerText,
                   fontWeight: 500,
                   fontSize: 10,
                   textAlign: 'center',
-                  borderRight: `1px solid ${excelColors.cellBorder}`,
-                  borderBottom: `1px solid ${excelColors.cellBorder}`,
+                  borderRight: `1px solid ${excelPaper.cellBorder}`,
+                  borderBottom: `1px solid ${excelPaper.cellBorder}`,
                   position: 'sticky',
                   top: 0,
                   zIndex: 2,
@@ -2336,13 +2392,15 @@ function ExcelTemplateGrid({
                 {/* Row header */}
                 <td style={{
                   padding: '1px 4px',
-                  background: excelColors.headerBg,
-                  color: excelColors.headerText,
+                  background: highlightArea && row >= highlightArea.startRow && row <= highlightArea.endRow
+                    ? 'color-mix(in srgb, var(--accent) 30%, ' + excelPaper.headerBg + ')'
+                    : excelPaper.headerBg,
+                  color: excelPaper.headerText,
                   fontWeight: 500,
                   fontSize: 10,
                   textAlign: 'center',
-                  borderRight: `1px solid ${excelColors.cellBorder}`,
-                  borderBottom: `1px solid ${excelColors.cellBorder}`,
+                  borderRight: `1px solid ${excelPaper.cellBorder}`,
+                  borderBottom: `1px solid ${excelPaper.cellBorder}`,
                   position: 'sticky',
                   left: 0,
                   zIndex: 1,
@@ -2378,7 +2436,8 @@ function ExcelTemplateGrid({
                   const xlsxBg = cellStyle?.fillType === 'solid' && cellStyle.fgColor
                     ? `#${cellStyle.fgColor.slice(-6)}`
                     : undefined;
-                  const borderStyle = () => `1px solid ${excelColors.cellBorder}`;
+                  const borderStyle = () => `1px solid ${excelPaper.cellBorder}`;
+                  const highlighted = isHighlighted(col, row, colSpan, rowSpan);
 
                   return (
                     <td
@@ -2389,16 +2448,17 @@ function ExcelTemplateGrid({
                         ? `${binding.name}${binding.label ? ` — ${binding.label}` : ''}\n${binding.value}${onElementClick ? `\n🔍 ${t.excelCellGoToStructure}` : ''}`
                         : xlsxCell?.value || undefined}
                       onClick={hasBinding && onElementClick ? () => onElementClick(binding.elementId) : undefined}
+                      onMouseEnter={() => setHoveredRef(ref)}
                       style={{
                         padding: '1px 3px',
                         borderRight: borderStyle(),
                         borderBottom: borderStyle(),
-                        borderTop: cellStyle?.borderTop && cellStyle.borderTop !== 'none' ? `1px solid ${excelColors.cellBorder}` : undefined,
-                        borderLeft: cellStyle?.borderLeft && cellStyle.borderLeft !== 'none' ? `1px solid ${excelColors.cellBorder}` : undefined,
-                        background: xlsxBg ?? excelColors.cellBg,
+                        borderTop: cellStyle?.borderTop && cellStyle.borderTop !== 'none' ? `1px solid ${excelPaper.cellBorder}` : undefined,
+                        borderLeft: cellStyle?.borderLeft && cellStyle.borderLeft !== 'none' ? `1px solid ${excelPaper.cellBorder}` : undefined,
+                        background: xlsxBg ?? excelPaper.cellBg,
                         color: cellStyle?.fontColor
                               ? `#${cellStyle.fontColor.slice(-6)}`
-                              : 'var(--text-primary)',
+                              : excelPaper.cellText,
                         fontStyle: cellStyle?.italic ? 'italic' : undefined,
                         fontWeight: cellStyle?.bold ? 700 : undefined,
                         textDecoration: cellStyle?.underline ? 'underline' : undefined,
@@ -2410,6 +2470,11 @@ function ExcelTemplateGrid({
                         maxWidth: merge ? undefined : colWidth(col),
                         height: 20,
                         cursor: hasBinding && onElementClick ? 'pointer' : undefined,
+                        // The whole named area lights up together, so it is obvious
+                        // how far the range under the pointer reaches.
+                        boxShadow: highlighted
+                          ? 'inset 0 0 0 1px var(--accent), inset 0 0 0 999px color-mix(in srgb, var(--accent) 16%, transparent)'
+                          : undefined,
                       }}
                     >
                       {displayValue}
@@ -2473,6 +2538,15 @@ function ExcelTemplateGrid({
   );
 }
 
+/** Convert a cell reference such as "AB12" to 1-based coordinates. */
+function refToCoords(ref: string): { col: number; row: number } | null {
+  const match = ref.match(/^([A-Z]+)(\d+)$/);
+  if (!match) return null;
+  let col = 0;
+  for (const ch of match[1]) col = col * 26 + (ch.charCodeAt(0) - 64);
+  return { col, row: parseInt(match[2], 10) };
+}
+
 /** Collect all unique cell addresses from a sheet to derive column letters for the header. */
 function collectSheetColumns(sheet: ExcelSheetData): string[] {
   const cols = new Set<string>();
@@ -2514,8 +2588,14 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
   // Leaving the preview while the workbook is still parsing must not set
   // state on an unmounted component (the effect itself re-runs on every
   // state change, so a per-run flag would cancel the in-flight parse).
+  // StrictMode mounts, unmounts and remounts in dev, so the flag has to be
+  // raised again on remount — otherwise the parse result is dropped and the
+  // preview stays on "loading" forever.
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   useEffect(() => {
     if (!effectiveBase64 || xlsxData || xlsxLoading || xlsxError) return;
     setXlsxLoading(true);
@@ -2759,8 +2839,8 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
         display: 'flex',
         alignItems: 'center',
         gap: 0,
-        borderBottom: `1px solid ${excelColors.cellBorder}`,
-        background: excelColors.cellBg,
+        borderBottom: `1px solid ${excelPaper.cellBorder}`,
+        background: excelPaper.cellBg,
         flexShrink: 0,
       }}>
         <div style={{
@@ -2768,9 +2848,9 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
           padding: '4px 8px',
           fontSize: 11,
           fontWeight: 600,
-          borderRight: `1px solid ${excelColors.cellBorder}`,
+          borderRight: `1px solid ${excelPaper.cellBorder}`,
           fontFamily: 'var(--font-mono, monospace)',
-          color: 'var(--text-primary)',
+          color: excelPaper.cellText,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
@@ -2780,8 +2860,8 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
         <div style={{
           padding: '4px 6px',
           fontSize: 11,
-          color: 'var(--text-secondary)',
-          borderRight: `1px solid ${excelColors.cellBorder}`,
+          color: excelPaper.mutedText,
+          borderRight: `1px solid ${excelPaper.cellBorder}`,
           fontStyle: 'italic',
         }}>
           <i>fx</i>
@@ -2791,7 +2871,7 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
           padding: '4px 8px',
           fontSize: 11,
           fontFamily: 'var(--font-mono, monospace)',
-          color: 'var(--text-primary)',
+          color: excelPaper.cellText,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
@@ -2810,8 +2890,8 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
       {columns.length > 0 && (
         <div style={{
           display: 'flex',
-          borderBottom: `1px solid ${excelColors.cellBorder}`,
-          background: excelColors.headerBg,
+          borderBottom: `1px solid ${excelPaper.cellBorder}`,
+          background: excelPaper.headerBg,
           flexShrink: 0,
           paddingLeft: 32,
         }}>
@@ -2824,8 +2904,8 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
               textAlign: 'center',
               fontSize: 10,
               fontWeight: 600,
-              color: excelColors.headerText,
-              borderRight: `1px solid ${excelColors.cellBorder}`,
+              color: excelPaper.headerText,
+              borderRight: `1px solid ${excelPaper.cellBorder}`,
               userSelect: 'none',
             }}>
               {col}
@@ -2835,13 +2915,13 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
       )}
 
       {/* Spreadsheet area */}
-      <div style={{ flex: 1, overflow: 'auto', padding: 0 }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: 0, background: excelPaper.gridBg }}>
         <div style={{
           display: 'flex',
           flexDirection: 'column',
-          border: `1px solid ${excelColors.cellBorder}`,
+          border: `1px solid ${excelPaper.cellBorder}`,
           overflow: 'hidden',
-          background: excelColors.cellBg,
+          background: excelPaper.cellBg,
           minHeight: '100%',
         }}>
           {/* Header section */}
@@ -2851,7 +2931,7 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
 
           {/* Loose cells at sheet level */}
           {sheet.cells.length > 0 && (
-            <div style={{ borderBottom: `1px solid ${excelColors.cellBorder}` }}>
+            <div style={{ borderBottom: `1px solid ${excelPaper.cellBorder}` }}>
               <ExcelCellGrid cells={sheet.cells} onCellClick={setSelectedCell} selectedCell={selectedCell} />
             </div>
           )}
@@ -2868,23 +2948,23 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
 
           {/* Empty state */}
           {sheet.cells.length === 0 && sheet.ranges.length === 0 && !sheet.header && !sheet.footer && (
-            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>{t.excelEmptySheet}</div>
+            <div style={{ padding: 24, textAlign: 'center', color: excelPaper.mutedText, fontSize: 12 }}>{t.excelEmptySheet}</div>
           )}
         </div>
       </div>
 
-      {/* Legend */}
+      {/* Legend — sits on the paper so its colour samples match the grid */}
       <div style={{
         padding: '4px 12px',
         fontSize: 10,
-        color: 'var(--text-secondary)',
-        borderTop: `1px solid ${excelColors.cellBorder}`,
-        background: 'var(--bg-secondary)',
+        color: excelPaper.mutedText,
+        borderTop: `1px solid ${excelPaper.cellBorder}`,
+        background: excelPaper.headerBg,
         display: 'flex',
         gap: 12,
         flexShrink: 0,
       }}>
-        <span><span style={{ color: excelColors.dynamicValueColor, fontStyle: 'italic' }}>Sample(…)</span> = {t.excelLegendDynamic}</span>
+        <span><span style={{ color: excelPaper.dynamicText, fontStyle: 'italic' }}>Sample(…)</span> = {t.excelLegendDynamic}</span>
         <span><span style={{ fontWeight: 600 }}>{t.excelLegendConstantWord}</span> = {t.excelLegendConstant}</span>
       </div>
 
@@ -2929,15 +3009,15 @@ function ExcelSectionBlock({ section, onCellClick }: { section: ExcelSectionData
   const isHeader = section.type === 'header';
   return (
     <div style={{
-      background: isHeader ? excelColors.headerSectionBg : excelColors.footerSectionBg,
-      borderLeft: `3px solid ${isHeader ? `${excelColors.rangeBorder}66` : 'var(--border-subtle)'}`,
-      borderBottom: `1px solid ${excelColors.cellBorder}`,
+      background: excelPaper.sectionBg,
+      borderLeft: `3px solid ${isHeader ? `${excelColors.rangeBorder}66` : excelPaper.cellBorder}`,
+      borderBottom: `1px solid ${excelPaper.cellBorder}`,
     }}>
       <div style={{
         padding: '4px 12px',
         fontSize: 11,
         fontWeight: 600,
-        color: 'var(--text-secondary)',
+        color: excelPaper.mutedText,
         textTransform: 'uppercase',
         letterSpacing: '0.05em',
         display: 'flex',
@@ -2955,7 +3035,7 @@ function ExcelRangeBlock({ range, depth, onCellClick, selectedCell }: { range: E
   const repIcon = range.replicationDirection === 'vertical' ? '↕' : range.replicationDirection === 'horizontal' ? '↔' : '';
   return (
     <div style={{
-      borderBottom: `1px solid ${excelColors.cellBorder}`,
+      borderBottom: `1px solid ${excelPaper.cellBorder}`,
       marginLeft: depth * 8,
       borderLeft: depth > 0 ? `2px solid ${excelColors.rangeBorder}44` : undefined,
     }}>
@@ -2965,13 +3045,13 @@ function ExcelRangeBlock({ range, depth, onCellClick, selectedCell }: { range: E
         alignItems: 'center',
         gap: 6,
         padding: '4px 12px',
-        background: excelColors.rangeBg,
-        borderBottom: `1px solid ${excelColors.cellBorder}`,
+        background: excelPaper.rangeBg,
+        borderBottom: `1px solid ${excelPaper.cellBorder}`,
       }}>
         <span style={{ fontSize: 13 }}>📐</span>
-        <span style={{ fontSize: 12, fontWeight: 600, color: excelColors.rangeText }}>{range.excelRange}</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: excelPaper.cellText }}>{range.excelRange}</span>
         {range.name !== range.excelRange && (
-          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>({range.name})</span>
+          <span style={{ fontSize: 11, color: excelPaper.mutedText }}>({range.name})</span>
         )}
         {repIcon && (
           <span style={{
@@ -2979,7 +3059,7 @@ function ExcelRangeBlock({ range, depth, onCellClick, selectedCell }: { range: E
             padding: '1px 6px',
             borderRadius: 3,
             border: `1px solid ${excelColors.rangeBorder}66`,
-            color: excelColors.rangeText,
+            color: excelPaper.cellText,
             fontWeight: 600,
           }}>
             {repIcon} {range.replicationDirection === 'vertical' ? t.excelRepeatingVertical : t.excelRepeatingHorizontal}
@@ -3001,6 +3081,7 @@ function ExcelRangeBlock({ range, depth, onCellClick, selectedCell }: { range: E
 }
 
 function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellData[]; onCellClick?: (cell: ExcelCellData) => void; selectedCell?: ExcelCellData | null }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   return (
     <div style={{
       display: 'grid',
@@ -3013,20 +3094,30 @@ function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellD
         const isDynamic = isSamplePlaceholder(cell.value);
         const hasDistinctAddress = cell.excelRange && cell.excelRange !== cell.name;
         const isSelected = selectedCell?.excelRange === cell.excelRange && selectedCell?.name === cell.name;
+        const isHovered = hoveredIndex === i;
         return (
-          <div key={i} onClick={() => onCellClick?.(cell)} style={{
+          <div
+            key={i}
+            onClick={() => onCellClick?.(cell)}
+            onMouseEnter={() => setHoveredIndex(i)}
+            onMouseLeave={() => setHoveredIndex(prev => (prev === i ? null : prev))}
+            style={{
             padding: '6px 12px',
-            borderRight: `1px solid ${excelColors.cellBorder}`,
-            borderBottom: `1px solid ${excelColors.cellBorder}`,
+            borderRight: `1px solid ${excelPaper.cellBorder}`,
+            borderBottom: `1px solid ${excelPaper.cellBorder}`,
             fontSize: 12,
             display: 'flex',
             flexDirection: 'column',
             gap: 2,
             minWidth: 0,
             cursor: 'pointer',
-            outline: isSelected ? `2px solid ${excelColors.rangeBorder}` : undefined,
+            outline: isSelected
+              ? `2px solid ${excelColors.rangeBorder}`
+              : isHovered ? `2px solid ${excelColors.rangeBorder}80` : undefined,
             outlineOffset: -2,
-            background: isSelected ? `${excelColors.rangeBorder}0a` : undefined,
+            background: isSelected
+              ? `${excelColors.rangeBorder}0a`
+              : isHovered ? `${excelColors.rangeBorder}12` : undefined,
             transition: 'outline 0.1s, background 0.1s',
           }}>
             <div style={{
@@ -3037,7 +3128,7 @@ function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellD
             }}>
               <span style={{
                 fontSize: 10,
-                color: excelColors.rangeMetaText,
+                color: excelPaper.mutedText,
                 fontFamily: 'var(--font-mono, monospace)',
                 fontWeight: 600,
                 flexShrink: 0,
@@ -3047,7 +3138,7 @@ function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellD
               {hasDistinctAddress && (
                 <span style={{
                   fontSize: 11,
-                  color: 'var(--text-secondary)',
+                  color: excelPaper.cellText,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -3059,7 +3150,7 @@ function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellD
             {cell.label && (
               <span style={{
                 fontSize: 10,
-                color: 'var(--text-secondary)',
+                color: excelPaper.mutedText,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -3071,7 +3162,7 @@ function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellD
             <span style={{
               fontFamily: 'var(--font-mono, monospace)',
               fontSize: 11,
-              color: isDynamic ? excelColors.dynamicValueColor : excelColors.constantValueColor,
+              color: isDynamic ? excelPaper.dynamicText : excelPaper.cellText,
               fontStyle: isDynamic ? 'italic' : undefined,
               fontWeight: isDynamic ? 400 : 500,
               overflow: 'hidden',

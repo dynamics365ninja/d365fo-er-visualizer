@@ -503,6 +503,17 @@ export interface AppState {
     datasourceTreeNodeId: string | null;
   } | null;
   /**
+   * Bindings that live *under* a model path. A container such as
+   * `model.InvoiceLines` often carries no binding of its own — what fills it is
+   * only visible through the bindings of the fields inside it.
+   */
+  findModelPathBindings: (modelDotPath: string) => Array<{
+    path: string;
+    relativePath: string;
+    expressionAsString: string;
+    configIndex: number;
+  }>;
+  /**
    * Where-used: find all occurrences of a table / enum / class name across all loaded configs.
    * Returns a flat list of trace links from the entity → datasource → model binding → format element.
    */
@@ -1823,6 +1834,53 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }
     return null;
+  },
+
+  findModelPathBindings: (modelDotPath: string) => {
+    const state = get();
+    let path = modelDotPath;
+    if (path.toLowerCase().startsWith('model.') || path.toLowerCase().startsWith('model\\')) {
+      path = path.substring(6);
+    }
+    const segments = parseDottedPath(path.replace(/\\/g, '.')).filter(Boolean);
+    if (segments.length === 0) return [];
+
+    // The same shifted-prefix fallback resolveModelPath uses: a format may
+    // address the model through a wrapper root the mapping does not repeat.
+    const prefixes: string[][] = [];
+    for (let start = 0; start < segments.length; start++) {
+      const candidate = segments.slice(start);
+      if (candidate.length > 0) prefixes.push(candidate);
+    }
+
+    const out: Array<{ path: string; relativePath: string; expressionAsString: string; configIndex: number }> = [];
+    const seen = new Set<string>();
+
+    for (const prefix of prefixes) {
+      const needle = prefix.join('.').toLowerCase();
+      for (const source of getAllMappingSources(state.configurations)) {
+        for (const binding of source.mapping.bindings as any[]) {
+          const normalized = String(binding.path ?? '').replace(/[\\/]/g, '.');
+          const lower = normalized.toLowerCase();
+          if (!lower.startsWith(`${needle}.`)) continue;
+          const expression = String(binding.expressionAsString ?? '').trim();
+          if (!expression) continue;
+          const key = `${source.configIndex}::${lower}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push({
+            path: normalized,
+            relativePath: normalized.slice(needle.length + 1),
+            expressionAsString: expression,
+            configIndex: source.configIndex,
+          });
+        }
+      }
+      // The longest matching prefix wins — no need to try shorter roots.
+      if (out.length > 0) break;
+    }
+
+    return out;
   },
 
   whereUsed: (entityName: string): WhereUsedEntry[] => {
@@ -3276,12 +3334,10 @@ function buildTreeForConfig(config: ERConfiguration, index: number, allConfigura
       // user can tell the DataContainerDescriptor roots apart, and mark the
       // one the loaded format actually binds to.
       const usedDefinition = selectMappingDefinition(mm, allConfigurations);
-      const usedSuffix = locale === 'cs' ? '  ✓ použito načteným formátem' : '  ✓ used by loaded format';
       children.push(...definitions.map((definition, di) => {
         const node = buildMappingTree(definition, `${prefix}-mapping-${di}`, index, mm.number, allConfigurations);
         if (definition === usedDefinition) {
-          node.icon = '⭐';
-          node.name += usedSuffix;
+          node.data = { ...(node.data ?? {}), isActiveMappingDefinition: true };
         }
         return node;
       }));

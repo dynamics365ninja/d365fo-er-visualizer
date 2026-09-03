@@ -287,8 +287,10 @@ export function ConfigExplorer() {
   const [isDragging, setIsDragging] = useState(false);
   const [kindFilter, setKindFilter] = useState<Set<ConfigKind>>(new Set(['DataModel', 'ModelMapping', 'Format']));
   const [sortMode, setSortMode] = useState<SortMode>('loadOrder');
+  // Everything that is loaded should be visible at first level on open — the
+  // explorer starts with every kind group expanded.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<ConfigKind>>(
-    () => new Set<ConfigKind>(['ModelMapping', 'Format']),
+    () => new Set<ConfigKind>(),
   );
   const [hierarchyView, setHierarchyView] = useState(false);
 
@@ -742,7 +744,8 @@ export function ConfigExplorer() {
       ) : (
         <div className="explorer-sections" role="tree" aria-label={t.configurations}>
           {groupedTreeNodes.map(group => {
-            const isCollapsed = !isFiltering && collapsedGroups.has(group.kind);
+            // An empty kind has nothing to show, so it stays visually folded.
+            const isCollapsed = !isFiltering && (collapsedGroups.has(group.kind) || group.nodes.length === 0);
             return (
               <div key={group.kind} className={`explorer-kind-group ${getExplorerGroupAccent(group.kind)} ${isCollapsed ? 'collapsed' : ''}`}>
                 <button
@@ -857,6 +860,9 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
 
   const isSelected = node.id === selectedId;
   const isAncestor = !isSelected && selectedPathIds.has(node.id);
+  // The mapping definition the loaded format actually binds to — bold, so the
+  // active one is obvious among sibling DataContainerDescriptor roots.
+  const isActiveMappingDefinition = node.data?.isActiveMappingDefinition === true;
 
   // Selection can come from outside the explorer (designer rows, search,
   // where-used). Ancestors expand above, but the row itself may sit far
@@ -896,9 +902,12 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
         )}
         <span className="icon">{getExplorerNodeIcon(node)}</span>
         <span className="tree-node-label" title={resolvedLabel ? `${node.name} — ${resolvedLabel}` : node.name}>
-          <span className="tree-node-name">{node.name}</span>
+          <span className={`tree-node-name${isActiveMappingDefinition ? ' tree-node-name--active' : ''}`}>{node.name}</span>
           {resolvedLabel && <span className="tree-node-sublabel">{resolvedLabel}</span>}
         </span>
+        {isActiveMappingDefinition && (
+          <span className="tree-node-active-pill" title={t.explorerActiveMappingHint}>{t.explorerActiveMapping}</span>
+        )}
         {version != null && version !== '' && node.type === 'file' && (
           <span className="tree-node-version-pill" title={`v${version}`}>v{version}</span>
         )}
