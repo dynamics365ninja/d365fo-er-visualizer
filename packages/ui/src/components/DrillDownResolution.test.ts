@@ -32,6 +32,15 @@ const MAPPING_XML = `<?xml version="1.0" encoding="utf-8"?>
     <ERModelMappingVersion ID.="{MAP},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
       <Mapping>
         <ERModelMapping ID.="{MAP}" Name="Mapping" DataContainerDescriptor="Root" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1">
+          <Binding>
+            <ERDataContainerBinding>
+              <Contents.>
+                <ERDataContainerPathBinding Path="InvoiceLines/InvoiceDate" ExpressionAsString="Tables.&apos;#SourceJournalTables&apos;.CustInvoiceJour.InvoiceDate" />
+                <ERDataContainerPathBinding Path="InvoiceLines/RecId" ExpressionAsString="Tables.&apos;#SourceJournalTables&apos;.CustInvoiceJour.RecId" />
+                <ERDataContainerPathBinding Path="InvoiceLines/JournalRecId" ExpressionAsString="&apos;$JournalRecId&apos;" />
+              </Contents.>
+            </ERDataContainerBinding>
+          </Binding>
           <Datasource>
             <ERModelDefinition>
               <Contents.>
@@ -172,5 +181,49 @@ describe('drill-down through nested calculated fields', () => {
     const sourceJournal = flatten(tree).find(n => n.label === '$SourceJournal');
     expect(sourceJournal?.badge).toBe('calc');
     expect(sourceJournal?.sublabel).toContain('FIRSTORNULL(');
+  });
+});
+
+/**
+ * ER binds containers implicitly: `model.InvoiceLines` carries no expression of
+ * its own, only the fields inside it do. Clicking that part of a path used to
+ * show nothing at all — it now has to report the sources of its descendants.
+ */
+describe('drill-down into a model container without a binding of its own', () => {
+  it('collects the data sources of the fields inside the container', () => {
+    const configurations = loadConfigurations();
+    const store = useAppStore.getState();
+
+    expect(store.resolveModelPath('InvoiceLines')).toBeNull();
+    expect(store.findModelPathBindings('model.InvoiceLines').map(b => b.relativePath))
+      .toEqual(expect.arrayContaining(['InvoiceDate', 'RecId', 'JournalRecId']));
+
+    const tree = buildExpressionTree({
+      expression: 'model.InvoiceLines',
+      configIndex: 0,
+      configurations,
+      resolveModelPath: store.resolveModelPath,
+      resolveDatasource: store.resolveDatasource,
+      findModelPathBindings: store.findModelPathBindings,
+    });
+
+    const labels = flatten(tree).map(n => n.label);
+    expect(labels).toEqual(expect.arrayContaining(['CustInvoiceJour', '$JournalRecId']));
+  });
+
+  it('keeps a leaf of that container resolving to its own binding', () => {
+    const configurations = loadConfigurations();
+    const store = useAppStore.getState();
+
+    const tree = buildExpressionTree({
+      expression: 'model.InvoiceLines.InvoiceDate',
+      configIndex: 0,
+      configurations,
+      resolveModelPath: store.resolveModelPath,
+      resolveDatasource: store.resolveDatasource,
+      findModelPathBindings: store.findModelPathBindings,
+    });
+
+    expect(flatten(tree).map(n => n.sublabel)).toContain('CustInvoiceJour.InvoiceDate');
   });
 });

@@ -15,10 +15,6 @@ import { useAppStore } from '../state/store';
 import { setLocale, t, useLocale } from '../i18n';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 
-interface ToolbarProps {
-  breadcrumb?: React.ReactNode;
-}
-
 const useStyles = makeStyles({
   root: {
     display: 'flex',
@@ -54,13 +50,6 @@ const useStyles = makeStyles({
     height: '20px',
     margin: '0 2px',
   },
-  breadcrumb: {
-    minWidth: 0,
-    overflow: 'hidden',
-    whiteSpace: 'nowrap',
-    textOverflow: 'ellipsis',
-    paddingLeft: '4px',
-  },
   hiddenInput: {
     display: 'none',
   },
@@ -85,10 +74,10 @@ const useStyles = makeStyles({
 });
 
 /**
- * Slim top toolbar — file/history operations + breadcrumb. View toggles,
- * theme, and the command palette live on the left ActivityBar.
+ * Slim top toolbar — file/history operations. View toggles, theme, and the
+ * command palette live on the left ActivityBar.
  */
-export function Toolbar({ breadcrumb }: ToolbarProps) {
+export function Toolbar() {
   const styles = useStyles();
   const currentLocale = useLocale();
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
@@ -167,9 +156,6 @@ export function Toolbar({ breadcrumb }: ToolbarProps) {
             {t.loadXml}
           </Button>
         </Tooltip>
-
-        {breadcrumb && <Divider vertical className={styles.sep} />}
-        <div className={styles.breadcrumb}>{breadcrumb}</div>
       </div>
 
       <div className={styles.rightGroup}>

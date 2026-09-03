@@ -9,7 +9,7 @@
  * resolved to its datasource. Clicking a formula or child datasource name
  * pushes a new frame. A breadcrumb bar lets you jump back to any prior frame.
  */
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   Dialog,
   DialogSurface,
@@ -38,13 +38,16 @@ import {
   ArrowShuffleRegular,
   PinRegular,
   BranchForkRegular,
-  ArrowClockwiseRegular,
-  ArrowLeftRegular,
   ArrowExpandRegular,
   DismissRegular,
   CircleRegular,
   FlowRegular,
   AppsListDetailRegular,
+  TagRegular,
+  CodeRegular,
+  PersonRegular,
+  FolderRegular,
+  ChevronRightRegular,
 } from '@fluentui/react-icons';
 import { useAppStore, resolveDeepExpression, selectMappingDefinition } from '../state/store';
 import { locale, t } from '../i18n';
@@ -57,9 +60,6 @@ interface Frame {
   label: string;           // breadcrumb label
   expression: string;      // expression being resolved
   configIndex: number;     // config index to resolve from
-  mappingExpression?: string | null;
-  mappingConfigIndex?: number | null;
-  mappingConfigName?: string | null;
 }
 
 export function getDrillDownEffectiveResolutionInput({
@@ -100,31 +100,33 @@ function dsTypeBadge(ds: any): string {
 
 function localizeBadgeLabel(badge: string): string {
   const cs: Record<string, string> = {
-    table: 'Tabulka',
-    enum: 'Výčet',
-    class: 'Třída',
-    calc: 'Výpočet',
-    container: 'Kontejner',
+    table: 'AX tabulka',
+    enum: 'AX výčet',
+    class: 'AX třída',
+    calc: 'Vypočtené pole',
+    container: 'Složka',
     groupby: 'Seskupení',
     join: 'Spojení',
-    object: 'Objekt',
-    userparameter: 'Uživatelský parametr',
-    param: 'Uživatelský parametr',
+    object: 'AX objekt',
+    userparameter: 'Parametr uživatele',
+    param: 'Parametr uživatele',
     importformat: 'Importní formát',
+    leaf: 'AX tabulka',
     unknown: 'Neznámé',
   };
   const en: Record<string, string> = {
-    table: 'Table',
-    enum: 'Enum',
-    class: 'Class',
-    calc: 'Calculation',
-    container: 'Container',
+    table: 'AX table',
+    enum: 'AX enum',
+    class: 'AX class',
+    calc: 'Calculated field',
+    container: 'Folder',
     groupby: 'Group by',
     join: 'Join',
-    object: 'Object',
+    object: 'AX object',
     userparameter: 'User parameter',
     param: 'User parameter',
     importformat: 'Import format',
+    leaf: 'AX table',
     unknown: 'Unknown',
   };
   const dict = locale === 'cs' ? cs : en;
@@ -606,28 +608,20 @@ function prettifyERExpr(expr: string, indentWidth = 2): string {
 interface ExpressionViewProps {
   expr: string;
   configIndex: number;
-  onPush: (f: Frame) => void;
   /**
-   * Optional expression string representing the current drill frame. Tokens
-   * whose click target would produce this exact expression are rendered
-   * non-interactively (no hover, no click) to prevent pointless self-pushes
-   * from the "Analyzuji výraz" hero — where the whole expression is a single
-   * DS token that otherwise keeps appending identical breadcrumbs.
+   * Opens the clicked part of a path. Every part is a valid prefix expression
+   * on its own, so the caller can resolve exactly what that hop returns —
+   * `model.Invoice.Address` answers a different question than `model.Invoice`.
    */
-  currentFrameExpression?: string;
+  onSegment?: (label: string, prefixExpression: string, configIndex: number) => void;
+  /** Normalised name of the part currently opened, so it can be marked. */
+  activeSegment?: string | null;
 }
 
-function ExpressionView({ expr, configIndex, onPush, currentFrameExpression }: ExpressionViewProps) {
+function ExpressionView({ expr, configIndex, onSegment, activeSegment }: ExpressionViewProps) {
   const tokens = useMemo(() => tokenizeERExpr(prettifyERExpr(expr)), [expr]);
   const configurations = useAppStore(s => s.configurations);
   const labels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
-
-  const buildSegmentExpression = (segments: string[], upto: number): string => (
-    segments
-      .slice(0, upto)
-      .map(formatSegmentForExpression)
-      .join('.')
-  );
 
   return (
     <div className="er-expr">
@@ -642,21 +636,37 @@ function ExpressionView({ expr, configIndex, onPush, currentFrameExpression }: E
           );
         }
         if (tok.kind === 'ds' && tok.segments && tok.segments.length > 0) {
-          const label = tok.raw.replace(/'/g, '');
+          const segments = tok.segments;
           return (
             <span key={idx} className="er-token-ds-path" title={tok.raw}>
-              {tok.segments.map((segment, segmentIdx) => {
-                const expression = buildSegmentExpression(tok.segments!, segmentIdx + 1);
-                const isSelf = currentFrameExpression !== undefined && expression === currentFrameExpression;
+              {segments.map((segment, segmentIdx) => {
+                const label = formatSegmentForDisplay(segment);
+                const normalized = normalizeExpr(label);
+                // `model` on its own is just the root keyword — it resolves to
+                // nothing, so it stays inert. Every real hop is clickable.
+                const isModelRoot = segmentIdx === 0 && normalized === 'model';
+                const clickable = Boolean(onSegment) && !isModelRoot;
+                const isSelf = clickable && activeSegment === normalized;
+                const prefix = segments.slice(0, segmentIdx + 1).map(formatSegmentForExpression).join('.');
                 return (
                   <React.Fragment key={`${idx}-${segmentIdx}`}>
                     {segmentIdx > 0 && <span className="er-token-ds-dot">.</span>}
                     <span
-                      className={`er-token-ds-segment${isSelf ? ' er-token-ds-segment--self' : ''}`}
-                      title={isSelf ? undefined : `→ ${expression}`}
-                      onClick={isSelf ? undefined : () => onPush({ label, expression, configIndex })}
+                      className={`er-token-ds-segment${isSelf ? ' er-token-ds-segment--self' : ''}${clickable ? '' : ' er-token-ds-segment--static'}`}
+                      role={clickable ? 'button' : undefined}
+                      tabIndex={clickable ? 0 : undefined}
+                      title={clickable ? t.lineageOpenSegment(prefix) : undefined}
+                      onClick={clickable ? () => onSegment!(label, prefix, configIndex) : undefined}
+                      onKeyDown={clickable
+                        ? event => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              onSegment!(label, prefix, configIndex);
+                            }
+                          }
+                        : undefined}
                     >
-                      {formatSegmentForDisplay(segment)}
+                      {label}
                     </span>
                   </React.Fragment>
                 );
@@ -696,602 +706,463 @@ interface WorkbenchPart {
   configIndex: number;
 }
 
-// Workbench-style frame view: expression parts on the left, details on the right.
-function DrillDownRebuiltView({ frame, onPush, configurations }: FrameViewProps) {
-  const resolveModelPath = useAppStore(s => s.resolveModelPath);
-  const resolveDatasource = useAppStore(s => s.resolveDatasource);
+/** A concrete D365FO source (table, enum, class, parameter, calculation) used by an expression. */
+interface UsedSource {
+  key: string;
+  name: string;
+  detail?: string;
+  badge: string;
+  expression?: string;
+  configIndex: number;
+}
 
-  const [selectedId, setSelectedId] = useState('root');
-  const treeItemRefs = React.useRef<Record<string, HTMLButtonElement | null>>({});
-  const treeListRef = React.useRef<HTMLDivElement | null>(null);
-  const [listScrollTop, setListScrollTop] = useState(0);
-  const [listViewportHeight, setListViewportHeight] = useState(420);
+const USED_SOURCE_ORDER: Record<string, number> = {
+  table: 0, enum: 1, class: 2, param: 3, groupby: 4, calc: 5, leaf: 6,
+};
 
-  const TREE_ITEM_ESTIMATED_HEIGHT = 50;
-  const TREE_OVERSCAN = 8;
-
-  React.useEffect(() => {
-    setSelectedId('root');
-  }, [frame.expression, frame.configIndex]);
-
-  /**
-   * The whole resolution chain, not just the segments of the expression text:
-   * model path → mapping formula → datasource → nested calculated fields → entity.
-   * Listing only the text segments hid every formula behind the first hop.
-   */
-  const treeNodes = useMemo(
-    () => buildWorkbenchParts({
-      expression: frame.expression,
-      label: frame.label,
-      configIndex: frame.configIndex,
-      configurations,
-      resolveModelPath,
-      resolveDatasource,
-    }),
-    [configurations, frame.configIndex, frame.expression, frame.label, resolveDatasource, resolveModelPath],
-  );
-
-  const selected = useMemo(
-    () => treeNodes.find(n => n.id === selectedId) ?? treeNodes[0],
-    [treeNodes, selectedId],
-  );
-
-  const selectByExpression = React.useCallback((expression: string) => {
-    const match = treeNodes.find(n => n.expression === expression);
-    if (match) setSelectedId(match.id);
-  }, [treeNodes]);
-
-  React.useEffect(() => {
-    const active = selected ? treeItemRefs.current[selected.id] : null;
-    if (active) {
-      active.scrollIntoView({ block: 'nearest' });
-    }
-  }, [selected]);
-
-  React.useLayoutEffect(() => {
-    const el = treeListRef.current;
-    if (!el) return;
-
-    const update = () => setListViewportHeight(el.clientHeight);
-    update();
-
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-
-    return () => observer.disconnect();
-  }, []);
-
-  if (!selected) {
-    return null;
+/**
+ * Single-column drill-down detail: what data the expression reads, how the
+ * value is filled in, and the source it ends at. The expression itself lives
+ * in the panel header, so this view no longer repeats it.
+ */
+/** Icon that identifies the kind of D365FO artefact a badge stands for. */
+function BadgeIcon({ badge, size = 14 }: { badge: string; size?: number }) {
+  switch (badge) {
+    case 'table':
+    case 'leaf':
+      return <TableRegular fontSize={size} aria-hidden />;
+    case 'enum':
+      return <TagRegular fontSize={size} aria-hidden />;
+    case 'class':
+      return <CodeRegular fontSize={size} aria-hidden />;
+    case 'calc':
+      return <CalculatorRegular fontSize={size} aria-hidden />;
+    case 'param':
+      return <PersonRegular fontSize={size} aria-hidden />;
+    case 'groupby':
+      return <ArrowShuffleRegular fontSize={size} aria-hidden />;
+    case 'model':
+    case 'mapping':
+      return <BranchForkRegular fontSize={size} aria-hidden />;
+    case 'root':
+      return <CompassNorthwestRegular fontSize={size} aria-hidden />;
+    default:
+      return <FolderRegular fontSize={size} aria-hidden />;
   }
+}
 
-  const selectedIsModel = selected.expression.toLowerCase().startsWith('model.') || selected.expression.toLowerCase().startsWith('model\\');
-  const cleanSelectedExpr = selectedIsModel ? extractModelPath(selected.expression) : selected.expression;
+const normalizeExpr = (value: string) => value.replace(/\s+/g, '').toLowerCase();
 
-  // Some format bindings are rendered without explicit "model." prefix (e.g. Invoice.InvoiceBase...).
-  // Keep model-path resolution enabled for these so intermediate sub-expressions still resolve.
-  const modelResult = resolveModelPath(cleanSelectedExpr);
-  const shouldUseModelBinding = selectedIsModel || Boolean(modelResult);
-  const mappingExpr = modelResult?.binding?.expressionAsString ?? frame.mappingExpression ?? null;
-  const mappingCi = modelResult?.bindingConfigIndex ?? frame.mappingConfigIndex ?? selected.configIndex;
-  const mappingConfig = modelResult
-    ? configurations[mappingCi]?.solutionVersion?.solution?.name
-    : (frame.mappingConfigName ?? (mappingExpr ? configurations[mappingCi]?.solutionVersion?.solution?.name : null));
+// ─── Value path (data lineage) ───────────────────────────────────────────────
+// Instead of navigating a stack of frames, the whole resolution chain of an
+// expression is laid out at once as an indented outline:
+//   expression → model path → mapping formula → datasource → formula → AX table
+// Nothing is pushed, replaced or appended, so there is no navigation state that
+// can drift out of sync with what is on screen.
 
-  const buildContextualFrame = React.useCallback((nextFrame: Frame): Frame => ({
-    ...nextFrame,
-    mappingExpression: mappingExpr,
-    mappingConfigIndex: mappingExpr ? mappingCi : null,
-    mappingConfigName: mappingExpr ? mappingConfig : null,
-  }), [mappingCi, mappingConfig, mappingExpr]);
+/** How deep the outline expands before the user has to open a branch. */
+const LINEAGE_AUTO_EXPAND_DEPTH = 3;
 
-  const pushWithContext = React.useCallback((nextFrame: Frame) => {
-    onPush(buildContextualFrame(nextFrame));
-  }, [buildContextualFrame, onPush]);
+/** What this hop of the chain represents, in the consultant's words. */
+function lineageStageLabel(node: TreeExprNode): string {
+  if (node.kind === 'mapping') return t.lineageStageMapping;
+  if (node.kind === 'calcfield') return t.lineageStageFormula;
+  if (node.badge === 'model') return t.lineageStageModelPath;
+  if (node.badge === 'param') return t.lineageStageUserParam;
+  if (node.badge === 'groupby') return t.lineageStageGroupBy;
+  if (node.kind === 'leaf') return t.lineageStageEntity;
+  if (node.kind === 'ref') return t.lineageStageUnresolved;
+  return t.lineageStageSource;
+}
 
-  const selectedIndex = Math.max(0, treeNodes.findIndex(n => n.id === selected.id));
+/** Nodes whose sublabel is an ER expression rather than a plain name. */
+function isFormulaNode(node: TreeExprNode): boolean {
+  return node.kind === 'mapping' || node.kind === 'calcfield';
+}
 
-  const ensureTreeIndexVisible = React.useCallback((index: number) => {
-    const listEl = treeListRef.current;
-    if (!listEl) return;
+/** Stable identity of a source across the outline, the chips and the expression. */
+function lineageSourceKey(badge: string, name: string): string {
+  return `${badge === 'userparameter' ? 'param' : badge}::${normalizeExpr(name)}`;
+}
 
-    const itemTop = index * TREE_ITEM_ESTIMATED_HEIGHT;
-    const itemBottom = itemTop + TREE_ITEM_ESTIMATED_HEIGHT;
-    const viewTop = listEl.scrollTop;
-    const viewBottom = viewTop + listEl.clientHeight;
+function countLineageDescendants(node: TreeExprNode): number {
+  return node.children.reduce((sum, child) => sum + 1 + countLineageDescendants(child), 0);
+}
 
-    if (itemTop < viewTop) {
-      listEl.scrollTop = itemTop;
-      return;
-    }
-    if (itemBottom > viewBottom) {
-      listEl.scrollTop = itemBottom - listEl.clientHeight;
-    }
-  }, []);
+interface LineageIndexEntry {
+  /** Row key used both for the DOM ref and for the highlight. */
+  key: string;
+  /** Node ids that must be open for the row to be on screen. */
+  ancestors: string[];
+}
 
-  const onTreeListKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (treeNodes.length === 0) return;
+/**
+ * Everything the outline needs to reveal a row on demand: which rows exist,
+ * how to open them, and which plain names in an expression lead to them.
+ */
+function buildLineageIndex(root: TreeExprNode): {
+  defaultOpen: Set<string>;
+  byKey: Map<string, LineageIndexEntry>;
+  byName: Map<string, LineageIndexEntry>;
+} {
+  const defaultOpen = new Set<string>();
+  const byKey = new Map<string, LineageIndexEntry>();
+  const byName = new Map<string, LineageIndexEntry>();
 
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      const nextIndex = Math.min(treeNodes.length - 1, selectedIndex + 1);
-      setSelectedId(treeNodes[nextIndex].id);
-      ensureTreeIndexVisible(nextIndex);
-      return;
-    }
+  const walk = (node: TreeExprNode, depth: number, ancestors: string[]): void => {
+    if (depth < LINEAGE_AUTO_EXPAND_DEPTH) defaultOpen.add(node.id);
 
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      const nextIndex = Math.max(0, selectedIndex - 1);
-      setSelectedId(treeNodes[nextIndex].id);
-      ensureTreeIndexVisible(nextIndex);
-      return;
-    }
-
-    if (event.key === 'Home') {
-      event.preventDefault();
-      setSelectedId(treeNodes[0].id);
-      ensureTreeIndexVisible(0);
-      return;
-    }
-
-    if (event.key === 'End') {
-      event.preventDefault();
-      const lastIndex = treeNodes.length - 1;
-      setSelectedId(treeNodes[lastIndex].id);
-      ensureTreeIndexVisible(lastIndex);
-      return;
+    const entry: LineageIndexEntry = { key: lineageSourceKey(node.badge, node.label), ancestors };
+    // The shallowest occurrence wins — that is the one the user should land on.
+    if (!byKey.has(entry.key)) byKey.set(entry.key, entry);
+    for (const name of [node.label, isFormulaNode(node) ? undefined : node.sublabel]) {
+      const normalized = normalizeExpr(String(name ?? ''));
+      if (normalized && !byName.has(normalized)) byName.set(normalized, entry);
     }
 
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      pushWithContext({
-        label: selected.label,
-        expression: selected.expression,
-        configIndex: selected.configIndex,
-      });
-    }
-  }, [ensureTreeIndexVisible, pushWithContext, selected.configIndex, selected.expression, selected.label, selectedIndex, treeNodes]);
+    const childAncestors = [...ancestors, node.id];
+    node.children.forEach(child => walk(child, depth + 1, childAncestors));
+  };
 
-  const pushMappingToDatasource = React.useCallback((nextFrame: Frame) => {
-    const deep = resolveDeepExpression(nextFrame.expression, configurations, nextFrame.configIndex);
-    const resolvedDs = (deep?.nestedDs ?? deep?.rootDs)
-      ?? resolveDatasource(firstSegment(nextFrame.expression), nextFrame.configIndex)?.datasource
-      ?? null;
+  root.children.forEach(child => walk(child, 1, []));
+  return { defaultOpen, byKey, byName };
+}
 
-    if (!resolvedDs) {
-      pushWithContext(nextFrame);
-      return;
-    }
-
-    const resolvedExpression = deep?.pathSegments?.length
-      ? deep.pathSegments.map(formatSegmentForExpression).join('.')
-      : nextFrame.expression;
-
-    pushWithContext({
-      ...nextFrame,
-      label: resolvedDs.name ?? nextFrame.label,
-      expression: resolvedExpression,
-      configIndex: deep?.rootDsConfigIndex ?? nextFrame.configIndex,
-    });
-  }, [configurations, pushWithContext, resolveDatasource]);
-
-  // Resolve datasource details from the currently selected expression.
-  // Mapping expression is shown as context, but must not override selection.
-  const { effectiveExpr, effectiveCi } = getDrillDownEffectiveResolutionInput({
-    selectedExpression: selected.expression,
-    selectedIsModel: shouldUseModelBinding,
-    frameConfigIndex: selected.configIndex,
-    modelBindingExpression: modelResult?.binding?.expressionAsString,
-    modelBindingConfigIndex: modelResult?.bindingConfigIndex,
-  });
-  const deepResult = resolveDeepExpression(effectiveExpr, configurations, effectiveCi);
-  // Resolve the *whole* selected path, not just its first segment: for
-  // "Parameters.'$ReferenceNumber'" the first segment is only the container,
-  // which is why such expressions reported "Data source: Container" and never
-  // showed the user parameter behind them.
-  const directResult = !shouldUseModelBinding ? resolveDatasource(selected.expression, selected.configIndex) : null;
-  const resolvedDs = (deepResult?.nestedDs ?? deepResult?.rootDs)
-    ?? modelResult?.datasource
-    ?? directResult?.datasource
-    ?? null;
-  const resolvedDsConfigIndex = deepResult?.rootDsConfigIndex
-    ?? modelResult?.datasourceConfigIndex
-    ?? directResult?.configIndex
-    ?? effectiveCi;
-  const labelPool = buildLabelPool(configurations, resolvedDsConfigIndex);
-
-  const normalizeExpr = (value: string) => value.replace(/\s+/g, '').toLowerCase();
-  const showMappingExpression = Boolean(mappingExpr && normalizeExpr(mappingExpr) !== normalizeExpr(selected.expression));
-
-  // The trailing segments of the path are fields on the entity, not datasources,
-  // so without them the panel showed the table but never which column it reads.
-  const resolvedFieldPath = deepResult?.fieldPath?.join('.') ?? '';
-  const resolvedEntityName = resolvedDs?.tableInfo?.tableName
-    ?? (resolvedDs?.enumInfo ? formatEnumDisplayName(resolvedDs.enumInfo.enumName, resolvedDs.enumInfo) : null)
-    ?? resolvedDs?.classInfo?.className
-    ?? null;
-  const targetName = resolvedEntityName && resolvedFieldPath
-    ? `${resolvedEntityName}.${resolvedFieldPath}`
-    : resolvedEntityName;
-  const targetIsDistinct = Boolean(
-    targetName
-    && (!resolvedDs?.name || normalizeExpr(String(targetName)) !== normalizeExpr(String(resolvedDs.name)))
-  );
-
-  const selectedPathSegments = useMemo(() => {
-    const firstDsToken = tokenizeERExpr(selected.expression).find(
-      (tok): tok is ERToken & { kind: 'ds'; segments: string[] } => tok.kind === 'ds' && Array.isArray(tok.segments) && tok.segments.length > 0,
-    );
-    if (firstDsToken) {
-      return firstDsToken.segments.map((segment, idx) => ({
-        label: formatSegmentForDisplay(segment),
-        expression: firstDsToken.segments.slice(0, idx + 1).map(formatSegmentForExpression).join('.'),
-      }));
-    }
-    return [{ label: selected.label, expression: selected.expression }];
-  }, [selected.expression, selected.label]);
-
-  /**
-   * A selection that is more than a bare path — a function call, comparison,
-   * boolean expression or label reference. The left column truncates it to one
-   * line and the breadcrumb only covers paths, so without this the full text of
-   * the very expression being drilled was nowhere on screen.
-   */
-  const showFullExpression = shouldShowFullExpression(selected.expression);
-
-  /**
-   * Model references used by a *compound* expression (the root `IF(...)`, a
-   * function call, a comparison …). Such an expression is not itself a model
-   * path, so `resolveModelPath` finds nothing for it and the panel used to show
-   * no mapping at all — even though every path inside it is mapped. List them
-   * so the mapping formulas are one click away from the root, which is where
-   * the drill-down opens.
-   */
-  const referencedModelBindings = useMemo(() => {
-    // Only for compound selections: a resolvable path renders its own card.
-    if (modelResult) return [];
-
-    const seen = new Set<string>();
-    const out: Array<{
-      expression: string;
-      label: string;
-      mappingExpression: string;
-      mappingConfigIndex: number;
-      mappingConfigName: string | null;
-    }> = [];
-
-    for (const tok of tokenizeERExpr(selected.expression)) {
-      if (tok.kind !== 'ds' || !tok.segments || tok.segments.length === 0) continue;
-      // Longest form first: the leaf is what carries the binding.
-      for (let len = tok.segments.length; len >= 1; len--) {
-        const segs = tok.segments.slice(0, len);
-        const expression = segs.map(formatSegmentForExpression).join('.');
-        if (seen.has(expression)) break;
-        const resolved = resolveModelPath(expression);
-        if (!resolved?.binding?.expressionAsString) continue;
-        seen.add(expression);
-        out.push({
-          expression,
-          label: segs.map(formatSegmentForDisplay).join('.'),
-          mappingExpression: resolved.binding.expressionAsString,
-          mappingConfigIndex: resolved.bindingConfigIndex,
-          mappingConfigName:
-            configurations[resolved.bindingConfigIndex]?.solutionVersion?.solution?.name ?? null,
-        });
-        break;
-      }
-    }
-    return out;
-  }, [modelResult, selected.expression, resolveModelPath, configurations]);
-
-  const datasourceDefinitionEntries = useMemo(() => {
-    if (!resolvedDs) return [] as Array<{ key: string; label: string; expression: string; kind: 'calc' | 'user-param' | 'groupby' }>;
-
-    const entries: Array<{ key: string; label: string; expression: string; kind: 'calc' | 'user-param' | 'groupby' }> = [];
-
-    const calcExpr = resolvedDs?.calculatedField?.expressionAsString?.trim();
-    if (calcExpr) {
-      entries.push({
-        key: 'calc-formula',
-        label: t.drillStepFormulaTitle,
-        expression: calcExpr,
-        kind: 'calc',
-      });
-    }
-
-    const userParamExpr = resolvedDs?.userParamInfo?.expressionAsString?.trim();
-    if (userParamExpr) {
-      entries.push({
-        key: 'user-param-expression',
-        label: t.drillStepUserParameterTitle,
-        expression: userParamExpr,
-        kind: 'user-param',
-      });
-    }
-
-    const groupByListExpr = resolvedDs?.groupByInfo?.listToGroup?.trim();
-    if (groupByListExpr) {
-      entries.push({
-        key: 'groupby-list',
-        label: t.drillStepGroupedListTitle,
-        expression: groupByListExpr,
-        kind: 'groupby',
-      });
-    }
-
-    if (Array.isArray(resolvedDs?.groupByInfo?.aggregations)) {
-      for (const agg of resolvedDs.groupByInfo.aggregations) {
-        const aggExpr = String(agg?.path ?? '').trim();
-        if (!aggExpr) continue;
-        const aggName = String(agg?.name ?? '').trim() || t.propValue;
-        entries.push({
-          key: `groupby-agg-${agg?.name ?? aggExpr}`,
-          label: t.drillStepAggregationTitle(aggName),
-          expression: aggExpr,
-          kind: 'groupby',
-        });
-      }
-    }
-
-    return entries;
-  }, [locale, resolvedDs]);
-
-  /**
-   * The resolved datasource is just the model container — saying "Data source:
-   * model" answers nothing. List the concrete D365FO sources instead: either
-   * the ones referenced by the mapping formula, or (for container-level paths
-   * with no formula) the sources used by the bindings under the selected path.
-   */
-  const resolvedDsIsModelOnly = Boolean(
-    resolvedDs
-    && !resolvedDs.tableInfo && !resolvedDs.enumInfo && !resolvedDs.classInfo
-    && !resolvedDs.calculatedField && !resolvedDs.userParamInfo && !resolvedDs.groupByInfo
-    && (resolvedDs.type === 'DataModel' || resolvedDs.modelInfo),
-  );
-
-  interface UnderlyingSource {
-    key: string;
-    name: string;
-    detail?: string;
-    badge: string;
-    expression?: string;
-    configIndex: number;
-  }
-
-  const underlyingSources = useMemo((): UnderlyingSource[] => {
-    if (!resolvedDsIsModelOnly) return [];
-    return collectUnderlyingSources({
-      mappingExpression: mappingExpr,
-      mappingConfigIndex: mappingCi,
-      selectedModelPath: cleanSelectedExpr,
-      configurations,
-      resolveModelPath,
-      resolveDatasource,
-    });
-  }, [resolvedDsIsModelOnly, mappingExpr, mappingCi, cleanSelectedExpr, configurations, resolveModelPath, resolveDatasource]);
-
-  const virtualWindow = useMemo(() => {
-    const visibleCount = Math.ceil(Math.max(1, listViewportHeight) / TREE_ITEM_ESTIMATED_HEIGHT);
-    const start = Math.max(0, Math.floor(listScrollTop / TREE_ITEM_ESTIMATED_HEIGHT) - TREE_OVERSCAN);
-    const end = Math.min(treeNodes.length, start + visibleCount + TREE_OVERSCAN * 2);
-    const items = treeNodes.slice(start, end);
-    return {
-      start,
-      end,
-      items,
-      topSpacer: start * TREE_ITEM_ESTIMATED_HEIGHT,
-      bottomSpacer: (treeNodes.length - end) * TREE_ITEM_ESTIMATED_HEIGHT,
-    };
-  }, [listScrollTop, listViewportHeight, treeNodes]);
+function LineageRow({ node, depth, highlightKey, openIds, onToggle, registerRef, onSegment, activeSegment }: {
+  node: TreeExprNode;
+  depth: number;
+  highlightKey: string | null;
+  openIds: Set<string>;
+  onToggle: (id: string) => void;
+  registerRef: (key: string, el: HTMLDivElement | null) => void;
+  onSegment: (label: string, prefixExpression: string, configIndex: number) => void;
+  activeSegment: string | null;
+}) {
+  const hasChildren = node.children.length > 0;
+  const formula = isFormulaNode(node) ? node.sublabel : undefined;
+  const expandable = hasChildren || Boolean(formula);
+  const open = openIds.has(node.id);
+  const sourceKey = lineageSourceKey(node.badge, node.label);
+  const isHighlighted = highlightKey === sourceKey;
+  // A mapping row's own name ("Mapping") only repeats its stage label, so the
+  // binding expression takes that slot instead — that is the useful part.
+  const showName = node.kind !== 'mapping';
 
   return (
-    <div className="dd-workbench">
-      <div className="dd-workbench__split">
-        <aside className="dd-workbench__tree" aria-label={locale === 'cs' ? 'Strom výrazu' : 'Expression tree'}>
-          <div className="dd-workbench__panel-head">{locale === 'cs' ? 'Části výrazu' : 'Expression parts'}</div>
-          <div
-            className="dd-workbench__tree-list"
-            ref={treeListRef}
-            tabIndex={0}
-            onScroll={(event) => setListScrollTop(event.currentTarget.scrollTop)}
-            onKeyDown={onTreeListKeyDown}
+    <li className="lin-node">
+      <div
+        ref={el => registerRef(sourceKey, el)}
+        className={`lin-row${isHighlighted ? ' is-highlight' : ''}`}
+      >
+        {expandable ? (
+          <button
+            type="button"
+            className={`lin-row__toggle${open ? ' is-open' : ''}`}
+            onClick={() => onToggle(node.id)}
+            aria-expanded={open}
+            aria-label={open ? t.lineageCollapse : t.lineageExpand}
+            title={open ? t.lineageCollapse : t.lineageExpand}
           >
-            {virtualWindow.topSpacer > 0 && (
-              <div className="dd-workbench__tree-spacer" style={{ height: `${virtualWindow.topSpacer}px` }} aria-hidden />
-            )}
-            {virtualWindow.items.map(node => (
-              <button
-                key={node.id}
-                type="button"
-                className={`dd-workbench__tree-item${selected.id === node.id ? ' is-active' : ''}`}
-                data-depth={node.depth}
-                onClick={() => setSelectedId(node.id)}
-                ref={(el) => {
-                  treeItemRefs.current[node.id] = el;
-                }}
-                style={{
-                  paddingLeft: `${12 + node.depth * 18}px`,
-                  ['--dd-tree-depth' as string]: node.depth,
-                }}
-                title={node.detail ? `${node.expression}\n\n${node.detail}` : node.expression}
-              >
-                <span className="dd-workbench__tree-label">
-                  <span className={`badge badge-${node.badge}`}>{badgeLabel(node.badge)}</span>
-                  {node.label}
-                </span>
-                <span className="dd-workbench__tree-expr">{node.detail ?? node.expression}</span>
-              </button>
-            ))}
-            {virtualWindow.bottomSpacer > 0 && (
-              <div className="dd-workbench__tree-spacer" style={{ height: `${virtualWindow.bottomSpacer}px` }} aria-hidden />
-            )}
-          </div>
-        </aside>
+            <ChevronRightRegular fontSize={12} />
+          </button>
+        ) : (
+          <span className="lin-row__toggle lin-row__toggle--leaf" aria-hidden>
+            <CircleRegular fontSize={7} />
+          </span>
+        )}
+        <span className="lin-row__icon" aria-hidden><BadgeIcon badge={node.badge} /></span>
+        <span className="lin-row__stage">{lineageStageLabel(node)}</span>
+        {showName && <span className="lin-row__name" title={node.label}>{node.label}</span>}
+        {node.sublabel && !formula && (
+          <code className="lin-row__detail" title={node.sublabel}>{node.sublabel}</code>
+        )}
+        {formula && !open && (
+          <code className="lin-row__detail" title={formula}>{formula}</code>
+        )}
+        {expandable && !open && (
+          <span className="lin-row__more">+{countLineageDescendants(node) + (formula ? 1 : 0)}</span>
+        )}
+      </div>
 
-        <section className="dd-workbench__detail">
-          <div className="dd-workbench__panel-head">{locale === 'cs' ? 'Naplnění vybrané části' : 'Selected part resolution'}</div>
-
-          <div className="dd-workbench__detail-block">
-            <div className="dd-workbench__detail-label">{locale === 'cs' ? 'Aktuální větev' : 'Current branch'}</div>
-            <div className="dd-workbench__breadcrumb">
-              {selectedPathSegments.map((segment, idx) => (
-                <React.Fragment key={`${segment.expression}-${idx}`}>
-                  {idx > 0 && <span className="dd-workbench__breadcrumb-sep" aria-hidden>›</span>}
-                  <button
-                    type="button"
-                    className={`dd-workbench__breadcrumb-segment${selected.expression === segment.expression ? ' is-active' : ''}`}
-                    onClick={() => selectByExpression(segment.expression)}
-                    title={segment.expression}
-                  >
-                    {segment.label}
-                  </button>
-                </React.Fragment>
-              ))}
-            </div>
-          </div>
-
-          {(showMappingExpression && mappingExpr || resolvedDs || referencedModelBindings.length > 0 || showFullExpression) && (
-            <div className="dd-workbench__detail-grid">
-              {showFullExpression && (
-                <div className="dd-workbench__detail-card">
-                  <div className="dd-workbench__detail-card-head">
-                    <span>{locale === 'cs' ? 'Výraz' : 'Expression'}</span>
-                    <span className="dd-workbench__card-meta">{selected.label}</span>
-                  </div>
-                  <ExpressionView
-                    expr={selected.expression}
-                    configIndex={selected.configIndex}
-                    onPush={pushWithContext}
-                    currentFrameExpression={selected.expression}
-                  />
-                </div>
-              )}
-
-              {referencedModelBindings.length > 0 && (
-                <div className="dd-workbench__detail-card">
-                  <div className="dd-workbench__detail-card-head">
-                    <span>{locale === 'cs' ? 'Mapování použitých cest' : 'Mapping of referenced paths'}</span>
-                    <span className="dd-workbench__card-meta">{referencedModelBindings.length}</span>
-                  </div>
-                  {referencedModelBindings.map(ref => (
-                    <div key={ref.expression} className="dd-ds-formula">
-                      <div className="dd-ds-formula__label">
-                        <button
-                          type="button"
-                          className="dd-workbench__ref-path"
-                          onClick={() => selectByExpression(ref.expression)}
-                          title={locale === 'cs' ? 'Vybrat tuto část výrazu' : 'Select this expression part'}
-                        >
-                          {ref.label}
-                        </button>
-                        {ref.mappingConfigName && (
-                          <span className="dd-workbench__card-meta">{ref.mappingConfigName}</span>
-                        )}
-                      </div>
-                      <ExpressionView
-                        expr={ref.mappingExpression}
-                        configIndex={ref.mappingConfigIndex}
-                        onPush={pushWithContext}
-                        currentFrameExpression={selected.expression}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {showMappingExpression && mappingExpr && (
-                <div className="dd-workbench__detail-card">
-                  <div className="dd-workbench__detail-card-head">
-                    <span>{locale === 'cs' ? 'Mapování' : 'Mapping'}</span>
-                    {mappingConfig && <span className="dd-workbench__card-meta">{mappingConfig}</span>}
-                  </div>
-                  <ExpressionView expr={mappingExpr} configIndex={mappingCi} onPush={pushMappingToDatasource} currentFrameExpression={selected.expression} />
-                </div>
-              )}
-
-              {resolvedDs && (
-                <div className="dd-workbench__detail-card">
-                  <div className="dd-workbench__detail-card-head">
-                    <span>{locale === 'cs' ? 'Datový zdroj' : 'Data source'}</span>
-                    <span className={`badge badge-${dsTypeBadge(resolvedDs)}`}>{localizeDatasourceType(resolvedDs)}</span>
-                  </div>
-                  <div className="dd-workbench__summary">
-                    <div className="dd-workbench__summary-row"><span>{t.propName}</span><strong>{resolvedDs.name}</strong></div>
-                    {targetIsDistinct && targetName && <div className="dd-workbench__summary-row"><span>{locale === 'cs' ? 'Cíl' : 'Target'}</span><strong>{targetName}</strong></div>}
-                    {typeof resolvedDs.label === 'string' && resolvedDs.label && (
-                      <div className="dd-workbench__summary-row">
-                        <span>{t.propLabel}</span>
-                        <strong title={resolvedDs.label}>{labelDisplayText(resolvedDs.label, labelPool) ?? resolvedDs.label}</strong>
-                      </div>
-                    )}
-                    {/* A user parameter has no formula behind it — its data type and
-                        label are the whole answer to "where does this come from". */}
-                    {resolvedDs.userParamInfo?.extendedDataTypeName && (
-                      <div className="dd-workbench__summary-row"><span>{t.propEdt}</span><strong>{resolvedDs.userParamInfo.extendedDataTypeName}</strong></div>
-                    )}
-                    {resolvedDs.type === 'UserParameter' && (
-                      <div className="dd-workbench__summary-note">
-                        {locale === 'cs'
-                          ? 'Hodnotu zadává uživatel při spuštění reportu — nepochází z modelu ani z tabulky.'
-                          : 'Filled in by the user when the report runs — it comes from neither the model nor a table.'}
-                      </div>
-                    )}
-                  </div>
-                  {underlyingSources.length > 0 && (
-                    <div className="dd-underlying">
-                      <div className="dd-underlying__head">
-                        {locale === 'cs' ? 'Tabulky a datové zdroje D365FO' : 'D365FO tables and data sources'}
-                      </div>
-                      <ul className="dd-underlying__list">
-                        {underlyingSources.map((src) => (
-                          <li key={src.key} className="dd-underlying__item">
-                            <span className={`badge badge-${src.badge}`}>{localizeBadgeLabel(src.badge)}</span>
-                            {src.expression ? (
-                              <button
-                                type="button"
-                                className="dd-underlying__link"
-                                onClick={() => pushWithContext({
-                                  label: src.name,
-                                  expression: src.expression!,
-                                  configIndex: src.configIndex,
-                                })}
-                              >
-                                {src.name}
-                              </button>
-                            ) : (
-                              <span className="dd-underlying__name">{src.name}</span>
-                            )}
-                            {src.detail && src.detail !== src.name && (
-                              <span className="dd-underlying__detail" title={src.detail}>{src.detail}</span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {datasourceDefinitionEntries.map((entry) => (
-                    <div key={entry.key} className="dd-ds-formula">
-                      <div className="dd-ds-formula__label">
-                        {entry.kind === 'calc' && <CalculatorRegular fontSize={13} aria-hidden />}
-                        {entry.kind === 'user-param' && <TextQuoteRegular fontSize={13} aria-hidden />}
-                        {entry.kind === 'groupby' && <ArrowShuffleRegular fontSize={13} aria-hidden />}
-                        {entry.label}
-                      </div>
-                      <ExpressionView
-                        expr={entry.expression}
-                        configIndex={resolvedDsConfigIndex}
-                        onPush={pushWithContext}
-                        currentFrameExpression={selected.expression}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
+      {open && (formula || hasChildren) && (
+        <div className="lin-branch">
+          {formula && (
+            <div className="lin-formula">
+              <span className="lin-formula__label">{t.lineageFormulaLabel}</span>
+              <ExpressionView
+                expr={formula}
+                configIndex={node.configIndex ?? 0}
+                onSegment={onSegment}
+                activeSegment={activeSegment}
+              />
             </div>
           )}
-        </section>
-      </div>
+          {hasChildren && (
+            <ul className="lin-children">
+              {node.children.map(child => (
+                <LineageRow
+                  key={child.id}
+                  node={child}
+                  depth={depth + 1}
+                  highlightKey={highlightKey}
+                  openIds={openIds}
+                  onToggle={onToggle}
+                  registerRef={registerRef}
+                  onSegment={onSegment}
+                  activeSegment={activeSegment}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/**
+ * The whole drill-down body: what data the expression uses, and the complete
+ * path each value travels to get there.
+ */
+function DrillDownLineageView({ expression, configIndex, configurations, elementName }: {
+  expression: string;
+  configIndex: number;
+  configurations: any[];
+  elementName?: string;
+}) {
+  const resolveModelPath = useAppStore(s => s.resolveModelPath);
+  const resolveDatasource = useAppStore(s => s.resolveDatasource);
+  const findModelPathBindings = useAppStore(s => s.findModelPathBindings);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const [showUnresolved, setShowUnresolved] = useState(false);
+  const [highlightKey, setHighlightKey] = useState<string | null>(null);
+  const [peek, setPeek] = useState<{ label: string; expression: string; configIndex: number } | null>(null);
+  const [pendingScrollKey, setPendingScrollKey] = useState<string | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+
+  const registerRef = React.useCallback((key: string, el: HTMLDivElement | null) => {
+    if (el) rowRefs.current.set(key, el);
+    else rowRefs.current.delete(key);
+  }, []);
+
+  const tree = useMemo(() => buildExpressionTree({
+    expression,
+    configIndex,
+    configurations,
+    resolveModelPath,
+    resolveDatasource,
+    findModelPathBindings,
+    includeUnresolvedRefs: showUnresolved,
+  }), [expression, configIndex, configurations, resolveModelPath, resolveDatasource, findModelPathBindings, showUnresolved]);
+
+  const usedSources = useMemo(() => collectUsedSources({
+    expression,
+    configIndex,
+    configurations,
+    resolveModelPath,
+    resolveDatasource,
+  }), [expression, configIndex, configurations, resolveModelPath, resolveDatasource]);
+
+  const index = useMemo(() => buildLineageIndex(tree), [tree]);
+  const [openIds, setOpenIds] = useState<Set<string>>(index.defaultOpen);
+
+  // A different expression means a different outline, so the open branches reset.
+  useEffect(() => { setOpenIds(index.defaultOpen); setPeek(null); }, [index]);
+
+  const toggle = React.useCallback((id: string) => {
+    setOpenIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  /**
+   * Reveal a row: open every branch above it first, then scroll once React has
+   * actually rendered it. Scrolling straight away would miss collapsed rows.
+   */
+  const reveal = (entry: LineageIndexEntry | undefined) => {
+    if (!entry) return;
+    setPeek(null);
+    setOpenIds(prev => {
+      const next = new Set(prev);
+      entry.ancestors.forEach(id => next.add(id));
+      return next;
+    });
+    setHighlightKey(entry.key);
+    setPendingScrollKey(entry.key);
+  };
+
+  useEffect(() => {
+    if (!pendingScrollKey) return;
+    const row = rowRefs.current.get(pendingScrollKey);
+    if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setPendingScrollKey(null);
+  }, [pendingScrollKey, openIds]);
+
+  /**
+   * Clicking a part of a path re-scopes the whole breakdown below the
+   * expression to that part — the question "what is behind this hop?" is
+   * answered in place, not in a second panel competing for attention.
+   */
+  const handleSegment = React.useCallback((label: string, prefixExpression: string, segmentConfigIndex: number) => {
+    setHighlightKey(null);
+    setPeek({ label, expression: prefixExpression, configIndex: segmentConfigIndex });
+  }, []);
+
+  // A scope only makes sense for the expression it was taken from.
+  useEffect(() => { setPeek(null); }, [expression, configIndex]);
+
+  /** What the clicked part of a path resolves to, on its own. */
+  const peekTree = useMemo(() => (peek
+    ? buildExpressionTree({
+        expression: peek.expression,
+        configIndex: peek.configIndex,
+        configurations,
+        resolveModelPath,
+        resolveDatasource,
+        findModelPathBindings,
+        includeUnresolvedRefs: true,
+      })
+    : null
+  ), [peek, configurations, resolveModelPath, resolveDatasource, findModelPathBindings]);
+
+  const peekIndex = useMemo(() => (peekTree ? buildLineageIndex(peekTree) : null), [peekTree]);
+  const [peekOpenIds, setPeekOpenIds] = useState<Set<string>>(new Set());
+  useEffect(() => { setPeekOpenIds(peekIndex?.defaultOpen ?? new Set()); }, [peekIndex]);
+  const togglePeek = React.useCallback((id: string) => {
+    setPeekOpenIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  const noopRef = React.useCallback(() => {}, []);
+
+  const activeSegment = useMemo(() => (peek ? normalizeExpr(peek.label) : null), [peek]);
+
+  // One set of props drives the outline, whether it shows the whole expression
+  // or just the part the user drilled into.
+  const shownTree = peekTree ?? tree;
+  const shownOpenIds = peek ? peekOpenIds : openIds;
+  const shownToggle = peek ? togglePeek : toggle;
+  const shownRegisterRef = peek ? noopRef : registerRef;
+  const shownHighlight = peek ? null : highlightKey;
+
+  return (
+    <div className="lin">
+      {/* The headline question — which D365FO data does this element read? */}
+      <section className="lin-summary">
+        <header className="lin-summary__head">
+          <span className="lin-summary__title">{t.drillUsedDataTitle}</span>
+          <span className="lin-summary__count">{usedSources.length}</span>
+        </header>
+        <p className="lin-summary__hint">{t.drillUsedDataHint}</p>
+        {usedSources.length > 0 ? (
+          <ul className="lin-chips">
+            {usedSources.map(src => {
+              const key = lineageSourceKey(src.badge, src.name);
+              return (
+                <li key={src.key}>
+                  <button
+                    type="button"
+                    className={`lin-chip${highlightKey === key ? ' is-active' : ''}`}
+                    onClick={() => reveal(index.byKey.get(key) ?? index.byName.get(normalizeExpr(src.name)))}
+                    title={t.lineageShowInPath(src.name)}
+                  >
+                    <BadgeIcon badge={src.badge} size={13} />
+                    <span className="lin-chip__name">{src.name}</span>
+                    <span className="lin-chip__type">{localizeBadgeLabel(src.badge)}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="lin-summary__empty">{t.drillUsedDataEmpty}</p>
+        )}
+      </section>
+
+      {/* The full chain, expanded — no navigation, nothing to lose track of. */}
+      <section className="lin-path">
+        <header className="lin-path__head">
+          <span className="lin-summary__title">{t.lineageTitle}</span>
+          {showTechnicalDetails && (
+            <button
+              type="button"
+              className={`lin-path__toggle${showUnresolved ? ' is-active' : ''}`}
+              onClick={() => setShowUnresolved(v => !v)}
+              aria-pressed={showUnresolved}
+            >
+              {locale === 'cs' ? 'Nevyřešené' : 'Unresolved'}
+            </button>
+          )}
+        </header>
+        <p className="lin-summary__hint">{t.lineageHint}</p>
+
+        <ul className="lin-tree">
+          <li className="lin-node">
+            <div className="lin-row lin-row--origin">
+              <span className="lin-row__toggle lin-row__toggle--leaf" aria-hidden>
+                <CircleRegular fontSize={7} />
+              </span>
+              <span className="lin-row__icon" aria-hidden><CompassNorthwestRegular fontSize={14} /></span>
+              <span className="lin-row__stage">{t.lineageStageOrigin}</span>
+              <span className="lin-row__name">{elementName ?? t.drillFocusExpression}</span>
+            </div>
+            <div className="lin-branch">
+              <div className="lin-formula">
+                <span className="lin-formula__label">{t.drillAnalyzing}</span>
+                <ExpressionView
+                  expr={expression}
+                  configIndex={configIndex}
+                  onSegment={handleSegment}
+                  activeSegment={activeSegment}
+                />
+              </div>
+
+              {/* The breakdown below is scoped to the part the user clicked. */}
+              {peek && (
+                <div className="lin-scope">
+                  <span className="lin-scope__label">{t.lineagePeekTitle}</span>
+                  <code className="lin-scope__expr" title={peek.expression}>{peek.expression}</code>
+                  <button
+                    type="button"
+                    className="lin-scope__reset"
+                    onClick={() => setPeek(null)}
+                    title={t.lineagePeekClose}
+                  >
+                    <DismissRegular fontSize={11} />
+                    <span>{t.lineagePeekClose}</span>
+                  </button>
+                </div>
+              )}
+
+              {shownTree.children.length > 0 ? (
+                <ul className="lin-children">
+                  {shownTree.children.map(child => (
+                    <LineageRow
+                      key={child.id}
+                      node={child}
+                      depth={1}
+                      highlightKey={shownHighlight}
+                      openIds={shownOpenIds}
+                      onToggle={shownToggle}
+                      registerRef={shownRegisterRef}
+                      onSegment={handleSegment}
+                      activeSegment={activeSegment}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <p className="lin-summary__empty">{t.lineagePeekEmpty}</p>
+              )}
+            </div>
+          </li>
+        </ul>
+      </section>
     </div>
   );
 }
@@ -1319,6 +1190,7 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
   const trimmedExpr = expression?.trim() ?? '';
   const openDrillDownTab = useAppStore(s => s.openDrillDownTab);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [dialogViewMode, setDialogViewMode] = useState<'workbench' | 'tree'>('workbench');
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(() => () => {
@@ -1392,12 +1264,10 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
       <Dialog open={isDialogOpen} onOpenChange={(_, d) => setIsDialogOpen(d.open)} modalType="modal">
         <DialogSurface
           className="dd-dialog-surface"
-          style={{
-            width: 'min(99vw, 99dvw)',
-            maxWidth: 'min(99vw, 99dvw)',
-            height: 'min(99vh, 99dvh)',
-            maxHeight: 'min(99vh, 99dvh)',
-          }}
+          style={dialogViewMode === 'tree'
+            // The tree needs room to pan/zoom; the detail view reads better narrow.
+            ? { width: '96vw', maxWidth: '96vw', height: '92vh', maxHeight: '92vh' }
+            : { width: 'min(1080px, 94vw)', maxWidth: 'min(1080px, 94vw)', height: 'min(760px, 88vh)', maxHeight: 'min(760px, 88vh)' }}
         >
           <DialogBody className="dd-dialog-body">
             <DialogTitle
@@ -1424,6 +1294,7 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
                 configIndex={configIndex}
                 elementName={elementName}
                 variant="dialog"
+                onViewModeChange={setDialogViewMode}
               />
             </DialogContent>
           </DialogBody>
@@ -1464,6 +1335,13 @@ interface TreeBuildContext {
   configurations: any[];
   resolveModelPath: (p: string) => any;
   resolveDatasource: (n: string, ci: number) => any;
+  /** Bindings under a container path — used when the container has none itself. */
+  findModelPathBindings?: (p: string) => Array<{
+    path: string;
+    relativePath: string;
+    expressionAsString: string;
+    configIndex: number;
+  }>;
   includeUnresolvedRefs: boolean;
   /** Remaining node budget, decremented as nodes are produced. */
   budget: number;
@@ -1489,9 +1367,13 @@ function buildTreeNode(
     const cleanPath = extractModelPath(expression);
     const modelResult = ctx.resolveModelPath(cleanPath);
     if (!modelResult) {
+      // A container usually carries no binding of its own — what fills it is
+      // only visible through the bindings of the fields inside it.
+      const scoped = buildContainerChildren(ctx, id, cleanPath, configIndex, visited, depth);
       return {
         id, kind: 'ref', label: cleanPath.split(/[.\\]/).pop() ?? cleanPath,
-        sublabel: cleanPath, badge: 'model', expression, configIndex, children: [],
+        sublabel: cleanPath, badge: 'model', expression, configIndex,
+        children: scoped,
       };
     }
     const bindingExpr: string = modelResult.binding?.expressionAsString ?? '';
@@ -1567,6 +1449,50 @@ function buildTreeNode(
 /** A datasource whose own definition explains where its value comes from. */
 function hasOwnDefinition(ds: any): boolean {
   return Boolean(ds?.calculatedField?.expressionAsString || ds?.userParamInfo || ds?.groupByInfo);
+}
+
+/** How many distinct sources a container may contribute before the list is cut. */
+const MAX_CONTAINER_SOURCES = 8;
+
+/**
+ * What fills a model container that has no binding of its own. ER binds most
+ * containers implicitly: only the fields inside them carry expressions, so the
+ * container's data sources have to be read off its descendants.
+ */
+function buildContainerChildren(
+  ctx: TreeBuildContext,
+  id: string,
+  cleanPath: string,
+  configIndex: number,
+  visited: Set<string>,
+  depth: number,
+): TreeExprNode[] {
+  const scoped = ctx.findModelPathBindings?.(cleanPath) ?? [];
+  if (scoped.length === 0) return [];
+
+  // One row per distinct source — a container with 40 fields off one table
+  // should read as "this table", not as 40 repetitions of it.
+  const byRoot = new Map<string, { expression: string; configIndex: number }>();
+  for (const binding of scoped) {
+    for (const tok of uniqueDsTokens(tokenizeERExpr(binding.expressionAsString))) {
+      const root = tok.segments[0]?.toLowerCase();
+      if (!root || byRoot.has(root)) continue;
+      byRoot.set(root, { expression: tok.expression, configIndex: binding.configIndex });
+      if (byRoot.size >= MAX_CONTAINER_SOURCES) break;
+    }
+    if (byRoot.size >= MAX_CONTAINER_SOURCES) break;
+  }
+
+  const children: TreeExprNode[] = [];
+  let i = 0;
+  for (const entry of byRoot.values()) {
+    const child = buildTreeNode(
+      ctx, `${id}-c${i++}`, entry.expression, entry.configIndex,
+      new Set(visited), depth + 1,
+    );
+    if (child) children.push(child);
+  }
+  return dedupeTreeChildren(children);
 }
 
 /**
@@ -1702,36 +1628,31 @@ function buildDsNode(
 }
 
 /**
- * Concrete D365FO sources behind a model-only resolution: either the sources
- * referenced by the mapping formula, or (for container-level paths without a
- * formula) the sources used by the bindings under the selected model path.
- * Exported for tests.
+ * Every concrete D365FO source (table, enum, class, user parameter, calculated
+ * field) an expression ends up reading — including the field on the entity.
+ * Walks the full resolution tree: model path → mapping formula → datasource →
+ * nested calculated fields → entity. Exported for tests.
  */
-export function collectUnderlyingSources(options: {
-  mappingExpression: string | null;
-  mappingConfigIndex: number;
-  selectedModelPath: string;
+export function collectUsedSources(options: {
+  expression: string;
+  configIndex: number;
   configurations: any[];
   resolveModelPath: (p: string) => any;
   resolveDatasource: (n: string, ci: number) => any;
-}): Array<{ key: string; name: string; detail?: string; badge: string; expression?: string; configIndex: number }> {
-  const {
-    mappingExpression, mappingConfigIndex, selectedModelPath,
-    configurations, resolveModelPath, resolveDatasource,
-  } = options;
+}): UsedSource[] {
+  const { expression, configIndex, configurations, resolveModelPath, resolveDatasource } = options;
 
-  type Source = { key: string; name: string; detail?: string; badge: string; expression?: string; configIndex: number };
-  const out = new Map<string, Source>();
-  const add = (src: Source) => {
+  const out = new Map<string, UsedSource>();
+  const add = (src: UsedSource) => {
     const badge = src.badge === 'userparameter' ? 'param' : src.badge;
     const key = `${badge}::${src.name}::${src.detail ?? ''}`;
     if (!out.has(key)) out.set(key, { ...src, badge, key });
   };
 
-  const collectFromExpression = (expression: string, configIndex: number): void => {
+  const collectFromExpression = (expr: string, ci: number): void => {
     const tree = buildExpressionTree({
-      expression,
-      configIndex,
+      expression: expr,
+      configIndex: ci,
       configurations,
       resolveModelPath,
       resolveDatasource,
@@ -1745,7 +1666,7 @@ export function collectUnderlyingSources(options: {
           detail: node.sublabel,
           badge: node.badge,
           expression: node.expression,
-          configIndex: node.configIndex ?? configIndex,
+          configIndex: node.configIndex ?? ci,
         });
       }
       node.children.forEach(walk);
@@ -1753,21 +1674,13 @@ export function collectUnderlyingSources(options: {
     tree.children.forEach(walk);
   };
 
-  // 1. Sources referenced by the mapping formula of the selected path.
-  if (mappingExpression) {
-    collectFromExpression(mappingExpression, mappingConfigIndex);
-  }
+  // 1. Everything reachable from the expression itself (model paths included —
+  //    buildExpressionTree walks through their mapping formulas).
+  collectFromExpression(expression, configIndex);
 
-  // 1b. Format bindings are often formulas themselves (IF(model.a, model.b, …))
-  //     with no single mapping binding behind them — walk the selected
-  //     expression directly, expanding each model reference it contains.
-  if (out.size === 0 && /[(<>=+\-*\s]/.test(selectedModelPath.trim())) {
-    collectFromExpression(selectedModelPath, mappingConfigIndex);
-  }
-
-  // 2. Container-level path without a formula — list only the sources used by
-  //    the mapping bindings *under the selected model path*, not every
-  //    datasource of the definition.
+  // 2. Container-level model path without a formula of its own — list the
+  //    sources used by the mapping bindings *under* that path.
+  const selectedModelPath = extractModelPath(expression);
   if (out.size === 0) {
     const splitPathSegments = (path: string): string[] => {
       const segments: string[] = [];
@@ -1820,14 +1733,17 @@ export function collectUnderlyingSources(options: {
         const bindings = ((definition?.bindings ?? []) as any[])
           .filter(binding => matchesSelectedPath(binding?.path));
         for (const binding of bindings.slice(0, 80)) {
-          const expression = String(binding?.expressionAsString ?? '').trim();
-          if (expression) collectFromExpression(expression, ci);
+          const bindingExpression = String(binding?.expressionAsString ?? '').trim();
+          if (bindingExpression) collectFromExpression(bindingExpression, ci);
         }
       }
     });
   }
 
-  return Array.from(out.values());
+  return Array.from(out.values()).sort((left, right) => (
+    (USED_SOURCE_ORDER[left.badge] ?? 9) - (USED_SOURCE_ORDER[right.badge] ?? 9)
+    || left.name.localeCompare(right.name)
+  ));
 }
 
 /**
@@ -1840,11 +1756,12 @@ export function buildExpressionTree(options: {
   configurations: any[];
   resolveModelPath: (p: string) => any;
   resolveDatasource: (n: string, ci: number) => any;
+  findModelPathBindings?: TreeBuildContext['findModelPathBindings'];
   includeUnresolvedRefs?: boolean;
 }): TreeExprNode {
   const {
     expression, configIndex, configurations,
-    resolveModelPath, resolveDatasource, includeUnresolvedRefs = false,
+    resolveModelPath, resolveDatasource, findModelPathBindings, includeUnresolvedRefs = false,
   } = options;
 
   const dsTokens = uniqueDsTokens(tokenizeERExpr(expression));
@@ -1862,6 +1779,7 @@ export function buildExpressionTree(options: {
       configurations,
       resolveModelPath,
       resolveDatasource,
+      findModelPathBindings,
       includeUnresolvedRefs,
       budget: MAX_TREE_NODES,
     };
@@ -2120,8 +2038,8 @@ function badgeIcon(badge: string): React.ReactNode {
 }
 
 function badgeLabel(badge: string): string {
-  const cs: Record<string, string> = { root: 'Výraz', model: 'Model', mapping: 'Mapování', table: 'Tabulka', enum: 'Výčet', class: 'Třída', calc: 'Výpočet', param: 'Parametr', groupby: 'Seskupení', ds: 'DS', leaf: 'Entita' };
-  const en: Record<string, string> = { root: 'Expression', model: 'Model', mapping: 'Mapping', table: 'Table', enum: 'Enum', class: 'Class', calc: 'Calculation', param: 'Parameter', groupby: 'Group by', ds: 'DS', leaf: 'Entity' };
+  const cs: Record<string, string> = { root: 'Výraz', model: 'Model', mapping: 'Mapování', table: 'AX tabulka', enum: 'AX výčet', class: 'AX třída', calc: 'Vypočtené pole', param: 'Parametr uživatele', groupby: 'Seskupení', ds: 'Pole', leaf: 'AX tabulka' };
+  const en: Record<string, string> = { root: 'Expression', model: 'Model', mapping: 'Mapping', table: 'AX table', enum: 'AX enum', class: 'AX class', calc: 'Calculated field', param: 'User parameter', groupby: 'Group by', ds: 'Field', leaf: 'AX table' };
   return (locale === 'cs' ? cs : en)[badge] ?? badge;
 }
 
@@ -2165,7 +2083,7 @@ function TreeFlowNode({ data }: { data: {
           <div className="ddt-node__actions" onClick={(event) => event.stopPropagation()}>
             {canDrill && (
               <button type="button" className="ddt-node__action" onClick={() => onDrill?.(node)}>
-                {t.drillDown}
+                {t.drillZoomIn}
               </button>
             )}
             {canCopy && (
@@ -2192,7 +2110,8 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill, i
   expression: string;
   configIndex: number;
   configurations: any[];
-  onDrill: (expr: string, ci: number) => void;
+  /** Optional: the tree is an alternative rendering of the same value path, not a navigator. */
+  onDrill?: (expr: string, ci: number) => void;
   includeUnresolvedRefs?: boolean;
   labelMode?: TreeLabelMode;
 }) {
@@ -2290,9 +2209,11 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill, i
           onSelect: (treeNode: TreeExprNode) => {
             setSelectedNodeId(treeNode.id);
           },
-          onDrill: (treeNode: TreeExprNode) => {
-            if (treeNode.expression) onDrill(treeNode.expression, treeNode.configIndex ?? configIndex);
-          },
+          onDrill: onDrill
+            ? (treeNode: TreeExprNode) => {
+                if (treeNode.expression) onDrill(treeNode.expression, treeNode.configIndex ?? configIndex);
+              }
+            : undefined,
           onCopy: async (treeNode: TreeExprNode) => {
             const value = treeNode.expression;
             if (!value) return;
@@ -2403,12 +2324,14 @@ export function DrillDownPanel({ expression, configIndex, elementName }: {
   );
 }
 
-export function DrillDownBody({ expression, configIndex, elementName, variant = 'inline', onPopOut }: {
+export function DrillDownBody({ expression, configIndex, elementName, variant = 'inline', onPopOut, onViewModeChange }: {
   expression: string;
   configIndex: number;
   elementName?: string;
   variant?: 'inline' | 'tab' | 'dialog';
   onPopOut?: () => void;
+  /** Lets the host (e.g. the dialog) resize itself for the roomier tree view. */
+  onViewModeChange?: (mode: 'workbench' | 'tree') => void;
 }) {
   const configurations = useAppStore(s => s.configurations);
   const trimmedExpr = expression?.trim() ?? '';
@@ -2432,9 +2355,9 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
   });
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(DRILLDOWN_VIEW_MODE_KEY, viewMode);
-  }, [viewMode]);
+    if (typeof window !== 'undefined') window.localStorage.setItem(DRILLDOWN_VIEW_MODE_KEY, viewMode);
+    onViewModeChange?.(viewMode);
+  }, [viewMode, onViewModeChange]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -2446,48 +2369,12 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
     window.localStorage.setItem(DRILLDOWN_LABEL_MODE_KEY, treeLabelMode);
   }, [treeLabelMode]);
 
-  const initialFrame = (): Frame => ({
-    label: elementName ?? (trimmedExpr.split(/[.(]/)[0] || '?'),
-    expression: trimmedExpr,
-    configIndex,
-  });
-
-  const [stack, setStack] = useState<Frame[]>([initialFrame()]);
-
-  const currentFrame = stack[stack.length - 1];
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
 
   const validationContext = useMemo(
-    () => getDrillValidationContext(configurations, currentFrame.configIndex, currentFrame.label),
-    [configurations, currentFrame.configIndex, currentFrame.label],
+    () => getDrillValidationContext(configurations, configIndex, elementName ?? firstSegment(trimmedExpr)),
+    [configurations, configIndex, elementName, trimmedExpr],
   );
-
-  const push = (frame: Frame) => setStack(s => {
-    // Skip pushing a frame that is identical to the current top. This happens
-    // when the user clicks the "Analyzuji výraz" expression in the hero — the
-    // whole expression is itself a DS token, so a click would just keep
-    // appending the same breadcrumb.
-    const top = s[s.length - 1];
-    if (top
-      && top.expression === frame.expression
-      && top.configIndex === frame.configIndex
-      && top.label === frame.label) {
-      return s;
-    }
-    return [...s, {
-      ...top,
-      ...frame,
-      mappingExpression: frame.mappingExpression ?? top?.mappingExpression ?? null,
-      mappingConfigIndex: frame.mappingConfigIndex ?? top?.mappingConfigIndex ?? null,
-      mappingConfigName: frame.mappingConfigName ?? top?.mappingConfigName ?? null,
-    }];
-  });
-  const jumpTo = (index: number) => setStack(s => s.slice(0, index + 1));
-  const restart = () => setStack([initialFrame()]);
-
-  React.useEffect(() => {
-    setStack([initialFrame()]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trimmedExpr, configIndex, elementName]);
 
   if (!trimmedExpr) {
     return (
@@ -2503,34 +2390,16 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
     );
   }
 
-  const atRoot = stack.length === 1;
-
   return (
-    <div className={`dd-panel ${variant === 'tab' ? 'dd-panel--tab' : ''} ${variant === 'dialog' ? 'dd-panel--dialog' : ''}`}>
+    <div className={`dd-panel ${variant === 'tab' ? 'dd-panel--tab' : ''} ${variant === 'dialog' ? 'dd-panel--dialog' : ''} ${viewMode === 'tree' ? 'dd-panel--tree' : ''}`}>
       <header className="dd-hero">
         <div className="dd-hero__top">
           <span className="dd-hero__badge">
             <span className="dd-hero__badge-icon" aria-hidden><CompassNorthwestRegular fontSize={13} /></span>
             {t.drillDown}
           </span>
-          <span className="dd-hero__meta">{t.drillSteps(stack.length)}</span>
+          {elementName && <span className="dd-hero__meta">{elementName}</span>}
           <div className="dd-hero__actions">
-            {!atRoot && (
-              <button
-                type="button"
-                className="dd-hero__btn"
-                onClick={() => setStack(s => s.slice(0, -1))}
-                title={t.back}
-              ><ArrowLeftRegular fontSize={13} /> {t.back}</button>
-            )}
-            {!atRoot && (
-              <button
-                type="button"
-                className="dd-hero__btn dd-hero__btn--ghost"
-                onClick={restart}
-                title={t.drillRestart}
-              ><ArrowClockwiseRegular fontSize={13} /> {t.drillRestart}</button>
-            )}
             {onPopOut && (
               <button
                 type="button"
@@ -2550,10 +2419,10 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
               aria-selected={viewMode === 'workbench'}
               className={`dd-view-toggle__btn${viewMode === 'workbench' ? ' is-active' : ''}`}
               onClick={() => setViewMode('workbench')}
-              title={locale === 'cs' ? 'Pracovní plocha' : 'Workbench'}
+              title={locale === 'cs' ? 'Přehledný detail výrazu' : 'Expression detail'}
             >
               <AppsListDetailRegular fontSize={14} />
-              <span className="dd-view-toggle__label">{locale === 'cs' ? 'Plocha' : 'Workbench'}</span>
+              <span className="dd-view-toggle__label">{locale === 'cs' ? 'Detail' : 'Detail'}</span>
             </button>
             <button
               type="button"
@@ -2567,7 +2436,7 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
               <span className="dd-view-toggle__label">{locale === 'cs' ? 'Strom' : 'Tree'}</span>
             </button>
           </div>
-          {viewMode === 'tree' && (
+          {viewMode === 'tree' && showTechnicalDetails && (
             <>
               <div
                 className="dd-tree-label-toggle"
@@ -2608,25 +2477,6 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
           )}
         </div>
 
-        {stack.length > 1 && (
-          <nav className="dd-hero__crumbs" aria-label={locale === 'cs' ? 'Drobečková navigace' : 'Breadcrumb'}>
-            {stack.map((f, i) => (
-              <React.Fragment key={i}>
-                {i > 0 && <span className="dd-hero__crumb-sep" aria-hidden>›</span>}
-                <button
-                  type="button"
-                  className={`dd-hero__crumb${i === stack.length - 1 ? ' is-active' : ''}`}
-                  onClick={() => i < stack.length - 1 && jumpTo(i)}
-                  disabled={i === stack.length - 1}
-                  title={f.expression}
-                >
-                  {f.label}
-                </button>
-              </React.Fragment>
-            ))}
-          </nav>
-        )}
-
         {validationContext && validationContext.rules.length > 0 && (
           <section className="dd-validation-summary" aria-label={locale === 'cs' ? 'Detaily validace' : 'Validation details'}>
             <div className="dd-validation-summary__head">
@@ -2649,13 +2499,13 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
                   {rule.conditionExpressionAsString && (
                     <div className="dd-validation-summary__expr-row">
                       <span className="dd-validation-summary__expr-label">{locale === 'cs' ? 'Podmínka' : 'Condition'}</span>
-                      <ExpressionView expr={rule.conditionExpressionAsString} configIndex={currentFrame.configIndex} onPush={push} currentFrameExpression={currentFrame.expression} />
+                      <ExpressionView expr={rule.conditionExpressionAsString} configIndex={configIndex} />
                     </div>
                   )}
                   {rule.messageExpressionAsString && (
                     <div className="dd-validation-summary__expr-row">
                       <span className="dd-validation-summary__expr-label">{locale === 'cs' ? 'Zpráva' : 'Message'}</span>
-                      <ExpressionView expr={rule.messageExpressionAsString} configIndex={currentFrame.configIndex} onPush={push} currentFrameExpression={currentFrame.expression} />
+                      <ExpressionView expr={rule.messageExpressionAsString} configIndex={configIndex} />
                     </div>
                   )}
                 </div>
@@ -2667,23 +2517,19 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
 
       {viewMode === 'tree' ? (
         <DrillDownTreeView
-          expression={currentFrame.expression}
-          configIndex={currentFrame.configIndex}
+          expression={trimmedExpr}
+          configIndex={configIndex}
           configurations={configurations}
           includeUnresolvedRefs={showUnresolvedRefs}
           labelMode={treeLabelMode}
-          onDrill={(expr, ci) => push({
-            label: expr.split(/[.(]/)[0] || expr,
-            expression: expr,
-            configIndex: ci,
-          })}
         />
       ) : (
         <div className="dd-frame-content">
-          <DrillDownRebuiltView
-            frame={currentFrame}
-            onPush={push}
+          <DrillDownLineageView
+            expression={trimmedExpr}
+            configIndex={configIndex}
             configurations={configurations}
+            elementName={elementName}
           />
         </div>
       )}
