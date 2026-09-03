@@ -192,6 +192,7 @@ export function SearchPanel() {
   const setActiveWhereUsedRefKey = useAppStore(s => s.setActiveWhereUsedRefKey);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const treeNodes = useAppStore(s => s.treeNodes);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const configurations = useAppStore(s => s.configurations);
   const whereUsedTrigger = useAppStore(s => s.whereUsedTrigger);
 
@@ -203,16 +204,24 @@ export function SearchPanel() {
     const section = locale === 'cs'
       ? { model: 'Model a binding', formula: 'Výrazy a funkce', guid: 'Technické reference' }
       : { model: 'Model and bindings', formula: 'Expressions and functions', guid: 'Technical references' };
-    return [
+    const examples: ExamplePreset[] = [
       { label: 'model.Header', hint: t.exampleHintIdentifier, category: section.model },
       { label: 'CompanyInfo', hint: t.exampleHintTable, category: section.model },
       { label: 'CalculatedTotal', hint: t.exampleHintCalcField, category: section.model },
       { label: 'DATETIMEFORMAT', hint: t.exampleHintFunction, category: section.formula },
       { label: 'ROUND', hint: t.exampleHintFunction, category: section.formula },
       { label: 'IF(', hint: t.exampleHintFunction, category: section.formula },
-      { label: '{', hint: locale === 'cs' ? 'Vyhledat GUID reference' : 'Search GUID references', category: section.guid },
     ];
-  }, [currentLocale]);
+    // GUID lookup is a developer tool — it has no meaning in consultant mode.
+    if (showTechnicalDetails) {
+      examples.push({
+        label: '{',
+        hint: locale === 'cs' ? 'Vyhledat GUID reference' : 'Search GUID references',
+        category: section.guid,
+      });
+    }
+    return examples;
+  }, [currentLocale, showTechnicalDetails]);
 
   const whereUsedExamples = useMemo<ExamplePreset[]>(() => {
     const section = locale === 'cs'
@@ -405,10 +414,12 @@ export function SearchPanel() {
           <>
             {!trimmedCurrentQuery && (
               <>
-                <div className="search-panel__kpis">
-                  <span className="search-panel__kpi">{registry.guidCount} GUID</span>
-                  <span className="search-panel__kpi">{registry.crossRefCount} cross-ref</span>
-                </div>
+                {showTechnicalDetails && (
+                  <div className="search-panel__kpis">
+                    <span className="search-panel__kpi">{registry.guidCount} GUID</span>
+                    <span className="search-panel__kpi">{registry.crossRefCount} cross-ref</span>
+                  </div>
+                )}
                 <ExamplePalette
                   title={t.examples}
                   examples={searchExamples}

@@ -545,7 +545,19 @@ function getConsultantFormatTypeLabel(type: string): string {
     XMLAttribute: 'Atribut',
     XMLSequence: 'Sekvence',
     String: 'Text',
+    Numeric: 'Číslo',
+    DateTime: 'Datum a čas',
     Base64: 'Příloha',
+    ExcelSheet: 'List',
+    ExcelRange: 'Oblast',
+    ExcelCell: 'Buňka',
+    ExcelHeader: 'Záhlaví',
+    ExcelFooter: 'Zápatí',
+    TextSequence: 'Sekvence',
+    TextLine: 'Řádek',
+    Sequence: 'Sekvence',
+    Common: 'Prvek',
+    Empty: 'Prázdný prvek',
   };
   const enLabels: Record<string, string> = {
     File: 'File',
@@ -556,10 +568,40 @@ function getConsultantFormatTypeLabel(type: string): string {
     XMLAttribute: 'Attribute',
     XMLSequence: 'Sequence',
     String: 'Text',
+    Numeric: 'Number',
+    DateTime: 'Date and time',
     Base64: 'Attachment',
+    ExcelSheet: 'Sheet',
+    ExcelRange: 'Range',
+    ExcelCell: 'Cell',
+    ExcelHeader: 'Header',
+    ExcelFooter: 'Footer',
+    TextSequence: 'Sequence',
+    TextLine: 'Line',
+    Sequence: 'Sequence',
+    Common: 'Element',
+    Empty: 'Empty element',
   };
   const labels = locale === 'cs' ? csLabels : enLabels;
-  return labels[type] ?? type;
+  return labels[type] ?? humanizeFormatTypeName(type);
+}
+
+/**
+ * Last resort for an element type the consultant labels don't cover: turn the
+ * raw ER identifier into plain words instead of leaking `XMLSequenceElement`.
+ */
+function humanizeFormatTypeName(type: string): string {
+  const words = String(type ?? '')
+    .replace(/^(XML|Excel|Text|Word|PDF)/, '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .trim();
+  if (!words) return locale === 'cs' ? 'Prvek' : 'Element';
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+}
+
+/** Element type as it should read in the current mode. */
+function formatTypeLabelFor(type: string, showTechnicalDetails: boolean | undefined): string {
+  return showTechnicalDetails ? type : getConsultantFormatTypeLabel(type);
 }
 
 function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): string {
@@ -1912,6 +1954,8 @@ type PreviewPlaceholderMode = 'sample' | 'omit' | 'braces';
 
 type PreviewRenderOptions = {
   placeholderMode: PreviewPlaceholderMode;
+  /** Consultant mode must not see raw ER element type names in the preview. */
+  showTechnicalDetails?: boolean;
 };
 
 function hashString(input: string): number {
@@ -3273,7 +3317,11 @@ function FormatPreview({ rootElement, direction, bindingMap, configIndex, onNavi
   });
   const [placeholderMode, setPlaceholderMode] = useState<PreviewPlaceholderMode>('sample');
   const [csvFirstRowHeader, setCsvFirstRowHeader] = useState(true);
-  const previewOptions = useMemo<PreviewRenderOptions>(() => ({ placeholderMode }), [placeholderMode]);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const previewOptions = useMemo<PreviewRenderOptions>(
+    () => ({ placeholderMode, showTechnicalDetails }),
+    [placeholderMode, showTechnicalDetails],
+  );
   const preview = useMemo(() => generateFormatPreview(previewRoot, bindingMap, previewOptions), [previewRoot, bindingMap, previewOptions]);
   const delimitedPreview = useMemo(() => parseDelimitedPreview(preview), [preview]);
 
@@ -3568,7 +3616,7 @@ function generateExcelPreview(root: ERFormatElement, bm: BindingMap, options: Pr
     } else if (el.elementType === 'ExcelCell') {
       lines.push(`${indent}📎 Cell: ${el.name} = ${previewValue(el, bm, options)}`);
     } else {
-      lines.push(`${indent}${el.elementType}: ${el.name}`);
+      lines.push(`${indent}${formatTypeLabelFor(el.elementType, options.showTechnicalDetails)}: ${el.name}`);
       for (const child of el.children) walk(child, depth + 1);
     }
   };
@@ -3578,7 +3626,7 @@ function generateExcelPreview(root: ERFormatElement, bm: BindingMap, options: Pr
 
 function generateGenericPreview(el: ERFormatElement, depth: number, bm: BindingMap, options: PreviewRenderOptions): string {
   const indent = '  '.repeat(depth);
-  const label = `${el.elementType}: ${el.name}`;
+  const label = `${formatTypeLabelFor(el.elementType, options.showTechnicalDetails)}: ${el.name}`;
   const pv = previewValue(el, bm, options);
   const val = pv !== `{${el.name}}` ? ` = ${pv}` : '';
   const line = `${indent}${label}${val}\n`;
@@ -4320,9 +4368,15 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
   } else if (ds.calculatedField) {
     targetLabel = ds.calculatedField.expressionAsString ?? '';
   } else if (ds.importFormatInfo) {
-    targetLabel = ds.importFormatInfo.formatGuid;
+    targetLabel = showTechnicalDetails
+      ? ds.importFormatInfo.formatGuid
+      : (locale === 'cs' ? 'Importní formát' : 'Import format');
   } else if (ds.groupByInfo) {
-    targetLabel = ds.groupByInfo.listToGroup ? `list: ${ds.groupByInfo.listToGroup}` : null;
+    targetLabel = ds.groupByInfo.listToGroup
+      ? (showTechnicalDetails
+          ? `list: ${ds.groupByInfo.listToGroup}`
+          : `${locale === 'cs' ? 'Seskupení podle' : 'Grouped by'}: ${ds.groupByInfo.listToGroup.split('/').pop()}`)
+      : null;
   }
 
   return (

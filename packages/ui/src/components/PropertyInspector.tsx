@@ -403,6 +403,38 @@ function ValidationProps({ data, configIndex, showTechnicalDetails }: { data: an
   );
 }
 
+/**
+ * A format element stores its transformation as a GUID reference. Consultants
+ * get the transformation's name; the raw reference stays in technical mode.
+ */
+function TransformationValue({ transformationId, configIndex, showTechnicalDetails }: {
+  transformationId: string;
+  configIndex: number;
+  showTechnicalDetails: boolean;
+}) {
+  const configurations = useAppStore(s => s.configurations);
+  const name = React.useMemo(() => {
+    const normalize = (value: string) => value.replace(/[{}]/g, '').toLowerCase();
+    const wanted = normalize(transformationId);
+    const config = configurations[configIndex];
+    const candidates = config?.content?.kind === 'Format'
+      ? [config, ...configurations]
+      : configurations;
+    for (const cfg of candidates) {
+      if (cfg?.content?.kind !== 'Format') continue;
+      const found = (cfg.content.formatVersion?.format?.transformations ?? [])
+        .find((trans: any) => normalize(String(trans?.id ?? '')) === wanted);
+      if (found?.name) return found.name as string;
+    }
+    return undefined;
+  }, [configurations, configIndex, transformationId]);
+
+  if (showTechnicalDetails) {
+    return <span className="prop-value guid">{name ? `${name} · ${transformationId}` : transformationId}</span>;
+  }
+  return <>{name ?? t.propTransformUnnamed}</>;
+}
+
 function FormatElementProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const excelRange = getFormatElementExcelRange(data);
   const labelRef = data.attributes?.['Label'];
@@ -419,7 +451,13 @@ function FormatElementProps({ data, configIndex, showTechnicalDetails }: { data:
   if (showTechnicalDetails && data.encoding) items.push([t.propEncoding, data.encoding]);
   if (showTechnicalDetails && data.maximalLength) items.push([t.propMaxLen, String(data.maximalLength)]);
   if (data.value) items.push([t.propValue, data.value]);
-  if (data.transformation) items.push([t.propTransform, data.transformation, 'guid']);
+  if (data.transformation) items.push([t.propTransform, (
+    <TransformationValue
+      transformationId={data.transformation}
+      configIndex={configIndex}
+      showTechnicalDetails={showTechnicalDetails}
+    />
+  )]);
   if (showTechnicalDetails && data.excludedFromDataSource) items.push([t.propExcluded, t.propYes]);
 
   return <PropGrid items={items} />;
