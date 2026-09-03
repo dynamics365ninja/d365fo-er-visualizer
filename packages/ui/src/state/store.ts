@@ -572,23 +572,50 @@ interface MappingSource {
   configName: string;
 }
 
-function getDatasourcePoolsForConfig(config: ERConfiguration): any[][] {
+function getDatasourcePoolsForConfig(
+  config: ERConfiguration,
+  preferredDescriptors: ReadonlySet<string> = new Set(),
+): any[][] {
   if (config.content.kind === 'ModelMapping') {
     const version = (config.content as ERModelMappingContent).version;
-    return getMappingDefinitions(version).map(mapping => mapping.datasources);
+    const definitions = orderMappingDefinitions(getMappingDefinitions(version), preferredDescriptors);
+    return definitions.map(mapping => mapping.datasources);
   }
 
   if (config.content.kind === 'Format') {
     const content = config.content as ERFormatContent;
+    // The format's own `model` datasource wins over anything a sibling format wants.
+    const ownDescriptors = getFormatDescriptorNames(content);
     return [
       ...content.embeddedModelMappingVersions.flatMap(version =>
-        getMappingDefinitions(version).map(mapping => mapping.datasources),
+        orderMappingDefinitions(getMappingDefinitions(version), ownDescriptors).map(
+          mapping => mapping.datasources,
+        ),
       ),
       content.formatMappingVersion.formatMapping.datasources,
     ].filter(pool => pool.length > 0);
   }
 
   return [];
+}
+
+/**
+ * Which mapping definitions a lookup started from `fromConfigIndex` should
+ * prefer. A model-mapping solution can carry one definition per
+ * DataContainerDescriptor (SalesInvoice, TMSCommercialInvoice, …) that reuse
+ * the same datasource names, so without this scope a lookup silently lands in
+ * the definition of a different model root.
+ */
+function getPreferredDescriptors(
+  configurations: ERConfiguration[],
+  fromConfigIndex: number,
+): ReadonlySet<string> {
+  const from = configurations[fromConfigIndex];
+  if (from?.content.kind === 'Format') {
+    const own = getFormatDescriptorNames(from.content as ERFormatContent);
+    if (own.size > 0) return own;
+  }
+  return getAllFormatDescriptorNames(configurations);
 }
 
 /** All mapping definitions of a model-mapping version (older cached data may miss `mappings`). */
@@ -641,10 +668,84 @@ function orderMappingDefinitions(definitions: any[], preferredDescriptors: Reado
  * the loaded formats (falls back to the first definition). Exported for the
  * designer views.
  */
+type DesignerTabState = Pick<AppState, 'openTabs' | 'activeTabId' | 'selectedNodeId' | 'selectedNode'>;
+
+/**
+ * Formats are what the tool is opened for, so put their designer on screen as
+ * soon as they load instead of leaving the user on an empty canvas. Only the
+ * configurations that just came in get a tab; already-open ones are left alone
+ * and the last format loaded becomes the active tab.
+ */
+export function openDesignerTabsForFormats(
+  state: DesignerTabState,
+  loaded: ERConfiguration[],
+  configurations: ERConfiguration[],
+  treeNodes: TreeNode[],
+): DesignerTabState {
+  let openTabs = state.openTabs;
+  let activeTabId = state.activeTabId;
+  let selectedNodeId = state.selectedNodeId;
+  let selectedNode = state.selectedNode;
+
+  for (const candidate of loaded) {
+    if (candidate.content.kind !== 'Format') continue;
+
+    // A merge may have kept the already-loaded object, so fall back to the path.
+    const index = configurations.indexOf(candidate) >= 0
+      ? configurations.indexOf(candidate)
+      : configurations.findIndex(config => config.filePath === candidate.filePath);
+    if (index < 0) continue;
+
+    const tabId = `cfg-${index}`;
+    if (!openTabs.some(tab => tab.id === tabId)) {
+      openTabs = [
+        ...openTabs,
+        { id: tabId, label: configurations[index].solutionVersion.solution.name, configIndex: index },
+      ];
+    }
+    activeTabId = tabId;
+    selectedNodeId = tabId;
+    selectedNode = treeNodes[index] ?? null;
+  }
+
+  return { openTabs, activeTabId, selectedNodeId, selectedNode };
+}
+
 export function selectMappingDefinition(version: any, configurations: ERConfiguration[]): any {
   const definitions = getMappingDefinitions(version);
   if (definitions.length <= 1) return definitions[0] ?? version?.mapping;
   return orderMappingDefinitions(definitions, getAllFormatDescriptorNames(configurations))[0];
+}
+
+/**
+ * Mapping definitions of one configuration, most relevant first — the
+ * definition whose `DataContainerDescriptor` the loaded format binds to comes
+ * before the definitions of the other model roots in the same solution.
+ */
+export function getScopedMappingDefinitions(
+  configurations: ERConfiguration[],
+  configIndex: number,
+): any[] {
+  const config = configurations[configIndex];
+  if (!config) return [];
+
+  if (config.content.kind === 'ModelMapping') {
+    const version = (config.content as ERModelMappingContent).version;
+    return orderMappingDefinitions(
+      getMappingDefinitions(version),
+      getPreferredDescriptors(configurations, configIndex),
+    );
+  }
+
+  if (config.content.kind === 'Format') {
+    const content = config.content as ERFormatContent;
+    const ownDescriptors = getFormatDescriptorNames(content);
+    return content.embeddedModelMappingVersions.flatMap(version =>
+      orderMappingDefinitions(getMappingDefinitions(version), ownDescriptors),
+    );
+  }
+
+  return [];
 }
 
 function getMappingSourcesForConfig(
@@ -817,9 +918,10 @@ function collectConfigurationWarnings(configurations: ERConfiguration[]): Config
       };
       // Include datasources from embedded model mapping versions so that
       // format bindings referencing model-mapping datasources are not
-      // incorrectly flagged as referencing unknown datasources.
+      // incorrectly flagged as referencing unknown datasources. A version can
+      // hold one definition per DataContainerDescriptor — scan them all.
       for (const embVersion of fc.embeddedModelMappingVersions) {
-        walkDs(embVersion.mapping.datasources);
+        for (const definition of getMappingDefinitions(embVersion)) walkDs(definition.datasources ?? []);
       }
       walkDs(fmtMap.datasources);
       // Count bindings whose expression root is unknown datasource.
@@ -998,6 +1100,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         recentFiles: nextRecent,
         recentSessions: nextSessions,
         cachedPaths: nextCachedPaths,
+        ...openDesignerTabsForFormats(state, parsed, newConfigs, treeNodes),
       });
     } catch (e) {
       console.error('Failed to parse ER configuration:', e);
@@ -1687,12 +1790,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!dsName) return null;
 
     const searchOrder = [fromConfigIndex, ...state.configurations.map((_, i) => i).filter(i => i !== fromConfigIndex)];
+    const preferredDescriptors = getPreferredDescriptors(state.configurations, fromConfigIndex);
 
     for (const ci of searchOrder) {
       const config = state.configurations[ci];
       if (!config) continue;
 
-      for (const datasources of getDatasourcePoolsForConfig(config)) {
+      for (const datasources of getDatasourcePoolsForConfig(config, preferredDescriptors)) {
         const root = findDatasourceByName(datasources, dsName);
         if (!root) continue;
 
@@ -1719,12 +1823,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   resolveBinding: (modelPath: string, fromConfigIndex: number) => {
     const state = get();
     const searchOrder = [fromConfigIndex, ...state.configurations.map((_, i) => i).filter(i => i !== fromConfigIndex)];
+    const preferredDescriptors = getPreferredDescriptors(state.configurations, fromConfigIndex);
 
     for (const ci of searchOrder) {
       const config = state.configurations[ci];
       if (!config) continue;
 
-      for (const source of getMappingSourcesForConfig(config, ci)) {
+      for (const source of getMappingSourcesForConfig(config, ci, preferredDescriptors)) {
         const binding = source.mapping.bindings.find((b: any) => b.path === modelPath);
         if (binding) {
           const treeNodeId = get().findBindingNode(modelPath, ci);
@@ -2832,10 +2937,15 @@ export function resolveDeepExpression(
   // Collect all datasource pools from all configs for cross-config tracing
   const allDatasourcePools: any[][] = [];
   const configDatasources = new Map<number, any[][]>();
-  for (let i = 0; i < configurations.length; i++) {
+  const preferredDescriptors = getPreferredDescriptors(configurations, fromConfigIndex);
+  const collectOrder = [
+    fromConfigIndex,
+    ...configurations.map((_: any, i: number) => i).filter((i: number) => i !== fromConfigIndex),
+  ];
+  for (const i of collectOrder) {
     const config = configurations[i];
     if (!config) continue;
-    const pools = getDatasourcePoolsForConfig(config);
+    const pools = getDatasourcePoolsForConfig(config, preferredDescriptors);
     if (pools.length > 0) {
       configDatasources.set(i, pools);
       allDatasourcePools.push(...pools);

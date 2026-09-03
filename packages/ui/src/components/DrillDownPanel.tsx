@@ -49,7 +49,7 @@ import {
   FolderRegular,
   ChevronRightRegular,
 } from '@fluentui/react-icons';
-import { useAppStore, resolveDeepExpression, selectMappingDefinition } from '../state/store';
+import { useAppStore, resolveDeepExpression, selectMappingDefinition, getScopedMappingDefinitions } from '../state/store';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { resolveLabel, buildLabelPool, labelDisplayText } from '../utils/label-resolver';
@@ -512,17 +512,9 @@ function getDrillValidationContext(
   const config = configurations[configIndex];
   if (!config) return null;
 
-  const mappings: any[] = [];
-  if (config.content?.kind === 'ModelMapping') {
-    const version = config.content.version;
-    mappings.push(...(version?.mappings?.length ? version.mappings : [version?.mapping].filter(Boolean)));
-  }
-  if (config.content?.kind === 'Format') {
-    for (const version of config.content.embeddedModelMappingVersions ?? []) {
-      if (version?.mappings?.length) mappings.push(...version.mappings);
-      else if (version?.mapping) mappings.push(version.mapping);
-    }
-  }
+  // Definitions of other DataContainerDescriptors can carry a validation on the
+  // very same path — take the definition the format binds to first.
+  const mappings = getScopedMappingDefinitions(configurations, configIndex);
 
   for (const mapping of mappings) {
     const validation = (mapping.validations ?? []).find((v: any) => v.path === elementName);

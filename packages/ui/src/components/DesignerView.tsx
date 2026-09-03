@@ -67,6 +67,27 @@ function resolveActiveMappingDefinition(version: any, configs: any[], activeNode
   return selectMappingDefinition(version, configs);
 }
 
+/**
+ * Restrict a solution's mapping definitions to the one that actually owns the
+ * selected datasource. Definitions of different DataContainerDescriptors reuse
+ * the same datasource names (`ReportDataProvider`, `Parameters`, …), so without
+ * this the property panel lists bindings from a foreign model root.
+ */
+function scopeDefinitionsToDatasource(definitions: any[], selected: any): any[] {
+  if (definitions.length <= 1 || !selected) return definitions;
+
+  const owns = (list: any[]): boolean => {
+    for (const ds of list ?? []) {
+      if (ds === selected) return true;
+      if (ds.children?.length && owns(ds.children)) return true;
+    }
+    return false;
+  };
+
+  const owners = definitions.filter(definition => owns(definition?.datasources ?? []));
+  return owners.length > 0 ? owners : definitions;
+}
+
 function getNodeHeaderIcon(node: any): React.ReactNode {
   const kind = node?.data?.kind ?? node?.data?.content?.kind;
   const nodeType = node?.type;
@@ -4121,7 +4142,7 @@ function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: n
     if (cfg.content.kind === 'ModelMapping') {
       const version = cfg.content.version as any;
       const definitions: any[] = version.mappings?.length ? version.mappings : [version.mapping];
-      for (const mapping of definitions) {
+      for (const mapping of scopeDefinitionsToDatasource(definitions, node.data)) {
         sources.push({
           sourceName: cfg.solutionVersion.solution.name,
           sourceConfigIndex: configIndex,
@@ -4132,7 +4153,7 @@ function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: n
     if (cfg.content.kind === 'Format') {
       for (const version of cfg.content.embeddedModelMappingVersions ?? []) {
         const definitions: any[] = (version as any).mappings?.length ? (version as any).mappings : [version.mapping];
-        for (const mapping of definitions) {
+        for (const mapping of scopeDefinitionsToDatasource(definitions, node.data)) {
           sources.push({
             sourceName: `${cfg.solutionVersion.solution.name} • ${mapping?.name ?? ''}`,
             sourceConfigIndex: configIndex,
