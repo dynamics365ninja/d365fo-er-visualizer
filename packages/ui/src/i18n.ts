@@ -288,6 +288,7 @@ export interface Translations {
   propMaxLen: string;
   propValue: string;
   propTransform: string;
+  propTransformUnnamed: string;
   propExcluded: string;
   propYes: string;
   propDirection: string;
@@ -818,6 +819,7 @@ const cs: Translations = {
   propMaxLen: 'Max. délka',
   propValue: 'Hodnota',
   propTransform: 'Transformace',
+  propTransformUnnamed: 'Nepojmenovaná transformace',
   propExcluded: 'Vyloučeno z DS',
   propYes: 'Ano',
   propDirection: 'Směr',
@@ -1352,6 +1354,7 @@ const en: Translations = {
   propMaxLen: 'Max length',
   propValue: 'Value',
   propTransform: 'Transformation',
+  propTransformUnnamed: 'Unnamed transformation',
   propExcluded: 'Excluded from DS',
   propYes: 'Yes',
   propDirection: 'Direction',

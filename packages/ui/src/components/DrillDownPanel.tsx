@@ -130,7 +130,20 @@ function localizeBadgeLabel(badge: string): string {
     unknown: 'Unknown',
   };
   const dict = locale === 'cs' ? cs : en;
-  return dict[badge] ?? badge;
+  return dict[badge] ?? humanizeInternalName(badge);
+}
+
+/**
+ * Fallback for an internal ER type token the dictionaries don't cover — plain
+ * words instead of a raw identifier such as `importformatdatasource`.
+ */
+function humanizeInternalName(token: string): string {
+  const words = String(token ?? '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .trim();
+  if (!words) return locale === 'cs' ? 'Zdroj' : 'Source';
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
 }
 
 function localizeDatasourceType(ds: any): string {
@@ -2040,7 +2053,7 @@ function badgeIcon(badge: string): React.ReactNode {
 function badgeLabel(badge: string): string {
   const cs: Record<string, string> = { root: 'Výraz', model: 'Model', mapping: 'Mapování', table: 'AX tabulka', enum: 'AX výčet', class: 'AX třída', calc: 'Vypočtené pole', param: 'Parametr uživatele', groupby: 'Seskupení', ds: 'Pole', leaf: 'AX tabulka' };
   const en: Record<string, string> = { root: 'Expression', model: 'Model', mapping: 'Mapping', table: 'AX table', enum: 'AX enum', class: 'AX class', calc: 'Calculated field', param: 'User parameter', groupby: 'Group by', ds: 'Field', leaf: 'AX table' };
-  return (locale === 'cs' ? cs : en)[badge] ?? badge;
+  return (locale === 'cs' ? cs : en)[badge] ?? humanizeInternalName(badge);
 }
 
 function TreeFlowNode({ data }: { data: {
@@ -2119,6 +2132,7 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill, i
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const pushToast = useAppStore(s => s.pushToast);
   const flowRef = React.useRef<any>(null);
   const [selectedNodeId, setSelectedNodeId] = useState('root');
@@ -2272,7 +2286,7 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill, i
 
   return (
     <div className="ddt-canvas">
-      {effectiveLabelMode !== labelMode && (
+      {effectiveLabelMode !== labelMode && showTechnicalDetails && (
         <div className="ddt-auto-compact-hint">
           {locale === 'cs'
             ? `Auto: kompaktní režim (${treeNodeCount} uzlů)`
@@ -2484,7 +2498,8 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
                 {locale === 'cs' ? 'Detaily validace' : 'Validation details'}
               </span>
               <span className="dd-validation-summary__meta">
-                {validationContext.path} • {validationContext.rules.length} {locale === 'cs' ? 'pravidel' : 'rules'}
+                {showTechnicalDetails && `${validationContext.path} • `}
+                {validationContext.rules.length} {locale === 'cs' ? 'pravidel' : 'rules'}
               </span>
             </div>
             <div className="dd-validation-summary__list">
