@@ -21,11 +21,38 @@ import {
   type AuthResult,
   type FnoConnection,
 } from '@er-visualizer/fno-client';
+import { clearRedirectPending, markRedirectPending } from './redirect-state';
 
 const pool = new Map<string, PublicClientApplication>();
+/** Auth response picked up by `handleRedirectPromise`, consumed by the next `acquireToken`. */
+const redirectResults = new Map<string, AuthenticationResult>();
 
 function appKey(conn: FnoConnection): string {
   return `${conn.tenantId}::${conn.clientId}`;
+}
+
+/**
+ * Where Microsoft identity should send the browser back to.
+ *
+ * It must be the SPA document itself, not the site root: on the web deployment
+ * the SPA is staged under `/app` while `/` is the marketing site, and returning
+ * to `/` drops the auth response on a page that never runs MSAL — the user just
+ * lands on the marketing page, still signed out. That is exactly what the popup
+ * flow hides on desktop and what breaks on tablets, where the popup is blocked
+ * and the redirect fallback is the only working path.
+ *
+ * `import.meta.env.BASE_URL` is `/app/` for the web build (APP_BASE) and `./`
+ * for dev/Electron, where the document path is the right answer instead.
+ */
+export function computeRedirectUri(): string {
+  const { origin, pathname } = window.location;
+  const base = import.meta.env.BASE_URL;
+  // Absolute base (web deployment): trailing slash stripped so the value matches
+  // the "Single-page application" redirect URI registered in Azure verbatim.
+  if (base && base.startsWith('/')) {
+    return `${origin}${base.replace(/\/+$/, '')}`;
+  }
+  return `${origin}${pathname.replace(/\/index\.html$/, '').replace(/\/+$/, '')}`;
 }
 
 async function getOrCreate(conn: FnoConnection): Promise<PublicClientApplication> {
@@ -36,12 +63,14 @@ async function getOrCreate(conn: FnoConnection): Promise<PublicClientApplication
     auth: {
       clientId: conn.clientId,
       authority: buildAuthority(conn.tenantId),
-      redirectUri: window.location.origin,
+      redirectUri: computeRedirectUri(),
       navigateToLoginRequestUrl: false,
     },
     cache: {
       cacheLocation: 'sessionStorage',
-      storeAuthStateInCookie: false,
+      // Safari/iPadOS partition or evict sessionStorage around a cross-site
+      // navigation; the cookie copy keeps the redirect flow's state alive.
+      storeAuthStateInCookie: true,
     },
     system: {
       loggerOptions: {
@@ -63,9 +92,12 @@ async function getOrCreate(conn: FnoConnection): Promise<PublicClientApplication
     const redirectResult = await app.handleRedirectPromise();
     if (redirectResult) {
       console.info('[BrowserAuthProvider] completed sign-in via redirect');
+      redirectResults.set(key, redirectResult);
+      clearRedirectPending();
     }
   } catch (err) {
     console.error('[BrowserAuthProvider] handleRedirectPromise failed', err);
+    clearRedirectPending();
   }
   pool.set(key, app);
   return app;
@@ -113,7 +145,7 @@ function buildSignInErrorMessage(err: unknown): string {
       : typeof err === 'string'
         ? err
         : '';
-  const origin = typeof window !== 'undefined' ? window.location.origin : '<unknown>';
+  const origin = typeof window !== 'undefined' ? computeRedirectUri() : '<unknown>';
   const looksLikeCsp = /Content Security Policy|violates the document's Content Security/i.test(raw);
   if (looksLikeCsp) {
     return (
@@ -143,6 +175,13 @@ export class BrowserAuthProvider implements AuthProvider {
   async acquireToken(conn: FnoConnection): Promise<AuthResult> {
     const app = await getOrCreate(conn);
     const scopes = [buildFnoScope(conn)];
+    // A sign-in that completed through the redirect fallback is already done —
+    // hand back its token instead of starting a new interactive round trip.
+    const fromRedirect = redirectResults.get(appKey(conn));
+    if (fromRedirect) {
+      redirectResults.delete(appKey(conn));
+      return resultToAuth(fromRedirect, conn.envUrl);
+    }
     const accounts = app.getAllAccounts();
     if (accounts.length > 0) {
       try {
@@ -164,6 +203,7 @@ export class BrowserAuthProvider implements AuthProvider {
         // the whole tab instead — it works wherever a popup does not, and
         // `handleRedirectPromise` above finishes the sign-in on the way back.
         console.warn('[BrowserAuthProvider] popup unusable, falling back to redirect');
+        markRedirectPending(conn.id);
         await app.acquireTokenRedirect({ scopes, prompt: 'select_account' });
         // acquireTokenRedirect navigates away; this never resolves normally.
         return new Promise<AuthResult>(() => {});

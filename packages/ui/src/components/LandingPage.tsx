@@ -28,6 +28,7 @@ import { useAppStore } from '../state/store';
 import { ThemeSwitch } from './ThemeSwitch';
 import { setLocale, t, useLocale } from '../i18n';
 import { FnoConnectPanel } from './FnoConnectPanel';
+import { peekRedirectPending } from '../fno/redirect-state';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 
 /**
@@ -445,7 +446,11 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [sourceTab, setSourceTab] = useState<'local' | 'remote'>('local');
+  // Coming back from a full-page MSAL redirect sign-in: open the F&O tab so the
+  // connect panel mounts and can resume the flow instead of showing "local files".
+  const [sourceTab, setSourceTab] = useState<'local' | 'remote'>(
+    () => (peekRedirectPending() ? 'remote' : 'local'),
+  );
   const landingRequest = useAppStore(s => s.landingRequest);
   // One-shot: honour each request exactly once (tracked by its version), so a
   // later plain "Home" click does not keep re-opening the remembered tab.
