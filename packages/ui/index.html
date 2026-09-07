@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- `viewport-fit=cover` so the safe-area insets below have something to
+       resolve against on notched/rounded tablets and phones. Zooming stays
+       enabled deliberately — it is the accessibility escape hatch for the
+       dense tree views. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <!-- Both entries, so the browser chrome follows the OS the same way the shell
        below and the marketing site do. Values are `--er-bg-soft`. -->
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f7f8" />
@@ -34,9 +41,29 @@
        `--er-bg-soft`, which the tokens are not loaded yet to provide. */
     html, body {
       background: #f7f7f8;
+      /* `100vh` on iOS/iPadOS Safari measures the viewport as if the browser
+         chrome were hidden, so a fixed shell gets clipped. `100dvh` tracks the
+         live viewport; the `100vh` line stays as the fallback for engines
+         without dynamic viewport units. */
       height: 100vh;
+      height: 100dvh;
       overflow: hidden;
       font-family: 'Inter', 'Segoe UI', sans-serif;
+      /* Suppress the 350 ms double-tap-to-zoom delay so taps register at once
+         and the app's own double-click handlers stay reliable on touch.
+         Pinch-zoom is unaffected. */
+      touch-action: manipulation;
+      -webkit-text-size-adjust: 100%;
+      /* iOS paints a grey flash on every tap; the app has its own :active and
+         selection styling. */
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Scoped to touch: stopping scroll chaining prevents iOS rubber-banding
+       the whole shell, but there is no reason to change how a desktop
+       browser behaves. */
+    @media (pointer: coarse) {
+      html, body { overscroll-behavior: none; }
     }
 
     @media (prefers-color-scheme: dark) {

@@ -36,6 +36,7 @@ import type { ERConfiguration } from '@er-visualizer/core';
 import { buildExplorerModelGroups, getBestVersion, type ExplorerModelGroup } from '../utils/model-hierarchy';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 import { buildLabelPool, labelDisplayText, looksLikeLabelRef } from '../utils/label-resolver';
+import { useCoarsePointer } from '../utils/responsive';
 import { WorkspaceManager } from './WorkspaceManager';
 import { FnoIngestPanel } from './FnoIngestPanel';
 import {
@@ -884,6 +885,11 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
   const parentClass = hasChildren ? 'tree-node-parent' : '';
   const kindLabel = inKindGroup ? getExplorerKindPillInGroup(node) : getExplorerKindLabel(node);
   const canCloseConfiguration = depth === 0 && node.configIndex != null && node.type === 'file';
+  // Double-tap is unreliable on touch (it competes with the platform's own
+  // zoom gesture), so on a coarse pointer every node that responds to a
+  // double-click gets an explicit menu entry instead.
+  const coarse = useCoarsePointer();
+  const showRowMenu = canCloseConfiguration || (coarse && node.configIndex != null);
 
   return (
     <>
@@ -912,7 +918,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
           <span className="tree-node-version-pill" title={`v${version}`}>v{version}</span>
         )}
         {kindLabel && <span className="tree-node-kind-pill">{kindLabel}</span>}
-        {canCloseConfiguration && (
+        {showRowMenu && (
           <Menu>
             <MenuTrigger disableButtonEnhancement>
               <button
@@ -929,16 +935,18 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
               <MenuList>
                 <MenuItem
                   icon={<OpenRegular />}
-                  onClick={() => onNavigate(node.id)}
+                  onClick={() => onDoubleClick(node)}
                 >
                   {t.explorerOpenInTab}
                 </MenuItem>
-                <MenuItem
-                  icon={<DeleteRegular />}
-                  onClick={() => onCloseConfiguration(node)}
-                >
-                  {t.closeConfiguration}
-                </MenuItem>
+                {canCloseConfiguration && (
+                  <MenuItem
+                    icon={<DeleteRegular />}
+                    onClick={() => onCloseConfiguration(node)}
+                  >
+                    {t.closeConfiguration}
+                  </MenuItem>
+                )}
               </MenuList>
             </MenuPopover>
           </Menu>

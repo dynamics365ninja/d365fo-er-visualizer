@@ -144,18 +144,21 @@ body {
   background: var(--bg-primary);
   overflow: hidden;
   height: 100vh;
+  height: 100dvh;
   letter-spacing: 0.01em;
   text-rendering: optimizeLegibility;
 }
 
 #root {
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
 }
 
 .fatal-screen {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 24px;
@@ -6885,4 +6888,209 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
+}
+
+
+
+/* ═══════════════════════════════════════════════════════════════
+   TOUCH / TABLET LAYER
+   The workspace is a dense, hover-driven desktop UI. On a tablet there is no
+   hover and no mouse precision, so this layer restores the affordances that
+   hover used to carry and grows the hit targets to a finger-sized minimum.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Long-press card that surfaces a native `title` on touch — see
+   components/TouchTitleTooltip.tsx. Positioned from JS. */
+.touch-title-tip {
+  position: fixed;
+  z-index: 10000;
+  padding: 8px 11px;
+  border-radius: 8px;
+  background: var(--bg-secondary, var(--er-surface));
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 30%);
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  animation: tooltip-appear 110ms ease;
+}
+
+@media (pointer: coarse) {
+  /* iOS shows its own selection callout on long press, which would fight the
+     tooltip above for the same gesture. */
+  [title]:not([title=""]) {
+    -webkit-touch-callout: none;
+  }
+
+  /* ── Hit targets ───────────────────────────────────────────────
+     Rows sit at 22–28px for density on a mouse; a finger needs ~40px.
+     Prefixed with `.app-shell` so these beat the density overrides further
+     up the file (`.explorer-tree-shell .tree-node` and friends) and the
+     Griffel classes, which all outrank a bare element selector. */
+  .app-shell .tree-node,
+  .app-shell .explorer-tree-shell .tree-node,
+  .app-shell .explorer-tree-shell .tree-node[data-depth='0'],
+  .app-shell .fmt-element-row,
+  .app-shell .mm-binding-row,
+  .app-shell .mm-tree-row,
+  .app-shell .ds-row,
+  .app-shell .lin-row,
+  .app-shell .search-hit,
+  .app-shell .wu-ref-row,
+  .app-shell .fmt-bind-card,
+  .app-shell .dd-collapsible__trigger,
+  .app-shell .ws-row {
+    min-height: 40px;
+  }
+
+  .app-shell .tree-node,
+  .app-shell .explorer-tree-shell .tree-node {
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+
+  .app-shell button,
+  .app-shell [role="button"],
+  .app-shell [role="tab"],
+  .app-shell .explorer-kind-chip,
+  .app-shell .fmt-tab-btn,
+  .app-shell .fmt-sliding-tabs__btn,
+  .app-shell .fmt-icon-btn,
+  .app-shell .fmt-stat-btn,
+  .app-shell .dd-hero__btn,
+  .app-shell .lin-chip {
+    min-height: 36px;
+  }
+
+  .app-shell .activity-bar__btn {
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  /* The chevron is the expand/collapse target for the whole tree. */
+  .app-shell .tree-chevron,
+  .app-shell .tree-chevron-placeholder,
+  .app-shell .ds-row-toggle,
+  .app-shell .lin-row__toggle {
+    min-width: 26px;
+    min-height: 26px;
+  }
+
+  /* ── Hover-only affordances become permanent ───────────────────
+     Everything below was revealed by :hover, i.e. unreachable on touch. */
+  .app-shell .tree-node-actions,
+  .app-shell .explorer-tree-shell .tree-node-actions,
+  .app-shell .ds-row-where-used,
+  .app-shell .search-hit__arrow,
+  .app-shell .search-hit__tab,
+  .app-shell .ddt-node__drill-hint {
+    opacity: 1;
+  }
+
+  .app-shell .tree-node-actions,
+  .app-shell .explorer-tree-shell .tree-node-actions {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* ── Panel splitters ───────────────────────────────────────────
+     A 1px hairline cannot be grabbed with a finger. Keep the hairline look,
+     but make the surrounding transparent strip the actual touch target. */
+  [data-panel-group-direction="horizontal"] > [data-resize-handle],
+  [data-panel-group-direction="horizontal"] > [data-resize-handle]:hover,
+  [data-panel-group-direction="horizontal"] > [data-resize-handle][data-resize-handle-state="drag"] {
+    position: relative;
+    width: 14px;
+    background: transparent;
+  }
+
+  [data-panel-group-direction="horizontal"] > [data-resize-handle]::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    background: var(--border-color);
+  }
+
+  [data-panel-group-direction="horizontal"] > [data-resize-handle][data-resize-handle-state="drag"]::after {
+    width: 4px;
+    background: var(--accent);
+  }
+
+  [data-panel-group-direction="vertical"] > [data-resize-handle],
+  [data-panel-group-direction="vertical"] > [data-resize-handle]:hover {
+    position: relative;
+    height: 14px;
+    background: transparent;
+  }
+
+  [data-panel-group-direction="vertical"] > [data-resize-handle]::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    transform: translateY(-50%);
+    background: var(--border-color);
+  }
+
+  [data-panel-group-direction="vertical"] > [data-resize-handle][data-resize-handle-state="drag"]::after {
+    height: 4px;
+    background: var(--accent);
+  }
+
+  /* Taller tabs push long labels ("Kde je použito") onto a second line and
+     out of the strip. Let the tabs shrink and ellipsise instead — scrolling
+     the whole strip would push the close/expand actions out of reach. */
+  .app-shell [role="tablist"] > [role="tab"] {
+    white-space: nowrap;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Native overlay scrollbars are all iOS draws; the 6px custom track only
+     narrows the content. Widen it for the engines that do honour it. */
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+}
+
+/* ── Narrow viewport (tablet portrait, split view, phone) ──────────
+   The workspace stacks to a single column in App.tsx; the chrome around it
+   has to give up its desktop breathing room too. */
+@media (max-width: 900px) {
+  .explorer-toolbar,
+  .fmt-toolbar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  /* Drill-down dialogs are sized for a desktop window. */
+  .dd-dialog-surface {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0;
+  }
+}
+
+/* Respect the home-indicator / rounded-corner insets on iPadOS and iOS when
+   the app runs full-screen from the home screen. The shell is `position:
+   fixed; inset: 0`, so the insets have to land on it rather than on <body>. */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .app-shell {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }

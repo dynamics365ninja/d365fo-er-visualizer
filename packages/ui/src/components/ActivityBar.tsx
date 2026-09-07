@@ -18,6 +18,7 @@ import {
 } from '@fluentui/react-icons';
 import type { FluentIcon } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
+import { useCoarsePointer } from '../utils/responsive';
 import { ThemeSwitch } from './ThemeSwitch';
 import { t } from '../i18n';
 
@@ -185,7 +186,9 @@ interface ActivityButtonProps {
 
 function ActivityButton({ Icon, label, onClick, active, shortcut, badge }: ActivityButtonProps) {
   const styles = useStyles();
-  const title = shortcut ? `${label} (${shortcut})` : label;
+  const coarse = useCoarsePointer();
+  // A "(Ctrl+B)" hint is noise on a tablet with no keyboard attached.
+  const title = shortcut && !coarse ? `${label} (${shortcut})` : label;
   return (
     <div className={styles.btnWrap}>
       <Tooltip content={title} relationship="label" withArrow positioning="after">
@@ -195,7 +198,7 @@ function ActivityButton({ Icon, label, onClick, active, shortcut, badge }: Activ
           onClick={onClick}
           aria-label={label}
           aria-pressed={active}
-          className={mergeClasses(styles.btn, active && styles.btnActive)}
+          className={mergeClasses('activity-bar__btn', styles.btn, active && styles.btnActive)}
         >
           <Icon fontSize={18} />
         </button>

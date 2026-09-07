@@ -38,6 +38,7 @@ import { buildFormatTreeIndex, type FormatTreeIndex } from '../utils/format-tree
 import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/theme-colors';
 import { ERDirection, getFormatElementExcelRange, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent, type ERFormatElement, type ERLabel } from '@er-visualizer/core';
 import { resolveLabel, buildLabelPool } from '../utils/label-resolver';
+import { useCoarsePointer } from '../utils/responsive';
 import { parseXlsxBase64, colToLetter, type XlsxWorkbook, type XlsxCell as XlsxCellType, type XlsxMerge, type XlsxArea } from '../utils/xlsx-parser';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
@@ -128,6 +129,8 @@ export function DesignerView() {
   const configs = useAppStore(s => s.configurations);
   const treeNodes = useAppStore(s => s.treeNodes);
   const selectedNode = useAppStore(s => s.selectedNode);
+  const coarse = useCoarsePointer();
+  const openHint = coarse ? t.openInExplorerTouch : t.openInExplorer;
 
   if (!activeTabId) {
     return (
@@ -145,7 +148,7 @@ export function DesignerView() {
 
           <p className="designer-empty-card__text">{t.selectElementHint}</p>
 
-          <div className="designer-empty-card__steps" aria-label={t.openInExplorer}>
+          <div className="designer-empty-card__steps" aria-label={openHint}>
             <div className="designer-empty-step">
               <span className="designer-empty-step__icon" aria-hidden><AppsListDetailRegular fontSize={14} /></span>
               <span className="designer-empty-step__text">{t.explorer}</span>
@@ -153,7 +156,7 @@ export function DesignerView() {
             <span className="designer-empty-step__arrow" aria-hidden><ArrowEnterRegular fontSize={12} /></span>
             <div className="designer-empty-step">
               <span className="designer-empty-step__icon" aria-hidden><CursorHoverRegular fontSize={14} /></span>
-              <span className="designer-empty-step__text">{t.openInExplorer}</span>
+              <span className="designer-empty-step__text">{openHint}</span>
             </div>
           </div>
         </div>
