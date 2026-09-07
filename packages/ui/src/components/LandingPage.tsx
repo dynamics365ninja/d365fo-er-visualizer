@@ -68,6 +68,16 @@ const useStyles = makeStyles({
     fontSize: '15px',
     fontWeight: 700,
     letterSpacing: '-0.01em',
+    color: 'var(--er-text)',
+    textDecorationLine: 'none',
+    borderRadius: 'var(--er-radius-md)',
+    ':hover': {
+      color: 'var(--er-accent)',
+    },
+    ':focus-visible': {
+      outline: '2px solid var(--er-accent)',
+      outlineOffset: '2px',
+    },
   },
   topbarActions: {
     marginLeft: 'auto',
@@ -395,6 +405,25 @@ function docsHref(): string {
   return 'https://github.com/dynamics365ninja/d365fo-er-visualizer#readme';
 }
 
+/**
+ * The app is staged under /app on the marketing site (see stage-app.mjs), so
+ * the logo can link back to the marketing homepage at the site root. When
+ * running the UI's own Vite dev server standalone (`pnpm --filter
+ * @er-visualizer/ui dev`), the marketing site normally runs alongside it on
+ * localhost:3000 (`packages/site`'s dev script), so link there instead of
+ * falling back to the repo — that only happens for other standalone builds
+ * (e.g. the Electron shell) where no marketing site is running at all.
+ */
+function marketingHomeHref(): string {
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/app')) {
+    return '/';
+  }
+  if (import.meta.env.DEV) {
+    return 'http://localhost:3000';
+  }
+  return 'https://github.com/dynamics365ninja/d365fo-er-visualizer#readme';
+}
+
 // ────────────────────────── component ──────────────────────────
 
 export function LandingPage({ onFilesLoaded }: LandingPageProps) {
@@ -475,10 +504,15 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
       {fnoIngestStatus && <FnoIngestPanel variant="overlay" />}
 
       <header className={styles.topbar}>
-        <span className={styles.brand}>
+        <a
+          className={styles.brand}
+          href={marketingHomeHref()}
+          title={t.landingHomeLinkLabel}
+          aria-label={t.landingHomeLinkLabel}
+        >
           <ErVisualizerMark />
           {t.appName}
-        </span>
+        </a>
         <div className={styles.topbarActions}>
           <a className={styles.docsLink} href={docsHref()} target="_blank" rel="noreferrer noopener">
             {t.landingDocsLink}
