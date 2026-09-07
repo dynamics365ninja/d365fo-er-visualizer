@@ -408,12 +408,18 @@ function docsHref(): string {
 /**
  * The app is staged under /app on the marketing site (see stage-app.mjs), so
  * the logo can link back to the marketing homepage at the site root. When
- * running standalone (local dev server, Electron shell) there is no marketing
- * site to go back to, so fall back to the repo like `docsHref` does.
+ * running the UI's own Vite dev server standalone (`pnpm --filter
+ * @er-visualizer/ui dev`), the marketing site normally runs alongside it on
+ * localhost:3000 (`packages/site`'s dev script), so link there instead of
+ * falling back to the repo — that only happens for other standalone builds
+ * (e.g. the Electron shell) where no marketing site is running at all.
  */
 function marketingHomeHref(): string {
   if (typeof window !== 'undefined' && window.location.pathname.startsWith('/app')) {
     return '/';
+  }
+  if (import.meta.env.DEV) {
+    return 'http://localhost:3000';
   }
   return 'https://github.com/dynamics365ninja/d365fo-er-visualizer#readme';
 }
