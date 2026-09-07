@@ -4,6 +4,7 @@ import { ClickablePath } from './ClickablePath';
 import { ERDirection, getFormatElementDataType, getFormatElementExcelRange } from '@er-visualizer/core';
 import { getEnumTypeLabel } from '../utils/enum-display';
 import { resolveLabel, buildLabelPool, looksLikeLabelRef } from '../utils/label-resolver';
+import { useCoarsePointer } from '../utils/responsive';
 import { t } from '../i18n';
 import {
   AppsListDetailRegular,
@@ -153,6 +154,7 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
   const configurations = useAppStore(s => s.configurations);
   const triggerWhereUsed = useAppStore(s => s.triggerWhereUsed);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
+  const coarse = useCoarsePointer();
   const node = nodeOverride ?? selectedNode;
   const configIndex = node?.configIndex ?? 0;
 
@@ -165,20 +167,24 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
         </div>
         <div className="property-empty-title">{t.noSelection}</div>
         <div className="property-empty-hint">{t.selectElementHint}</div>
-        <div className="property-empty-tips">
-          <div className="property-empty-tip">
-            <span className="property-empty-tip-key">Ctrl+F</span>
-            <span className="property-empty-tip-label">{t.search}</span>
+        {/* Keyboard-only tips; a tablet without a hardware keyboard cannot act
+            on them, and the ActivityBar rail already offers the same targets. */}
+        {!coarse && (
+          <div className="property-empty-tips">
+            <div className="property-empty-tip">
+              <span className="property-empty-tip-key">Ctrl+F</span>
+              <span className="property-empty-tip-label">{t.search}</span>
+            </div>
+            <div className="property-empty-tip">
+              <span className="property-empty-tip-key">Ctrl+B</span>
+              <span className="property-empty-tip-label">{t.explorer}</span>
+            </div>
+            <div className="property-empty-tip">
+              <span className="property-empty-tip-key">Ctrl+K</span>
+              <span className="property-empty-tip-label">{t.commandPalette}</span>
+            </div>
           </div>
-          <div className="property-empty-tip">
-            <span className="property-empty-tip-key">Ctrl+B</span>
-            <span className="property-empty-tip-label">{t.explorer}</span>
-          </div>
-          <div className="property-empty-tip">
-            <span className="property-empty-tip-key">Ctrl+K</span>
-            <span className="property-empty-tip-label">{t.commandPalette}</span>
-          </div>
-        </div>
+        )}
       </div>
     );
   }

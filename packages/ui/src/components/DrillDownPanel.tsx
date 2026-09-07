@@ -53,6 +53,7 @@ import { useAppStore, resolveDeepExpression, selectMappingDefinition, getScopedM
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { resolveLabel, buildLabelPool, labelDisplayText } from '../utils/label-resolver';
+import { useCoarsePointer } from '../utils/responsive';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1226,6 +1227,9 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dialogViewMode, setDialogViewMode] = useState<'workbench' | 'tree'>('workbench');
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Touch has no reliable double-tap of its own, and waiting for one only adds
+  // lag; the dialog's own "open as tab" button covers that path instead.
+  const coarse = useCoarsePointer();
 
   React.useEffect(() => () => {
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
@@ -1270,6 +1274,11 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
             openAsTab();
             return;
           }
+          if (coarse) {
+            cancelPendingOpen();
+            setIsDialogOpen(true);
+            return;
+          }
           if (e.detail > 1) return; // second click of a double-click
           cancelPendingOpen();
           clickTimerRef.current = setTimeout(() => {
@@ -1291,7 +1300,7 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
             else setIsDialogOpen(true);
           }
         }}
-        title={`${t.drillClickToToggle} · ${t.drillOpenAsTab}`}
+        title={coarse ? t.drillClickToToggle : `${t.drillClickToToggle} · ${t.drillOpenAsTab}`}
       >
         {children}
       </span>

@@ -94,6 +94,8 @@ export interface Translations {
   examples: string;
   // Designer
   openInExplorer: string;
+  /** Touch equivalent: double-click is not a reliable gesture on a tablet. */
+  openInExplorerTouch: string;
   collapse: string;
   expand: string;
   filter: string;
@@ -624,6 +626,7 @@ const cs: Translations = {
 
   // Designer
   openInExplorer: 'V Exploreru otevřete vizualizaci dvojklikem na vybraný prvek.',
+  openInExplorerTouch: 'V Exploreru klepněte na ⋮ u prvku a zvolte Otevřít v záložce.',
   collapse: 'Sbalit vše',
   expand: 'Rozbalit vše',
   filter: 'Filtrovat…',
@@ -1163,6 +1166,7 @@ const en: Translations = {
   examples: 'Examples:',
 
   openInExplorer: 'In Explorer, double-click the selected item to open its visualization.',
+  openInExplorerTouch: 'In Explorer, tap ⋮ on an item and choose Open in tab.',
   collapse: 'Collapse all',
   expand: 'Expand all',
   filter: 'Filter…',

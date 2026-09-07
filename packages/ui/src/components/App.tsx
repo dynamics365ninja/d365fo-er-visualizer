@@ -49,6 +49,8 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { ToastHost } from './ToastHost';
 import { CommandPalette, type CommandItem } from './CommandPalette';
 import { ActivityBar } from './ActivityBar';
+import { TouchTitleTooltip } from './TouchTitleTooltip';
+import { useCompactLayout, useStackedLayout } from '../utils/responsive';
 import { t, locale, useLocale } from '../i18n';
 
 // ────────────────────────── styles ──────────────────────────
@@ -101,6 +103,30 @@ const useAppStyles = makeStyles({
     width: '100%',
     borderLeft: 'none',
     borderRight: 'none',
+  },
+  /* ── Narrow (tablet portrait / phone) single-column layout ───────────────
+     Below the breakpoint there is no room for three columns, so panels stack
+     on top of the designer instead of squeezing it. The designer stays mounted
+     and merely hidden — remounting it on every panel toggle would re-parse and
+     re-lay out the whole format tree. */
+  narrowStack: {
+    position: 'relative',
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    display: 'flex',
+    overflow: 'hidden',
+  },
+  narrowPane: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  narrowHidden: {
+    display: 'none',
   },
   center: {
     display: 'flex',
@@ -395,6 +421,42 @@ export function App() {
     setShowLanding(false);
   }, []);
 
+  // Below 900 px there is only room for the designer plus one side panel, so
+  // opening one closes the other. A ref keeps the toggles below stable while
+  // still reading the live value.
+  const isCompact = useCompactLayout();
+  const isStacked = useStackedLayout();
+  const isCompactRef = useRef(isCompact);
+  isCompactRef.current = isCompact;
+
+  // Shrinking the window while both were open leaves no room; drop the
+  // explorer so the panel the user touched last stays visible.
+  useEffect(() => {
+    if (isCompact && showLeft && showRight) setShowLeft(false);
+  }, [isCompact, showLeft, showRight]);
+
+  const toggleExplorer = useCallback(() => {
+    setShowLeft(prev => {
+      if (!prev && isCompactRef.current) {
+        setShowRight(false);
+        setRightFullscreen(false);
+      }
+      return !prev;
+    });
+  }, []);
+
+  // A side panel needs a bigger share of a tablet than of a desktop monitor:
+  // 26 % of an 834 px viewport is a 217 px tree, which truncates almost every
+  // element name. The percentages still add up to 100 because at most one side
+  // panel is open once `isCompact` holds.
+  const leftPaneSize = isCompact ? 42 : 26;
+  const rightPaneSize = isCompact ? 46 : 28;
+  const centerPaneSize = isCompact
+    ? 100 - (showLeft ? leftPaneSize : 0) - (showRight ? rightPaneSize : 0)
+    // The desktop numbers deliberately overshoot 100 and get normalised by the
+    // panel group; they are kept verbatim so the desktop split does not move.
+    : showLeft && showRight ? 56 : showLeft || showRight ? 78 : 100;
+
   const toggleSearch = useCallback(() => {
     if (showRight && rightTab === 'search') {
       setShowRight(false);
@@ -403,6 +465,7 @@ export function App() {
       setRightTab('search');
       setSearchPanelMode('search');
       setShowRight(true);
+      if (isCompactRef.current) setShowLeft(false);
     }
   }, [showRight, rightTab, setSearchPanelMode]);
 
@@ -414,11 +477,11 @@ export function App() {
       setRightTab('where-used');
       setSearchPanelMode('where-used');
       setShowRight(true);
+      if (isCompactRef.current) setShowLeft(false);
     }
   }, [showRight, rightTab, setSearchPanelMode]);
 
-  const handleRightTabChange = useCallback((tab: 'properties' | 'search' | 'where-used') => {
-    setRightTab(tab);
+  const handleRightTabChange = useCallback((tab: 'properties' | 'search' | 'where-used') => {    setRightTab(tab);
     if (tab === 'search') setSearchPanelMode('search');
     else if (tab === 'where-used') setSearchPanelMode('where-used');
   }, [setSearchPanelMode]);
@@ -430,6 +493,7 @@ export function App() {
     } else {
       setRightTab('properties');
       setShowRight(true);
+      if (isCompactRef.current) setShowLeft(false);
     }
   }, [showRight, rightTab]);
 
@@ -465,7 +529,7 @@ export function App() {
       }
       if (mod && (e.key === 'b' || e.key === 'B')) {
         e.preventDefault();
-        setShowLeft(s => !s);
+        toggleExplorer();
         return;
       }
       if (mod && (e.key === 'j' || e.key === 'J')) {
@@ -486,20 +550,20 @@ export function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [navigateBack, navigateForward, toggleSearch, toggleWhereUsed, toggleProperties]);
+  }, [navigateBack, navigateForward, toggleSearch, toggleWhereUsed, toggleProperties, toggleExplorer]);
 
   const paletteCommands = useMemo<CommandItem[]>(() => [
     { id: 'home', group: t.cmdGroupNav, label: t.cmdGoHome, action: () => { setShowLanding(true); } },
     { id: 'back', group: t.cmdGroupNav, label: t.cmdBack, hint: 'Alt+←', action: navigateBack },
     { id: 'forward', group: t.cmdGroupNav, label: t.cmdForward, hint: 'Alt+→', action: navigateForward },
     { id: 'search', group: t.cmdGroupView, label: t.cmdToggleSearch, hint: 'Ctrl+F', action: toggleSearch },
-    { id: 'explorer', group: t.cmdGroupView, label: t.cmdToggleExplorer, hint: 'Ctrl+B', action: () => setShowLeft(s => !s) },
+    { id: 'explorer', group: t.cmdGroupView, label: t.cmdToggleExplorer, hint: 'Ctrl+B', action: toggleExplorer },
     { id: 'props', group: t.cmdGroupView, label: t.cmdToggleProperties, hint: 'Ctrl+J', action: toggleProperties },
     { id: 'theme', group: t.cmdGroupView, label: t.cmdToggleTheme, action: cycleTheme },
     { id: 'tech', group: t.cmdGroupView, label: t.cmdToggleTechnical, action: () => setShowTechnicalDetails(!showTechnicalDetails) },
     { id: 'collapse', group: t.cmdGroupTools, label: t.cmdCollapseAll, action: () => requestExplorerExpand('none') },
     { id: 'expand', group: t.cmdGroupTools, label: t.cmdExpandAll, action: () => requestExplorerExpand('all') },
-  ], [navigateBack, navigateForward, toggleSearch, toggleProperties, cycleTheme, setShowTechnicalDetails, showTechnicalDetails, requestExplorerExpand, locale]);
+  ], [navigateBack, navigateForward, toggleSearch, toggleProperties, toggleExplorer, cycleTheme, setShowTechnicalDetails, showTechnicalDetails, requestExplorerExpand, locale]);
 
   // Entering a drill-down tab hides the side panels once; re-opening them
   // while staying on that tab must survive unrelated tab-list changes.
@@ -515,23 +579,24 @@ export function App() {
 
   if (isLandingVisible) {
     return (
-      <div className={styles.landingShell}>
+      <div className={mergeClasses('app-shell', styles.landingShell)}>
         <ErrorBoundary label="Landing">
           <LandingPage onFilesLoaded={handleFilesLoaded} />
         </ErrorBoundary>
         <ToastHost />
+        <TouchTitleTooltip />
       </div>
     );
   }
 
   return (
-    <div className={styles.shell}>
+    <div className={mergeClasses('app-shell', styles.shell)}>
       <ActivityBar
         showLeft={showLeft}
         showRight={showRight}
         rightTab={rightTab}
         whereUsedActive={showRight && rightTab === 'where-used'}
-        onToggleLeft={() => setShowLeft(s => !s)}
+        onToggleLeft={toggleExplorer}
         onToggleRight={toggleProperties}
         onToggleSearch={toggleSearch}
         onToggleWhereUsed={toggleWhereUsed}
@@ -555,11 +620,49 @@ export function App() {
                   setShowPropsStrip={setShowPropsStrip}
                 />
               </div>
+            ) : isStacked ? (
+              /* One column at a time: the designer stays mounted underneath so
+                 toggling a panel does not throw away its scroll and tab state. */
+              <div className={styles.narrowStack}>
+                <div className={mergeClasses(styles.center, (showLeft || showRight) && styles.narrowHidden)}>
+                  <TabBar />
+                  <div className={styles.panelContent}>
+                    <ErrorBoundary label="Designer">
+                      <React.Suspense fallback={<PanelLoading />}>
+                        <DesignerView />
+                      </React.Suspense>
+                    </ErrorBoundary>
+                  </div>
+                </div>
+                {showLeft && (
+                  <div className={mergeClasses(styles.sidebar, styles.narrowPane)}>
+                    <ErrorBoundary label="Explorer">
+                      <ConfigExplorer />
+                    </ErrorBoundary>
+                  </div>
+                )}
+                {showRight && (
+                  <div className={mergeClasses(styles.sidebar, styles.sidebarRight, styles.narrowPane)}>
+                    <RightPanel
+                      tab={rightTab}
+                      onTabChange={handleRightTabChange}
+                      fullscreen={false}
+                      hideSizeToggle
+                      onExpand={() => setRightFullscreen(true)}
+                      onCollapse={() => setRightFullscreen(false)}
+                      onClose={() => { setShowRight(false); setRightFullscreen(false); }}
+                      panelContentClass={styles.panelContent}
+                      showPropsStrip={showPropsStrip}
+                      setShowPropsStrip={setShowPropsStrip}
+                    />
+                  </div>
+                )}
+              </div>
             ) : (
               <PanelGroup direction="horizontal">
                 {showLeft && (
                   <>
-                    <Panel defaultSize={26} minSize={15} maxSize={40}>
+                    <Panel defaultSize={leftPaneSize} minSize={isCompact ? 28 : 15} maxSize={isCompact ? 60 : 40}>
                       <div className={styles.sidebar}>
                         <ErrorBoundary label="Explorer">
                           <ConfigExplorer />
@@ -570,7 +673,7 @@ export function App() {
                   </>
                 )}
 
-                <Panel defaultSize={showLeft && showRight ? 56 : showLeft || showRight ? 78 : 100} minSize={30}>
+                <Panel defaultSize={centerPaneSize} minSize={isCompact ? 22 : 30}>
                   <div className={styles.center}>
                     <TabBar />
                     <div className={styles.panelContent}>
@@ -586,7 +689,7 @@ export function App() {
                 {showRight && (
                   <>
                     <PanelResizeHandle className={styles.resizeHandle} />
-                    <Panel defaultSize={28} minSize={20} maxSize={50}>
+                    <Panel defaultSize={rightPaneSize} minSize={isCompact ? 30 : 20} maxSize={isCompact ? 65 : 50}>
                       <div className={mergeClasses(styles.sidebar, styles.sidebarRight)}>
                         <RightPanel
                           tab={rightTab}
@@ -612,6 +715,7 @@ export function App() {
           />
       </div>
       <ToastHost />
+      <TouchTitleTooltip />
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
@@ -645,6 +749,7 @@ function RightPanel({
   tab,
   onTabChange,
   fullscreen,
+  hideSizeToggle,
   onExpand,
   onCollapse,
   onClose,
@@ -655,6 +760,9 @@ function RightPanel({
   tab: 'properties' | 'search' | 'where-used';
   onTabChange: (tab: 'properties' | 'search' | 'where-used') => void;
   fullscreen: boolean;
+  /** Narrow layout: the panel already fills the viewport, so expand/collapse
+   *  would be a no-op control taking up scarce header width. */
+  hideSizeToggle?: boolean;
   onExpand: () => void;
   onCollapse: () => void;
   onClose: () => void;
@@ -702,15 +810,17 @@ function RightPanel({
         </button>
         <div className={styles.rightTabSpacer} />
         <div className={styles.rightTabActions}>
-          <Tooltip content={fullscreen ? t.collapse : t.expand} relationship="label" withArrow>
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={fullscreen ? <ArrowMinimizeRegular /> : <ExpandUpRightRegular />}
-              onClick={fullscreen ? onCollapse : onExpand}
-              aria-label={fullscreen ? t.collapse : t.expand}
-            />
-          </Tooltip>
+          {!hideSizeToggle && (
+            <Tooltip content={fullscreen ? t.collapse : t.expand} relationship="label" withArrow>
+              <Button
+                appearance="subtle"
+                size="small"
+                icon={fullscreen ? <ArrowMinimizeRegular /> : <ExpandUpRightRegular />}
+                onClick={fullscreen ? onCollapse : onExpand}
+                aria-label={fullscreen ? t.collapse : t.expand}
+              />
+            </Tooltip>
+          )}
           <Tooltip content={t.dismiss} relationship="label" withArrow>
             <Button
               appearance="subtle"
