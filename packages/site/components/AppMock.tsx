@@ -4,15 +4,21 @@ import { useState } from 'react';
 
 /**
  * Stylised illustration of the drill-down — the screen that makes the product
- * what it is. The Workbench/Tree switch really works, so the hero shows both
- * of the views the app offers.
+ * what it is. The dropdown really works, so the hero can show either of the
+ * views the app offers: the "Value path" lineage outline that's open in the
+ * app today, or the node-graph designer view.
  *
- * The panels are decorative (and marked as such); only the switch is exposed
- * to assistive tech. Unlike a screenshot, this stays theme-aware, responsive,
- * and readable at hero size.
+ * The panels are decorative (and marked as such); only the dropdown is
+ * exposed to assistive tech. Unlike a screenshot, this stays theme-aware,
+ * responsive, and readable at hero size.
  */
 
-type View = 'workbench' | 'tree';
+type View = 'lineage' | 'graph';
+
+const VIEW_LABELS: Record<View, string> = {
+  lineage: 'Value path (drill-down)',
+  graph: 'Node graph (designer)',
+};
 
 function Chip({ children }: { children: React.ReactNode }) {
   return (
@@ -96,71 +102,112 @@ function ExpressionBlock() {
   );
 }
 
-function WorkbenchView() {
+/** A stage badge, matching the wording used in the app's real lineage outline. */
+function StageBadge({ tone, children }: { tone: 'model' | 'mapping' | 'source' | 'formula' | 'entity'; children: React.ReactNode }) {
+  const toneClass: Record<typeof tone, string> = {
+    model: 'border-accent/30 bg-accent-soft text-accent',
+    mapping: 'border-border-strong bg-surface-2 text-muted',
+    source: 'border-emerald-600/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+    formula: 'border-emerald-600/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+    entity: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  };
   return (
-    <div className="grid lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)]">
-      {/* Expression parts */}
+    <span
+      className={`shrink-0 rounded border px-1.5 py-[1px] text-[9px] font-medium uppercase tracking-wider ${toneClass[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** One row of the "Value path" outline, indented like the real drill-down tree. */
+function LineageRow({
+  indent = 0,
+  stage,
+  name,
+  sub,
+  active,
+}: {
+  indent?: number;
+  stage: 'model' | 'mapping' | 'source' | 'formula' | 'entity';
+  name: string;
+  sub?: string;
+  active?: boolean;
+}) {
+  const stageLabel: Record<typeof stage, string> = {
+    model: 'Model path',
+    mapping: 'Binding in model mapping',
+    source: 'Data source',
+    formula: 'Calculated field',
+    entity: 'AX object',
+  };
+  return (
+    <div
+      className={`flex items-center gap-1.5 rounded-md px-1.5 py-1 ${
+        active ? 'bg-accent-soft ring-1 ring-inset ring-accent/25' : ''
+      }`}
+      style={{ marginLeft: `${indent * 0.9}rem` }}
+    >
+      <StageBadge tone={stage}>{stageLabel[stage]}</StageBadge>
+      <span className="truncate font-mono text-[10.5px] font-semibold">{name}</span>
+      {sub && <span className="truncate font-mono text-[9.5px] text-muted">{sub}</span>}
+    </div>
+  );
+}
+
+function LineageView() {
+  return (
+    <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+      {/* D365FO data used */}
       <div className="border-b border-border p-3 lg:border-b-0 lg:border-r">
-        <p className="px-1 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
-          Expression parts
+        <div className="flex items-center justify-between px-1 pb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+            D365FO data used
+          </p>
+          <span className="rounded border border-border px-1.5 py-[1px] text-[9px] text-muted">
+            5
+          </span>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5 px-1">
+          <Chip>$A4A5Docs</Chip>
+          <Chip>aggregated.&apos;$TotalBasePlusTax&apos;</Chip>
+          <Chip>$Threshold</Chip>
+          <Chip>$NoTaxDocumentEnum</Chip>
+          <Chip>$A4DocsBadDebts</Chip>
+        </div>
+
+        <p className="mt-3 rounded-lg border border-accent/30 bg-accent-soft px-2.5 py-2 text-[10px] leading-4 text-muted">
+          <span className="font-semibold text-accent">Selected part of the expression: </span>
+          &apos;Control statement&apos;.&apos;$A4Docs&apos; — click any part of a formula to drill
+          into it.
         </p>
-
-        <div className="rounded-lg border border-accent/30 bg-accent-soft px-2.5 py-2">
-          <p className="text-[12px] font-semibold">VetaA4</p>
-          <p className="mt-0.5 truncate font-mono text-[10px] text-muted">
-            &apos;Control statement&apos;.&apos;$A4Docs&apos;
-          </p>
-        </div>
-
-        <div className="mt-1.5 rounded-lg px-2.5 py-2 pl-5">
-          <p className="truncate font-mono text-[11px]">&apos;Control statement&apos;</p>
-          <p className="mt-0.5 truncate font-mono text-[10px] text-muted">
-            &apos;Control statement&apos;
-          </p>
-        </div>
       </div>
 
-      {/* Selected part resolution */}
+      {/* Value path */}
       <div className="bg-bg-soft p-3">
         <p className="px-1 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
-          Selected part resolution
+          Value path
         </p>
 
-        <p className="px-1 text-[10px] font-medium uppercase tracking-wider text-muted">
-          Current branch
-        </p>
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 px-1 font-mono text-[10.5px]">
-          <span className="rounded border border-border bg-surface px-1.5 py-[2px] text-muted">
-            &apos;Control statement&apos;
-          </span>
-          <Punct>›</Punct>
-          <span className="rounded border border-accent/30 bg-accent-soft px-1.5 py-[2px] text-accent">
-            &apos;$A4Docs&apos;
-          </span>
+        <div className="space-y-0.5">
+          <LineageRow stage="model" name="$A4Docs" sub="'Control statement'.'$A4Docs'" active />
+          <LineageRow indent={1} stage="mapping" name="LISTJOIN( WHERE(…), … )" />
+          <LineageRow indent={2} stage="source" name="$A4A5Docs" />
+          <LineageRow indent={2} stage="formula" name="$Threshold" sub="User parameter" />
+          <LineageRow indent={3} stage="entity" name="$NoTaxDocumentEnum" sub="NoTaxDocument" />
+          <LineageRow indent={2} stage="source" name="$A4DocsBadDebts" />
         </div>
 
-        <div className="mt-3 rounded-lg border border-border bg-surface p-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[11px] font-semibold">Data source</span>
-            <span className="rounded border border-emerald-600/25 bg-emerald-500/10 px-2 py-[2px] text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-              Calculation
+        <div className="mt-3 border-t border-border pt-2">
+          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+            <span aria-hidden="true" className="text-accent">
+              ▤
             </span>
-          </div>
-          <div className="mt-2 flex items-center justify-between gap-3 text-[11px]">
-            <span className="text-muted">Name</span>
-            <span className="font-mono font-semibold">$A4Docs</span>
-          </div>
-
-          <div className="mt-3 border-t border-border pt-3">
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
-              <span aria-hidden="true" className="text-accent">
-                ▤
-              </span>
-              Value calculation — click to continue
-            </p>
-            <div className="mt-2">
-              <ExpressionBlock />
-            </div>
+            Full formula
+          </p>
+          <div className="mt-2">
+            <ExpressionBlock />
           </div>
         </div>
       </div>
@@ -303,27 +350,12 @@ function TreeView() {
 }
 
 export function AppMock() {
-  const [view, setView] = useState<View>('workbench');
-
-  const tab = (value: View, label: string) => (
-    <button
-      type="button"
-      onClick={() => setView(value)}
-      aria-pressed={view === value}
-      className={`rounded px-2 py-1 text-[10px] font-semibold transition-colors ${
-        view === value
-          ? 'bg-accent text-accent-contrast'
-          : 'text-muted hover:text-text'
-      }`}
-    >
-      {label}
-    </button>
-  );
+  const [view, setView] = useState<View>('lineage');
 
   return (
     <div
       role="group"
-      aria-label="Illustration of the drill-down — switch between the workbench and tree view"
+      aria-label="Illustration of the drill-down — pick a view from the dropdown"
       className="overflow-hidden rounded-xl border border-border bg-surface shadow-[0_24px_60px_-30px_rgba(0,0,0,0.45)]"
     >
       {/* Dialog header */}
@@ -334,37 +366,37 @@ export function AppMock() {
         </span>
         <span
           aria-hidden="true"
-          className="ml-2 rounded bg-accent px-2 py-[3px] text-[10px] font-semibold uppercase tracking-wider text-accent-contrast"
+          className="ml-2 hidden rounded bg-accent px-2 py-[3px] text-[10px] font-semibold uppercase tracking-wider text-accent-contrast sm:inline"
         >
           Drill-down
         </span>
-        <span
-          aria-hidden="true"
-          className="hidden rounded border border-border bg-surface px-2 py-[3px] text-[10px] text-muted sm:inline"
-        >
-          1 step
-        </span>
 
-        <div className="ml-auto flex items-center gap-2">
-          {view === 'tree' && (
-            <div
-              aria-hidden="true"
-              className="hidden items-center gap-1 rounded-md border border-border bg-surface p-0.5 md:flex"
-            >
-              <span className="px-2 py-1 text-[10px] text-muted">Compact</span>
-              <span className="rounded bg-accent px-2 py-1 text-[10px] font-semibold text-accent-contrast">
-                Full
-              </span>
-            </div>
-          )}
-          <div className="flex items-center gap-1 rounded-md border border-border bg-surface p-0.5">
-            {tab('workbench', 'Workbench')}
-            {tab('tree', 'Tree')}
-          </div>
+        <div className="relative ml-auto">
+          <label className="sr-only" htmlFor="app-mock-view">
+            View
+          </label>
+          <select
+            id="app-mock-view"
+            value={view}
+            onChange={(event) => setView(event.target.value as View)}
+            className="cursor-pointer appearance-none rounded-md border border-border bg-surface py-1 pl-2.5 pr-6 text-[10px] font-semibold text-text"
+          >
+            {(Object.keys(VIEW_LABELS) as View[]).map((value) => (
+              <option key={value} value={value}>
+                {VIEW_LABELS[value]}
+              </option>
+            ))}
+          </select>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-muted"
+          >
+            ▾
+          </span>
         </div>
       </div>
 
-      <div aria-hidden="true">{view === 'workbench' ? <WorkbenchView /> : <TreeView />}</div>
+      <div aria-hidden="true">{view === 'lineage' ? <LineageView /> : <TreeView />}</div>
     </div>
   );
 }
