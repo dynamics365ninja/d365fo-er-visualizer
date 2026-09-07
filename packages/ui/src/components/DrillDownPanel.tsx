@@ -1033,19 +1033,34 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
   // A scope only makes sense for the expression it was taken from.
   useEffect(() => { setPeek(null); }, [expression, configIndex]);
 
-  /** What the clicked part of a path resolves to, on its own. */
-  const peekTree = useMemo(() => (peek
-    ? buildExpressionTree({
-        expression: peek.expression,
-        configIndex: peek.configIndex,
-        configurations,
-        resolveModelPath,
-        resolveDatasource,
-        findModelPathBindings,
-        includeUnresolvedRefs: true,
-      })
-    : null
-  ), [peek, configurations, resolveModelPath, resolveDatasource, findModelPathBindings]);
+  /**
+   * What the clicked part of a path resolves to, on its own. The scope box
+   * above already shows `peek.expression` verbatim, so when the outline's
+   * own top row would just spell out that very same expression again (a
+   * model-path wrapper whose name + full path repeat it exactly), skip that
+   * row and start from what it actually leads to instead.
+   */
+  const peekTree = useMemo(() => {
+    if (!peek) return null;
+    const built = buildExpressionTree({
+      expression: peek.expression,
+      configIndex: peek.configIndex,
+      configurations,
+      resolveModelPath,
+      resolveDatasource,
+      findModelPathBindings,
+      includeUnresolvedRefs: true,
+    });
+    const target = normalizeExpr(peek.expression);
+    let children = built.children;
+    while (children.length === 1 && children[0].children.length > 0) {
+      const [only] = children;
+      const restatesExpression = normalizeExpr(String(only.sublabel ?? only.expression ?? '')) === target;
+      if (!restatesExpression) break;
+      children = only.children;
+    }
+    return children === built.children ? built : { ...built, children };
+  }, [peek, configurations, resolveModelPath, resolveDatasource, findModelPathBindings]);
 
   const peekIndex = useMemo(() => (peekTree ? buildLineageIndex(peekTree) : null), [peekTree]);
   const [peekOpenIds, setPeekOpenIds] = useState<Set<string>>(new Set());
