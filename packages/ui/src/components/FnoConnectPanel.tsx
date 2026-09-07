@@ -61,6 +61,7 @@ import { useAppStore } from '../state/store';
 import { useFnoProfiles, newProfileId } from '../state/fno-profiles';
 import { useFnoSession } from '../state/fno-session';
 import { fnoSession } from '../fno/session';
+import { clearRedirectPending, peekRedirectPending } from '../fno/redirect-state';
 import { DependencyPromptDialog, type DependencyPromptRequest } from './DependencyPromptDialog';
 
 const useStyles = makeStyles({
@@ -552,6 +553,27 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       setLoadingSolutions(false);
     }
   }, [activeProfile, markUsed, pushToast]);
+
+  // Finish a sign-in that went through the full-page redirect fallback (tablets
+  // and any browser that blocks the popup). The redirect reloads the SPA, so
+  // re-select the profile the user started from and resume automatically —
+  // otherwise the app comes back looking exactly like a failed sign-in.
+  const redirectResumedRef = useRef(false);
+  useEffect(() => {
+    if (redirectResumedRef.current) return;
+    const pendingId = peekRedirectPending();
+    if (!pendingId) return;
+    // Profiles come from localStorage; wait until they are available.
+    if (!profiles.some(p => p.id === pendingId)) return;
+    if (activeProfileId !== pendingId) {
+      setActiveProfileId(pendingId);
+      return;
+    }
+    if (!activeProfile) return;
+    redirectResumedRef.current = true;
+    clearRedirectPending();
+    void handleConnect();
+  }, [profiles, activeProfileId, activeProfile, handleConnect]);
 
   const handleRetryWithRoot = useCallback(async () => {
     if (!activeProfile) return;
