@@ -10,6 +10,32 @@
 
 const PENDING_KEY = 'er-visualizer:fno-redirect-pending';
 
+/**
+ * Where Microsoft identity must send the browser back to — and the value that
+ * has to be registered in the Entra app registration.
+ *
+ * This is the plain origin, *not* the `/app` path the SPA is served from. Two
+ * reasons:
+ *
+ *  - It is what the popup flow has always used, so existing registrations keep
+ *    working and nobody has to touch Entra to gain tablet support.
+ *  - Entra compares redirect URIs verbatim, and a path is one more thing to get
+ *    wrong (trailing slash, preview deployments, `/index.html`).
+ *
+ * On the web deployment the origin is the marketing site, which does not run
+ * MSAL — so the site forwards auth responses to `/app` (see the inline script in
+ * packages/site/app/layout.tsx). The token request still sends this exact origin
+ * as `redirect_uri`, which is what Entra validates.
+ *
+ * Lives here rather than next to the MSAL adapter so the connect panel can quote
+ * it in error messages without pulling ~0.4 MB of identity library into the
+ * main bundle.
+ */
+export function computeRedirectUri(): string {
+  if (typeof window === 'undefined') return '';
+  return window.location.origin;
+}
+
 export function markRedirectPending(connId: string): void {
   try {
     window.sessionStorage.setItem(PENDING_KEY, connId);

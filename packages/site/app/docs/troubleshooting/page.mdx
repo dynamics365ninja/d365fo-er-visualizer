@@ -56,6 +56,25 @@ branch you care about.
 Allow popups for the site, or use the [desktop app](/docs/desktop-app), which signs in through a
 loopback listener instead.
 
+On tablets and phones the popup is blocked by default, so the app automatically falls back to a
+full-page redirect: the tab navigates to Microsoft identity and back, and the sign-in resumes on
+its own. Nothing needs to be configured for this.
+
+### "AADSTS50011: the redirect URI … does not match"
+
+Microsoft Entra compares redirect URIs verbatim and did not find the one the app sent. The connect
+panel prints the exact value under **Application (client) ID** — copy it and add it in Entra under
+**Authentication → Add a platform → Single-page application**.
+
+It is the plain origin, with no path and no trailing slash, for example
+`https://your-er-visualizer-domain`. Watch out for:
+
+- the URI sitting under the **Web** or **Mobile and desktop applications** platform instead of
+  **Single-page application**,
+- a preview deployment, which has its own hostname and needs its own entry,
+- edits made in a different app registration than the one whose Application (client) ID is in
+  your profile.
+
 ### "Sign-in failed" mentioning Content Security Policy
 
 The browser blocked the request to Microsoft identity endpoints. This normally means the app is

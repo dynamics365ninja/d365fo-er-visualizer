@@ -387,6 +387,9 @@ export interface Translations {
   fnoEnvUrl: string;
   fnoTenantId: string;
   fnoClientId: string;
+  fnoRedirectUriHint: string;
+  fnoRedirectUriCopy: string;
+  fnoRedirectUriCopied: string;
   fnoSaveProfile: string;
   fnoUpdateProfile: string;
   fnoNewProfile: string;
@@ -914,6 +917,9 @@ const cs: Translations = {
   fnoEnvUrl: 'URL prostředí',
   fnoTenantId: 'Tenant ID (Entra)',
   fnoClientId: 'Application (client) ID',
+  fnoRedirectUriHint: 'Redirect URI — zaregistruj v Entra pod „Single-page application" přesně tuto hodnotu:',
+  fnoRedirectUriCopy: 'Kopírovat',
+  fnoRedirectUriCopied: 'Redirect URI zkopírováno do schránky.',
   fnoSaveProfile: 'Uložit profil',
   fnoUpdateProfile: 'Uložit změny',
   fnoNewProfile: 'Nový profil',
@@ -1450,6 +1456,9 @@ const en: Translations = {
   fnoEnvUrl: 'Environment URL',
   fnoTenantId: 'Tenant ID (Entra)',
   fnoClientId: 'Application (client) ID',
+  fnoRedirectUriHint: 'Redirect URI — register exactly this value in Entra under "Single-page application":',
+  fnoRedirectUriCopy: 'Copy',
+  fnoRedirectUriCopied: 'Redirect URI copied to clipboard.',
   fnoSaveProfile: 'Save profile',
   fnoUpdateProfile: 'Save changes',
   fnoNewProfile: 'New profile',

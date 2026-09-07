@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SiteHeader } from '@/components/SiteHeader';
 import { siteDescription, siteName, siteTagline, siteUrl } from '@/lib/site';
+import { authRedirectForwardScript } from '@/lib/auth-redirect';
 import { themeBootstrapScript } from '@er-visualizer/design-tokens/theme';
 import './globals.css';
 
@@ -95,6 +96,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
     >
       <head>
+        {/* Hand an MSAL auth response over to the SPA — the redirect URI is this
+            origin, but only /app runs MSAL. Must run before anything else. */}
+        <script dangerouslySetInnerHTML={{ __html: authRedirectForwardScript }} />
         {/* Adopt the theme the user picked in the app (same origin under /app). */}
         <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
       </head>
