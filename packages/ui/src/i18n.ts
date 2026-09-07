@@ -305,6 +305,7 @@ export interface Translations {
   landingTitle: string;
   landingSub: string;
   landingDocsLink: string;
+  landingHomeLinkLabel: string;
   landingSourceLabel: string;
   // Landing page – drop zone
   landingDropPrimary: string;
@@ -838,6 +839,7 @@ const cs: Translations = {
   landingTitle: 'D365FO ER Visualizer',
   landingSub: 'Načti ER konfigurace z disku nebo přímo z prostředí Finance & Operations a začni trasovat vazby formátů přes mapování až ke zdrojové tabulce, třídě nebo výčtu.',
   landingDocsLink: 'Dokumentace',
+  landingHomeLinkLabel: 'Zpět na úvodní stránku D365FO ER Visualizer',
   landingSourceLabel: 'Zdroj konfigurací',
   landingDropPrimary: 'Přetáhni ER XML soubory sem',
   landingDropRelease: 'Pusť soubory',
@@ -1372,6 +1374,7 @@ const en: Translations = {
   landingTitle: 'D365FO ER Visualizer',
   landingSub: 'Load ER configurations from disk or straight from a Finance & Operations environment, then trace format bindings through the model mapping down to the source table, class, or enum.',
   landingDocsLink: 'Documentation',
+  landingHomeLinkLabel: 'Back to the D365FO ER Visualizer homepage',
   landingSourceLabel: 'Configuration source',
   landingDropPrimary: 'Drop ER XML files here',
   landingDropRelease: 'Release files',
