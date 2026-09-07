@@ -24,11 +24,10 @@ In the Entra admin center, go to **App registrations → New registration**.
 1. Give it a name — `ER Visualizer` is fine.
 2. Under **Supported account types**, single tenant is the normal choice.
 3. Add the platform you will use, under **Authentication → Add a platform**:
-   - **Single-page application** — redirect URI is the exact URL the app runs on, *including* the
-     `/app` path: `https://your-er-visualizer-domain/app`. For local development that is
-     `http://localhost:5173`. The path matters — sign-in on tablets and any browser that blocks
-     the popup falls back to a full-page redirect, and a mismatched URI sends the user back to the
-     marketing page instead of the app.
+   - **Single-page application** — redirect URI is the origin you open the app from, for example
+     `https://your-er-visualizer-domain` (no path). For local development that is
+     `http://localhost:5173`. Entra matches this string verbatim, so leave off the trailing slash,
+     and note that every Vercel preview deployment has its own hostname and needs its own entry.
    - **Mobile and desktop applications** — add `http://localhost` if you will use the
      [desktop app](/docs/desktop-app). The loopback flow picks a free port at runtime, and Entra
      matches any port for `http://localhost`.

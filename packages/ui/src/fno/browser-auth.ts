@@ -21,7 +21,7 @@ import {
   type AuthResult,
   type FnoConnection,
 } from '@er-visualizer/fno-client';
-import { clearRedirectPending, markRedirectPending } from './redirect-state';
+import { clearRedirectPending, computeRedirectUri, markRedirectPending } from './redirect-state';
 
 const pool = new Map<string, PublicClientApplication>();
 /** Auth response picked up by `handleRedirectPromise`, consumed by the next `acquireToken`. */
@@ -32,28 +32,10 @@ function appKey(conn: FnoConnection): string {
 }
 
 /**
- * Where Microsoft identity should send the browser back to.
- *
- * It must be the SPA document itself, not the site root: on the web deployment
- * the SPA is staged under `/app` while `/` is the marketing site, and returning
- * to `/` drops the auth response on a page that never runs MSAL — the user just
- * lands on the marketing page, still signed out. That is exactly what the popup
- * flow hides on desktop and what breaks on tablets, where the popup is blocked
- * and the redirect fallback is the only working path.
- *
- * `import.meta.env.BASE_URL` is `/app/` for the web build (APP_BASE) and `./`
- * for dev/Electron, where the document path is the right answer instead.
+ * Where Microsoft identity should send the browser back to. Defined in
+ * `redirect-state` so it is reachable without loading MSAL.
  */
-export function computeRedirectUri(): string {
-  const { origin, pathname } = window.location;
-  const base = import.meta.env.BASE_URL;
-  // Absolute base (web deployment): trailing slash stripped so the value matches
-  // the "Single-page application" redirect URI registered in Azure verbatim.
-  if (base && base.startsWith('/')) {
-    return `${origin}${base.replace(/\/+$/, '')}`;
-  }
-  return `${origin}${pathname.replace(/\/index\.html$/, '').replace(/\/+$/, '')}`;
-}
+export { computeRedirectUri } from './redirect-state';
 
 async function getOrCreate(conn: FnoConnection): Promise<PublicClientApplication> {
   const key = appKey(conn);

@@ -47,6 +47,7 @@ import {
   ArrowLeftRegular,
   SelectAllOffRegular,
   CheckboxCheckedRegular,
+  CopyRegular,
 } from '@fluentui/react-icons';
 import type {
   ErComponentType,
@@ -61,7 +62,7 @@ import { useAppStore } from '../state/store';
 import { useFnoProfiles, newProfileId } from '../state/fno-profiles';
 import { useFnoSession } from '../state/fno-session';
 import { fnoSession } from '../fno/session';
-import { clearRedirectPending, peekRedirectPending } from '../fno/redirect-state';
+import { clearRedirectPending, computeRedirectUri, peekRedirectPending } from '../fno/redirect-state';
 import { DependencyPromptDialog, type DependencyPromptRequest } from './DependencyPromptDialog';
 
 const useStyles = makeStyles({
@@ -135,6 +136,26 @@ const useStyles = makeStyles({
     alignItems: 'center',
     flexWrap: 'wrap',
     marginTop: tokens.spacingVerticalXS,
+  },
+  redirectHint: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    marginTop: tokens.spacingVerticalXS,
+  },
+  redirectHintRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalXS,
+    flexWrap: 'wrap',
+  },
+  redirectHintValue: {
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200,
+    backgroundColor: tokens.colorNeutralBackground3,
+    borderRadius: tokens.borderRadiusSmall,
+    padding: `2px ${tokens.spacingHorizontalXS}`,
+    wordBreak: 'break-all',
   },
 
   // ── Profile list ─────────────────────────────────────────────
@@ -446,6 +467,11 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   const [expandedSolutions, setExpandedSolutions] = useState<Set<string>>(new Set());
   // Credential form is collapsed by default when the user already has profiles.
   const [formOpen, setFormOpen] = useState(() => profiles.length === 0);
+  // Only meaningful for the web build; Electron signs in through a loopback URI.
+  const redirectUri = useMemo(() => {
+    const uri = computeRedirectUri();
+    return /^https?:/i.test(uri) ? uri : '';
+  }, []);
 
   // Cache: root DataModel name → full flat component list.
   // When the user clicks a derived DataModel whose root was already
@@ -3214,6 +3240,31 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           </Field>
         </div>
 
+        {/* Entra compares the redirect URI verbatim and it is not something the
+            user can guess — it depends on where the app is hosted. Show the exact
+            value so it can be pasted into the app registration. */}
+        {redirectUri && (
+          <div className={styles.redirectHint}>
+            <Caption2 style={{ color: tokens.colorNeutralForeground3 }}>{t.fnoRedirectUriHint}</Caption2>
+            <div className={styles.redirectHintRow}>
+              <code className={styles.redirectHintValue}>{redirectUri}</code>
+              <Button
+                size="small"
+                appearance="subtle"
+                icon={<CopyRegular />}
+                onClick={() => {
+                  navigator.clipboard?.writeText(redirectUri).then(
+                    () => pushToast({ kind: 'success', message: t.fnoRedirectUriCopied }),
+                    () => {},
+                  );
+                }}
+              >
+                {t.fnoRedirectUriCopy}
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className={styles.fieldActions}>
           <Button appearance="primary" disabled={!canSave} icon={<CheckmarkCircleRegular />} onClick={handleSaveProfile}>
             {isEditing ? t.fnoUpdateProfile : t.fnoSaveProfile}
@@ -3870,6 +3921,30 @@ function describeHttpError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * AADSTS50011 means Entra received a redirect URI that is not on the
+ * registration's list. The only useful answer is the exact string it must
+ * match — Entra compares verbatim, so a trailing slash or a different host
+ * (a Vercel preview deployment has its own) is already a mismatch.
+ */
+function buildRedirectMismatchMessage(raw: string): string {
+  // Entra echoes the offending URI back; prefer it over our own guess.
+  const fromServer = raw.match(/redirect URI '([^']+)'/i)?.[1];
+  const uri = fromServer || computeRedirectUri();
+  const isWeb = /^https?:/i.test(uri);
+  if (!isWeb) {
+    return 'AADSTS50011: Redirect URI nesedí. V App registration → Authentication → Mobile and desktop applications přidej „http://localhost".';
+  }
+  return (
+    `AADSTS50011: Redirect URI nesedí. Aplikace posílá přesně:\n` +
+    `    ${uri}\n` +
+    `Zaregistruj tuto hodnotu v Entra → App registrations → Authentication → Add a platform → ` +
+    `Single-page application (ne „Web", ne „Mobile and desktop applications").\n` +
+    `Musí sedět znak po znaku — bez lomítka na konci a bez cesty.\n` +
+    `Pozor: každé preview nasazení má vlastní hostname a potřebuje vlastní záznam.`
+  );
+}
+
 function explainAuthError(err: unknown): string {
   // Unwrap FnoAuthError.cause so we see the *original* MSAL/IPC message.
   const chain: string[] = [];
@@ -3909,7 +3984,7 @@ function explainAuthError(err: unknown): string {
     case '9002326':
       return 'AADSTS9002326: Redirect URI je u App registration zařazené jako „Single-page application". Přesuň ho pod „Mobile and desktop applications" (http://localhost).';
     case '50011':
-      return 'AADSTS50011: Redirect URI nesedí. V App registration → Authentication → Mobile and desktop applications přidej „http://localhost".';
+      return buildRedirectMismatchMessage(raw);
     default:
       return code ? `AADSTS${code}: ${raw}` : raw;
   }
