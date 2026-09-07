@@ -65,6 +65,23 @@ describe('tokenizeERExpr label references', () => {
     const tokens = tokenizeERExpr('@.Amount');
     expect(tokens).toEqual([{ kind: 'other', raw: '@.Amount' }]);
   });
+
+  it('keeps a quoted datasource joined with a trailing plain field', () => {
+    // 'SalesInvoiceLocalizationTmp_Lines'.ItemId used to split into two
+    // unrelated tokens — the quoted datasource and a bogus standalone
+    // "ItemId" identifier that then rendered as its own unresolved reference.
+    const tokens = tokenizeERExpr("'$SalesInvoiceLocalizationTmp_Lines'.ItemId");
+    expect(tokens).toEqual([
+      { kind: 'ds', raw: "'$SalesInvoiceLocalizationTmp_Lines'.ItemId", segments: ['$SalesInvoiceLocalizationTmp_Lines', 'ItemId'] },
+    ]);
+  });
+
+  it('keeps a quoted datasource joined with multiple trailing plain fields', () => {
+    const tokens = tokenizeERExpr("'$Foo'.Bar.Baz");
+    expect(tokens).toEqual([
+      { kind: 'ds', raw: "'$Foo'.Bar.Baz", segments: ['$Foo', 'Bar', 'Baz'] },
+    ]);
+  });
 });
 
 import { shouldShowFullExpression } from './DrillDownPanel';

@@ -363,23 +363,37 @@ export function tokenizeERExpr(expr: string): ERToken[] {
       tokens.push({ kind: 'other', raw }); i = j; continue;
     }
 
-    // ── Quoted path: 'seg1'.'seg2'… ─────────────────────────────────────────
+    // ── Quoted path: 'seg1'.'seg2'… / 'seg1'.plainField.plainField2… ─────────
     if (ch === "'") {
       const segments: string[] = [];
       let raw = '';
       let j = i;
-      while (j < n && expr[j] === "'") {
-        j++;                        // skip opening '
-        let seg = '';
-        while (j < n && expr[j] !== "'") seg += expr[j++];
-        if (j < n) j++;             // skip closing '
-        raw += "'" + seg + "'";
-        segments.push(seg);
-        // Continue if followed by . then another quote
-        if (j < n && expr[j] === '.' && j + 1 < n && expr[j + 1] === "'") {
-          raw += '.'; j++;
+      j++;                          // skip opening '
+      let seg = '';
+      while (j < n && expr[j] !== "'") seg += expr[j++];
+      if (j < n) j++;                // skip closing '
+      raw += "'" + seg + "'";
+      segments.push(seg);
+
+      // Extend with any further dotted segments, quoted or plain — without
+      // the plain-identifier case, "'$Foo'.Bar" split into two unrelated
+      // tokens and "Bar" rendered as its own bogus unresolved reference.
+      while (j < n && expr[j] === '.') {
+        if (j + 1 < n && expr[j + 1] === "'") {
+          let m = j + 2; let nextSeg = '';
+          while (m < n && expr[m] !== "'") nextSeg += expr[m++];
+          if (m < n) m++;
+          raw += ".'" + nextSeg + "'";
+          segments.push(nextSeg); j = m;
+        } else if (j + 1 < n && /[A-Za-z0-9_$]/.test(expr[j + 1])) {
+          let m = j + 1;
+          while (m < n && /[A-Za-z0-9_$]/.test(expr[m])) m++;
+          const nextName = expr.slice(j + 1, m);
+          if (ER_FUNCTIONS.has(nextName.toUpperCase())) break;
+          raw += '.' + nextName; segments.push(nextName); j = m;
         } else { break; }
       }
+
       tokens.push({ kind: segments.length > 0 ? 'ds' : 'other', raw, segments });
       i = j; continue;
     }
@@ -878,7 +892,7 @@ function LineageRow({ node, depth, highlightKey, openIds, onToggle, registerRef,
         <span className="lin-row__icon" aria-hidden><BadgeIcon badge={node.badge} /></span>
         <span className="lin-row__stage">{lineageStageLabel(node)}</span>
         {showName && <span className="lin-row__name" title={node.label}>{node.label}</span>}
-        {node.sublabel && !formula && (
+        {node.sublabel && node.sublabel !== node.label && !formula && (
           <code className="lin-row__detail" title={node.sublabel}>{node.sublabel}</code>
         )}
         {formula && !open && (
