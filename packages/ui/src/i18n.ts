@@ -515,13 +515,6 @@ export interface Translations {
 
   // Search panel
   searchInLabel: string;
-  exampleHintTable: string;
-  exampleHintEnum: string;
-  exampleHintLookup: string;
-  exampleHintParam: string;
-  exampleHintIdentifier: string;
-  exampleHintFunction: string;
-  exampleHintCalcField: string;
   searchRefCount: (n: number) => string;
   whereUsedSummary: (occurrences: number, files: number) => string;
   navigateToDatasource: string;
@@ -577,6 +570,7 @@ export interface Translations {
   searchAllConfigs: string;
   searchAllConfigsHint: string;
   searchHiddenByRelated: (n: number) => string;
+  searchHiddenByRelatedShort: (n: number) => string;
   searchCatStructure: string;
   searchCatBindings: string;
   searchCatExpressions: string;
@@ -1053,13 +1047,6 @@ const cs: Translations = {
 
   // Search panel
   searchInLabel: 'v',
-  exampleHintTable: 'tabulka',
-  exampleHintEnum: 'enum',
-  exampleHintLookup: 'lookup',
-  exampleHintParam: 'parametr',
-  exampleHintIdentifier: 'identifikátor',
-  exampleHintFunction: 'funkce',
-  exampleHintCalcField: 'kalkulované pole',
   searchRefCount: (n: number) => `${n} ${n === 1 ? 'odkaz' : n < 5 ? 'odkazy' : 'odkazů'} ve výrazu`,
   whereUsedSummary: (occurrences: number, files: number) => `${occurrences} ${occurrences === 1 ? 'výskyt' : occurrences < 5 ? 'výskyty' : 'výskytů'} v ${files} ${files === 1 ? 'souboru' : 'souborech'}`,
   navigateToDatasource: 'Přejít na datový zdroj',
@@ -1115,6 +1102,7 @@ const cs: Translations = {
   searchAllConfigs: 'Vše',
   searchAllConfigsHint: 'Hledat ve všech načtených konfiguracích, včetně nesouvisejících modelů.',
   searchHiddenByRelated: (n: number) => `Skryto v nesouvisejících konfiguracích: ${n}`,
+  searchHiddenByRelatedShort: (n: number) => `+${n} jinde`,
   searchCatStructure: 'Struktura',
   searchCatBindings: 'Vazby',
   searchCatExpressions: 'Výrazy',
@@ -1600,13 +1588,6 @@ const en: Translations = {
 
   // Search panel
   searchInLabel: 'in',
-  exampleHintTable: 'table',
-  exampleHintEnum: 'enum',
-  exampleHintLookup: 'lookup',
-  exampleHintParam: 'parameter',
-  exampleHintIdentifier: 'identifier',
-  exampleHintFunction: 'function',
-  exampleHintCalcField: 'calc. field',
   searchRefCount: (n: number) => `${n} reference${n === 1 ? '' : 's'} in expression`,
   whereUsedSummary: (occurrences: number, files: number) => `${occurrences} occurrence${occurrences === 1 ? '' : 's'} in ${files} file${files === 1 ? '' : 's'}`,
   navigateToDatasource: 'Navigate to datasource',
@@ -1662,6 +1643,7 @@ const en: Translations = {
   searchAllConfigs: 'All',
   searchAllConfigsHint: 'Search every loaded configuration, including unrelated models.',
   searchHiddenByRelated: (n: number) => `Hidden in unrelated configurations: ${n}`,
+  searchHiddenByRelatedShort: (n: number) => `+${n} elsewhere`,
   searchCatStructure: 'Structure',
   searchCatBindings: 'Bindings',
   searchCatExpressions: 'Expressions',
