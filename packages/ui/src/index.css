@@ -6970,6 +6970,69 @@ body {
     height: 44px;
   }
 
+  /* ── Status bar ────────────────────────────────────────────────
+     A 30px strip of chips. The blanket rule above only grew the one chip
+     carrying `role="button"` (the validator), so it both outgrew the strip
+     and towered over its neighbours. Size the strip for a finger and give
+     every chip in it the same height instead. */
+  .app-shell .app-statusbar {
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .app-shell .app-statusbar > span {
+    min-height: 30px;
+    box-sizing: border-box;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  /* ── Designer toolbar controls ─────────────────────────────────
+     The density toggle (28px square) and the expand/collapse slider (22px
+     options) sat at three different heights next to the 36px tabs. Give the
+     whole toolbar one height and let the labelled variants set their width
+     from their text. */
+  .app-shell .fmt-icon-btn,
+  .app-shell .expand-slider__option,
+  .app-shell .expand-slider--compact .expand-slider__option,
+  .app-shell .filter-field {
+    height: 36px;
+    min-height: 36px;
+  }
+
+  .app-shell .filter-field {
+    box-sizing: border-box;
+  }
+
+  /* Spelling the toolbar buttons out leaves the filter squeezed to a couple
+     of characters. Let it claim the rest of the row and wrap onto its own
+     line rather than shrink below a usable width. */
+  .app-shell .fmt-toolbar .filter-field {
+    flex: 1 1 180px;
+    min-width: 180px;
+  }
+
+  .app-shell .expand-slider,
+  .app-shell .expand-slider--compact {
+    align-items: center;
+  }
+
+  .app-shell .fmt-icon-btn--labelled,
+  .app-shell .expand-slider--labelled .expand-slider__option {
+    width: auto;
+    min-width: 0;
+    gap: 7px;
+    padding: 0 12px;
+    font-family: inherit;
+    font-size: 12.5px;
+    white-space: nowrap;
+  }
+
+  /* Without the sliding thumb the active option needs its own surface. */
+  .app-shell .expand-slider--labelled .expand-slider__option.active {
+    background: color-mix(in srgb, var(--accent) 16%, var(--bg-hover));
+  }
+
   /* The chevron is the expand/collapse target for the whole tree. */
   .app-shell .tree-chevron,
   .app-shell .tree-chevron-placeholder,
@@ -6992,8 +7055,8 @@ body {
 
   .app-shell .tree-node-actions,
   .app-shell .explorer-tree-shell .tree-node-actions {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
   }
 
   /* ── Panel splitters ───────────────────────────────────────────

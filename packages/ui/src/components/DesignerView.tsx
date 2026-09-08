@@ -486,10 +486,13 @@ function useNavFlash(active: boolean, duration = 1400): boolean {
 function DensityToggle({ density, onChange }: { density: DensityMode; onChange: (value: DensityMode) => void }) {
   const compact = density === 'compact';
   const label = compact ? t.comfortableDensity : t.compactDensity;
+  // The icon alone only reads with a hover tooltip, which touch does not have,
+  // and 28px is below a comfortable tap target. Spell the action out instead.
+  const labelled = useCoarsePointer();
   return (
     <button
       type="button"
-      className="fmt-icon-btn"
+      className={labelled ? 'fmt-icon-btn fmt-icon-btn--labelled' : 'fmt-icon-btn'}
       aria-pressed={compact}
       title={`${locale === 'cs' ? 'Hustota zobrazení' : 'Display density'} — ${label}`}
       aria-label={label}
@@ -498,6 +501,7 @@ function DensityToggle({ density, onChange }: { density: DensityMode; onChange: 
       {compact
         ? <TextBulletListSquareRegular fontSize={15} />
         : <TextAlignJustifyRegular fontSize={15} />}
+      {labelled && <span className="fmt-icon-btn__label">{label}</span>}
     </button>
   );
 }
