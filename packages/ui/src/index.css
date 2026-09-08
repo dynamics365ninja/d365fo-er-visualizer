@@ -1382,6 +1382,91 @@ body {
   flex-direction: column;
 }
 
+/* ── Hit categories inside a configuration group ──────────────────
+   One configuration can match as a data source, a binding, an expression
+   and a structural reference at once. Filing the rows under a labelled,
+   colour-marked section makes that mix readable instead of one long list
+   where every row's kind chip has to be read individually. */
+.search-cat {
+  --search-cat-color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+}
+
+.search-cat--structure   { --search-cat-color: var(--accent, #4f8ef7); }
+.search-cat--bindings    { --search-cat-color: #16a34a; }
+.search-cat--expressions { --search-cat-color: #a855f7; }
+.search-cat--datasources { --search-cat-color: #f59e0b; }
+.search-cat--references  { --search-cat-color: #64748b; }
+
+.search-cat__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 3px 12px;
+  background: color-mix(in srgb, var(--search-cat-color) 8%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+}
+
+.search-cat:first-child .search-cat__header {
+  border-top: 0;
+}
+
+.search-cat__marker {
+  width: 3px;
+  align-self: stretch;
+  min-height: 12px;
+  border-radius: 2px;
+  background: var(--search-cat-color);
+}
+
+.search-cat__title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--search-cat-color) 78%, var(--text-primary));
+}
+
+.search-cat__count {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--search-cat-color) 14%, transparent);
+  border-radius: 999px;
+  padding: 0 6px;
+  line-height: 15px;
+}
+
+.search-cat__rows {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The rows sit inside a tinted section, so indent them to keep the
+   section marker readable as the left edge of the group. */
+.search-cat__rows .search-hit {
+  padding-left: 18px;
+}
+
+/* ── Search reach ─────────────────────────────────────────────────
+   Which configurations the search is allowed to look at, as opposed to
+   the scope toggle above it, which filters by configuration kind. */
+.search-panel__reach {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  padding: 0 0 6px;
+}
+
+.search-panel__reach-note {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+}
+
 /* Divider between items */
 .search-result-group-body .search-hit + .search-hit {
   border-top: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);
@@ -6949,6 +7034,14 @@ body {
   .app-shell .explorer-tree-shell .tree-node {
     padding-top: 5px;
     padding-bottom: 5px;
+  }
+
+  /* Scope/reach pills sit in a dense header row, so they get a touch target
+     without inheriting the generic button sizing that would wrap the row. */
+  .app-shell .search-scope-toggle__btn {
+    min-height: 30px;
+    padding: 5px 12px;
+    font-size: 11px;
   }
 
   .app-shell button,
