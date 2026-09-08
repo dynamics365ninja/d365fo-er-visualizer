@@ -73,8 +73,6 @@ export interface Translations {
   find: string;
   hideExplorer: string;
   showExplorer: string;
-  hideProperties: string;
-  showProperties: string;
   showDetails: string;
   hideDetails: string;
   /* The theme switch names the mode it is in, as `<themeLabel>: <mode>` — the
@@ -609,8 +607,6 @@ const cs: Translations = {
   find: 'Najít',
   hideExplorer: 'Skrýt Explorer',
   showExplorer: 'Zobrazit Explorer',
-  hideProperties: 'Skrýt Vlastnosti',
-  showProperties: 'Zobrazit Vlastnosti',
   showDetails: 'Zobrazit detaily',
   hideDetails: 'Skrýt detaily',
   themeLabel: 'Motiv',
@@ -1153,8 +1149,6 @@ const en: Translations = {
   find: 'Find',
   hideExplorer: 'Hide Explorer',
   showExplorer: 'Show Explorer',
-  hideProperties: 'Hide Properties',
-  showProperties: 'Show Properties',
   showDetails: 'Show details',
   hideDetails: 'Hide details',
   themeLabel: 'Theme',

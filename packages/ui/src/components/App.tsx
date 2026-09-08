@@ -142,41 +142,13 @@ const useAppStyles = makeStyles({
     minHeight: 0,
     overflow: 'auto',
   },
-  resizeHandleH: {
-    height: '5px',
-    backgroundColor: 'var(--er-border)',
-    cursor: 'row-resize',
-    transitionProperty: 'background-color',
-    transitionDuration: '140ms',
-    ':hover': { backgroundColor: 'var(--er-accent)' },
-    ':active': { backgroundColor: 'var(--er-accent-hover)' },
-  },
-  propertiesStrip: {
+  /** Search / where-used own the whole panel body below the tab strip. */
+  searchPaneFill: {
     display: 'flex',
     flexDirection: 'column',
-    height: '100%',
-    minHeight: 0,
-    overflow: 'hidden',
-  },
-  propertiesStripHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '7px 12px',
-    fontSize: '10px',
-    fontWeight: 600,
-    color: 'var(--er-text-muted)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-    borderTop: '1px solid var(--er-border)',
-    borderBottom: '1px solid var(--er-border)',
-    backgroundColor: 'var(--er-surface-2)',
-    flexShrink: 0,
-  },
-  propertiesStripContent: {
     flex: 1,
     minHeight: 0,
-    overflow: 'auto',
+    overflow: 'hidden',
   },
   resizeHandle: {
     width: '5px',
@@ -371,7 +343,6 @@ export function App() {
   const [showRight, setShowRight] = useState(false);
   const [rightTab, setRightTab] = useState<'properties' | 'search' | 'where-used'>('properties');
   const [rightFullscreen, setRightFullscreen] = useState(false);
-  const [showPropsStrip, setShowPropsStrip] = useState(true);
   const [showLanding, setShowLanding] = useState(true);
   const landingRequest = useAppStore(s => s.landingRequest);
   useEffect(() => {
@@ -616,8 +587,6 @@ export function App() {
                   onCollapse={() => setRightFullscreen(false)}
                   onClose={() => { setShowRight(false); setRightFullscreen(false); }}
                   panelContentClass={styles.panelContent}
-                  showPropsStrip={showPropsStrip}
-                  setShowPropsStrip={setShowPropsStrip}
                 />
               </div>
             ) : isStacked ? (
@@ -652,8 +621,6 @@ export function App() {
                       onCollapse={() => setRightFullscreen(false)}
                       onClose={() => { setShowRight(false); setRightFullscreen(false); }}
                       panelContentClass={styles.panelContent}
-                      showPropsStrip={showPropsStrip}
-                      setShowPropsStrip={setShowPropsStrip}
                     />
                   </div>
                 )}
@@ -699,8 +666,6 @@ export function App() {
                           onCollapse={() => setRightFullscreen(false)}
                           onClose={() => { setShowRight(false); setRightFullscreen(false); }}
                           panelContentClass={styles.panelContent}
-                          showPropsStrip={showPropsStrip}
-                          setShowPropsStrip={setShowPropsStrip}
                         />
                       </div>
                     </Panel>
@@ -754,8 +719,6 @@ function RightPanel({
   onCollapse,
   onClose,
   panelContentClass,
-  showPropsStrip,
-  setShowPropsStrip,
 }: {
   tab: 'properties' | 'search' | 'where-used';
   onTabChange: (tab: 'properties' | 'search' | 'where-used') => void;
@@ -767,10 +730,6 @@ function RightPanel({
   onCollapse: () => void;
   onClose: () => void;
   panelContentClass: string;
-  /** Lifted to the parent: RightPanel is mounted at two tree positions
-   * (docked / fullscreen), so local state would reset on every switch. */
-  showPropsStrip: boolean;
-  setShowPropsStrip: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const styles = useAppStyles();
   return (
@@ -833,65 +792,13 @@ function RightPanel({
         </div>
       </div>
       {tab === 'search' || tab === 'where-used' ? (
-        showPropsStrip ? (
-          <PanelGroup direction="vertical" style={{ flex: 1, minHeight: 0 }}>
-            <Panel defaultSize={60} minSize={25}>
-              <ErrorBoundary label="Search">
-                <React.Suspense fallback={<PanelLoading />}>
-                  <SearchPanel />
-                </React.Suspense>
-              </ErrorBoundary>
-            </Panel>
-            <PanelResizeHandle className={styles.resizeHandleH} />
-            <Panel defaultSize={40} minSize={15}>
-              <div className={styles.propertiesStrip}>
-                <div className={styles.propertiesStripHeader}>
-                  <AppsListDetailRegular fontSize={12} />
-                  {t.properties}
-                  <div className={styles.rightTabSpacer} />
-                  <Tooltip content={t.hideProperties} relationship="label" withArrow>
-                    <Button
-                      appearance="subtle"
-                      size="small"
-                      icon={<DismissRegular fontSize={12} />}
-                      onClick={() => setShowPropsStrip(false)}
-                      aria-label={t.hideProperties}
-                    />
-                  </Tooltip>
-                </div>
-                <div className={styles.propertiesStripContent}>
-                  <ErrorBoundary label="Inspector">
-                    <PropertyInspector />
-                  </ErrorBoundary>
-                </div>
-              </div>
-            </Panel>
-          </PanelGroup>
-        ) : (
-          <div className={styles.propertiesStrip} style={{ flex: 1, minHeight: 0 }}>
-            <div style={{ flex: 1, minHeight: 0 }}>
-              <ErrorBoundary label="Search">
-                <React.Suspense fallback={<PanelLoading />}>
-                  <SearchPanel />
-                </React.Suspense>
-              </ErrorBoundary>
-            </div>
-            <div className={styles.propertiesStripHeader}>
-              <AppsListDetailRegular fontSize={12} />
-              {t.properties}
-              <div className={styles.rightTabSpacer} />
-              <Tooltip content={t.showProperties} relationship="label" withArrow>
-                <Button
-                  appearance="subtle"
-                  size="small"
-                  icon={<ExpandUpRightRegular fontSize={12} />}
-                  onClick={() => setShowPropsStrip(true)}
-                  aria-label={t.showProperties}
-                />
-              </Tooltip>
-            </div>
-          </div>
-        )
+        <div className={styles.searchPaneFill}>
+          <ErrorBoundary label="Search">
+            <React.Suspense fallback={<PanelLoading />}>
+              <SearchPanel />
+            </React.Suspense>
+          </ErrorBoundary>
+        </div>
       ) : (
         <div className={panelContentClass}>
           <ErrorBoundary label="Inspector">
