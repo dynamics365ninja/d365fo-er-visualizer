@@ -10,7 +10,7 @@ import type { TreeNode } from '../state/store';
 import type { GUIDEntry } from '@er-visualizer/core';
 import { locale, t, useLocale } from '../i18n';
 import { getFormatTypeThemeColor } from '../utils/theme-colors';
-import { relatedConfigIndices } from '../utils/model-hierarchy';
+import { relatedConfigIndices, relatedContainerRules, hitPassesContainerRule, type ScopeContainerRule } from '../utils/model-hierarchy';
 import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 
 type SearchResultEntry = {
@@ -54,7 +54,13 @@ function getSearchResultDedupeKey(r: SearchResultEntry): string {
 }
 
 type NestedResult = { entry: SearchResultEntry; children: SearchResultEntry[] };
-type ExamplePreset = { label: string; hint: string; category: string };
+type ExamplePreset = {
+  /** What gets typed into the box. */
+  query: string;
+  /** The question the query answers — this is what the chip leads with. */
+  label: string;
+  category: string;
+};
 
 /**
  * Nest "Binding for X: ..." and "Format binding expression: ..." sub-hits under
@@ -156,14 +162,14 @@ function ExamplePalette({
           <div className="search-example-board__chips">
             {items.map(item => (
               <button
-                key={`${category}:${item.label}`}
+                key={`${category}:${item.query}`}
                 type="button"
                 className="search-example-chip"
-                onClick={() => onApply(item.label)}
-                title={item.hint}
+                onClick={() => onApply(item.query)}
+                title={item.query}
               >
                 <span className="search-example-chip__label">{item.label}</span>
-                <span className="search-example-chip__hint">{item.hint}</span>
+                <span className="search-example-chip__query">{item.query}</span>
               </button>
             ))}
           </div>
@@ -212,51 +218,65 @@ export function SearchPanel() {
     return tab ? tab.configIndex : null;
   }, [openTabs, activeTabId]);
 
-  const relatedIndices = useMemo(() => {
+  const relatedFilter = useMemo(() => {
     if (activeConfigIndex == null) return null;
     const indices = relatedConfigIndices(configurations, activeConfigIndex);
-    return indices.size === configurations.length ? null : indices;
+    const narrowsConfigs = indices.size < configurations.length;
+    // Container rules narrow *within* a related model, so they matter even
+    // when every loaded configuration belongs to the same tree.
+    const rules = relatedContainerRules(configurations, activeConfigIndex);
+    if (!narrowsConfigs && rules.size === 0) return null;
+
+    const paths = new Set(
+      Array.from(indices).map(i => configurations[i]?.filePath).filter(Boolean) as string[],
+    );
+    const ruleByPath = new Map<string, ScopeContainerRule>();
+    rules.forEach((rule, idx) => {
+      const path = configurations[idx]?.filePath;
+      if (path) ruleByPath.set(path, rule);
+    });
+
+    return {
+      allowsConfigIndex: (idx: number) => !narrowsConfigs || indices.has(idx),
+      allows: (r: SearchResultEntry) =>
+        (!narrowsConfigs || paths.has(r.sourceConfigPath))
+        && hitPassesContainerRule(ruleByPath.get(r.sourceConfigPath), r.sourceComponent),
+    };
   }, [configurations, activeConfigIndex]);
 
-  const relatedPaths = useMemo(() => {
-    if (!relatedIndices) return null;
-    return new Set(Array.from(relatedIndices).map(i => configurations[i]?.filePath).filter(Boolean) as string[]);
-  }, [relatedIndices, configurations]);
-
+  // The presets are framed as questions a consultant actually arrives with,
+  // not as a catalogue of what the box accepts; the query itself rides along
+  // as a secondary line so the mapping stays learnable.
   const searchExamples = useMemo<ExamplePreset[]>(() => {
-    const section = locale === 'cs'
-      ? { model: 'Model a binding', formula: 'Výrazy a funkce', guid: 'Technické reference' }
-      : { model: 'Model and bindings', formula: 'Expressions and functions', guid: 'Technical references' };
-    const examples: ExamplePreset[] = [
-      { label: 'model.Header', hint: t.exampleHintIdentifier, category: section.model },
-      { label: 'CompanyInfo', hint: t.exampleHintTable, category: section.model },
-      { label: 'CalculatedTotal', hint: t.exampleHintCalcField, category: section.model },
-      { label: 'DATETIMEFORMAT', hint: t.exampleHintFunction, category: section.formula },
-      { label: 'ROUND', hint: t.exampleHintFunction, category: section.formula },
-      { label: 'IF(', hint: t.exampleHintFunction, category: section.formula },
+    const cs = locale === 'cs';
+    const section = cs
+      ? { mapping: 'Odkud se berou data', calc: 'Výpočty a podmínky', output: 'Podoba výstupu' }
+      : { mapping: 'Where the data comes from', calc: 'Calculations and conditions', output: 'Shape of the output' };
+    return [
+      { query: 'model.', label: cs ? 'Co všechno čte z datového modelu' : 'Everything read from the data model', category: section.mapping },
+      { query: 'CompanyInfo', label: cs ? 'Kde se používají údaje o firmě' : 'Where company details are used', category: section.mapping },
+      { query: '@GER_LABEL', label: cs ? 'Odkud pocházejí popisky' : 'Where labels come from', category: section.mapping },
+      { query: 'ROUND', label: cs ? 'Kde se zaokrouhlují částky' : 'Where amounts get rounded', category: section.calc },
+      { query: 'IF(', label: cs ? 'Podmíněná logika ve výrazech' : 'Conditional logic in expressions', category: section.calc },
+      { query: 'CalculatedTotal', label: cs ? 'Počítaná pole a mezisoučty' : 'Calculated fields and subtotals', category: section.calc },
+      { query: 'DATETIMEFORMAT', label: cs ? 'Formátování data a času' : 'Date and time formatting', category: section.output },
+      { query: 'NUMBERFORMAT', label: cs ? 'Formátování čísel' : 'Number formatting', category: section.output },
+      { query: 'CONCATENATE', label: cs ? 'Skládání textových hodnot' : 'Text values being pieced together', category: section.output },
     ];
-    // GUID lookup is a developer tool — it has no meaning in consultant mode.
-    if (showTechnicalDetails) {
-      examples.push({
-        label: '{',
-        hint: locale === 'cs' ? 'Vyhledat GUID reference' : 'Search GUID references',
-        category: section.guid,
-      });
-    }
-    return examples;
-  }, [currentLocale, showTechnicalDetails]);
+  }, [currentLocale]);
 
   const whereUsedExamples = useMemo<ExamplePreset[]>(() => {
-    const section = locale === 'cs'
-      ? { entity: 'Datové entity', expression: 'Výrazy a proměnné' }
-      : { entity: 'Data entities', expression: 'Expressions and variables' };
+    const cs = locale === 'cs';
+    const section = cs
+      ? { impact: 'Dopad změny', trace: 'Dohledání hodnoty' }
+      : { impact: 'Impact of a change', trace: 'Tracing a value' };
     return [
-      { label: 'TaxTrans', hint: t.exampleHintTable, category: section.entity },
-      { label: 'NoYesEnum', hint: t.exampleHintEnum, category: section.entity },
-      { label: 'TaxCodeGroupLookup', hint: t.exampleHintLookup, category: section.entity },
-      { label: 'ReportingCurrency', hint: t.exampleHintParam, category: section.expression },
-      { label: 'ledgerAccount', hint: t.exampleHintIdentifier, category: section.expression },
-      { label: 'CalculatedTotal', hint: t.exampleHintCalcField, category: section.expression },
+      { query: 'TaxTrans', label: cs ? 'Co se rozbije při změně tabulky' : 'What breaks if a table changes', category: section.impact },
+      { query: 'NoYesEnum', label: cs ? 'Kde se opírám o výčtový typ' : 'Where an enum is relied on', category: section.impact },
+      { query: 'TaxCodeGroupLookup', label: cs ? 'Kde se používá lookup' : 'Where a lookup is used', category: section.impact },
+      { query: 'ReportingCurrency', label: cs ? 'Kde se uplatní parametr' : 'Where a parameter takes effect', category: section.trace },
+      { query: 'ledgerAccount', label: cs ? 'Odkud se plní účet' : 'What fills the ledger account', category: section.trace },
+      { query: 'CalculatedTotal', label: cs ? 'Co stojí za počítaným polem' : 'What sits behind a calculated field', category: section.trace },
     ];
   }, [currentLocale]);
 
@@ -354,14 +374,14 @@ export function SearchPanel() {
     }
     const map = new Map<string, { configName: string; refs: Reference[] }>();
     for (const r of refs) {
-      if (relatedOnly && relatedIndices && !relatedIndices.has(r.configIndex)) continue;
+      if (relatedOnly && relatedFilter && !relatedFilter.allowsConfigIndex(r.configIndex)) continue;
       const key = `${r.configIndex}|${r.configName}`;
       const bucket = map.get(key);
       if (bucket) bucket.refs.push(r);
       else map.set(key, { configName: r.configName, refs: [r] });
     }
     return Array.from(map.entries());
-  }, [whereUsedResults, treeNodes, navigateToTreeNode, relatedOnly, relatedIndices]);
+  }, [whereUsedResults, treeNodes, navigateToTreeNode, relatedOnly, relatedFilter]);
 
   // Resolving a hit to its tree node walks the whole tree, so do it exactly
   // once per result set here; the grouped list below reuses the map.
@@ -458,8 +478,8 @@ export function SearchPanel() {
                   const navigableResults = navigableSearch.results;
                   // Related-only runs first so the count on the "All" chip
                   // tells the user exactly what turning it off would add.
-                  const relatedResults = relatedOnly && relatedPaths
-                    ? navigableResults.filter(r => relatedPaths.has(r.sourceConfigPath))
+                  const relatedResults = relatedOnly && relatedFilter
+                    ? navigableResults.filter(r => relatedFilter.allows(r))
                     : navigableResults;
                   const hiddenByRelated = navigableResults.length - relatedResults.length;
                   // Apply scope filter
@@ -497,20 +517,9 @@ export function SearchPanel() {
                             </button>
                           ))}
                         </div>
-                        <div className="search-panel__results-actions">
-                          <ExpandCollapseSlider
-                            size="compact"
-                            expandLabel={t.expand}
-                            collapseLabel={t.collapse}
-                            expandIcon={<TextExpandRegular fontSize={16} />}
-                            collapseIcon={<TextCollapseRegular fontSize={16} />}
-                            onExpand={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
-                            onCollapse={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
-                          />
-                        </div>
                       </div>
-                      {relatedPaths && (
-                        <div className="search-panel__reach">
+                      <div className="search-panel__reach">
+                        {relatedFilter && (
                           <div className="search-scope-toggle" role="group" aria-label={locale === 'cs' ? 'Rozsah hledání' : 'Search reach'}>
                             <button
                               type="button"
@@ -529,11 +538,27 @@ export function SearchPanel() {
                               {t.searchAllConfigs}
                             </button>
                           </div>
-                          {relatedOnly && hiddenByRelated > 0 && (
-                            <span className="search-panel__reach-note">{t.searchHiddenByRelated(hiddenByRelated)}</span>
-                          )}
+                        )}
+                        {relatedFilter && relatedOnly && hiddenByRelated > 0 && (
+                          <span className="search-panel__reach-note" title={t.searchHiddenByRelated(hiddenByRelated)}>
+                            {t.searchHiddenByRelatedShort(hiddenByRelated)}
+                          </span>
+                        )}
+                        {/* The expand slider rides here rather than in the bar
+                            above: the panel is narrow, and the count plus the
+                            four kind chips already fill that row. */}
+                        <div className="search-panel__results-actions">
+                          <ExpandCollapseSlider
+                            size="compact"
+                            expandLabel={t.expand}
+                            collapseLabel={t.collapse}
+                            expandIcon={<TextExpandRegular fontSize={16} />}
+                            collapseIcon={<TextCollapseRegular fontSize={16} />}
+                            onExpand={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
+                            onCollapse={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
+                          />
                         </div>
-                      )}
+                      </div>
                       <div className="search-panel__results">
                         {scopedResults.length === 0 ? (
                           <div className="search-panel__empty">
@@ -597,20 +622,9 @@ export function SearchPanel() {
                         </button>
                       ))}
                     </div>
-                    <div className="search-panel__results-actions">
-                      <ExpandCollapseSlider
-                        size="compact"
-                        expandLabel={t.expand}
-                        collapseLabel={t.collapse}
-                        expandIcon={<TextExpandRegular fontSize={16} />}
-                        collapseIcon={<TextCollapseRegular fontSize={16} />}
-                        onExpand={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
-                        onCollapse={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
-                      />
-                    </div>
                   </div>
-                  {relatedIndices && (
-                    <div className="search-panel__reach">
+                  <div className="search-panel__reach">
+                    {relatedFilter && (
                       <div className="search-scope-toggle" role="group" aria-label={locale === 'cs' ? 'Rozsah hledání' : 'Search reach'}>
                         <button
                           type="button"
@@ -629,8 +643,19 @@ export function SearchPanel() {
                           {t.searchAllConfigs}
                         </button>
                       </div>
+                    )}
+                    <div className="search-panel__results-actions">
+                      <ExpandCollapseSlider
+                        size="compact"
+                        expandLabel={t.expand}
+                        collapseLabel={t.collapse}
+                        expandIcon={<TextExpandRegular fontSize={16} />}
+                        collapseIcon={<TextCollapseRegular fontSize={16} />}
+                        onExpand={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
+                        onCollapse={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
+                      />
                     </div>
-                  )}
+                  </div>
                   <div className="search-panel__results">
                     <div className="search-results">
                       {whereUsedFileGroups.map(([key, { configName, refs }]) => (
@@ -1039,10 +1064,16 @@ function SearchResultCard({
     : hit.tab === 'datasources' ? (cs ? 'Datové zdroje' : 'Data Sources')
     : null;
 
+  // Structure, binding and expression rows carry a tag that restates their
+  // section; the section header and the row tint already say it. Data source
+  // and reference tags survive because they discriminate within their section
+  // (table vs enum vs class, format vs model vs mapping).
+  const showTag = hit.category === 'datasources' || hit.category === 'references';
+
   return (
     <button
       type="button"
-      className="search-hit"
+      className={`search-hit search-hit--${hit.category}`}
       onClick={() => navigateToTreeNode(targetNode.id)}
       title={result.sourceComponent || result.target}
     >
@@ -1051,7 +1082,7 @@ function SearchResultCard({
           <span className="search-hit__location">
             <Highlight text={location} query={query} />
           </span>
-          <span className={`search-hit__tag search-hit__tag--${hit.labelKind}`}>{hit.label}</span>
+          {showTag && <span className={`search-hit__tag search-hit__tag--${hit.labelKind}`}>{hit.label}</span>}
           {tabLabel && <span className="search-hit__tab">{tabLabel}</span>}
           <ArrowRightRegular className="search-hit__arrow" />
         </div>

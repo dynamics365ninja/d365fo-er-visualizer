@@ -1316,7 +1316,6 @@ body {
 .search-result-group {
   min-width: 0;
   border: 1px solid color-mix(in srgb, var(--border-color) 74%, transparent);
-  border-radius: 8px;
   background: color-mix(in srgb, var(--bg-primary) 78%, transparent);
   overflow: hidden;
   /* accent left bar when expanded */
@@ -1367,7 +1366,7 @@ body {
 .search-result-group-count {
   flex: none;
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: 2px;
   background: color-mix(in srgb, var(--accent) 18%, var(--bg-tertiary));
   color: var(--text-primary);
   font-size: 10px;
@@ -1416,7 +1415,6 @@ body {
   width: 3px;
   align-self: stretch;
   min-height: 12px;
-  border-radius: 2px;
   background: var(--search-cat-color);
 }
 
@@ -1434,7 +1432,7 @@ body {
   font-weight: 600;
   color: var(--text-secondary);
   background: color-mix(in srgb, var(--search-cat-color) 14%, transparent);
-  border-radius: 999px;
+  border-radius: 2px;
   padding: 0 6px;
   line-height: 15px;
 }
@@ -1450,6 +1448,27 @@ body {
   padding-left: 18px;
 }
 
+/* Tint every row with its section colour so the kind of a hit reads at a
+   glance and the per-row type chip can be dropped. `--search-cat-color` is
+   inherited from the section, and mixing against `transparent` keeps the
+   wash equally light on both themes. The left border is widened to match
+   the section marker, so the two line up into one continuous rail. */
+.search-cat__rows .search-hit {
+  background: color-mix(in srgb, var(--search-cat-color) 7%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--search-cat-color) 32%, transparent);
+}
+
+.search-cat__rows .search-hit:hover {
+  background: color-mix(in srgb, var(--search-cat-color) 17%, transparent);
+  border-left-color: var(--search-cat-color);
+}
+
+/* The tint already separates the rows, so the divider only needs to hint.
+   Specificity has to clear the generic group divider defined further down. */
+.search-result-group-body .search-cat__rows .search-hit + .search-hit {
+  border-top-color: color-mix(in srgb, var(--search-cat-color) 20%, transparent);
+}
+
 /* ── Search reach ─────────────────────────────────────────────────
    Which configurations the search is allowed to look at, as opposed to
    the scope toggle above it, which filters by configuration kind. */
@@ -1462,9 +1481,15 @@ body {
   padding: 0 0 6px;
 }
 
+/* Pushes the expand slider to the far edge, whatever sits to its left. */
+.search-panel__reach .search-panel__results-actions {
+  margin-left: auto;
+}
+
 .search-panel__reach-note {
   font-size: 10.5px;
   color: var(--text-secondary);
+  min-width: 0;
 }
 
 /* Divider between items */
@@ -4821,11 +4846,11 @@ body {
 
 .search-example-board {
   border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
-  border-radius: 12px;
+  border-radius: 4px;
   background: color-mix(in srgb, var(--bg-primary) 80%, transparent);
   padding: 10px;
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .search-example-board__title {
@@ -4847,21 +4872,25 @@ body {
   font-weight: 600;
 }
 
+/* One preset per line: these read as questions, and a wrapped pill cloud
+   makes a sentence hard to scan. */
 .search-example-board__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  display: grid;
+  gap: 3px;
 }
 
 .search-example-chip {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 7px;
-  border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--bg-secondary) 76%, transparent);
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
   color: var(--text-primary);
-  padding: 3px 10px;
+  padding: 5px 8px;
   cursor: pointer;
   max-width: 100%;
 }
@@ -4872,16 +4901,28 @@ body {
 }
 
 .search-example-chip__label {
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+/* The query the preset stands for, kept visible so the mapping from question
+   to search term is learnable rather than magic. */
+.search-example-chip__query {
   font-family: var(--font-mono, monospace);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--border-color) 40%, transparent);
+  border-radius: 2px;
+  padding: 1px 5px;
   white-space: nowrap;
 }
 
-.search-example-chip__hint {
-  font-size: 10px;
-  color: var(--text-secondary);
-  white-space: nowrap;
+.search-example-chip:hover .search-example-chip__query {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .search-results {
@@ -6289,8 +6330,10 @@ body {
 
 /* ─── Search / where-used ─── */
 
+/* Result rows read as a dense list, not as cards: square edges let the
+   coloured category rail on the left run unbroken down the section. */
 .search-hit {
-  border-radius: var(--er-radius-md);
+  border-radius: 0;
   font-size: var(--px-text);
 }
 

@@ -1,4 +1,4 @@
-import type { ERConfiguration, ERModelMappingContent, ERFormatContent, ERDataModelContent } from '@er-visualizer/core';
+import type { ERConfiguration, ERModelMappingContent, ERFormatContent, ERDataModelContent, ERDataModel, ERDataContainerDescriptor } from '@er-visualizer/core';
 
 // ─── Model hierarchy helpers ─────────────────────────────────────────────────
 
@@ -118,6 +118,139 @@ export function relatedConfigIndices(
   });
 
   return related;
+}
+
+/**
+ * The root container names through which `cfg` enters its data model(s).
+ *
+ * A model configuration routinely carries several unrelated root containers
+ * (a sales invoice tree next to a transport one, say). A format only ever
+ * enters through the descriptor named by its `model` datasource, so anything
+ * hanging off the other roots is noise for a search started from that format.
+ * Returns an empty set when the configuration imposes no entry point — a
+ * DataModel opened directly, for instance, where the whole tree is in scope.
+ */
+export function entryContainerNames(cfg: ERConfiguration | undefined): Set<string> {
+  const names = new Set<string>();
+  if (!cfg) return names;
+  const c = cfg.content;
+
+  if (c.kind === 'Format') {
+    const fc = c as ERFormatContent;
+    for (const embedded of fc.embeddedModelMappingVersions ?? []) {
+      for (const m of embedded.mappings ?? (embedded.mapping ? [embedded.mapping] : [])) {
+        if (m.dataContainerDescriptor) names.add(m.dataContainerDescriptor);
+      }
+    }
+    for (const ds of fc.formatMappingVersion?.formatMapping?.datasources ?? []) {
+      const name = ds.modelInfo?.dataContainerDescriptorName;
+      if (name) names.add(name);
+    }
+  } else if (c.kind === 'ModelMapping') {
+    const mc = c as ERModelMappingContent;
+    for (const m of mc.version.mappings ?? [mc.version.mapping]) {
+      if (m?.dataContainerDescriptor) names.add(m.dataContainerDescriptor);
+    }
+  }
+
+  return names;
+}
+
+/**
+ * Container names reachable from `entries` by walking `typeDescriptor` links.
+ *
+ * `typeDescriptor` points at another container by ID, and IDs and names
+ * coincide in practice, so both are accepted as a lookup key to stay robust
+ * against models that diverge.
+ */
+export function reachableContainerNames(model: ERDataModel, entries: Set<string>): Set<string> {
+  const byKey = new Map<string, ERDataContainerDescriptor>();
+  for (const container of model.containers) {
+    if (container.id) byKey.set(container.id, container);
+    if (container.name) byKey.set(container.name, container);
+  }
+
+  const reached = new Set<string>();
+  const queue = Array.from(entries);
+  while (queue.length) {
+    const container = byKey.get(queue.shift()!);
+    if (!container || reached.has(container.name)) continue;
+    reached.add(container.name);
+    for (const item of container.items) {
+      if (item.typeDescriptor) queue.push(item.typeDescriptor);
+    }
+  }
+  return reached;
+}
+
+/**
+ * Per-configuration rules narrowing a search *inside* a related configuration.
+ *
+ * Membership alone is too coarse: the data model a format depends on also
+ * holds the roots of unrelated trees, and a mapping file can define several
+ * root descriptors at once. Only configurations that actually need narrowing
+ * get an entry.
+ */
+export interface ScopeContainerRule {
+  /** Container names a DataModel hit may sit under; everything else is noise. */
+  allowedContainers?: Set<string>;
+  /** Every container name in that model, so unrelated cross-refs pass through. */
+  knownContainers?: Set<string>;
+  /** Mapping definitions rooted outside the entry points. */
+  excludedMappingNames?: Set<string>;
+}
+
+export function relatedContainerRules(
+  configurations: ERConfiguration[],
+  activeIdx: number | null | undefined,
+): Map<number, ScopeContainerRule> {
+  const rules = new Map<number, ScopeContainerRule>();
+  if (activeIdx == null) return rules;
+  const entries = entryContainerNames(configurations[activeIdx]);
+  if (entries.size === 0) return rules;
+
+  configurations.forEach((cfg, idx) => {
+    if (idx === activeIdx) return;
+
+    if (cfg.content.kind === 'DataModel') {
+      const model = (cfg.content as ERDataModelContent).version.model;
+      const known = new Set(model.containers.map(c => c.name).filter(Boolean));
+      const allowed = reachableContainerNames(model, entries);
+      // No overlap at all means the entry names belong to a different model
+      // shape; narrowing on a guess would hide everything, so stay out.
+      if (allowed.size > 0) rules.set(idx, { allowedContainers: allowed, knownContainers: known });
+      return;
+    }
+
+    if (cfg.content.kind === 'ModelMapping') {
+      const mc = cfg.content as ERModelMappingContent;
+      const excluded = new Set<string>();
+      let kept = 0;
+      for (const m of mc.version.mappings ?? [mc.version.mapping]) {
+        if (!m?.name) continue;
+        if (m.dataContainerDescriptor && !entries.has(m.dataContainerDescriptor)) excluded.add(m.name);
+        else kept++;
+      }
+      if (excluded.size > 0 && kept > 0) rules.set(idx, { excludedMappingNames: excluded });
+    }
+  });
+
+  return rules;
+}
+
+/**
+ * Whether a hit inside a scoped configuration survives its container rule.
+ * Model cross-refs are emitted as `Container.Item`; anything whose head is not
+ * a container name of that model (a base-model reference, say) is left alone.
+ */
+export function hitPassesContainerRule(rule: ScopeContainerRule | undefined, sourceComponent: string): boolean {
+  if (!rule) return true;
+  if (rule.excludedMappingNames?.has(sourceComponent)) return false;
+  if (rule.allowedContainers) {
+    const head = sourceComponent.split('.')[0];
+    if (rule.knownContainers?.has(head) && !rule.allowedContainers.has(head)) return false;
+  }
+  return true;
 }
 
 export interface ExplorerModelGroup {  configIdx: number;
