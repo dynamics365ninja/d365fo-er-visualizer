@@ -38,7 +38,7 @@ import { buildFormatTreeIndex, type FormatTreeIndex } from '../utils/format-tree
 import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/theme-colors';
 import { ERDirection, getFormatElementExcelRange, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent, type ERFormatElement, type ERLabel } from '@er-visualizer/core';
 import { resolveLabel, buildLabelPool } from '../utils/label-resolver';
-import { useCoarsePointer } from '../utils/responsive';
+import { useCoarsePointer, useCompactLayout } from '../utils/responsive';
 import { parseXlsxBase64, colToLetter, type XlsxWorkbook, type XlsxCell as XlsxCellType, type XlsxMerge, type XlsxArea } from '../utils/xlsx-parser';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
@@ -486,13 +486,10 @@ function useNavFlash(active: boolean, duration = 1400): boolean {
 function DensityToggle({ density, onChange }: { density: DensityMode; onChange: (value: DensityMode) => void }) {
   const compact = density === 'compact';
   const label = compact ? t.comfortableDensity : t.compactDensity;
-  // The icon alone only reads with a hover tooltip, which touch does not have,
-  // and 28px is below a comfortable tap target. Spell the action out instead.
-  const labelled = useCoarsePointer();
   return (
     <button
       type="button"
-      className={labelled ? 'fmt-icon-btn fmt-icon-btn--labelled' : 'fmt-icon-btn'}
+      className="fmt-icon-btn"
       aria-pressed={compact}
       title={`${locale === 'cs' ? 'Hustota zobrazení' : 'Display density'} — ${label}`}
       aria-label={label}
@@ -501,7 +498,6 @@ function DensityToggle({ density, onChange }: { density: DensityMode; onChange: 
       {compact
         ? <TextBulletListSquareRegular fontSize={15} />
         : <TextAlignJustifyRegular fontSize={15} />}
-      {labelled && <span className="fmt-icon-btn__label">{label}</span>}
     </button>
   );
 }
@@ -1478,6 +1474,9 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   const treeNodes = useAppStore(s => s.treeNodes);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const configurations = useAppStore(s => s.configurations);
+  // Below ~900px the tabs, the three tools and the filter no longer fit on one
+  // toolbar line, so the tools move up into the header, which has slack there.
+  const toolsInHeader = useCompactLayout();
 
   const [filter, setFilter] = useState('');
   const [view, setView] = useState<'structure' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping'>('structure');
@@ -1738,6 +1737,55 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
     return tabs;
   }, [stats.totalElements, stats.datasources, bindingsLabel, dataSourcesLabel, groupCountLabel, groupedBindingsByType.length, fc.direction, fc.embeddedModelMappingVersions.length]);
 
+  /* Density plus expand/collapse. Rendered either in the toolbar next to the
+     filter (desktop, unchanged) or up in the header — below ~900px the tabs,
+     these two and the filter no longer share one toolbar line, and the header
+     is the only bar with room left. */
+  const designerTools = (
+    <>
+      <DensityToggle density={density} onChange={setDensity} />
+      {(view === 'structure' || view === 'bindings' || view === 'datasources') && (
+        <ExpandCollapseSlider
+          size="compact"
+          expandLabel={t.expand}
+          collapseLabel={t.collapse}
+          expandIcon={
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 6 L8 2 L12 6" />
+              <path d="M4 10 L8 14 L12 10" />
+            </svg>
+          }
+          collapseIcon={
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 3 L8 7 L12 3" />
+              <path d="M4 13 L8 9 L12 13" />
+            </svg>
+          }
+          onExpand={() => {
+            if (view === 'structure') {
+              setStructureExpandMode('all');
+              setStructureExpandVersion(version => version + 1);
+            } else if (view === 'bindings') {
+              expandAllBindingTypeGroups();
+            } else {
+              dsListRef.current?.expandAll();
+            }
+          }}
+          onCollapse={() => {
+            if (view === 'structure') {
+              setStructureExpandMode('none');
+              setStructureExpandVersion(version => version + 1);
+            } else if (view === 'bindings') {
+              collapseAllBindingTypeGroups();
+            } else {
+              dsListRef.current?.collapseAll();
+            }
+          }}
+        />
+      )}
+    </>
+  );
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* ── Header Bar ── */}
@@ -1753,14 +1801,15 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
             className={`fmt-stat fmt-stat-bound fmt-stat-btn ${view === 'structure' && structureBindingFilter === 'bound' ? 'active' : ''}`}
             title={`${stats.boundElements} ${t.bound}`}
             onClick={() => { setView('structure'); setStructureBindingFilter(f => f === 'bound' ? 'all' : 'bound'); }}
-          ><CheckmarkCircleRegular fontSize={13} /> {stats.boundElements} {t.bound}</button>
+          ><CheckmarkCircleRegular fontSize={13} /> {stats.boundElements} <span className="fmt-stat-btn__word">{t.bound}</span></button>
           <button
             type="button"
             className={`fmt-stat fmt-stat-unbound fmt-stat-btn ${view === 'structure' && structureBindingFilter === 'unbound' ? 'active' : ''}`}
             title={`${stats.unboundElements} ${t.unbound}`}
             onClick={() => { setView('structure'); setStructureBindingFilter(f => f === 'unbound' ? 'all' : 'unbound'); }}
-          ><CircleRegular fontSize={13} /> {stats.unboundElements} {t.unbound}</button>
+          ><CircleRegular fontSize={13} /> {stats.unboundElements} <span className="fmt-stat-btn__word">{t.unbound}</span></button>
         </div>
+        {toolsInHeader && <div className="fmt-header-tools">{designerTools}</div>}
       </div>
 
       {/* ── Linked Mappings banner (import formats only) ── */}
@@ -1792,46 +1841,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
       <div className="fmt-toolbar">
         <SlidingTabs tabs={formatTabs} activeId={view} onChange={setView} />
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
-          <DensityToggle density={density} onChange={setDensity} />
-          {(view === 'structure' || view === 'bindings' || view === 'datasources') && (
-            <ExpandCollapseSlider
-              size="compact"
-              expandLabel={t.expand}
-              collapseLabel={t.collapse}
-              expandIcon={
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M4 6 L8 2 L12 6" />
-                  <path d="M4 10 L8 14 L12 10" />
-                </svg>
-              }
-              collapseIcon={
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M4 3 L8 7 L12 3" />
-                  <path d="M4 13 L8 9 L12 13" />
-                </svg>
-              }
-              onExpand={() => {
-                if (view === 'structure') {
-                  setStructureExpandMode('all');
-                  setStructureExpandVersion(version => version + 1);
-                } else if (view === 'bindings') {
-                  expandAllBindingTypeGroups();
-                } else {
-                  dsListRef.current?.expandAll();
-                }
-              }}
-              onCollapse={() => {
-                if (view === 'structure') {
-                  setStructureExpandMode('none');
-                  setStructureExpandVersion(version => version + 1);
-                } else if (view === 'bindings') {
-                  collapseAllBindingTypeGroups();
-                } else {
-                  dsListRef.current?.collapseAll();
-                }
-              }}
-            />
-          )}
+          {!toolsInHeader && designerTools}
           {/* The preview and embedded-mapping views have their own content
               (the mapping designer carries its own filter), so the text
               filter is only offered where it actually filters something. */}

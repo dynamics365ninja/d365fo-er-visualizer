@@ -7004,6 +7004,20 @@ body {
     box-sizing: border-box;
   }
 
+  /* Sizing the wrapper left the bordered input itself at its content height,
+     so the field looked shorter than the controls beside it. */
+  .app-shell .filter-field__input {
+    height: 100%;
+    box-sizing: border-box;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  /* ── One row per bar ───────────────────────────────────────────
+     Width-driven, not pointer-driven: it mirrors `useCompactLayout`, which
+     is what moves the tools out of the toolbar. See the max-width: 900px
+     block for the layout half of this. */
+
   /* Spelling the toolbar buttons out leaves the filter squeezed to a couple
      of characters. Let it claim the rest of the row and wrap onto its own
      line rather than shrink below a usable width. */
@@ -7015,22 +7029,6 @@ body {
   .app-shell .expand-slider,
   .app-shell .expand-slider--compact {
     align-items: center;
-  }
-
-  .app-shell .fmt-icon-btn--labelled,
-  .app-shell .expand-slider--labelled .expand-slider__option {
-    width: auto;
-    min-width: 0;
-    gap: 7px;
-    padding: 0 12px;
-    font-family: inherit;
-    font-size: 12.5px;
-    white-space: nowrap;
-  }
-
-  /* Without the sliding thumb the active option needs its own surface. */
-  .app-shell .expand-slider--labelled .expand-slider__option.active {
-    background: color-mix(in srgb, var(--accent) 16%, var(--bg-hover));
   }
 
   /* The chevron is the expand/collapse target for the whole tree. */
@@ -7131,10 +7129,54 @@ body {
    The workspace stacks to a single column in App.tsx; the chrome around it
    has to give up its desktop breathing room too. */
 @media (max-width: 900px) {
-  .explorer-toolbar,
-  .fmt-toolbar {
+  .explorer-toolbar {
     flex-wrap: wrap;
     row-gap: 6px;
+  }
+
+  /* The designer bars deliberately stay on one line — see the touch layer. */
+
+  /* ── Designer bars stay on one line ────────────────────────────
+     The designer pane is ~445px wide on a tablet in portrait, which cannot
+     hold the view tabs, the tools and the filter on one line. The tools move
+     up into the header (which has the slack); what is left down here is the
+     tab strip, which scrolls, plus a filter at a usable fixed width. */
+  .app-shell .fmt-header,
+  .app-shell .fmt-toolbar {
+    flex-wrap: nowrap;
+  }
+
+  .app-shell .fmt-toolbar .fmt-sliding-tabs {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .app-shell .fmt-toolbar .fmt-sliding-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-shell .fmt-sliding-tabs__btn {
+    flex-shrink: 0;
+  }
+
+  .app-shell .fmt-header-tools {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  .app-shell .fmt-header-stats {
+    min-width: 0;
+  }
+
+  /* "0 bound" / "4 unbound" are what make the header counters ~230px wide.
+     The icon and the number carry the meaning; the word is restored by the
+     button's own `title` (long-press on touch). */
+  .app-shell .fmt-stat-btn__word {
+    display: none;
   }
 
   /* Drill-down dialogs are sized for a desktop window. */

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useCoarsePointer } from '../utils/responsive';
 
 interface ExpandCollapseSliderProps {
   onExpand: () => void;
@@ -18,11 +17,10 @@ interface ExpandCollapseSliderProps {
  * slides to the side that was last used, giving compact, consistent visual feedback
  * (same interaction pattern as the density toggle).
  *
- * On touch the icon-only form is both too small to hit and too cryptic without a
- * hover tooltip, so the labels are spelled out and the options grow to a
- * finger-sized height. The sliding thumb is dropped in that mode: the two labels
- * have different widths, so a thumb pinned to 50 % would no longer line up with
- * the option underneath it.
+ * Stays icon-only on touch as well: it shares the format header with the type
+ * badge and the bound/unbound counters, and spelled-out labels there push the
+ * row onto a second line on a tablet in portrait. The long-press tooltip
+ * carries the wording instead.
  */
 export function ExpandCollapseSlider({
   onExpand,
@@ -34,24 +32,17 @@ export function ExpandCollapseSlider({
   size = 'default',
 }: ExpandCollapseSliderProps) {
   const [lastAction, setLastAction] = useState<'expand' | 'collapse' | null>(null);
-  const labelled = useCoarsePointer();
 
   return (
     <div
-      className={[
-        'expand-slider',
-        size === 'compact' ? 'expand-slider--compact' : '',
-        labelled ? 'expand-slider--labelled' : '',
-      ].filter(Boolean).join(' ')}
+      className={`expand-slider ${size === 'compact' ? 'expand-slider--compact' : ''}`}
       role="group"
       aria-label={`${expandLabel} / ${collapseLabel}`}
     >
-      {!labelled && (
-        <div
-          className={`expand-slider__thumb ${lastAction ? 'expand-slider__thumb--visible' : ''} ${lastAction === 'collapse' ? 'expand-slider__thumb--right' : ''}`}
-          aria-hidden="true"
-        />
-      )}
+      <div
+        className={`expand-slider__thumb ${lastAction ? 'expand-slider__thumb--visible' : ''} ${lastAction === 'collapse' ? 'expand-slider__thumb--right' : ''}`}
+        aria-hidden="true"
+      />
       <button
         type="button"
         className={`expand-slider__option ${lastAction === 'expand' ? 'active' : ''}`}
@@ -60,7 +51,6 @@ export function ExpandCollapseSlider({
         aria-label={expandLabel}
       >
         {expandIcon}
-        {labelled && <span className="expand-slider__label">{expandLabel}</span>}
       </button>
       <button
         type="button"
@@ -70,7 +60,6 @@ export function ExpandCollapseSlider({
         aria-label={collapseLabel}
       >
         {collapseIcon}
-        {labelled && <span className="expand-slider__label">{collapseLabel}</span>}
       </button>
     </div>
   );
