@@ -576,6 +576,9 @@ export interface Translations {
   searchCatExpressions: string;
   searchCatDatasources: string;
   searchCatReferences: string;
+  wuCatBindings: string;
+  wuCatExpressions: string;
+  wuCatFormat: string;
   pathSegmentDatasource: string;
   tooltipClickToNavigate: string;
   activityBarLabel: string;
@@ -1108,6 +1111,9 @@ const cs: Translations = {
   searchCatExpressions: 'Výrazy',
   searchCatDatasources: 'Datové zdroje',
   searchCatReferences: 'Reference',
+  wuCatBindings: 'Vazby v mapování',
+  wuCatExpressions: 'Výrazy a validace',
+  wuCatFormat: 'Prvky formátu',
   pathSegmentDatasource: 'Zdroj',
   tooltipClickToNavigate: 'Kliknutím přejít',
   activityBarLabel: 'Panel aktivit',
@@ -1649,6 +1655,9 @@ const en: Translations = {
   searchCatExpressions: 'Expressions',
   searchCatDatasources: 'Data sources',
   searchCatReferences: 'References',
+  wuCatBindings: 'Mapping bindings',
+  wuCatExpressions: 'Expressions and validations',
+  wuCatFormat: 'Format elements',
   pathSegmentDatasource: 'DS',
   tooltipClickToNavigate: 'Click to navigate',
   activityBarLabel: 'Activity bar',
