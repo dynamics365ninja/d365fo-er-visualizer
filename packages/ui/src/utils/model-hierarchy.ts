@@ -48,8 +48,79 @@ export function formatReferencedModelIds(content: ERFormatContent): string[] {
   return ids;
 }
 
-export interface ExplorerModelGroup {
-  configIdx: number;
+/**
+ * The configurations that belong together with `activeIdx` — everything a
+ * search rooted at the open configuration should be allowed to look at.
+ *
+ * A workspace usually holds several unrelated model trees at once, so an
+ * unscoped search returns hits from data models that the open format has
+ * nothing to do with. The related set is:
+ *  - the active configuration itself
+ *  - the DataModel(s) it targets, plus their `Base=` ancestors
+ *  - the ModelMappings targeting any of those models
+ *
+ * Sibling formats of the same model are deliberately left out: they are
+ * separate deliverables, and their hits are exactly the noise this filters.
+ * Returns every index when the active configuration is unknown, so callers
+ * can use the result unconditionally.
+ */
+export function relatedConfigIndices(
+  configurations: ERConfiguration[],
+  activeIdx: number | null | undefined,
+): Set<number> {
+  const all = () => new Set(configurations.map((_, i) => i));
+  if (activeIdx == null) return all();
+  const active = configurations[activeIdx];
+  if (!active) return all();
+
+  const modelIdToIdx = new Map<string, number>();
+  const solutionIdToIdx = new Map<string, number>();
+  configurations.forEach((cfg, idx) => {
+    const solutionId = normGuid(cfg.solutionVersion.solution.id);
+    if (solutionId) solutionIdToIdx.set(solutionId, idx);
+    if (cfg.content.kind === 'DataModel') {
+      const modelId = normGuid((cfg.content as ERDataModelContent).version.model.id);
+      if (modelId) modelIdToIdx.set(modelId, idx);
+    }
+  });
+
+  const related = new Set<number>([activeIdx]);
+  const modelIds = new Set<string>();
+
+  if (active.content.kind === 'Format') {
+    for (const id of formatReferencedModelIds(active.content as ERFormatContent)) modelIds.add(id);
+  } else if (active.content.kind === 'ModelMapping') {
+    const id = normGuid((active.content as ERModelMappingContent).version.mapping.modelId);
+    if (id) modelIds.add(id);
+  } else if (active.content.kind === 'DataModel') {
+    const id = normGuid((active.content as ERDataModelContent).version.model.id);
+    if (id) modelIds.add(id);
+  }
+
+  // Pull in each targeted model and walk its derivation chain upwards; a
+  // mapping often binds against the base model rather than the derived one.
+  for (const startId of Array.from(modelIds)) {
+    let idx = modelIdToIdx.get(startId);
+    while (idx != null && !related.has(idx)) {
+      related.add(idx);
+      const modelId = normGuid((configurations[idx].content as ERDataModelContent).version.model.id);
+      if (modelId) modelIds.add(modelId);
+      const baseSolutionId = normGuid(configurations[idx].solutionVersion.solution.baseSolutionId);
+      const parentIdx = baseSolutionId ? solutionIdToIdx.get(baseSolutionId) : undefined;
+      idx = parentIdx != null && configurations[parentIdx].content.kind === 'DataModel' ? parentIdx : undefined;
+    }
+  }
+
+  configurations.forEach((cfg, idx) => {
+    if (cfg.content.kind !== 'ModelMapping') return;
+    const id = normGuid((cfg.content as ERModelMappingContent).version.mapping.modelId);
+    if (id && modelIds.has(id)) related.add(idx);
+  });
+
+  return related;
+}
+
+export interface ExplorerModelGroup {  configIdx: number;
   /** Direct non-DataModel children (mappings / formats). */
   children: number[];
   /** Derived DataModel children. */

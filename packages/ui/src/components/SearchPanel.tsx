@@ -10,6 +10,7 @@ import type { TreeNode } from '../state/store';
 import type { GUIDEntry } from '@er-visualizer/core';
 import { locale, t, useLocale } from '../i18n';
 import { getFormatTypeThemeColor } from '../utils/theme-colors';
+import { relatedConfigIndices } from '../utils/model-hierarchy';
 import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 
 type SearchResultEntry = {
@@ -195,10 +196,32 @@ export function SearchPanel() {
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const configurations = useAppStore(s => s.configurations);
   const whereUsedTrigger = useAppStore(s => s.whereUsedTrigger);
+  const openTabs = useAppStore(s => s.openTabs);
+  const activeTabId = useAppStore(s => s.activeTabId);
 
   const [searchExpandSignal, setSearchExpandSignal] = useState<{ version: number; expanded: boolean }>({ version: 0, expanded: true });
   const [whereUsedExpandSignal, setWhereUsedExpandSignal] = useState<{ version: number; expanded: boolean }>({ version: 0, expanded: true });
   const [searchScope, setSearchScope] = useState<'all' | 'format' | 'mapping' | 'model'>('all');
+  // A workspace often holds several unrelated model trees, and an unscoped
+  // registry search reports hits from all of them. Default to the open
+  // configuration's own tree; the "All" chip opts back into the full sweep.
+  const [relatedOnly, setRelatedOnly] = useState(true);
+
+  const activeConfigIndex = useMemo(() => {
+    const tab = openTabs.find(tb => tb.id === activeTabId);
+    return tab ? tab.configIndex : null;
+  }, [openTabs, activeTabId]);
+
+  const relatedIndices = useMemo(() => {
+    if (activeConfigIndex == null) return null;
+    const indices = relatedConfigIndices(configurations, activeConfigIndex);
+    return indices.size === configurations.length ? null : indices;
+  }, [configurations, activeConfigIndex]);
+
+  const relatedPaths = useMemo(() => {
+    if (!relatedIndices) return null;
+    return new Set(Array.from(relatedIndices).map(i => configurations[i]?.filePath).filter(Boolean) as string[]);
+  }, [relatedIndices, configurations]);
 
   const searchExamples = useMemo<ExamplePreset[]>(() => {
     const section = locale === 'cs'
@@ -331,13 +354,14 @@ export function SearchPanel() {
     }
     const map = new Map<string, { configName: string; refs: Reference[] }>();
     for (const r of refs) {
+      if (relatedOnly && relatedIndices && !relatedIndices.has(r.configIndex)) continue;
       const key = `${r.configIndex}|${r.configName}`;
       const bucket = map.get(key);
       if (bucket) bucket.refs.push(r);
       else map.set(key, { configName: r.configName, refs: [r] });
     }
     return Array.from(map.entries());
-  }, [whereUsedResults, treeNodes, navigateToTreeNode]);
+  }, [whereUsedResults, treeNodes, navigateToTreeNode, relatedOnly, relatedIndices]);
 
   // Resolving a hit to its tree node walks the whole tree, so do it exactly
   // once per result set here; the grouped list below reuses the map.
@@ -432,8 +456,14 @@ export function SearchPanel() {
               <>
                 {(() => {
                   const navigableResults = navigableSearch.results;
+                  // Related-only runs first so the count on the "All" chip
+                  // tells the user exactly what turning it off would add.
+                  const relatedResults = relatedOnly && relatedPaths
+                    ? navigableResults.filter(r => relatedPaths.has(r.sourceConfigPath))
+                    : navigableResults;
+                  const hiddenByRelated = navigableResults.length - relatedResults.length;
                   // Apply scope filter
-                  const scopedResults = searchScope === 'all' ? navigableResults : navigableResults.filter(r => {
+                  const scopedResults = searchScope === 'all' ? relatedResults : relatedResults.filter(r => {
                     const kind = (configurations.find(c => c.filePath === r.sourceConfigPath) as any)?.kind ?? '';
                     if (searchScope === 'format') return kind === 'Format';
                     if (searchScope === 'mapping') return kind === 'ModelMapping';
@@ -479,6 +509,31 @@ export function SearchPanel() {
                           />
                         </div>
                       </div>
+                      {relatedPaths && (
+                        <div className="search-panel__reach">
+                          <div className="search-scope-toggle" role="group" aria-label={locale === 'cs' ? 'Rozsah hledání' : 'Search reach'}>
+                            <button
+                              type="button"
+                              className={`search-scope-toggle__btn ${relatedOnly ? 'active' : ''}`}
+                              onClick={() => setRelatedOnly(true)}
+                              title={t.searchRelatedOnlyHint}
+                            >
+                              {t.searchRelatedOnly}
+                            </button>
+                            <button
+                              type="button"
+                              className={`search-scope-toggle__btn ${relatedOnly ? '' : 'active'}`}
+                              onClick={() => setRelatedOnly(false)}
+                              title={t.searchAllConfigsHint}
+                            >
+                              {t.searchAllConfigs}
+                            </button>
+                          </div>
+                          {relatedOnly && hiddenByRelated > 0 && (
+                            <span className="search-panel__reach-note">{t.searchHiddenByRelated(hiddenByRelated)}</span>
+                          )}
+                        </div>
+                      )}
                       <div className="search-panel__results">
                         {scopedResults.length === 0 ? (
                           <div className="search-panel__empty">
@@ -554,6 +609,28 @@ export function SearchPanel() {
                       />
                     </div>
                   </div>
+                  {relatedIndices && (
+                    <div className="search-panel__reach">
+                      <div className="search-scope-toggle" role="group" aria-label={locale === 'cs' ? 'Rozsah hledání' : 'Search reach'}>
+                        <button
+                          type="button"
+                          className={`search-scope-toggle__btn ${relatedOnly ? 'active' : ''}`}
+                          onClick={() => setRelatedOnly(true)}
+                          title={t.searchRelatedOnlyHint}
+                        >
+                          {t.searchRelatedOnly}
+                        </button>
+                        <button
+                          type="button"
+                          className={`search-scope-toggle__btn ${relatedOnly ? '' : 'active'}`}
+                          onClick={() => setRelatedOnly(false)}
+                          title={t.searchAllConfigsHint}
+                        >
+                          {t.searchAllConfigs}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div className="search-panel__results">
                     <div className="search-results">
                       {whereUsedFileGroups.map(([key, { configName, refs }]) => (
@@ -673,11 +750,15 @@ function formatBindingLabel(prop: string, cs: boolean): { label: string; labelKi
   return { label: prop, labelKind: 'property' };
 }
 
+type HitCategory = 'structure' | 'bindings' | 'expressions' | 'datasources' | 'references';
+
 type ParsedHit = {
   /** Short tag label shown in the kind chip (e.g. "Tabulka", "Vazba", "Výraz") */
   label: string;
   /** CSS modifier for colour coding (reuses badge colour keys) */
   labelKind: string;
+  /** Which section the hit is filed under inside its configuration group. */
+  category: HitCategory;
   /** Primary location text — the path/name of where the match lives */
   location: string;
   /** Optional secondary line — the expression or value that contains the query */
@@ -685,6 +766,18 @@ type ParsedHit = {
   /** Designer tab where the user will land: 'structure' | 'bindings' | 'datasources' | null */
   tab: 'structure' | 'bindings' | 'datasources' | null;
 };
+
+const HIT_CATEGORY_ORDER: HitCategory[] = ['structure', 'bindings', 'expressions', 'datasources', 'references'];
+
+function hitCategoryLabel(category: HitCategory): string {
+  switch (category) {
+    case 'structure': return t.searchCatStructure;
+    case 'bindings': return t.searchCatBindings;
+    case 'expressions': return t.searchCatExpressions;
+    case 'datasources': return t.searchCatDatasources;
+    default: return t.searchCatReferences;
+  }
+}
 
 function parseSearchHit(
   result: SearchResultEntry,
@@ -697,19 +790,19 @@ function parseSearchHit(
 
   // ── Datasource usages ── show the matched *value* as primary, source as secondary
   if (/^Datasource ".+" uses table "/.test(ctx)) {
-    return { label: cs ? 'Tabulka' : 'Table', labelKind: 'table', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
+    return { label: cs ? 'Tabulka' : 'Table', labelKind: 'table', category: 'datasources', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
   }
   if (/^Datasource ".+" uses enum "/.test(ctx)) {
-    return { label: cs ? 'Výčet' : 'Enum', labelKind: 'enum', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
+    return { label: cs ? 'Výčet' : 'Enum', labelKind: 'enum', category: 'datasources', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
   }
   if (/^Datasource ".+" uses class "/.test(ctx)) {
-    return { label: cs ? 'Třída' : 'Class', labelKind: 'class', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
+    return { label: cs ? 'Třída' : 'Class', labelKind: 'class', category: 'datasources', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
   }
   if (/^User parameter ".+" uses EDT "/.test(ctx)) {
-    return { label: 'EDT', labelKind: 'edt', location: tgt, expression: cs ? `parametr: ${comp}` : `param: ${comp}`, tab: 'datasources' };
+    return { label: 'EDT', labelKind: 'edt', category: 'datasources', location: tgt, expression: cs ? `parametr: ${comp}` : `param: ${comp}`, tab: 'datasources' };
   }
   if (ctx.startsWith('Selected field in datasource "')) {
-    return { label: cs ? 'Pole' : 'Field', labelKind: 'field', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
+    return { label: cs ? 'Pole' : 'Field', labelKind: 'field', category: 'datasources', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
   }
 
   // ── Model binding: "Binding: path = expr" ─────────────────────────
@@ -718,7 +811,7 @@ function parseSearchHit(
     const eq   = rest.indexOf(' = ');
     const path = eq >= 0 ? rest.slice(0, eq) : rest;
     const expr = eq >= 0 ? rest.slice(eq + 3) : '';
-    return { label: cs ? 'Vazba' : 'Binding', labelKind: 'binding', location: path, expression: expr, tab: 'bindings' as const };
+    return { label: cs ? 'Vazba' : 'Binding', labelKind: 'binding', category: 'bindings', location: path, expression: expr, tab: 'bindings' as const };
   }
 
   // ── Formula inside binding: "Binding for path: expr" ──────────────
@@ -727,7 +820,7 @@ function parseSearchHit(
     const col  = rest.indexOf(':');
     const path = col >= 0 ? rest.slice(0, col).trim() : rest;
     const expr = col >= 0 ? rest.slice(col + 1).trim() : '';
-    return { label: cs ? 'Výraz' : 'Expression', labelKind: 'formula', location: path, expression: expr, tab: 'bindings' as const };
+    return { label: cs ? 'Výraz' : 'Expression', labelKind: 'formula', category: 'expressions', location: path, expression: expr, tab: 'bindings' as const };
   }
 
   // ── Format binding expression (optionally with [PropName]) ────────
@@ -737,7 +830,7 @@ function parseSearchHit(
     const propMatch = ctx.match(/Format binding \[([^\]]+)\] expression/);
     const prop = propMatch?.[1] ?? '';
     const { label, labelKind } = formatBindingLabel(prop, cs);
-    return { label, labelKind, location: comp, expression: expr, tab: 'bindings' as const };
+    return { label, labelKind, category: 'bindings' as const, location: comp, expression: expr, tab: 'bindings' as const };
   }
 
   // ── Format binding to GUID component (optionally with [PropName]) ─
@@ -750,6 +843,7 @@ function parseSearchHit(
     return {
       label,
       labelKind,
+      category: 'bindings' as const,
       location: resolved?.name ?? comp,
       expression: expr,
       tab: 'bindings' as const,
@@ -759,30 +853,30 @@ function parseSearchHit(
   // ── Calculated field ──────────────────────────────────────────────
   if (ctx.startsWith('Calculated field expression:')) {
     const expr = ctx.slice('Calculated field expression:'.length).trim();
-    return { label: cs ? 'Výpočet' : 'Calc. field', labelKind: 'formula', location: comp, expression: expr, tab: 'datasources' as const };
+    return { label: cs ? 'Výpočet' : 'Calc. field', labelKind: 'formula', category: 'expressions', location: comp, expression: expr, tab: 'datasources' as const };
   }
 
   // ── TypeDescriptor ────────────────────────────────────────────────
   if (ctx === 'TypeDescriptor reference in model field') {
-    return { label: cs ? 'Typ pole' : 'Field type', labelKind: 'field', location: comp, expression: tgt, tab: 'structure' as const };
+    return { label: cs ? 'Typ pole' : 'Field type', labelKind: 'field', category: 'structure', location: comp, expression: tgt, tab: 'structure' as const };
   }
 
   // ── Structural references ─────────────────────────────────────────
   if (ctx === 'Model mapping references data model') {
-    return { label: cs ? 'Model' : 'Model ref', labelKind: 'model', location: comp, expression: '', tab: null };
+    return { label: cs ? 'Model' : 'Model ref', labelKind: 'model', category: 'references', location: comp, expression: '', tab: null };
   }
   if (ctx === 'Base model reference') {
-    return { label: cs ? 'Základ' : 'Base ref', labelKind: 'model', location: comp, expression: '', tab: null };
+    return { label: cs ? 'Základ' : 'Base ref', labelKind: 'model', category: 'references', location: comp, expression: '', tab: null };
   }
   if (ctx === 'Format mapping references format definition') {
-    return { label: cs ? 'Formát' : 'Format ref', labelKind: 'format', location: comp, expression: '', tab: null };
+    return { label: cs ? 'Formát' : 'Format ref', labelKind: 'format', category: 'references', location: comp, expression: '', tab: null };
   }
 
   // ── Generic formula: "context label: expr" ────────────────────────
   if (result.targetType === 'Formula') {
     const col  = ctx.indexOf(':');
     const expr = col >= 0 ? ctx.slice(col + 1).trim() : ctx;
-    return { label: cs ? 'Výraz' : 'Expression', labelKind: 'formula', location: comp, expression: expr, tab: 'datasources' as const };
+    return { label: cs ? 'Výraz' : 'Expression', labelKind: 'formula', category: 'expressions', location: comp, expression: expr, tab: 'datasources' as const };
   }
 
   // ── GUID fallback ─────────────────────────────────────────────────
@@ -791,6 +885,7 @@ function parseSearchHit(
     return {
       label: resolved?.kind ?? 'GUID',
       labelKind: 'guid',
+      category: 'references' as const,
       location: resolved?.name ?? tgt,
       expression: '',
       tab: null,
@@ -801,6 +896,7 @@ function parseSearchHit(
   return {
     label: result.targetType ?? '',
     labelKind: (result.targetType ?? '').toLowerCase(),
+    category: 'references' as const,
     location: comp || tgt,
     expression: ctx.length < 120 ? ctx : '',
     tab: null,
@@ -838,19 +934,29 @@ function SearchResultGroup({
   const [expanded, setExpanded] = useState(true);
 
   // Items arrive deduplicated and navigable; the node lookup was done once by
-  // the panel so no row (or group) walks the tree again.
-  const deduped = useMemo(() => {
-    // Suppress "Binding for …" and "Format binding expression:" sub-hits that already
-    // have a parent "Binding: …" / "Format binding to component:" entry in the same group.
+  // the panel so no row (or group) walks the tree again. Splitting them by hit
+  // category turns one long mixed list into short, self-describing sections.
+  const sections = useMemo(() => {
     const nested = nestBindingResults(items.filter(r => nodeByResult.has(r)));
-    return nested.map(n => ({ entry: n.entry, node: nodeByResult.get(n.entry)! }));
-  }, [items, nodeByResult]);
+    const byCategory = new Map<HitCategory, Array<{ entry: SearchResultEntry; node: TreeNode; hit: ParsedHit }>>();
+    for (const n of nested) {
+      const hit = parseSearchHit(n.entry, registry);
+      const bucket = byCategory.get(hit.category) ?? [];
+      bucket.push({ entry: n.entry, node: nodeByResult.get(n.entry)!, hit });
+      byCategory.set(hit.category, bucket);
+    }
+    return HIT_CATEGORY_ORDER
+      .filter(category => byCategory.has(category))
+      .map(category => ({ category, rows: byCategory.get(category)! }));
+  }, [items, nodeByResult, registry]);
+
+  const totalRows = useMemo(() => sections.reduce((n, s) => n + s.rows.length, 0), [sections]);
 
   useEffect(() => {
     if (expandSignal.version > 0) setExpanded(expandSignal.expanded);
   }, [expandSignal.version, expandSignal.expanded]);
 
-  if (deduped.length === 0) return null;
+  if (totalRows === 0) return null;
 
   return (
     <div className="search-result-group">
@@ -870,19 +976,30 @@ function SearchResultGroup({
             {kindLabel(configKind)}
           </span>
         )}
-        <span className="search-result-group-count">{deduped.length}</span>
+        <span className="search-result-group-count">{totalRows}</span>
       </button>
       {expanded && (
         <div className="search-result-group-body">
-          {deduped.map(({ entry, node }, i) => (
-            <SearchResultCard
-              key={`${entry.target}:${entry.sourceComponent}:${i}`}
-              result={entry}
-              targetNode={node}
-              query={query}
-              registry={registry}
-              navigateToTreeNode={navigateToTreeNode}
-            />
+          {sections.map(({ category, rows }) => (
+            <div key={category} className={`search-cat search-cat--${category}`}>
+              <div className="search-cat__header">
+                <span className="search-cat__marker" aria-hidden="true" />
+                <span className="search-cat__title">{hitCategoryLabel(category)}</span>
+                <span className="search-cat__count">{rows.length}</span>
+              </div>
+              <div className="search-cat__rows">
+                {rows.map(({ entry, node, hit }, i) => (
+                  <SearchResultCard
+                    key={`${entry.target}:${entry.sourceComponent}:${i}`}
+                    hit={hit}
+                    result={entry}
+                    targetNode={node}
+                    query={query}
+                    navigateToTreeNode={navigateToTreeNode}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -891,27 +1008,33 @@ function SearchResultGroup({
 }
 
 function SearchResultCard({
+  hit,
   result,
   targetNode,
   query,
-  registry,
   navigateToTreeNode,
 }: {
+  /** Parsed once by the group so the section split and the row agree. */
+  hit: ParsedHit;
   result: SearchResultEntry;
   /** Resolved by the group memo — do not re-walk the tree per row. */
   targetNode: TreeNode;
   query: string;
-  registry: { lookup: (guid: string) => GUIDEntry | undefined };
   navigateToTreeNode: (nodeId: string) => void;
 }) {
-  const hit = parseSearchHit(result, registry);
   const shortExpr = hit.expression.length > 100 ? `${hit.expression.slice(0, 100)}…` : hit.expression;
-  const showExpr = shortExpr && shortExpr !== hit.location;
+  // A few cross-ref shapes carry the match only in the component name, which
+  // leaves the primary line blank; fall back so a row is never nameless.
+  const location = hit.location || result.sourceComponent || result.target;
+  const showExpr = shortExpr && shortExpr !== location;
 
   if (!targetNode) return null;
 
   const cs = locale === 'cs';
-  const tabLabel = hit.tab === 'structure' ? (cs ? 'Struktura' : 'Structure')
+  // The destination tab is already implied by the section the row sits in, so
+  // only spell it out when it says something the section header does not.
+  const tabLabel = hit.tab === hit.category ? null
+    : hit.tab === 'structure' ? (cs ? 'Struktura' : 'Structure')
     : hit.tab === 'bindings' ? (cs ? 'Vazby' : 'Bindings')
     : hit.tab === 'datasources' ? (cs ? 'Datové zdroje' : 'Data Sources')
     : null;
@@ -926,7 +1049,7 @@ function SearchResultCard({
       <div className="search-hit__body">
         <div className="search-hit__row1">
           <span className="search-hit__location">
-            <Highlight text={hit.location} query={query} />
+            <Highlight text={location} query={query} />
           </span>
           <span className={`search-hit__tag search-hit__tag--${hit.labelKind}`}>{hit.label}</span>
           {tabLabel && <span className="search-hit__tab">{tabLabel}</span>}

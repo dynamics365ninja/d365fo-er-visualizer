@@ -572,6 +572,16 @@ export interface Translations {
   bindingCount: (n: number) => string;
   bindingVia: string;
   searchNoResultsInScope: string;
+  searchRelatedOnly: string;
+  searchRelatedOnlyHint: string;
+  searchAllConfigs: string;
+  searchAllConfigsHint: string;
+  searchHiddenByRelated: (n: number) => string;
+  searchCatStructure: string;
+  searchCatBindings: string;
+  searchCatExpressions: string;
+  searchCatDatasources: string;
+  searchCatReferences: string;
   pathSegmentDatasource: string;
   tooltipClickToNavigate: string;
   activityBarLabel: string;
@@ -1100,6 +1110,16 @@ const cs: Translations = {
   bindingCount: (n) => `${n} ${n === 1 ? 'vazba' : n < 5 ? 'vazby' : 'vazeb'}`,
   bindingVia: 'přes',
   searchNoResultsInScope: 'V tomto rozsahu nic nenalezeno.',
+  searchRelatedOnly: 'Jen související',
+  searchRelatedOnlyHint: 'Hledat pouze v otevřené konfiguraci, jejím datovém modelu a mapováních téhož modelu.',
+  searchAllConfigs: 'Vše',
+  searchAllConfigsHint: 'Hledat ve všech načtených konfiguracích, včetně nesouvisejících modelů.',
+  searchHiddenByRelated: (n: number) => `Skryto v nesouvisejících konfiguracích: ${n}`,
+  searchCatStructure: 'Struktura',
+  searchCatBindings: 'Vazby',
+  searchCatExpressions: 'Výrazy',
+  searchCatDatasources: 'Datové zdroje',
+  searchCatReferences: 'Reference',
   pathSegmentDatasource: 'Zdroj',
   tooltipClickToNavigate: 'Kliknutím přejít',
   activityBarLabel: 'Panel aktivit',
@@ -1637,6 +1657,16 @@ const en: Translations = {
   bindingCount: (n) => `${n} binding${n === 1 ? '' : 's'}`,
   bindingVia: 'via',
   searchNoResultsInScope: 'No results in this scope.',
+  searchRelatedOnly: 'Related only',
+  searchRelatedOnlyHint: 'Search only the open configuration, its data model and mappings of the same model.',
+  searchAllConfigs: 'All',
+  searchAllConfigsHint: 'Search every loaded configuration, including unrelated models.',
+  searchHiddenByRelated: (n: number) => `Hidden in unrelated configurations: ${n}`,
+  searchCatStructure: 'Structure',
+  searchCatBindings: 'Bindings',
+  searchCatExpressions: 'Expressions',
+  searchCatDatasources: 'Data sources',
+  searchCatReferences: 'References',
   pathSegmentDatasource: 'DS',
   tooltipClickToNavigate: 'Click to navigate',
   activityBarLabel: 'Activity bar',
