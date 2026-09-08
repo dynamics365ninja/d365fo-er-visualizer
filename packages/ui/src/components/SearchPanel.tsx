@@ -11,6 +11,7 @@ import type { GUIDEntry } from '@er-visualizer/core';
 import { locale, t, useLocale } from '../i18n';
 import { getFormatTypeThemeColor } from '../utils/theme-colors';
 import { relatedConfigIndices, relatedContainerRules, hitPassesContainerRule, type ScopeContainerRule } from '../utils/model-hierarchy';
+import { referenceCategory, WHERE_USED_CATEGORY_ORDER, type ReferenceCategory } from '../utils/where-used-category';
 import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 
 type SearchResultEntry = {
@@ -1127,6 +1128,33 @@ function toLocalizedBindingKind(label: string): string {
   return label;
 }
 
+/** Which section a where-used reference belongs to — see
+ *  `utils/where-used-category`, which owns the rule so it can be tested
+ *  without mounting the panel. */
+function referenceCategoryLabel(category: ReferenceCategory): string {
+  switch (category) {
+    case 'bindings': return t.wuCatBindings;
+    case 'expressions': return t.wuCatExpressions;
+    default: return t.wuCatFormat;
+  }
+}
+
+/** Expand the terse kind codes the where-used scan emits. They only ever show
+ *  up inside the expressions section, where they are the one thing telling the
+ *  rows apart. */
+function toLocalizedRefKind(ref: Reference): string {
+  if (ref.kind === 'formatElement') return ref.kindLabel;
+  const cs = locale === 'cs';
+  switch (ref.kindLabel.trim().toLowerCase()) {
+    case 'calc': return cs ? 'Výpočet' : 'Calculated';
+    case 'param': return cs ? 'Parametr' : 'Parameter';
+    case 'agg': return cs ? 'Agregace' : 'Aggregation';
+    case 'validation': return cs ? 'Validace' : 'Validation';
+    case 'message': return cs ? 'Zpráva' : 'Message';
+    default: return toLocalizedBindingKind(ref.kindLabel);
+  }
+}
+
 function FileReferenceGroup({
   configName,
   references,
@@ -1150,7 +1178,24 @@ function FileReferenceGroup({
     if (expandSignal.version > 0) setExpanded(expandSignal.expanded);
   }, [expandSignal.version, expandSignal.expanded]);
 
-  const visibleRefs = scope === 'all' ? references : references.filter(r => r.area === scope);
+  const visibleRefs = useMemo(
+    () => (scope === 'all' ? references : references.filter(r => r.area === scope)),
+    [references, scope],
+  );
+
+  const sections = useMemo(() => {
+    const byCategory = new Map<ReferenceCategory, Reference[]>();
+    for (const ref of visibleRefs) {
+      const category = referenceCategory(ref);
+      const bucket = byCategory.get(category) ?? [];
+      bucket.push(ref);
+      byCategory.set(category, bucket);
+    }
+    return WHERE_USED_CATEGORY_ORDER
+      .filter(category => byCategory.has(category))
+      .map(category => ({ category, refs: byCategory.get(category)! }));
+  }, [visibleRefs]);
+
   if (visibleRefs.length === 0) return null;
 
   return (
@@ -1170,15 +1215,27 @@ function FileReferenceGroup({
       </button>
       {expanded && (
         <div className="search-result-group-body">
-          {visibleRefs.map((ref, i) => (
-            <ReferenceRow
-              key={i}
-              reference={ref}
-              query={query}
-              referenceKey={`${ref.area}:${configName}:${i}:${ref.shortLocation}`}
-              activeRefKey={activeRefKey}
-              onReferenceOpen={onReferenceOpen}
-            />
+          {sections.map(({ category, refs }) => (
+            <div key={category} className={`search-cat search-cat--${category}`}>
+              <div className="search-cat__header">
+                <span className="search-cat__marker" aria-hidden="true" />
+                <span className="search-cat__title">{referenceCategoryLabel(category)}</span>
+                <span className="search-cat__count">{refs.length}</span>
+              </div>
+              <div className="search-cat__rows">
+                {refs.map((ref, i) => (
+                  <ReferenceRow
+                    key={`${category}:${i}`}
+                    reference={ref}
+                    category={category}
+                    query={query}
+                    referenceKey={`${ref.area}:${configName}:${category}:${i}:${ref.shortLocation}`}
+                    activeRefKey={activeRefKey}
+                    onReferenceOpen={onReferenceOpen}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -1188,21 +1245,23 @@ function FileReferenceGroup({
 
 function ReferenceRow({
   reference,
+  category,
   query,
   referenceKey,
   activeRefKey,
   onReferenceOpen,
 }: {
   reference: Reference;
+  category: ReferenceCategory;
   query: string;
   referenceKey: string;
   activeRefKey: string | null;
   onReferenceOpen: (key: string) => void;
 }) {
-  const { location, kindLabel, preview, kindColor, onOpen } = reference;
+  const { location, preview, kindColor, onOpen } = reference;
   const breadcrumb = location.slice(0, -1);
   const leaf = location[location.length - 1] ?? '';
-  const localizedKind = reference.kind === 'binding' ? toLocalizedBindingKind(kindLabel) : kindLabel;
+  const localizedKind = toLocalizedRefKind(reference);
   const isActive = activeRefKey === referenceKey;
 
   const openReference = () => {
@@ -1214,11 +1273,15 @@ function ReferenceRow({
     ? { background: `color-mix(in srgb, ${kindColor} 15%, var(--bg-primary))`, color: kindColor, borderColor: `color-mix(in srgb, ${kindColor} 40%, transparent)` }
     : undefined;
   const tagClass = reference.kind === 'binding' ? 'search-hit__tag--binding' : 'search-hit__tag--format';
+  // In the bindings section every row is a plain binding, so the chip would
+  // only echo the section header and the row tint. Elsewhere it discriminates
+  // (calc vs validation, Sequence vs Excel Cell) and stays.
+  const showTag = category !== 'bindings';
 
   return (
     <button
       type="button"
-      className={`search-hit ${isActive ? 'wu-ref-row--active' : ''}`}
+      className={`search-hit search-hit--${category} ${isActive ? 'wu-ref-row--active' : ''}`}
       onClick={openReference}
       title={`${location.join(' / ')}${preview ? '\n' + preview : ''}`}
     >
@@ -1229,12 +1292,14 @@ function ReferenceRow({
           <span className="wu-ref-leaf">
             <Highlight text={leaf} query={query} />
           </span>
-          <span
-            className={`search-hit__tag ${tagClass}`}
-            style={tagStyle}
-          >
-            {localizedKind}
-          </span>
+          {showTag && (
+            <span
+              className={`search-hit__tag ${tagClass}`}
+              style={tagStyle}
+            >
+              {localizedKind}
+            </span>
+          )}
           <ArrowRightRegular className="search-hit__arrow" />
         </div>
         {breadcrumb.length > 0 && (
