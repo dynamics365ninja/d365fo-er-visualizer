@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ERConfiguration } from '@er-visualizer/core';
-import { relatedConfigIndices, relatedContainerRules, hitPassesContainerRule, entryContainerNames, reachableContainerNames } from './model-hierarchy.js';
+import { relatedConfigIndices, relatedContainerRules, hitPassesContainerRule, entryContainerNames, reachableContainerNames, mappingDefinitionLabel } from './model-hierarchy.js';
 
 type Kind = 'DataModel' | 'ModelMapping' | 'Format';
 
@@ -135,6 +135,24 @@ describe('reachableContainerNames', () => {
     const model = (INVOICE_MODEL.content as any).version.model;
     const reached = reachableContainerNames(model, new Set(['SalesInvoice']));
     expect(Array.from(reached).sort()).toEqual(['InvoiceLine', 'SalesInvoice']);
+  });
+});
+
+describe('mappingDefinitionLabel', () => {
+  it('appends the container descriptor when it differs from the definition name', () => {
+    expect(mappingDefinitionLabel({ name: 'Invoice mapping', dataContainerDescriptor: 'SalesInvoice' }))
+      .toBe('Invoice mapping [SalesInvoice]');
+  });
+
+  it('keeps a single name when the descriptor repeats it', () => {
+    expect(mappingDefinitionLabel({ name: 'SalesInvoice', dataContainerDescriptor: 'SalesInvoice' }))
+      .toBe('SalesInvoice');
+  });
+
+  it('falls back to the descriptor and stays silent when neither is set', () => {
+    expect(mappingDefinitionLabel({ dataContainerDescriptor: 'SalesInvoice' })).toBe('SalesInvoice');
+    expect(mappingDefinitionLabel({})).toBeUndefined();
+    expect(mappingDefinitionLabel(undefined)).toBeUndefined();
   });
 });
 

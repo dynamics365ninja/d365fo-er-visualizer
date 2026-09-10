@@ -562,8 +562,11 @@ export interface Translations {
   searchRelatedOnlyHint: string;
   searchAllConfigs: string;
   searchAllConfigsHint: string;
+  searchRelatedEmpty: string;
   searchHiddenByRelated: (n: number) => string;
   searchHiddenByRelatedShort: (n: number) => string;
+  searchGroupDefinition: (name: string) => string;
+  searchGroupDefinitionHint: (name: string) => string;
   searchCatStructure: string;
   searchCatBindings: string;
   searchCatExpressions: string;
@@ -1089,8 +1092,11 @@ const cs: Translations = {
   searchRelatedOnlyHint: 'Hledat pouze v otevřené konfiguraci, jejím datovém modelu a mapováních téhož modelu.',
   searchAllConfigs: 'Vše',
   searchAllConfigsHint: 'Hledat ve všech načtených konfiguracích, včetně nesouvisejících modelů.',
+  searchRelatedEmpty: 'V související konfiguraci nic nenalezeno — přepněte na „Vše".',
   searchHiddenByRelated: (n: number) => `Skryto v nesouvisejících konfiguracích: ${n}`,
   searchHiddenByRelatedShort: (n: number) => `+${n} jinde`,
+  searchGroupDefinition: (name: string) => `Definice: ${name}`,
+  searchGroupDefinitionHint: (name: string) => `Definice mapování ${name}`,
   searchCatStructure: 'Struktura',
   searchCatBindings: 'Vazby',
   searchCatExpressions: 'Výrazy',
@@ -1625,8 +1631,11 @@ const en: Translations = {
   searchRelatedOnlyHint: 'Search only the open configuration, its data model and mappings of the same model.',
   searchAllConfigs: 'All',
   searchAllConfigsHint: 'Search every loaded configuration, including unrelated models.',
+  searchRelatedEmpty: 'Nothing in the related configuration — switch to "All".',
   searchHiddenByRelated: (n: number) => `Hidden in unrelated configurations: ${n}`,
   searchHiddenByRelatedShort: (n: number) => `+${n} elsewhere`,
+  searchGroupDefinition: (name: string) => `Definition: ${name}`,
+  searchGroupDefinitionHint: (name: string) => `Mapping definition ${name}`,
   searchCatStructure: 'Structure',
   searchCatBindings: 'Bindings',
   searchCatExpressions: 'Expressions',

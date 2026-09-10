@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseERConfiguration } from '@er-visualizer/core';
 import { useAppStore } from './store';
-import { getScopedMappingDefinitions } from './store';
+import { getScopedMappingDefinitions, relatedMappingDefinitionLabels } from './store';
 import { buildExpressionTree } from '../components/DrillDownPanel';
 
 /**
@@ -154,5 +154,63 @@ describe('mapping definition scope', () => {
     const sublabels = flatten(tree).map(n => n.sublabel ?? '').join('\n');
     expect(sublabels).toContain('SalesInvoiceDP');
     expect(sublabels).not.toContain('TmsCommercialInvoiceDP');
+  });
+
+  // Search and where-used group their hits per definition, so every node and
+  // every reference has to carry the definition it came from.
+  it('stamps every tree node under a mapping with its definition', () => {
+    useAppStore.setState({ configurations: [], treeNodes: [] } as any);
+    useAppStore.getState().loadXmlFile(MAPPING_XML, 'mapping.xml');
+
+    const nodes = flatten(useAppStore.getState().treeNodes[0]);
+    const bindings = nodes.filter(n => n.type === 'binding');
+    expect(bindings.length).toBe(2);
+    expect(bindings.map(n => n.mappingDefinition).sort())
+      .toEqual(['SalesInvoice', 'TMSCommercialInvoice']);
+
+    const datasources = nodes.filter(n => n.type === 'datasource');
+    expect(datasources.map(n => n.mappingDefinition).sort())
+      .toEqual(['SalesInvoice', 'TMSCommercialInvoice']);
+  });
+
+  it('names the definition a where-used hit was found in', () => {
+    useAppStore.setState({ configurations: [], treeNodes: [] } as any);
+    useAppStore.getState().loadXmlFile(MAPPING_XML, 'mapping.xml');
+
+    const entries = useAppStore.getState().whereUsed('SalesInvoiceDP');
+    const definitions = entries.flatMap(e => e.modelPaths.map(m => m.definition));
+    expect(definitions.length).toBeGreaterThan(0);
+    expect(new Set(definitions)).toEqual(new Set(['SalesInvoice']));
+  });
+
+  it('scopes the definitions related to the active format', () => {
+    const configurations = loadConfigurations();
+    // Index 0 is the format that binds to SalesInvoice.
+    expect(relatedMappingDefinitionLabels(configurations, 0)).toEqual(new Set(['SalesInvoice']));
+    // A mapping opened on its own imposes no definition scope.
+    expect(relatedMappingDefinitionLabels(configurations, 1)).toBeNull();
+  });
+
+  it('stamps registry cross-refs with the definition they were indexed in', () => {
+    useAppStore.setState({ configurations: [], treeNodes: [] } as any);
+    useAppStore.getState().loadXmlFile(MAPPING_XML, 'mapping.xml');
+
+    const hits = useAppStore.getState().registry.search('ReportDataProvider')
+      .filter((r: any) => r.targetType === 'Formula');
+    expect(hits.length).toBeGreaterThan(1);
+    expect(new Set(hits.map((r: any) => r.sourceDefinition)))
+      .toEqual(new Set(['SalesInvoice', 'TMSCommercialInvoice']));
+  });
+
+  it('reports a shared expression against the definition the format binds to', () => {
+    useAppStore.setState({ configurations: [], treeNodes: [] } as any);
+    useAppStore.getState().loadXmlFile(FORMAT_XML, 'format.xml');
+    useAppStore.getState().loadXmlFile(MAPPING_XML, 'mapping.xml');
+
+    // `getHeader` appears in every definition; only the bound one is relevant.
+    const entries = useAppStore.getState().whereUsed('getHeader');
+    const hits = entries.flatMap(e => e.modelPaths);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(new Set(hits.map(m => m.definition))).toEqual(new Set(['SalesInvoice']));
   });
 });

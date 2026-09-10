@@ -5,9 +5,9 @@ import {
   TextExpandRegular,
   TextCollapseRegular,
 } from '@fluentui/react-icons';
-import { useAppStore } from '../state/store';
+import { useAppStore, activeMappingDefinitionLabel, relatedMappingDefinitionLabels } from '../state/store';
 import type { TreeNode } from '../state/store';
-import type { GUIDEntry } from '@er-visualizer/core';
+import type { ERConfiguration, GUIDEntry } from '@er-visualizer/core';
 import { locale, t, useLocale } from '../i18n';
 import { getFormatTypeThemeColor } from '../utils/theme-colors';
 import { relatedConfigIndices, relatedContainerRules, hitPassesContainerRule, type ScopeContainerRule } from '../utils/model-hierarchy';
@@ -19,18 +19,39 @@ type SearchResultEntry = {
   targetType: string;
   sourceConfigPath: string;
   sourceComponent: string;
+  /** Mapping definition the hit was indexed in, when it came from a mapping. */
+  sourceDefinition?: string;
   sourceContext: string;
 };
 
-function findTreeNodeByMatch(nodes: TreeNode[], predicate: (node: TreeNode) => boolean): TreeNode | null {
-  for (const node of nodes) {
-    if (predicate(node)) return node;
-    if (node.children) {
-      const found = findTreeNodeByMatch(node.children, predicate);
-      if (found) return found;
+/**
+ * First node matching `predicate`, preferring the one that sits in
+ * `preferredDefinition`. A mapping solution maps the same binding path in each
+ * of its definitions, so an unqualified walk lands in whichever definition
+ * comes first in the file instead of the one the loaded format goes through.
+ */
+function findTreeNodeByMatch(
+  nodes: TreeNode[],
+  predicate: (node: TreeNode) => boolean,
+  preferredDefinition?: string,
+): TreeNode | null {
+  let fallback: TreeNode | null = null;
+
+  const walk = (list: TreeNode[]): TreeNode | null => {
+    for (const node of list) {
+      if (predicate(node)) {
+        if (!preferredDefinition || node.mappingDefinition === preferredDefinition) return node;
+        fallback ??= node;
+      }
+      if (node.children) {
+        const found = walk(node.children);
+        if (found) return found;
+      }
     }
-  }
-  return null;
+    return null;
+  };
+
+  return walk(nodes) ?? fallback;
 }
 
 function escapeRegExp(s: string): string {
@@ -226,7 +247,10 @@ export function SearchPanel() {
     // Container rules narrow *within* a related model, so they matter even
     // when every loaded configuration belongs to the same tree.
     const rules = relatedContainerRules(configurations, activeConfigIndex);
-    if (!narrowsConfigs && rules.size === 0) return null;
+    // A mapping solution repeats the same paths in every definition, so the
+    // definitions of the other model roots are noise for the active format.
+    const definitions = relatedMappingDefinitionLabels(configurations, activeConfigIndex);
+    if (!narrowsConfigs && rules.size === 0 && !definitions) return null;
 
     const paths = new Set(
       Array.from(indices).map(i => configurations[i]?.filePath).filter(Boolean) as string[],
@@ -239,6 +263,8 @@ export function SearchPanel() {
 
     return {
       allowsConfigIndex: (idx: number) => !narrowsConfigs || indices.has(idx),
+      // Hits outside a mapping carry no definition and are never narrowed here.
+      allowsDefinition: (definition?: string) => !definition || !definitions || definitions.has(definition),
       allows: (r: SearchResultEntry) =>
         (!narrowsConfigs || paths.has(r.sourceConfigPath))
         && hitPassesContainerRule(ruleByPath.get(r.sourceConfigPath), r.sourceComponent),
@@ -328,7 +354,7 @@ export function SearchPanel() {
     [whereUsedResults],
   );
 
-  const whereUsedFileGroups = useMemo(() => {
+  const whereUsedGrouping = useMemo(() => {
     const refs: Reference[] = [];
     for (const entry of whereUsedResults) {
       const dsName = entry.datasource.name;
@@ -338,6 +364,7 @@ export function SearchPanel() {
           kind: 'binding' as const,
           configIndex: m.configIndex,
           configName: m.configName,
+          definition: m.definition,
           location: entry.entityType === 'TextMatch'
             ? m.path.split(/[./]/).filter(Boolean)
             : [dsName, ...m.path.split('.').filter(Boolean)],
@@ -348,7 +375,11 @@ export function SearchPanel() {
             if (m.treeNodeId) { navigateToTreeNode(m.treeNodeId); return; }
             const root = treeNodes[m.configIndex];
             if (!root) return;
-            const node = findTreeNodeByMatch(root.children ?? [], n => n.type === 'binding' && n.data?.path === m.path);
+            const node = findTreeNodeByMatch(
+              root.children ?? [],
+              n => n.type === 'binding' && n.data?.path === m.path,
+              m.definition,
+            );
             if (node) navigateToTreeNode(node.id);
           },
         });
@@ -373,16 +404,27 @@ export function SearchPanel() {
         });
       }
     }
-    const map = new Map<string, { configName: string; refs: Reference[] }>();
+    // A mapping solution holds one definition per model root (SalesInvoice,
+    // TMSCommercialInvoice, …) whose datasources and bindings share names, so
+    // each definition gets its own group instead of being mixed into the file.
+    const map = new Map<string, { configName: string; configIndex: number; definition?: string; refs: Reference[] }>();
     for (const r of refs) {
       if (relatedOnly && relatedFilter && !relatedFilter.allowsConfigIndex(r.configIndex)) continue;
-      const key = `${r.configIndex}|${r.configName}`;
+      // "Related only" means the definition the active format goes through;
+      // the sibling definitions map the same paths and only add noise.
+      if (relatedOnly && relatedFilter && !relatedFilter.allowsDefinition(r.definition)) continue;
+      const key = `${r.configIndex}|${r.configName}|${r.definition ?? ''}`;
       const bucket = map.get(key);
       if (bucket) bucket.refs.push(r);
-      else map.set(key, { configName: r.configName, refs: [r] });
+      else map.set(key, { configName: r.configName, configIndex: r.configIndex, definition: r.definition, refs: [r] });
     }
-    return Array.from(map.entries());
+    return { groups: Array.from(map.entries()), totalRefs: refs.length };
   }, [whereUsedResults, treeNodes, navigateToTreeNode, relatedOnly, relatedFilter]);
+
+  const whereUsedFileGroups = whereUsedGrouping.groups;
+  // Kept unfiltered so the reach toggle survives a related-only filter that
+  // hides everything — otherwise the user is stranded on "nothing found".
+  const whereUsedTotalRefs = whereUsedGrouping.totalRefs;
 
   // Resolving a hit to its tree node walks the whole tree, so do it exactly
   // once per result set here; the grouped list below reuses the map.
@@ -477,10 +519,16 @@ export function SearchPanel() {
               <>
                 {(() => {
                   const navigableResults = navigableSearch.results;
+                  const isRelatedResult = (r: SearchResultEntry) => !relatedFilter || (
+                    relatedFilter.allows(r)
+                    && relatedFilter.allowsDefinition(
+                      r.sourceDefinition ?? navigableSearch.nodeByResult.get(r)?.mappingDefinition,
+                    )
+                  );
                   // Related-only runs first so the count on the "All" chip
                   // tells the user exactly what turning it off would add.
                   const relatedResults = relatedOnly && relatedFilter
-                    ? navigableResults.filter(r => relatedFilter.allows(r))
+                    ? navigableResults.filter(isRelatedResult)
                     : navigableResults;
                   const hiddenByRelated = navigableResults.length - relatedResults.length;
                   // Apply scope filter
@@ -500,7 +548,14 @@ export function SearchPanel() {
                     groupMap.set(gk, bucket);
                   }
                   const totalNested = Array.from(groupMap.values()).reduce((sum, grp) => sum + nestBindingResults(grp).length, 0);
-                  const capped = scopedResults.slice(0, 100);
+                  // The list is capped, and the definitions of the other model
+                  // roots come first in file order — without this the active
+                  // definition would drop off the end when "All" is turned on.
+                  const ranked = relatedFilter && !relatedOnly
+                    ? [...scopedResults].sort((a, b) =>
+                      Number(isRelatedResult(b)) - Number(isRelatedResult(a)))
+                    : scopedResults;
+                  const capped = ranked.slice(0, 100);
                   return (
                     <>
                       <div className="search-panel__results-bar">
@@ -604,7 +659,7 @@ export function SearchPanel() {
               </>
             )}
 
-            {whereUsedFileGroups.length > 0 && (() => {
+            {(whereUsedFileGroups.length > 0 || whereUsedTotalRefs > 0) && (() => {
               const totalVisible = whereUsedFileGroups.reduce(
                 (n, [, g]) => n + (whereUsedScope === 'all' ? g.refs.length : g.refs.filter(r => r.area === whereUsedScope).length), 0);
               return (
@@ -659,10 +714,16 @@ export function SearchPanel() {
                   </div>
                   <div className="search-panel__results">
                     <div className="search-results">
-                      {whereUsedFileGroups.map(([key, { configName, refs }]) => (
+                      {whereUsedFileGroups.length === 0 && (
+                        // Everything was filtered out by "Related only"; the
+                        // toggle above stays reachable so this is not a dead end.
+                        <div className="search-panel__empty">{t.searchRelatedEmpty}</div>
+                      )}
+                      {whereUsedFileGroups.map(([key, { configName, definition, refs }]) => (
                         <FileReferenceGroup
                           key={key}
                           configName={configName}
+                          definition={definition}
                           references={refs}
                           scope={whereUsedScope}
                           query={whereUsedQuery}
@@ -690,7 +751,7 @@ export function SearchPanel() {
               </div>
             )}
 
-            {whereUsedFileGroups.length === 0 && deadDatasources.length === 0 && trimmedCurrentQuery && (
+            {whereUsedFileGroups.length === 0 && whereUsedTotalRefs === 0 && deadDatasources.length === 0 && trimmedCurrentQuery && (
               <div className="search-panel__empty">{t.noResultsFor(whereUsedQuery)}</div>
             )}
           </>
@@ -717,25 +778,31 @@ function SearchResultsGrouped({
   totalCount: number;
   query: string;
   expandSignal: { version: number; expanded: boolean };
-  configurations: Array<{ filePath: string }>;
+  configurations: ERConfiguration[];
   registry: { lookup: (guid: string) => GUIDEntry | undefined };
   navigateToTreeNode: (nodeId: string) => void;
 }) {
   const groups = useMemo(() => {
-    // Group by config file name + kind
-    const map = new Map<string, { configPath: string; kind: string; items: SearchResultEntry[] }>();
+    // Group by config file name + kind + mapping definition. A mapping
+    // solution holds one definition per model root (SalesInvoice,
+    // TMSCommercialInvoice, …) whose datasources and bindings share names, so
+    // folding them into one group would make the hits unreadable.
+    const map = new Map<string, { configPath: string; kind: string; definition?: string; items: SearchResultEntry[] }>();
     for (const r of results) {
       const configPath = r.sourceConfigPath || '—';
       const fileName = configPath.split(/[\\/]/).pop()?.replace(/\.xml$/i, '') ?? configPath;
       const configDef = configurations.find(c => c.filePath === configPath);
       const kind = (configDef as any)?.kind ?? '';
-      const key = `${fileName}__${kind}`;
+      // The registry stamps the definition a mapping hit came from; fall back
+      // to the resolved node for hits indexed without one.
+      const definition = r.sourceDefinition ?? nodeByResult.get(r)?.mappingDefinition;
+      const key = `${fileName}__${kind}__${definition ?? ''}`;
       const existing = map.get(key);
       if (existing) existing.items.push(r);
-      else map.set(key, { configPath, kind, items: [r] });
+      else map.set(key, { configPath, kind, definition, items: [r] });
     }
     return Array.from(map.entries()).sort((a, b) => b[1].items.length - a[1].items.length);
-  }, [results, configurations]);
+  }, [results, configurations, nodeByResult]);
 
   return (
     <div className="search-results">
@@ -744,7 +811,7 @@ function SearchResultsGrouped({
           {locale === 'cs' ? `Zobrazeno prvních ${results.length} z ${totalCount}` : `Showing first ${results.length} of ${totalCount}`}
         </div>
       )}
-      {groups.map(([key, { configPath, kind, items }]) => {
+      {groups.map(([key, { configPath, kind, definition, items }]) => {
         const fileName = configPath.split(/[\\/]/).pop()?.replace(/\.xml$/i, '') ?? configPath;
         return (
           <SearchResultGroup
@@ -752,6 +819,7 @@ function SearchResultsGrouped({
             configPath={configPath}
             fileName={fileName}
             configKind={kind}
+            definition={definition}
             items={items}
             nodeByResult={nodeByResult}
             query={query}
@@ -936,10 +1004,23 @@ function kindLabel(kind: string): string {
   return kind;
 }
 
+/** Names the mapping definition (model root) a group of hits belongs to. The
+ *  definitions of one solution reuse datasource and binding names, so this is
+ *  what tells two otherwise identical rows apart. */
+function MappingDefinitionChip({ definition }: { definition?: string }) {
+  if (!definition) return null;
+  return (
+    <span className="search-result-group-model" title={t.searchGroupDefinitionHint(definition)}>
+      {t.searchGroupDefinition(definition)}
+    </span>
+  );
+}
+
 function SearchResultGroup({
   configPath,
   fileName,
   configKind,
+  definition,
   items,
   nodeByResult,
   query,
@@ -950,6 +1031,8 @@ function SearchResultGroup({
   configPath: string;
   fileName: string;
   configKind: string;
+  /** Mapping definition these hits come from; absent outside mappings. */
+  definition?: string;
   items: SearchResultEntry[];
   nodeByResult: Map<SearchResultEntry, TreeNode>;
   query: string;
@@ -1002,6 +1085,7 @@ function SearchResultGroup({
             {kindLabel(configKind)}
           </span>
         )}
+        <MappingDefinitionChip definition={definition} />
         <span className="search-result-group-count">{totalRows}</span>
       </button>
       {expanded && (
@@ -1106,6 +1190,8 @@ type Reference = {
   kind: 'binding' | 'formatElement';
   configIndex: number;
   configName: string;
+  /** Mapping definition (`Name [DataContainerDescriptor]`) the reference sits in. */
+  definition?: string;
   /** Human-readable location path (e.g. breadcrumb for a format element, or datasource.path for a binding). */
   location: string[];
   /** Short kind label shown inline as a chip ("binding", "Sequence", "Group"…). */
@@ -1157,6 +1243,7 @@ function toLocalizedRefKind(ref: Reference): string {
 
 function FileReferenceGroup({
   configName,
+  definition,
   references,
   scope,
   query,
@@ -1165,6 +1252,8 @@ function FileReferenceGroup({
   onReferenceOpen,
 }: {
   configName: string;
+  /** Mapping definition the group belongs to; absent for format-only groups. */
+  definition?: string;
   references: Reference[];
   scope: 'all' | 'mapping' | 'format';
   query: string;
@@ -1211,6 +1300,7 @@ function FileReferenceGroup({
         <span className="search-result-group-name" title={configName}>
           <Highlight text={configName} query={query} />
         </span>
+        <MappingDefinitionChip definition={definition} />
         <span className="search-result-group-count">{visibleRefs.length}</span>
       </button>
       {expanded && (
@@ -1335,18 +1425,24 @@ function findNodeForSearchResult(
   if (!rootNode) return null;
 
   const sourceExpr = extractExpressionFromContext(result.sourceContext);
+  // The same binding path is mapped in every definition of a mapping solution;
+  // resolve against the one the loaded format goes through.
+  const preferred = result.sourceDefinition
+    ?? activeMappingDefinitionLabel(configurations as ERConfiguration[], configIndex);
+  const find = (predicate: (node: TreeNode) => boolean) =>
+    findTreeNodeByMatch(rootNode.children ?? [], predicate, preferred);
 
   if (result.sourceContext === 'TypeDescriptor reference in model field') {
     return findFieldNode(rootNode, result.sourceComponent);
   }
 
   if (result.sourceContext === 'Model mapping references data model') {
-    return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'mapping')
+    return find(node => node.type === 'mapping')
       ?? (rootNode.data?.kind === 'ModelMapping' ? rootNode : null);
   }
 
   if (result.sourceContext === 'Format mapping references format definition') {
-    return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'format')
+    return find(node => node.type === 'format')
       ?? (rootNode.data?.kind === 'Format' ? rootNode : null);
   }
 
@@ -1355,22 +1451,18 @@ function findNodeForSearchResult(
   }
 
   if (result.sourceContext.startsWith('Binding:')) {
-    return findTreeNodeByMatch(rootNode.children ?? [], node =>
-      node.type === 'binding' && node.data?.path === result.target,
-    );
+    return find(node => node.type === 'binding' && node.data?.path === result.target);
   }
 
   if (result.sourceContext.startsWith('Binding for ')) {
     const bindingPath = result.sourceContext.slice('Binding for '.length).split(':')[0]?.trim();
     if (bindingPath) {
-      return findTreeNodeByMatch(rootNode.children ?? [], node =>
-        node.type === 'binding' && node.data?.path === bindingPath,
-      );
+      return find(node => node.type === 'binding' && node.data?.path === bindingPath);
     }
   }
 
   if (result.sourceContext.startsWith('Format binding to component:')) {
-    return findTreeNodeByMatch(rootNode.children ?? [], node =>
+    return find(node =>
       (node.type === 'formatElement' && node.data?.id === result.target)
       || (node.type === 'formatBinding' && node.data?.componentId === result.target),
     );
@@ -1383,7 +1475,7 @@ function findNodeForSearchResult(
 
   if (result.targetType === 'GUID') {
     const guidNode = resolveGuidTargetNode(result.target, treeNodes, configurations, registry)
-      ?? findTreeNodeByMatch(rootNode.children ?? [], node =>
+      ?? find(node =>
         (node.type === 'formatElement' && node.data?.id === result.target)
         || node.data?.id === result.target,
       );
@@ -1391,9 +1483,7 @@ function findNodeForSearchResult(
   }
 
   if (result.targetType === 'ModelPath') {
-    const bindingNode = findTreeNodeByMatch(rootNode.children ?? [], node =>
-      node.type === 'binding' && node.data?.path === result.target,
-    );
+    const bindingNode = find(node => node.type === 'binding' && node.data?.path === result.target);
     if (bindingNode) return bindingNode;
   }
 
@@ -1407,16 +1497,12 @@ function findNodeForSearchResult(
       ? result.sourceContext.slice('Binding for '.length).split(':')[0]?.trim()
       : null;
     if (bindingPath) {
-      const bindingNode = findTreeNodeByMatch(rootNode.children ?? [], node =>
-        node.type === 'binding' && node.data?.path === bindingPath,
-      );
+      const bindingNode = find(node => node.type === 'binding' && node.data?.path === bindingPath);
       if (bindingNode) return bindingNode;
     }
   }
 
-  return findTreeNodeByMatch(rootNode.children ?? [], node =>
-    node.type === 'datasource' && node.name === result.sourceComponent,
-  );
+  return find(node => node.type === 'datasource' && node.name === result.sourceComponent);
 }
 
 function findFieldNode(rootNode: TreeNode, sourceComponent: string): TreeNode | null {
