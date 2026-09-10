@@ -26,6 +26,11 @@
   --er-surface: #ffffff;
   --er-surface-2: #f1f2f3;
   --er-surface-3: #e6e7e9;
+  /* Dialogs and popovers sit on white; the shadow does the lifting here. */
+  --er-surface-raised: #ffffff;
+  --er-surface-raised-2: #f4f5f6;
+  /* Code, formulas, anything quoted verbatim. */
+  --er-surface-sunken: #f4f5f6;
   --er-selected: #dfeced;
 
   --er-border: #e2e3e5;
@@ -46,8 +51,12 @@
   /* ER component types — the same three hues everywhere they appear */
   --er-model: #6d5ce7;
   --er-model-soft: #ece9fd;
-  --er-mapping: #0a6f73;
-  --er-mapping-soft: #e4f1f1;
+  /* Deliberately not the accent: mapping is a kind, the accent is "you can
+     click this". While the two shared one teal, every mapping pill read as a
+     control and every control read as a mapping. Plum is the free slot
+     between the model's violet and the format's orange. */
+  --er-mapping: #a3308a;
+  --er-mapping-soft: #f8e8f4;
   --er-format: #c2681a;
   --er-format-soft: #fbeee0;
 
@@ -79,19 +88,25 @@
 /* Shared by both dark entry points below. Keep the two selector lists in sync. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --er-bg: #0b0b0c;
-    --er-bg-soft: #0f1011;
-    --er-surface: #161719;
-    --er-surface-2: #1d1e21;
-    --er-surface-3: #262829;
+    --er-bg: #0e1012;
+    --er-bg-soft: #131518;
+    --er-surface: #1a1d20;
+    --er-surface-2: #22262a;
+    --er-surface-3: #2b3036;
+    /* Above the app: dialogs, popovers, menus. A modal darker than the
+       window behind it reads as a hole, not as something on top. */
+    --er-surface-raised: #262b30;
+    --er-surface-raised-2: #2e343a;
+    /* Below the app: code, formulas, anything quoted verbatim. */
+    --er-surface-sunken: #0f1113;
     --er-selected: #16343a;
 
-    --er-border: #2a2c2e;
-    --er-border-strong: #3b3e41;
+    --er-border: #2f343a;
+    --er-border-strong: #434a51;
 
     --er-text: #ecedef;
-    --er-text-muted: #a0a4a8;
-    --er-text-subtle: #7a7f84;
+    --er-text-muted: #a5aab0;
+    --er-text-subtle: #868c92;
 
     --er-accent: #35b8bd;
     --er-accent-hover: #52ced3;
@@ -102,8 +117,8 @@
 
     --er-model: #a396ff;
     --er-model-soft: #241f3d;
-    --er-mapping: #35b8bd;
-    --er-mapping-soft: #0e2b2d;
+    --er-mapping: #e08fd0;
+    --er-mapping-soft: #331f31;
     --er-format: #e79a4f;
     --er-format-soft: #33260f;
 
@@ -130,19 +145,22 @@
 }
 
 :root[data-theme='dark'] {
-  --er-bg: #0b0b0c;
-  --er-bg-soft: #0f1011;
-  --er-surface: #161719;
-  --er-surface-2: #1d1e21;
-  --er-surface-3: #262829;
+  --er-bg: #0e1012;
+  --er-bg-soft: #131518;
+  --er-surface: #1a1d20;
+  --er-surface-2: #22262a;
+  --er-surface-3: #2b3036;
+  --er-surface-raised: #262b30;
+  --er-surface-raised-2: #2e343a;
+  --er-surface-sunken: #0f1113;
   --er-selected: #16343a;
 
-  --er-border: #2a2c2e;
-  --er-border-strong: #3b3e41;
+  --er-border: #2f343a;
+  --er-border-strong: #434a51;
 
   --er-text: #ecedef;
-  --er-text-muted: #a0a4a8;
-  --er-text-subtle: #7a7f84;
+  --er-text-muted: #a5aab0;
+  --er-text-subtle: #868c92;
 
   --er-accent: #35b8bd;
   --er-accent-hover: #52ced3;
@@ -153,8 +171,8 @@
 
   --er-model: #a396ff;
   --er-model-soft: #241f3d;
-  --er-mapping: #35b8bd;
-  --er-mapping-soft: #0e2b2d;
+  --er-mapping: #e08fd0;
+  --er-mapping-soft: #331f31;
   --er-format: #e79a4f;
   --er-format-soft: #33260f;
 
@@ -189,6 +207,15 @@
   --er-font-sans: var(--font-inter, 'Inter'), 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   --er-font-display: var(--font-space-grotesk, 'Space Grotesk'), var(--er-font-sans);
   --er-font-mono: var(--font-jetbrains-mono, 'JetBrains Mono'), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* UI type scale. Fifteen hand-picked sizes between 8 and 14px used to fight
+     each other inside one row; these five are the whole workbench vocabulary.
+     Display sizes (the landing page's headings) stay bespoke. */
+  --er-text-2xs: 9.5px;   /* type badges, attribution — smallest legible */
+  --er-text-xs: 10.5px;   /* pills, counts, uppercase section labels */
+  --er-text-sm: 11.5px;   /* secondary labels, hints, expressions */
+  --er-text-md: 12.5px;   /* rows and body copy */
+  --er-text-lg: 14px;     /* panel and section titles */
 
   --er-radius-sm: 4px;
   --er-radius-md: 6px;

@@ -22,7 +22,9 @@ import {
   ArrowUploadRegular,
   ArrowDownloadRegular,
   SearchRegular,
+  InfoRegular,
 } from '@fluentui/react-icons';
+import { Tooltip } from '@fluentui/react-components';
 import '@xyflow/react/dist/style.css';
 import { useAppStore, resolveDeepExpression, selectMappingDefinition } from '../state/store';
 import { ClickablePath } from './ClickablePath';
@@ -478,6 +480,24 @@ function useNavFlash(active: boolean, duration = 1400): boolean {
   }, [active, duration]);
 
   return flash;
+}
+
+/**
+ * The designer header's usage hint.
+ *
+ * It used to be a sentence pinned to the right of every designer header —
+ * permanent instructions that cost a header line and were read once. It is the
+ * same text, parked behind an icon that sits at the end of the header (a
+ * long-press reaches it on touch).
+ */
+function DesignerHint({ text }: { text: string }) {
+  return (
+    <Tooltip content={text} relationship="label" withArrow>
+      <span className="fmt-header-hint" tabIndex={0} role="note" aria-label={text}>
+        <InfoRegular fontSize={14} />
+      </span>
+    </Tooltip>
+  );
 }
 
 /** Segmented tab strip with a sliding highlight that animates to the active tab's own position/width. */
@@ -948,7 +968,7 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
           <span className="fmt-stat">{t.statsFields(stats.fields)}</span>
           <span className="fmt-stat">{t.statsRelations(stats.edges)}</span>
         </div>
-        <div className="fmt-header-hint">{t.modelHierarchyHint}</div>
+        <DesignerHint text={t.modelHierarchyHint} />
       </div>
       <div style={{ flex: 1 }}>
         <ReactFlow nodes={nodes} edges={edges} fitView nodesConnectable={false} nodesDraggable>
@@ -1264,11 +1284,10 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
             </span>
           )}
         </div>
-        <div className="fmt-header-hint">
-          {locale === 'cs'
-            ? 'Klikni na řádek pro vlastnosti, na lupu pro rozpad výrazu'
-            : 'Click a row for properties, the magnifier for the expression drill-down'}
-        </div>
+        <DesignerHint text={locale === 'cs'
+          ? 'Klikni na řádek pro vlastnosti, na lupu pro rozpad výrazu'
+          : 'Click a row for properties, the magnifier for the expression drill-down'}
+        />
       </div>
       <div className="fmt-toolbar">
         <SlidingTabs

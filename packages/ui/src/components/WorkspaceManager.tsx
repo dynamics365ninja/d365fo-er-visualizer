@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Dialog,
-  DialogActions,
   DialogBody,
   DialogContent,
   DialogSurface,
@@ -13,6 +12,9 @@ import {
 import {
   AddRegular,
   ArrowCounterclockwiseRegular,
+  DataBarVerticalFilled,
+  DocumentFilled,
+  LinkFilled,
   CloudArrowDownRegular,
   DeleteRegular,
   DismissRegular,
@@ -209,22 +211,44 @@ export function WorkspaceManager({
           style={{
             width: 'min(1100px, calc(100vw - 48px))',
             maxWidth: 'calc(100vw - 32px)',
-            height: 'min(820px, calc(100vh - 80px))',
-            maxHeight: 'calc(100vh - 32px)',
+            // Hugs its lists instead of always standing 820px tall — a
+            // workspace of three files left two thirds of the dialog empty.
+            height: 'auto',
+            maxHeight: 'calc(100vh - 64px)',
             minWidth: '460px',
             minHeight: '340px',
             resize: 'both',
             overflow: 'hidden',
           }}
         >
-          <DialogBody className="ws-dialog-body" style={{ height: '100%', maxHeight: '100%', overflow: 'hidden' }}>
-            <DialogTitle>
+          <DialogBody className="ws-dialog-body" style={{ maxHeight: '100%', overflow: 'hidden' }}>
+            <DialogTitle
+              className="ws-titlebar"
+              action={
+                <Button
+                  className="ws-dialog-close"
+                  appearance="subtle"
+                  size="small"
+                  icon={<DismissRegular />}
+                  aria-label={t.dismiss}
+                  onClick={() => onOpenChange(false)}
+                />
+              }
+            >
               <span className="ws-title">
                 {t.workspaceManager}
+                {/* Three bare numbers said nothing about what they counted;
+                    the icons are the same ones the explorer marks kinds with. */}
                 <span className="ws-title-counts">
-                  <span className="ws-count ws-count--model" title={dependencyKindLabel('DataModel')}>{counts.DataModel}</span>
-                  <span className="ws-count ws-count--mapping" title={dependencyKindLabel('ModelMapping')}>{counts.ModelMapping}</span>
-                  <span className="ws-count ws-count--format" title={dependencyKindLabel('Format')}>{counts.Format}</span>
+                  <span className="ws-count ws-count--model" title={dependencyKindLabel('DataModel')}>
+                    <DataBarVerticalFilled fontSize={11} />{counts.DataModel}
+                  </span>
+                  <span className="ws-count ws-count--mapping" title={dependencyKindLabel('ModelMapping')}>
+                    <LinkFilled fontSize={11} />{counts.ModelMapping}
+                  </span>
+                  <span className="ws-count ws-count--format" title={dependencyKindLabel('Format')}>
+                    <DocumentFilled fontSize={11} />{counts.Format}
+                  </span>
                 </span>
               </span>
             </DialogTitle>
@@ -346,11 +370,6 @@ export function WorkspaceManager({
                 }}
               />
             </DialogContent>
-            <DialogActions>
-              <Button appearance="primary" onClick={() => onOpenChange(false)}>
-                {t.workspaceClose}
-              </Button>
-            </DialogActions>
           </DialogBody>
         </DialogSurface>
       </Dialog>

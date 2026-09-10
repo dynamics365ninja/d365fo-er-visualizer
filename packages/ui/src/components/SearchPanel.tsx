@@ -3,6 +3,7 @@ import {
   DocumentRegular,
   ArrowRightRegular,
   TextExpandRegular,
+  FilterRegular,
   TextCollapseRegular,
 } from '@fluentui/react-icons';
 import { useAppStore, activeMappingDefinitionLabel, relatedMappingDefinitionLabels } from '../state/store';
@@ -558,8 +559,22 @@ export function SearchPanel() {
                   const capped = ranked.slice(0, 100);
                   return (
                     <>
+                      {/* Count, scope, reach and the expand slider on one
+                          line. They used to take three, which in a 300px panel
+                          left the results themselves starting below the fold. */}
                       <div className="search-panel__results-bar">
-                        <span className="search-panel__results-count">{t.searchResultCount(totalNested)}</span>
+                        <span
+                          className="search-panel__results-count"
+                          title={capped.length < totalNested
+                            ? (locale === 'cs'
+                              ? `Zobrazeno prvních ${capped.length} z ${totalNested}`
+                              : `Showing first ${capped.length} of ${totalNested}`)
+                            : undefined}
+                        >
+                          {capped.length < totalNested
+                            ? `${capped.length} / ${totalNested}`
+                            : t.searchResultCount(totalNested)}
+                        </span>
                         <div className="search-scope-toggle" role="group" aria-label={locale === 'cs' ? 'Oblast výsledků' : 'Scope'}>
                           {(['all', 'format', 'mapping', 'model'] as const).map(s => (
                             <button key={s} type="button"
@@ -573,37 +588,27 @@ export function SearchPanel() {
                             </button>
                           ))}
                         </div>
-                      </div>
-                      <div className="search-panel__reach">
-                        {relatedFilter && (
-                          <div className="search-scope-toggle" role="group" aria-label={locale === 'cs' ? 'Rozsah hledání' : 'Search reach'}>
-                            <button
-                              type="button"
-                              className={`search-scope-toggle__btn ${relatedOnly ? 'active' : ''}`}
-                              onClick={() => setRelatedOnly(true)}
-                              title={t.searchRelatedOnlyHint}
-                            >
-                              {t.searchRelatedOnly}
-                            </button>
-                            <button
-                              type="button"
-                              className={`search-scope-toggle__btn ${relatedOnly ? '' : 'active'}`}
-                              onClick={() => setRelatedOnly(false)}
-                              title={t.searchAllConfigsHint}
-                            >
-                              {t.searchAllConfigs}
-                            </button>
-                          </div>
-                        )}
-                        {relatedFilter && relatedOnly && hiddenByRelated > 0 && (
-                          <span className="search-panel__reach-note" title={t.searchHiddenByRelated(hiddenByRelated)}>
-                            {t.searchHiddenByRelatedShort(hiddenByRelated)}
-                          </span>
-                        )}
-                        {/* The expand slider rides here rather than in the bar
-                            above: the panel is narrow, and the count plus the
-                            four kind chips already fill that row. */}
                         <div className="search-panel__results-actions">
+                          {relatedFilter && (
+                            /* Two labelled buttons for a two-state switch cost
+                               more than the state is worth in this column; the
+                               badge says how many hits the filter is holding
+                               back, the tooltip says what it does. */
+                            <button
+                              type="button"
+                              className={`search-reach-toggle ${relatedOnly ? 'active' : ''}`}
+                              aria-pressed={relatedOnly}
+                              onClick={() => setRelatedOnly(v => !v)}
+                              title={relatedOnly
+                                ? `${t.searchRelatedOnly} — ${t.searchAllConfigsHint}`
+                                : `${t.searchAllConfigs} — ${t.searchRelatedOnlyHint}`}
+                            >
+                              <FilterRegular fontSize={14} />
+                              {relatedOnly && hiddenByRelated > 0 && (
+                                <span className="search-reach-toggle__badge">{hiddenByRelated}</span>
+                              )}
+                            </button>
+                          )}
                           <ExpandCollapseSlider
                             size="compact"
                             expandLabel={t.expand}
@@ -806,11 +811,6 @@ function SearchResultsGrouped({
 
   return (
     <div className="search-results">
-      {totalCount > results.length && (
-        <div className="search-section-caption search-section-caption--cap">
-          {locale === 'cs' ? `Zobrazeno prvních ${results.length} z ${totalCount}` : `Showing first ${results.length} of ${totalCount}`}
-        </div>
-      )}
       {groups.map(([key, { configPath, kind, definition, items }]) => {
         const fileName = configPath.split(/[\\/]/).pop()?.replace(/\.xml$/i, '') ?? configPath;
         return (

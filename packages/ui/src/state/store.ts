@@ -10,6 +10,7 @@ import type {
 import { parseERConfigurations, GUIDRegistry, getFormatElementExcelRange } from '@er-visualizer/core';
 import { locale } from '../i18n';
 import { buildFormatBindingPresentation } from '../utils/format-binding-display';
+import { dsPathToExpression } from '../utils/ds-path';
 import { useFnoSession } from './fno-session';
 import { onFnoDownloadEvent } from '../fno/session';
 import { formatReferencedModelIds, mappingDefinitionLabel } from '../utils/model-hierarchy';
@@ -2854,7 +2855,7 @@ function extractExpressionReferences(expr: string): string[] {
 function getDelegateDatasources(ds: any, pools: any[][]): any[] {
   const expressions: string[] = [];
   if (ds.calculatedField?.expressionAsString) expressions.push(ds.calculatedField.expressionAsString);
-  if (ds.groupByInfo?.listToGroup) expressions.push(String(ds.groupByInfo.listToGroup).replace(/\//g, '.'));
+  if (ds.groupByInfo?.listToGroup) expressions.push(dsPathToExpression(ds.groupByInfo.listToGroup));
   if (ds.userParamInfo?.expressionAsString) expressions.push(ds.userParamInfo.expressionAsString);
 
   const delegates: any[] = [];
@@ -2989,7 +2990,7 @@ function traceCalculatedFieldDeps(
     // GroupBy references a list datasource
     const listRef = ds.groupByInfo.listToGroup;
     if (listRef) {
-      const refSegments = parseDottedPath(String(listRef).replace(/\//g, '.'));
+      const refSegments = parseDottedPath(dsPathToExpression(listRef));
       const found = findDsAcrossPools(allDatasourcePools, refSegments, true);
       if (found) {
         traceCalculatedFieldDeps(found, allDatasourcePools, visited, involvedDatasources, calcChain);

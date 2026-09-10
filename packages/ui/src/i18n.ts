@@ -145,7 +145,6 @@ export interface Translations {
   workspaceAddRecent: string;
   workspaceAdd: string;
   workspaceAddFiles: string;
-  workspaceClose: string;
   workspaceAvailable: string;
   workspaceAvailableEmpty: string;
   workspaceFilterPlaceholder: string;
@@ -689,7 +688,6 @@ const cs: Translations = {
   workspaceAddRecent: 'Přidat z nedávných',
   workspaceAdd: 'Přidat do pracovní plochy',
   workspaceAddFiles: 'Přidat soubory…',
-  workspaceClose: 'Zavřít',
   workspaceAvailable: 'K dispozici (zavřené / v mezipaměti)',
   workspaceAvailableEmpty: 'Žádné další konfigurace v mezipaměti.',
   workspaceFilterPlaceholder: 'Filtrovat konfigurace…',
@@ -1243,7 +1241,6 @@ const en: Translations = {
   workspaceAddRecent: 'Add from recent',
   workspaceAdd: 'Add to workspace',
   workspaceAddFiles: 'Add files…',
-  workspaceClose: 'Close',
   workspaceAvailable: 'Available (closed / cached)',
   workspaceAvailableEmpty: 'No further cached configurations.',
   workspaceFilterPlaceholder: 'Filter configurations…',

@@ -189,7 +189,10 @@ const useAppStyles = makeStyles({
   rightTabStrip: {
     display: 'flex',
     alignItems: 'center',
-    minHeight: '44px',
+    // Same 40px as the explorer header and the editor tab bar, so the three
+    // columns share one horizontal rule under the top bar.
+    height: '40px',
+    minHeight: '40px',
     flexShrink: 0,
     padding: '0 8px 0 10px',
     gap: '4px',
@@ -210,6 +213,12 @@ const useAppStyles = makeStyles({
     fontFamily: tokens.fontFamilyBase,
     fontWeight: 500,
     cursor: 'pointer',
+    // A narrow panel used to wrap "Kde je použito" onto a second line inside a
+    // 28px tab, which spilled out of the strip. Shrink to an ellipsis instead.
+    minWidth: 0,
+    whiteSpace: 'nowrap',
+    overflowX: 'hidden',
+    textOverflow: 'ellipsis',
     transitionProperty: 'color, background-color, border-color',
     transitionDuration: '140ms',
     ':hover': {
@@ -717,9 +726,11 @@ function RightPanel({
           aria-selected={tab === 'properties'}
           className={mergeClasses(styles.rightTab, tab === 'properties' && styles.rightTabActive)}
           onClick={() => onTabChange('properties')}
+          title={t.properties}
+          aria-label={t.properties}
         >
           <span className={styles.rightTabIcon} aria-hidden><AppsListDetailRegular fontSize={13} /></span>
-          {t.properties}
+          {tab === 'properties' && t.properties}
         </button>
         <button
           type="button"
@@ -727,9 +738,11 @@ function RightPanel({
           aria-selected={tab === 'search'}
           className={mergeClasses(styles.rightTab, tab === 'search' && styles.rightTabActive)}
           onClick={() => onTabChange('search')}
+          title={t.search}
+          aria-label={t.search}
         >
           <span className={styles.rightTabIcon} aria-hidden><SearchRegular fontSize={13} /></span>
-          {t.search}
+          {tab === 'search' && t.search}
         </button>
         <button
           type="button"
@@ -737,9 +750,11 @@ function RightPanel({
           aria-selected={tab === 'where-used'}
           className={mergeClasses(styles.rightTab, tab === 'where-used' && styles.rightTabActive)}
           onClick={() => onTabChange('where-used')}
+          title={t.whereUsedAction}
+          aria-label={t.whereUsedAction}
         >
           <span className={styles.rightTabIcon} aria-hidden><LinkRegular fontSize={13} /></span>
-          {t.whereUsedAction}
+          {tab === 'where-used' && t.whereUsedAction}
         </button>
         <div className={styles.rightTabSpacer} />
         <div className={styles.rightTabActions}>
