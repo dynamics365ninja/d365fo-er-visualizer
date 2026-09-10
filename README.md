@@ -24,7 +24,7 @@ This tool parses the full ER XML bundle, merges cross-references across all load
 |---|---|
 | 📂 **XML & live ingestion** | Parse raw ER XML bundles from disk (drag-and-drop) or pull directly from a live F&O environment via MSAL + ER custom services |
 | 🌳 **Visual designers** | Interactive node-graph views for DataModel, ModelMapping, and Format — powered by React Flow |
-| 🔍 **Search & where-used** | Full-text search across all loaded configurations; trace any element to every format binding, model binding, or datasource that references it |
+| 🔍 **Search & where-used** | Full-text search across all loaded configurations, grouped by configuration and by hit category, with a *Related only / All* reach toggle; trace any element to the mapping bindings, expressions and format elements that reference it |
 | 🧩 **Expression drill-down** | Split workbench: expression tree on the left, mapping/datasource resolution on the right — navigate through calculated fields to concrete sources. A second view renders the whole breakdown as a React Flow tree |
 | 🏷️ **Property inspector** | Context-aware property grid for any selected node — files, containers, fields, datasources, bindings, format elements |
 | 🔗 **Clickable paths** | Identifiers in ER expressions are hyperlinks; hovering shows a tooltip card with the resolved source |
@@ -83,7 +83,8 @@ pnpm build      # core → tsc, fno-client → tsc, ui → Vite bundle, electron
 pnpm build:web  # production web deploy — SPA built with base /app/, staged into the site, then Next
 pnpm test       # Vitest — core (XML parser, GUID registry), fno-client (ER services, path keys, auth),
                 #          ui (store, format-tree filter, drill-down resolution, label resolver, xlsx)
-pnpm lint       # tsc --noEmit in every TypeScript package
+pnpm lint       # tsc --noEmit in every package that defines it (run `pnpm build` first —
+                #          the UI typechecks against core's emitted .d.ts)
 ```
 
 The `ui` xlsx-parser tests need a real Excel template and are skipped unless

@@ -12,7 +12,7 @@
     "test": "pnpm --filter @er-visualizer/core test && pnpm --filter @er-visualizer/fno-client test && pnpm --filter @er-visualizer/ui test",
     "test:watch": "pnpm --filter @er-visualizer/core test:watch",
     "test:integration": "tsx scripts/integration-test.ts",
-    "lint": "pnpm -r --filter './packages/*' lint"
+    "lint": "pnpm -r lint"
   },
   "devDependencies": {
     "@azure/msal-node": "^3.2.0",

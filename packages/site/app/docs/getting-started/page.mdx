@@ -50,8 +50,10 @@ The workspace follows the layout of a code editor.
 | **Properties** (`Ctrl+J`) | Details of whatever is currently selected |
 
 In the Explorer, a **single click** selects a node and fills the Properties panel. A **double
-click** opens it in its own tab — the root of a configuration opens the full designer, while a
-node deeper in the tree opens a focused detail view.
+click** opens it, and what opens depends on the node: the root of a configuration opens the full
+designer, a node that carries an expression — a binding, a calculated field, a validation — opens
+the [drill-down workbench](/docs/expression-drill-down) on that expression, and anything else
+opens a focused detail view.
 
 ## A few things worth knowing on day one
 

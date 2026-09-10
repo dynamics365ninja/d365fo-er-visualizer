@@ -121,17 +121,25 @@ deployment rather than a copy behind a proxy that rewrites headers.
 
 ### Sign-in succeeds but the solution list is empty
 
-The Entra application is not registered inside Finance &amp; Operations. In F&amp;O, open **System
-administration → Setup → Azure Active Directory applications** and add the client ID with a user
-account whose permissions the calls run under.
+Sign-in worked, so this is not an authentication problem — the environment genuinely reports no ER
+configurations. The usual cause is an environment where nothing has been imported yet.
+
+In F&amp;O, open **Organization administration → Electronic reporting → Configuration providers**,
+pick **Microsoft (Active) → Repositories → LCS → Open**, and import the configurations you need
+from Lifecycle Services. Then connect again.
+
+If configurations *are* there, check that your F&amp;O user has access to the Electronic reporting
+workspace — every call runs under your own permissions. The panel logs the underlying responses to
+the browser console under the `[fno-client]` prefix.
 
 ### "Upstream F&O redirected … login redirect"
 
 The environment rejected the access token and answered with a sign-in redirect. Check that:
 
 - the **environment URL** in the profile matches the environment you signed in against — the token
-  audience is derived from it,
-- the **tenant ID** is the tenant that owns the environment, and
+  audience is derived from it, so a token issued for one environment is not valid for another,
+- you picked the **work account belonging to that environment's tenant** in the Microsoft sign-in
+  (the tenant is taken from the account, not configured anywhere), and
 - the delegated **Dynamics ERP** permission has been granted and consented.
 
 ### "Target host not allowed"
