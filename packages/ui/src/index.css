@@ -7859,3 +7859,47 @@ div.path-tooltip-card {
 .ws-titlebar {
   padding-right: 40px;
 }
+
+/* ─── Used data: folded, and grouped by kind when opened ───
+   The evidence list runs to seventy-odd rows on a real expression. It opens on
+   demand, and inside it the artefacts are grouped, so the chips can drop the
+   type label each was repeating. */
+.lin-summary__head--toggle {
+  width: 100%;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lin-summary__head--toggle:hover .lin-summary__title {
+  color: var(--er-accent);
+}
+
+.lin-group {
+  margin-top: 8px;
+}
+
+.lin-group__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0 4px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lin-group__count {
+  padding: 0 5px;
+  border-radius: var(--er-radius-pill);
+  background: var(--bg-hover);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-2xs);
+  font-variant-numeric: tabular-nums;
+}

@@ -101,6 +101,42 @@ function dsTypeBadge(ds: any): string {
   return ds.type?.toLowerCase() ?? 'unknown';
 }
 
+/** Plural of `localizeBadgeLabel`, for the heading over a group of sources. */
+function localizeBadgeGroupLabel(badge: string): string {
+  const cs: Record<string, string> = {
+    table: 'AX tabulky',
+    enum: 'AX výčty',
+    class: 'AX třídy',
+    calc: 'Vypočtená pole',
+    container: 'Složky',
+    groupby: 'Seskupení',
+    join: 'Spojení',
+    object: 'AX objekty',
+    userparameter: 'Parametry uživatele',
+    param: 'Parametry uživatele',
+    importformat: 'Importní formáty',
+    leaf: 'AX tabulky',
+    unknown: 'Neznámé',
+  };
+  const en: Record<string, string> = {
+    table: 'AX tables',
+    enum: 'AX enums',
+    class: 'AX classes',
+    calc: 'Calculated fields',
+    container: 'Folders',
+    groupby: 'Group by',
+    join: 'Joins',
+    object: 'AX objects',
+    userparameter: 'User parameters',
+    param: 'User parameters',
+    importformat: 'Import formats',
+    leaf: 'AX tables',
+    unknown: 'Unknown',
+  };
+  const map = locale === 'cs' ? cs : en;
+  return map[badge] ?? localizeBadgeLabel(badge);
+}
+
 function localizeBadgeLabel(badge: string): string {
   const cs: Record<string, string> = {
     table: 'AX tabulka',
@@ -1060,6 +1096,25 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
     resolveDatasource,
   }), [expression, configIndex, configurations, resolveModelPath, resolveDatasource]);
 
+  /* The used-data list runs to dozens of rows on a real expression, so it
+     starts folded: the outline above it is the answer, this is the evidence. */
+  const [usedDataOpen, setUsedDataOpen] = useState(false);
+
+  /** The same sources, grouped by what kind of D365FO artefact they are. */
+  const usedSourceGroups = useMemo(() => {
+    const groups = new Map<string, UsedSource[]>();
+    for (const src of usedSources) {
+      const list = groups.get(src.badge) ?? [];
+      list.push(src);
+      groups.set(src.badge, list);
+    }
+    return [...groups.entries()]
+      .map(([badge, items]) => ({ badge, items }))
+      .sort((left, right) =>
+        (USED_SOURCE_ORDER[left.badge] ?? 99) - (USED_SOURCE_ORDER[right.badge] ?? 99)
+        || left.badge.localeCompare(right.badge));
+  }, [usedSources]);
+
   const index = useMemo(() => buildLineageIndex(tree), [tree]);
   const [openIds, setOpenIds] = useState<Set<string>>(index.defaultOpen);
 
@@ -1264,33 +1319,53 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
       </section>
       {/* The headline question — which D365FO data does this element read? */}
       <section className="lin-summary">
-        <header className="lin-summary__head">
+        <button
+          type="button"
+          className="lin-summary__head lin-summary__head--toggle"
+          aria-expanded={usedDataOpen}
+          onClick={() => setUsedDataOpen(open => !open)}
+        >
+          <span className={`tree-chevron ${usedDataOpen ? 'open' : ''}`} aria-hidden />
           <span className="lin-summary__title">{t.drillUsedDataTitle}</span>
           <span className="lin-summary__count">{usedSources.length}</span>
-        </header>
-        <p className="lin-summary__hint">{t.drillUsedDataHint}</p>
-        {usedSources.length > 0 ? (
-          <ul className="lin-chips">
-            {usedSources.map(src => {
-              const key = lineageSourceKey(src.badge, src.name);
-              return (
-                <li key={src.key}>
-                  <button
-                    type="button"
-                    className={`lin-chip${highlightKey === key ? ' is-active' : ''}`}
-                    onClick={() => reveal(index.byKey.get(key) ?? index.byName.get(normalizeExpr(src.name)))}
-                    title={t.lineageShowInPath(src.name)}
-                  >
-                    <BadgeIcon badge={src.badge} size={13} />
-                    <span className="lin-chip__name">{src.name}</span>
-                    <span className="lin-chip__type">{localizeBadgeLabel(src.badge)}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="lin-summary__empty">{t.drillUsedDataEmpty}</p>
+        </button>
+        {usedDataOpen && (
+          usedSources.length > 0 ? (
+            <>
+              <p className="lin-summary__hint">{t.drillUsedDataHint}</p>
+              {usedSourceGroups.map(group => (
+                <div key={group.badge} className="lin-group">
+                  <div className="lin-group__head">
+                    <BadgeIcon badge={group.badge} size={12} />
+                    <span className="lin-group__title">{localizeBadgeGroupLabel(group.badge)}</span>
+                    <span className="lin-group__count">{group.items.length}</span>
+                  </div>
+                  <ul className="lin-chips">
+                    {group.items.map(src => {
+                      const key = lineageSourceKey(src.badge, src.name);
+                      return (
+                        <li key={src.key}>
+                          <button
+                            type="button"
+                            className={`lin-chip${highlightKey === key ? ' is-active' : ''}`}
+                            onClick={() => reveal(index.byKey.get(key) ?? index.byName.get(normalizeExpr(src.name)))}
+                            /* The kind is the group heading now, so the chip
+                               carries the name alone. */
+                            title={`${localizeBadgeLabel(src.badge)} — ${t.lineageShowInPath(src.name)}`}
+                          >
+                            <BadgeIcon badge={src.badge} size={13} />
+                            <span className="lin-chip__name">{src.name}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </>
+          ) : (
+            <p className="lin-summary__empty">{t.drillUsedDataEmpty}</p>
+          )
         )}
       </section>
     </div>
