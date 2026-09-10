@@ -350,7 +350,7 @@ export default function HomePage() {
             {[
               'Read-only — nothing is written back to your environment',
               'No account, no telemetry, no configuration content stored',
-              'Sign-in uses your own Entra app registration and your own permissions',
+              'Sign-in uses your own Microsoft work account and your own permissions',
               'MIT licensed — audit or self-host the whole stack',
             ].map((item) => (
               <li

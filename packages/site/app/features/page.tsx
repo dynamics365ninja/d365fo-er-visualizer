@@ -90,7 +90,7 @@ const blocks: FeatureBlock[] = [
     id: 'fno',
     eyebrow: 'Live environments',
     title: 'Browse and ingest a live ER solution tree',
-    body: 'Sign in with your own Entra app registration, walk the ER solution hierarchy of the environment, and pull down exactly the configurations you need — including the ones you did not know you needed.',
+    body: 'Sign in with your Microsoft work account, walk the ER solution hierarchy of the environment, and pull down exactly the configurations you need — including the ones you did not know you needed.',
     points: [
       'Multi-select configurations across drill levels in one session',
       'Ancestor data models are discovered and included automatically',

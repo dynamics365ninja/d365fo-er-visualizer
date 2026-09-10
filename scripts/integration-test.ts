@@ -263,7 +263,10 @@ function startLoopbackListener(): Promise<LoopbackListener> {
   });
 }
 
-async function acquireToken(conn: FnoConnection): Promise<string> {
+/** A connection whose Entra tenant/client are known — the script always has both. */
+type ResolvedFnoConnection = FnoConnection & { tenantId: string; clientId: string };
+
+async function acquireToken(conn: ResolvedFnoConnection): Promise<string> {
   const msalConfig: Configuration = {
     auth: {
       clientId: conn.clientId,
@@ -422,7 +425,7 @@ function printRow(r: DownloadResult): void {
 
 async function main(): Promise<void> {
   const cfg = readConfig();
-  const conn: FnoConnection = {
+  const conn: ResolvedFnoConnection = {
     id: 'integration-test', displayName: 'Integration Test',
     envUrl: cfg.envUrl, tenantId: cfg.tenantId, clientId: cfg.clientId, createdAt: Date.now(),
   };

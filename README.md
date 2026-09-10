@@ -110,9 +110,24 @@ parser, version extraction and format-tree filtering on real data. Configure it 
 ## F&O Live Connection
 
 1. Switch to the **D365 F&O server** tab and click **New profile**.
-2. Enter your environment URL, tenant ID, and the client ID of an Entra app registration with delegated `https://<env>.dynamics.com` permission and *"Allow public client flows" = Yes*.
-3. Click **Connect** — MSAL signs you in via popup (browser) or loopback window (Electron).
+2. Enter a name and the environment URL — that is the whole profile. No tenant ID, no client ID.
+3. Click **Connect** — the standard Microsoft sign-in opens (popup in the browser, loopback window in Electron) and the token is scoped to that environment.
 4. Browse the ER solution tree, tick the configurations you want, and click **Load selected**. Ancestor DataModels are auto-included.
+
+Sign-in runs against **one multi-tenant public-client Entra registration owned by the build**, on
+the shared `organizations` authority — that is what removes the per-customer app registration and
+keeps Entra identifiers out of the UI. Configure it once:
+
+| Where | Setting |
+|---|---|
+| SPA / site build | `VITE_FNO_CLIENT_ID` environment variable |
+| Electron | `FNO_CLIENT_ID`, or `FALLBACK_CLIENT_ID` in `packages/electron/src/fno/built-in-client.ts` for packaged builds |
+
+The registration must be multi-tenant, allow public client flows, hold the delegated *Dynamics
+ERP* `user_impersonation` permission, and list the app's origins as **Single-page application**
+redirect URIs (plus `http://localhost` under **Mobile and desktop applications** for Electron). A
+build without it shows the connect panel with an explicit "not configured" message instead of
+failing at sign-in. See [`docs/connect-to-fno`](packages/site/app/docs/connect-to-fno/page.mdx).
 
 ---
 
@@ -177,6 +192,7 @@ site's `public/app`, then `next build`.
 | **Framework preset** | Next.js (from `packages/site/vercel.json`) |
 | **Build command** | `pnpm run build:all` (from `packages/site/vercel.json`) |
 | `NEXT_PUBLIC_SITE_URL` | Production origin, e.g. `https://er-visualizer.example.com` — used for canonical URLs, `sitemap.xml`, and Open Graph tags |
+| `VITE_FNO_CLIENT_ID` | Client ID of the **multi-tenant public-client (SPA)** Entra registration the build signs in with (delegated *Dynamics ERP* permission). Required for the F&O live connection — without it the connect panel reports that sign-in is not configured. Users never see or enter it. |
 
 > **Migrating an existing deployment:** the Root Directory used to be `packages/ui`. Change it to
 > `packages/site` — the old `packages/ui/vercel.json` and `packages/ui/api/fno.ts` have been

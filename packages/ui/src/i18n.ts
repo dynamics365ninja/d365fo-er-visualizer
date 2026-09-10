@@ -373,22 +373,31 @@ export interface Translations {
   fnoHeading: string;
   fnoSubheading: string;
   fnoProfileName: string;
+  fnoProfileNameHint: string;
   fnoEnvUrl: string;
-  fnoTenantId: string;
-  fnoClientId: string;
+  fnoEnvUrlHint: string;
+  fnoEnvUrlInvalid: string;
+  fnoSignInHint: string;
+  fnoMissingBuiltInClientId: string;
   fnoRedirectUriHint: string;
   fnoRedirectUriCopy: string;
   fnoRedirectUriCopied: string;
   fnoSaveProfile: string;
   fnoUpdateProfile: string;
   fnoNewProfile: string;
+  fnoNewProfileTitle: string;
+  fnoEditProfileTitle: string;
+  fnoEditProfile: string;
+  fnoCancel: string;
   fnoConnect: string;
   fnoDisconnect: string;
   fnoConnecting: string;
   fnoConnected: (user: string) => string;
   fnoProfiles: string;
   fnoNoProfiles: string;
+  fnoNoProfilesHint: string;
   fnoRemoveProfile: string;
+  fnoActiveProfile: string;
   fnoSolutions: string;
   fnoConfigurations: string;
   fnoLoading: string;
@@ -900,22 +909,34 @@ const cs: Translations = {
   fnoHeading: 'Připojení k Dynamics 365 F&O',
   fnoSubheading: 'Načti ER konfigurace přímo z prostředí (CHE, Sandbox, UDE).',
   fnoProfileName: 'Název profilu',
+  fnoProfileNameHint: 'Jak se prostředí zobrazí v seznamu.',
   fnoEnvUrl: 'URL prostředí',
-  fnoTenantId: 'Tenant ID (Entra)',
-  fnoClientId: 'Application (client) ID',
+  fnoEnvUrlHint: 'Adresa, na které běží F&O — bez cesty za doménou.',
+  fnoEnvUrlInvalid: 'Zadej platnou adresu začínající https://',
+  fnoSignInHint: 'Po kliknutí na Připojit se otevře standardní přihlášení Microsoftem.',
+  fnoMissingBuiltInClientId:
+    'Tento build nemá nastavené VITE_FNO_CLIENT_ID, takže se nelze přihlásit. ' +
+    'Doplň do buildu Application (client) ID víceklientské (multi-tenant) SPA registrace ' +
+    's delegovaným oprávněním Dynamics ERP a s tímto Redirect URI:',
   fnoRedirectUriHint: 'Redirect URI — zaregistruj v Entra pod „Single-page application" přesně tuto hodnotu:',
   fnoRedirectUriCopy: 'Kopírovat',
   fnoRedirectUriCopied: 'Redirect URI zkopírováno do schránky.',
   fnoSaveProfile: 'Uložit profil',
   fnoUpdateProfile: 'Uložit změny',
   fnoNewProfile: 'Nový profil',
+  fnoNewProfileTitle: 'Nový profil prostředí',
+  fnoEditProfileTitle: 'Upravit profil prostředí',
+  fnoEditProfile: 'Upravit profil',
+  fnoCancel: 'Zrušit',
   fnoConnect: 'Připojit',
   fnoDisconnect: 'Odpojit',
   fnoConnecting: 'Připojuji…',
   fnoConnected: (user: string) => `Připojen jako ${user}`,
-  fnoProfiles: 'Uložené profily',
-  fnoNoProfiles: 'Zatím žádný profil. Vyplň údaje nahoře a stiskni „Uložit profil".',
+  fnoProfiles: 'Prostředí',
+  fnoNoProfiles: 'Zatím tu není žádné prostředí.',
+  fnoNoProfilesHint: 'Přidej profil s názvem a URL adresou F&O prostředí a přihlas se účtem Microsoft.',
   fnoRemoveProfile: 'Odebrat profil',
+  fnoActiveProfile: 'Vybráno',
   fnoSolutions: 'ER řešení',
   fnoConfigurations: 'Konfigurace',
   fnoLoading: 'Načítám…',
@@ -1436,22 +1457,34 @@ const en: Translations = {
   fnoHeading: 'Connect to Dynamics 365 F&O',
   fnoSubheading: 'Load ER configurations directly from an environment (CHE, Sandbox, UDE).',
   fnoProfileName: 'Profile name',
+  fnoProfileNameHint: 'How the environment appears in the list.',
   fnoEnvUrl: 'Environment URL',
-  fnoTenantId: 'Tenant ID (Entra)',
-  fnoClientId: 'Application (client) ID',
+  fnoEnvUrlHint: 'The address F&O runs on — no path after the domain.',
+  fnoEnvUrlInvalid: 'Enter a valid address starting with https://',
+  fnoSignInHint: 'Clicking Connect opens the standard Microsoft sign-in.',
+  fnoMissingBuiltInClientId:
+    'This build has no VITE_FNO_CLIENT_ID configured, so sign-in cannot run. ' +
+    'Set it to the Application (client) ID of a multi-tenant SPA registration ' +
+    'with the delegated Dynamics ERP permission and this redirect URI:',
   fnoRedirectUriHint: 'Redirect URI — register exactly this value in Entra under "Single-page application":',
   fnoRedirectUriCopy: 'Copy',
   fnoRedirectUriCopied: 'Redirect URI copied to clipboard.',
   fnoSaveProfile: 'Save profile',
   fnoUpdateProfile: 'Save changes',
   fnoNewProfile: 'New profile',
+  fnoNewProfileTitle: 'New environment profile',
+  fnoEditProfileTitle: 'Edit environment profile',
+  fnoEditProfile: 'Edit profile',
+  fnoCancel: 'Cancel',
   fnoConnect: 'Connect',
   fnoDisconnect: 'Disconnect',
   fnoConnecting: 'Connecting…',
   fnoConnected: (user: string) => `Connected as ${user}`,
-  fnoProfiles: 'Saved profiles',
-  fnoNoProfiles: 'No profile yet. Fill in the fields above and press "Save profile".',
+  fnoProfiles: 'Environments',
+  fnoNoProfiles: 'No environment here yet.',
+  fnoNoProfilesHint: 'Add a profile with a name and the F&O environment URL, then sign in with your Microsoft account.',
   fnoRemoveProfile: 'Remove profile',
+  fnoActiveProfile: 'Selected',
   fnoSolutions: 'ER solutions',
   fnoConfigurations: 'Configurations',
   fnoLoading: 'Loading…',

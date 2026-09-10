@@ -51,6 +51,28 @@ branch you care about.
 
 ## Signing in to Finance &amp; Operations
 
+### "Approval required" / "Žádost čeká na vyřízení"
+
+Sign-in stops on a Microsoft page saying an administrator has been notified. The tenant has
+**user consent disabled**, so nobody can approve the app for themselves — even though the
+permissions the app asks for (`Odata.FullAccess`, `CustomService.FullAccess` on Dynamics ERP) are
+ordinary user-consentable ones.
+
+A tenant administrator has to approve it once, after which everyone in the tenant signs in without
+a prompt. The approver needs the **Global Administrator**, **Application Administrator**, **Cloud
+Application Administrator** or **Privileged Role Administrator** role — a *Dynamics 365
+Administrator* is **not** enough.
+
+In the [Entra admin center](https://entra.microsoft.com/#view/Microsoft_AAD_IAM/StartboardApplicationsMenuBlade/~/AccessRequests):
+*Identity → Applications → Enterprise applications → Admin consent requests*, pick the app and
+choose **Review permissions and consent**.
+
+Or, from a shell signed in as such an administrator:
+
+```bash
+az ad app permission admin-consent --id <application-client-id>
+```
+
 ### The sign-in popup is blocked
 
 Allow popups for the site, or use the [desktop app](/docs/desktop-app), which signs in through a
@@ -62,9 +84,12 @@ its own. Nothing needs to be configured for this.
 
 ### "AADSTS50011: the redirect URI … does not match"
 
-Microsoft Entra compares redirect URIs verbatim and did not find the one the app sent. The connect
-panel prints the exact value under **Application (client) ID** — copy it and add it in Entra under
-**Authentication → Add a platform → Single-page application**.
+Microsoft Entra compares redirect URIs verbatim and did not find the one the app sent. Users of a
+ready-made build never hit this — it means the build's own registration is missing an origin, so
+it is one for whoever hosts the app. See
+[Self-hosting: register the application](/docs/connect-to-fno#self-hosting-register-the-application).
+The connect panel prints the exact value to add in Entra under **Authentication → Add a platform →
+Single-page application**.
 
 It is the plain origin, with no path and no trailing slash, for example
 `https://your-er-visualizer-domain`. Watch out for:
@@ -72,8 +97,7 @@ It is the plain origin, with no path and no trailing slash, for example
 - the URI sitting under the **Web** or **Mobile and desktop applications** platform instead of
   **Single-page application**,
 - a preview deployment, which has its own hostname and needs its own entry,
-- edits made in a different app registration than the one whose Application (client) ID is in
-  your profile.
+- edits made in a different app registration than the one in `VITE_FNO_CLIENT_ID`.
 
 ### "Sign-in failed" mentioning Content Security Policy
 

@@ -22,7 +22,12 @@ import {
   Body1Strong,
   Badge,
   Tooltip,
-  Divider,
+  Dialog,
+  DialogSurface,
+  DialogBody,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   makeStyles,
   tokens,
   shorthands,
@@ -30,6 +35,7 @@ import {
 } from '@fluentui/react-components';
 import {
   DeleteRegular,
+  EditRegular,
   PlugConnectedRegular,
   PlugDisconnectedRegular,
   CloudArrowDownRegular,
@@ -38,7 +44,7 @@ import {
   ChevronRightRegular,
   ChevronDownRegular,
   AddRegular,
-  PersonCircleRegular,
+  ServerRegular,
   LinkMultiple20Regular,
   DocumentTableRegular,
   TableSimpleRegular,
@@ -63,6 +69,7 @@ import { useFnoProfiles, newProfileId } from '../state/fno-profiles';
 import { useFnoSession } from '../state/fno-session';
 import { fnoSession } from '../fno/session';
 import { clearRedirectPending, computeRedirectUri, peekRedirectPending } from '../fno/redirect-state';
+import { hasBuiltInClientId } from '../fno/built-in-client';
 import { DependencyPromptDialog, type DependencyPromptRequest } from './DependencyPromptDialog';
 
 const useStyles = makeStyles({
@@ -123,25 +130,21 @@ const useStyles = makeStyles({
     color: tokens.colorBrandForeground1,
   },
 
-  // ── Field grid ───────────────────────────────────────────────
-  fieldGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-    gap: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalM}`,
-    width: '100%',
-  },
-  fieldActions: {
-    display: 'flex',
-    gap: tokens.spacingHorizontalS,
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    marginTop: tokens.spacingVerticalXS,
-  },
-  redirectHint: {
+  // ── Profile editor form ──────────────────────────────────────
+  // Stacked full-width rows: every label, input and hint lines up on the same
+  // left edge and every input is exactly as wide as the next one. A two-column
+  // grid made the short "name" and the long "URL" look mismatched.
+  formStack: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '2px',
-    marginTop: tokens.spacingVerticalXS,
+    gap: tokens.spacingVerticalM,
+    width: '100%',
+  },
+  formInput: {
+    width: '100%',
+  },
+  dialogSurface: {
+    maxWidth: '540px',
   },
   redirectHintRow: {
     display: 'flex',
@@ -157,6 +160,15 @@ const useStyles = makeStyles({
     padding: `2px ${tokens.spacingHorizontalXS}`,
     wordBreak: 'break-all',
   },
+  warningBox: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalXS,
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
+    ...shorthands.border('1px', 'solid', tokens.colorPaletteRedBorder1),
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorPaletteRedBackground1,
+  },
 
   // ── Profile list ─────────────────────────────────────────────
   profileList: {
@@ -164,8 +176,12 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     gap: tokens.spacingVerticalXS,
   },
+  // Fixed three-track grid so the avatar, the text block and the action
+  // buttons keep the same x-position in every row no matter how long the
+  // profile name or URL is.
   profileRow: {
-    display: 'flex',
+    display: 'grid',
+    gridTemplateColumns: 'auto minmax(0, 1fr) auto',
     alignItems: 'center',
     gap: tokens.spacingHorizontalM,
     ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
@@ -199,8 +215,34 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorBrandBackgroundPressed,
   },
   profileMeta: {
-    flex: 1,
     minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1px',
+  },
+  // Long environment URLs must not push the action buttons out of alignment.
+  profileLine: {
+    display: 'block',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  profileActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '2px',
+    flexShrink: 0,
+  },
+  profileEmptyState: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: tokens.spacingVerticalXS,
+    textAlign: 'center',
+    ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalL),
+    ...shorthands.border('1px', 'dashed', tokens.colorNeutralStroke2),
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground2,
   },
 
   // ── Connection status bar ─────────────────────────────────────
@@ -411,7 +453,6 @@ const useStyles = makeStyles({
   },
 });
 
-const DEFAULT_CLIENT_ID = '';
 const ZERO_GUID_LOWER = '00000000-0000-0000-0000-000000000000';
 
 /** True when `guid` is a non-empty, non-zero GUID — i.e. usable as a download parameter. */
@@ -458,15 +499,16 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   } = useFnoSession();
 
   // ── Local-only state (OK to lose on unmount) ──
+  // Editor target: `null` = closed, `{ id: null }` = creating, `{ id }` = editing
+  // that profile. Editing is deliberately decoupled from `activeProfileId`
+  // (which only says *which environment Connect talks to*) so that picking a
+  // profile never silently rewrites a half-typed form.
+  const [editor, setEditor] = useState<{ id: string | null } | null>(null);
   const [profileName, setProfileName] = useState('');
   const [envUrl, setEnvUrl] = useState('');
-  const [tenantId, setTenantId] = useState('');
-  const [clientId, setClientId] = useState(DEFAULT_CLIENT_ID);
   const [customRoot, setCustomRoot] = useState('');
   const [ingesting, setIngesting] = useState(false);
   const [expandedSolutions, setExpandedSolutions] = useState<Set<string>>(new Set());
-  // Credential form is collapsed by default when the user already has profiles.
-  const [formOpen, setFormOpen] = useState(() => profiles.length === 0);
   // Only meaningful for the web build; Electron signs in through a loopback URI.
   const redirectUri = useMemo(() => {
     const uri = computeRedirectUri();
@@ -497,51 +539,67 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     [profiles, activeProfileId],
   );
 
-  // When the active profile changes, populate the editor with its values.
-  // The Zustand store already resets browsing state in `setActiveProfileId`.
-  useEffect(() => {
-    const profile = profiles.find(p => p.id === activeProfileId) ?? null;
-    if (profile) {
-      setProfileName(profile.displayName);
-      setEnvUrl(profile.envUrl);
-      setTenantId(profile.tenantId);
-      setClientId(profile.clientId);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProfileId]);
+  // Profile being edited (null while creating a new one).
+  const editorTarget = useMemo(
+    () => (editor?.id ? profiles.find(p => p.id === editor.id) ?? null : null),
+    [editor, profiles],
+  );
 
-  const canSave = profileName.trim().length > 0 && envUrl.trim().length > 0 && tenantId.trim().length > 0 && clientId.trim().length > 0;
-  const isEditing = activeProfile !== null;
+  const openNewProfile = useCallback(() => {
+    setProfileName('');
+    setEnvUrl('');
+    setEditor({ id: null });
+  }, []);
+
+  const openEditProfile = useCallback((p: FnoConnection) => {
+    setProfileName(p.displayName);
+    setEnvUrl(p.envUrl);
+    setEditor({ id: p.id });
+  }, []);
+
+  const closeEditor = useCallback(() => setEditor(null), []);
+
+  const trimmedUrl = envUrl.trim().replace(/\/+$/, '');
+  // Only flag a bad URL once the user has typed something — an empty field is
+  // "not filled in yet", not an error.
+  const urlLooksValid = /^https?:\/\/[^\s/?#]+/i.test(trimmedUrl);
+  const showUrlError = trimmedUrl.length > 0 && !urlLooksValid;
+  const canSave = profileName.trim().length > 0 && urlLooksValid;
 
   const handleSaveProfile = useCallback(() => {
-    const base: FnoConnection = activeProfile
-      ? { ...activeProfile }
-      : { id: newProfileId(), createdAt: Date.now(), displayName: '', envUrl: '', tenantId: '', clientId: '' };
+    if (!canSave) return;
+    const base: FnoConnection = editorTarget
+      ? { ...editorTarget }
+      : { id: newProfileId(), createdAt: Date.now(), displayName: '', envUrl: '' };
     const profile: FnoConnection = {
       ...base,
       displayName: profileName.trim(),
       envUrl: envUrl.trim().replace(/\/+$/, ''),
-      tenantId: tenantId.trim(),
-      clientId: clientId.trim(),
+      // Sign-in always runs against the registration built into this app, so a
+      // profile carries no Entra identifiers. Legacy profiles are migrated by
+      // dropping the ones they were saved with.
+      tenantId: undefined,
+      clientId: undefined,
     };
     upsert(profile);
     // Re-activating the already active profile would reset the connection
     // state (setActiveProfileId clears solutions/components) — only switch
     // when a different/new profile was saved.
-    if (profile.id !== activeProfile?.id) setActiveProfileId(profile.id);
+    if (profile.id !== activeProfileId) setActiveProfileId(profile.id);
     pushToast({
       kind: 'success',
-      message: activeProfile ? t.fnoProfileUpdated(profile.displayName) : t.fnoProfileSaved(profile.displayName),
+      message: editorTarget ? t.fnoProfileUpdated(profile.displayName) : t.fnoProfileSaved(profile.displayName),
     });
-  }, [activeProfile, profileName, envUrl, tenantId, clientId, upsert, pushToast]);
+    setEditor(null);
+  }, [canSave, editorTarget, profileName, envUrl, upsert, pushToast, activeProfileId]);
 
-  const handleNewProfile = useCallback(() => {
-    setActiveProfileId(null);
-    setProfileName('');
-    setEnvUrl('');
-    setTenantId('');
-    setClientId(DEFAULT_CLIENT_ID);
-  }, []);
+  const handleRemoveProfile = useCallback((id: string) => {
+    remove(id);
+    if (activeProfileId === id) setActiveProfileId(null);
+    // Leaving the dialog open on a profile that no longer exists would silently
+    // turn an edit into a create.
+    setEditor(prev => (prev?.id === id ? null : prev));
+  }, [remove, activeProfileId]);
 
   const handleConnect = useCallback(async () => {
     if (!activeProfile) return;
@@ -3198,127 +3256,168 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         </div>
       </div>
 
-      {/* ── Profile editor card ─────────────────────────────────────────── */}
+      {/* ── Environments card ───────────────────────────────────────────── */}
+      {/* Selecting a row picks the environment to connect to; editing lives on
+          an explicit pencil button and a modal, so the two actions can no
+          longer be confused with each other. */}
       <div className={styles.card}>
-        <div
-          className={styles.cardHeader}
-          style={{ cursor: 'pointer', userSelect: 'none' }}
-          onClick={() => setFormOpen(o => !o)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setFormOpen(o => !o); }}
-          aria-expanded={formOpen}
-        >
+        <div className={styles.cardHeader}>
           <div className={styles.cardHeaderLeft}>
-            <PersonCircleRegular fontSize={18} className={styles.cardIcon} />
-            <Body1Strong>{t.fnoCredentials}</Body1Strong>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalXS }}>
-            {isEditing && (
-              <Button size="small" appearance="subtle" icon={<AddRegular />} onClick={e => { e.stopPropagation(); handleNewProfile(); }}>
-                {t.fnoNewProfile}
-              </Button>
+            <ServerRegular fontSize={18} className={styles.cardIcon} />
+            <Body1Strong>{t.fnoProfiles}</Body1Strong>
+            {profiles.length > 0 && (
+              <Badge appearance="filled" color="brand" size="small">{profiles.length}</Badge>
             )}
-            {formOpen ? <ChevronDownRegular fontSize={16} /> : <ChevronRightRegular fontSize={16} />}
           </div>
+          {profiles.length > 0 && (
+            <Button appearance="primary" size="small" icon={<AddRegular />} onClick={openNewProfile}>
+              {t.fnoNewProfile}
+            </Button>
+          )}
         </div>
 
-        {formOpen && (<>
-
-        <div className={styles.fieldGrid}>
-          <Field label={t.fnoProfileName}>
-            <Input value={profileName} onChange={(_, d) => setProfileName(d.value)} placeholder="CHE · Sandbox" />
-          </Field>
-          <Field label={t.fnoEnvUrl}>
-            <Input value={envUrl} onChange={(_, d) => setEnvUrl(d.value)} placeholder="https://org.sandbox.operations.dynamics.com" />
-          </Field>
-          <Field label={t.fnoTenantId}>
-            <Input value={tenantId} onChange={(_, d) => setTenantId(d.value)} placeholder="contoso.onmicrosoft.com nebo GUID" />
-          </Field>
-          <Field label={t.fnoClientId}>
-            <Input value={clientId} onChange={(_, d) => setClientId(d.value)} />
-          </Field>
-        </div>
-
-        {/* Entra compares the redirect URI verbatim and it is not something the
-            user can guess — it depends on where the app is hosted. Show the exact
-            value so it can be pasted into the app registration. */}
-        {redirectUri && (
-          <div className={styles.redirectHint}>
-            <Caption2 style={{ color: tokens.colorNeutralForeground3 }}>{t.fnoRedirectUriHint}</Caption2>
-            <div className={styles.redirectHintRow}>
-              <code className={styles.redirectHintValue}>{redirectUri}</code>
-              <Button
-                size="small"
-                appearance="subtle"
-                icon={<CopyRegular />}
-                onClick={() => {
-                  navigator.clipboard?.writeText(redirectUri).then(
-                    () => pushToast({ kind: 'success', message: t.fnoRedirectUriCopied }),
-                    () => {},
-                  );
-                }}
-              >
-                {t.fnoRedirectUriCopy}
-              </Button>
-            </div>
+        {/* Deployment problem, not a user problem: without a registration baked
+            into the build there is nothing to sign in with, so no profile can
+            work. Say so up front instead of failing at Connect. */}
+        {!hasBuiltInClientId && (
+          <div className={styles.warningBox}>
+            <Caption2 style={{ color: tokens.colorPaletteRedForeground1 }}>{t.fnoMissingBuiltInClientId}</Caption2>
+            {redirectUri && (
+              <div className={styles.redirectHintRow}>
+                <code className={styles.redirectHintValue}>{redirectUri}</code>
+                <Button
+                  size="small"
+                  appearance="subtle"
+                  icon={<CopyRegular />}
+                  onClick={() => {
+                    navigator.clipboard?.writeText(redirectUri).then(
+                      () => pushToast({ kind: 'success', message: t.fnoRedirectUriCopied }),
+                      () => {},
+                    );
+                  }}
+                >
+                  {t.fnoRedirectUriCopy}
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
-        <div className={styles.fieldActions}>
-          <Button appearance="primary" disabled={!canSave} icon={<CheckmarkCircleRegular />} onClick={handleSaveProfile}>
-            {isEditing ? t.fnoUpdateProfile : t.fnoSaveProfile}
-          </Button>
-        </div>
-        </>)}
-
-        {/* Profile list — always visible regardless of formOpen */}
-        {profiles.length > 0 && (
-          <>
-            <Divider style={{ marginTop: tokens.spacingVerticalXS }} />
-            <Caption2 style={{ color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              {t.fnoProfiles}
-            </Caption2>
-            <div className={styles.profileList}>
-              {profiles.map(p => (
+        {profiles.length === 0 ? (
+          <div className={styles.profileEmptyState}>
+            <ServerRegular fontSize={28} style={{ color: tokens.colorNeutralForeground3 }} />
+            <Body1Strong>{t.fnoNoProfiles}</Body1Strong>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3, maxWidth: '420px' }}>
+              {t.fnoNoProfilesHint}
+            </Caption1>
+            <Button
+              appearance="primary"
+              icon={<AddRegular />}
+              onClick={openNewProfile}
+              style={{ marginTop: tokens.spacingVerticalS }}
+            >
+              {t.fnoNewProfile}
+            </Button>
+          </div>
+        ) : (
+          <div className={styles.profileList}>
+            {profiles.map(p => {
+              const isActive = activeProfileId === p.id;
+              return (
                 <div
                   key={p.id}
-                  className={mergeClasses(styles.profileRow, activeProfileId === p.id ? styles.profileRowActive : '')}
+                  className={mergeClasses(styles.profileRow, isActive ? styles.profileRowActive : '')}
                   onClick={() => setActiveProfileId(p.id)}
                   role="button"
+                  aria-pressed={isActive}
                   tabIndex={0}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setActiveProfileId(p.id); }}
                 >
-                  <div className={mergeClasses(styles.profileAvatar, activeProfileId === p.id ? styles.profileAvatarActive : '')}>
+                  <div className={mergeClasses(styles.profileAvatar, isActive ? styles.profileAvatarActive : '')}>
                     {initials(p.displayName || p.envUrl)}
                   </div>
                   <div className={styles.profileMeta}>
-                    <Body1Strong>{p.displayName}</Body1Strong>
-                    <div>
-                      <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{p.envUrl}</Caption1>
-                    </div>
+                    <Body1Strong className={styles.profileLine}>{p.displayName}</Body1Strong>
+                    <Caption1 className={styles.profileLine} style={{ color: tokens.colorNeutralForeground3 }}>
+                      {p.envUrl}
+                    </Caption1>
                   </div>
-                  <Tooltip content={t.fnoRemoveProfile} relationship="label">
-                    <Button
-                      appearance="subtle"
-                      icon={<DeleteRegular />}
-                      aria-label={t.fnoRemoveProfile}
-                      onClick={e => {
-                        e.stopPropagation();
-                        remove(p.id);
-                        if (activeProfileId === p.id) setActiveProfileId(null);
-                      }}
-                    />
-                  </Tooltip>
+                  <div className={styles.profileActions}>
+                    {isActive && (
+                      <Badge appearance="tint" color="brand" size="small" style={{ marginRight: tokens.spacingHorizontalXS }}>
+                        {t.fnoActiveProfile}
+                      </Badge>
+                    )}
+                    <Tooltip content={t.fnoEditProfile} relationship="label">
+                      <Button
+                        appearance="subtle"
+                        icon={<EditRegular />}
+                        aria-label={t.fnoEditProfile}
+                        onClick={e => { e.stopPropagation(); openEditProfile(p); }}
+                      />
+                    </Tooltip>
+                    <Tooltip content={t.fnoRemoveProfile} relationship="label">
+                      <Button
+                        appearance="subtle"
+                        icon={<DeleteRegular />}
+                        aria-label={t.fnoRemoveProfile}
+                        onClick={e => { e.stopPropagation(); handleRemoveProfile(p.id); }}
+                      />
+                    </Tooltip>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </>
-        )}
-        {profiles.length === 0 && (
-          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{t.fnoNoProfiles}</Caption1>
+              );
+            })}
+          </div>
         )}
       </div>
+
+      {/* ── Profile editor dialog ───────────────────────────────────────── */}
+      <Dialog open={editor !== null} onOpenChange={(_, d) => { if (!d.open) closeEditor(); }}>
+        <DialogSurface className={styles.dialogSurface}>
+          <DialogBody>
+            <DialogTitle>{editorTarget ? t.fnoEditProfileTitle : t.fnoNewProfileTitle}</DialogTitle>
+            <DialogContent>
+              <div className={styles.formStack}>
+                <Field label={t.fnoProfileName} hint={t.fnoProfileNameHint}>
+                  <Input
+                    className={styles.formInput}
+                    value={profileName}
+                    onChange={(_, d) => setProfileName(d.value)}
+                    placeholder="CHE · Sandbox"
+                  />
+                </Field>
+                <Field
+                  label={t.fnoEnvUrl}
+                  hint={showUrlError ? undefined : t.fnoEnvUrlHint}
+                  validationState={showUrlError ? 'error' : 'none'}
+                  validationMessage={showUrlError ? t.fnoEnvUrlInvalid : undefined}
+                >
+                  <Input
+                    className={styles.formInput}
+                    value={envUrl}
+                    onChange={(_, d) => setEnvUrl(d.value)}
+                    placeholder="https://org.sandbox.operations.dynamics.com"
+                    onKeyDown={e => { if (e.key === 'Enter') handleSaveProfile(); }}
+                  />
+                </Field>
+                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{t.fnoSignInHint}</Caption1>
+              </div>
+            </DialogContent>
+            <DialogActions>
+              <Button appearance="secondary" onClick={closeEditor}>{t.fnoCancel}</Button>
+              <Button
+                appearance="primary"
+                disabled={!canSave}
+                icon={<CheckmarkCircleRegular />}
+                onClick={handleSaveProfile}
+              >
+                {editorTarget ? t.fnoUpdateProfile : t.fnoSaveProfile}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
 
       {/* ── Connection status bar ────────────────────────────────────────── */}
       {activeProfile && (

@@ -19,6 +19,27 @@ import {
   LogLevel,
 } from '@azure/msal-node';
 import type { FnoConnection } from '@er-visualizer/fno-client';
+import { AUTHORITY_TENANT, BUILT_IN_CLIENT_ID } from './built-in-client';
+
+/**
+ * Connection profiles carry no Entra identifiers — every sign-in uses the
+ * shell's built-in multi-tenant registration. A legacy profile that still has
+ * its own `clientId` keeps working and overrides the built-in one.
+ */
+function resolveClientId(conn: FnoConnection): string {
+  const explicit = (conn.clientId ?? '').trim();
+  if (explicit) return explicit;
+  if (BUILT_IN_CLIENT_ID) return BUILT_IN_CLIENT_ID;
+  throw new Error(
+    'This build has no Entra application (client) ID configured, so sign-in ' +
+      'cannot run. Set FNO_CLIENT_ID, or bake one into ' +
+      'packages/electron/src/fno/built-in-client.ts.',
+  );
+}
+
+function resolveTenantId(conn: FnoConnection): string {
+  return (conn.tenantId ?? '').trim() || AUTHORITY_TENANT;
+}
 
 /** Interactive sign-in must complete within this window, otherwise the
  * loopback listener is torn down and the renderer gets a clear error. */
@@ -124,7 +145,7 @@ function makeCachePlugin(): ICachePlugin {
 const msalPool = new Map<string, PublicClientApplication>();
 
 function msalKey(conn: FnoConnection): string {
-  return `${conn.tenantId}::${conn.clientId}`;
+  return `${resolveTenantId(conn)}::${resolveClientId(conn)}`;
 }
 
 function getMsalApp(conn: FnoConnection): PublicClientApplication {
@@ -133,8 +154,8 @@ function getMsalApp(conn: FnoConnection): PublicClientApplication {
   if (cached) return cached;
   const config: Configuration = {
     auth: {
-      clientId: conn.clientId,
-      authority: `https://login.microsoftonline.com/${encodeURIComponent(conn.tenantId)}`,
+      clientId: resolveClientId(conn),
+      authority: `https://login.microsoftonline.com/${encodeURIComponent(resolveTenantId(conn))}`,
     },
     cache: {
       cachePlugin: makeCachePlugin(),
@@ -267,8 +288,8 @@ async function login(conn: FnoConnection): Promise<FnoAuthResult> {
       prompt: 'select_account',
     });
     console.info('[fno-auth] login starting', {
-      tenantId: conn.tenantId,
-      clientId: conn.clientId,
+      tenantId: resolveTenantId(conn),
+      clientId: resolveClientId(conn),
       scope,
       redirectUri: listener.redirectUri,
     });
