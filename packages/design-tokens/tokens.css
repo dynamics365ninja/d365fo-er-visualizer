@@ -28,24 +28,28 @@
   --er-surface-3: #e6e7e9;
   /* Dialogs and popovers sit on white; the shadow does the lifting here. */
   --er-surface-raised: #ffffff;
-  --er-surface-raised-2: #f4f5f6;
+  --er-surface-raised-2: #f2f4f7;
   /* Code, formulas, anything quoted verbatim. */
-  --er-surface-sunken: #f4f5f6;
-  --er-selected: #dfeced;
+  --er-surface-sunken: #eef1f5;
+  --er-selected: #dfeaf2;
 
   --er-border: #e2e3e5;
-  --er-border-strong: #c8cacd;
+  --er-border-strong: #b4bac1;
 
   --er-text: #101214;
   --er-text-muted: #5c6165;
   --er-text-subtle: #82878b;
 
   /* Brand */
-  --er-accent: #0a6f73;
-  --er-accent-hover: #085c60;
-  --er-accent-active: #064c50;
-  --er-accent-soft: #e4f1f1;
-  --er-accent-border: rgba(10, 111, 115, 0.35);
+  /* Sky blue, not teal: at 182° the old accent sat on the edge of green, and
+     on a dark ground it read as green outright. 200° keeps the cool family the
+     brand is built on while leaving the green behind — and it stays clear of
+     all three kind hues (model 247°, mapping 312°, format 30°). */
+  --er-accent: #106d94;
+  --er-accent-hover: #0d5c7e;
+  --er-accent-active: #0a4d69;
+  --er-accent-soft: #e2eff6;
+  --er-accent-border: rgba(16, 109, 148, 0.35);
   --er-accent-contrast: #ffffff;
 
   /* ER component types — the same three hues everywhere they appear */
@@ -75,6 +79,7 @@
   --er-info-border: #a8d7cc;
 
   /* Elevation */
+  --er-scrim: rgba(12, 18, 24, 0.32);
   --er-shadow-color: rgba(13, 22, 24, 0.12);
   --er-shadow-1: 0 1px 2px rgba(13, 22, 24, 0.06);
   --er-shadow-2: 0 4px 12px rgba(13, 22, 24, 0.08);
@@ -95,25 +100,25 @@
     --er-surface-3: #2b3036;
     /* Above the app: dialogs, popovers, menus. A modal darker than the
        window behind it reads as a hole, not as something on top. */
-    --er-surface-raised: #262b30;
-    --er-surface-raised-2: #2e343a;
+    --er-surface-raised: #16191d;
+    --er-surface-raised-2: #1e2228;
     /* Below the app: code, formulas, anything quoted verbatim. */
-    --er-surface-sunken: #0f1113;
-    --er-selected: #16343a;
+    --er-surface-sunken: #0b0d0f;
+    --er-selected: #142f3f;
 
     --er-border: #2f343a;
-    --er-border-strong: #434a51;
+    --er-border-strong: #5a636d;
 
     --er-text: #ecedef;
     --er-text-muted: #a5aab0;
     --er-text-subtle: #868c92;
 
-    --er-accent: #35b8bd;
-    --er-accent-hover: #52ced3;
-    --er-accent-active: #2aa1a6;
-    --er-accent-soft: #0e2b2d;
-    --er-accent-border: rgba(53, 184, 189, 0.38);
-    --er-accent-contrast: #04191b;
+    --er-accent: #4bb3e8;
+    --er-accent-hover: #6cc3f0;
+    --er-accent-active: #3a9bcd;
+    --er-accent-soft: #0d2a38;
+    --er-accent-border: rgba(75, 179, 232, 0.38);
+    --er-accent-contrast: #04161f;
 
     --er-model: #a396ff;
     --er-model-soft: #241f3d;
@@ -135,6 +140,9 @@
     --er-info-soft: #1f3834;
     --er-info-border: #3f6e63;
 
+    /* What a dialog dims the app with. A dark theme carries a modal on a
+       deep scrim and a lit border, not on a lighter panel. */
+    --er-scrim: rgba(0, 0, 0, 0.62);
     --er-shadow-color: rgba(0, 0, 0, 0.5);
     --er-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
     --er-shadow-2: 0 4px 14px rgba(0, 0, 0, 0.45);
@@ -150,24 +158,24 @@
   --er-surface: #1a1d20;
   --er-surface-2: #22262a;
   --er-surface-3: #2b3036;
-  --er-surface-raised: #262b30;
-  --er-surface-raised-2: #2e343a;
-  --er-surface-sunken: #0f1113;
-  --er-selected: #16343a;
+  --er-surface-raised: #16191d;
+  --er-surface-raised-2: #1e2228;
+  --er-surface-sunken: #0b0d0f;
+  --er-selected: #142f3f;
 
   --er-border: #2f343a;
-  --er-border-strong: #434a51;
+  --er-border-strong: #5a636d;
 
   --er-text: #ecedef;
   --er-text-muted: #a5aab0;
   --er-text-subtle: #868c92;
 
-  --er-accent: #35b8bd;
-  --er-accent-hover: #52ced3;
-  --er-accent-active: #2aa1a6;
-  --er-accent-soft: #0e2b2d;
-  --er-accent-border: rgba(53, 184, 189, 0.38);
-  --er-accent-contrast: #04191b;
+  --er-accent: #4bb3e8;
+  --er-accent-hover: #6cc3f0;
+  --er-accent-active: #3a9bcd;
+  --er-accent-soft: #0d2a38;
+  --er-accent-border: rgba(75, 179, 232, 0.38);
+  --er-accent-contrast: #04161f;
 
   --er-model: #a396ff;
   --er-model-soft: #241f3d;
@@ -189,6 +197,9 @@
   --er-info-soft: #1f3834;
   --er-info-border: #3f6e63;
 
+  /* What a dialog dims the app with. A dark theme carries a modal on a
+     deep scrim and a lit border, not on a lighter panel. */
+  --er-scrim: rgba(0, 0, 0, 0.62);
   --er-shadow-color: rgba(0, 0, 0, 0.5);
   --er-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
   --er-shadow-2: 0 4px 14px rgba(0, 0, 0, 0.45);

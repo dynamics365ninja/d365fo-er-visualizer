@@ -52,6 +52,7 @@ import {
 import { useAppStore, resolveDeepExpression, selectMappingDefinition, getScopedMappingDefinitions } from '../state/store';
 import { locale, t } from '../i18n';
 import { dsPathToExpression } from '../utils/ds-path';
+import { useResizableDialog } from '../utils/resizable-dialog';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { resolveLabel, buildLabelPool, labelDisplayText, collectLabelTranslations, getUserLanguageTag } from '../utils/label-resolver';
 import { useCoarsePointer } from '../utils/responsive';
@@ -1380,103 +1381,6 @@ const DRILL_DIALOG_MIN_W = 420;
 const DRILL_DIALOG_MIN_H = 320;
 const DRILL_DIALOG_SIZE_KEY = 'er-visualizer.drilldown.dialogSize';
 
-interface DialogSize { width: number; height: number }
-
-function readStoredDialogSize(mode: string): DialogSize | null {
-  try {
-    const raw = window.localStorage.getItem(`${DRILL_DIALOG_SIZE_KEY}.${mode}`);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<DialogSize>;
-    if (typeof parsed?.width !== 'number' || typeof parsed?.height !== 'number') return null;
-    if (!Number.isFinite(parsed.width) || !Number.isFinite(parsed.height)) return null;
-    return {
-      width: Math.max(DRILL_DIALOG_MIN_W, parsed.width),
-      height: Math.max(DRILL_DIALOG_MIN_H, parsed.height),
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Lets the user drag the drill-down dialog to whatever size the expression
- * needs and remembers it per view mode — the tree and the workbench want very
- * different shapes, and a fixed size made deep lineages unreadable.
- *
- * The size is driven by an explicit grip rather than CSS `resize`, because
- * Fluent's own surface styles are injected after ours and reset both `resize`
- * and `overflow` on `DialogSurface`.
- */
-function useResizableDialog(mode: string, open: boolean) {
-  const surfaceRef = useRef<HTMLDivElement | null>(null);
-  const [size, setSize] = useState<DialogSize | null>(null);
-
-  // localStorage is read on open (not on mount) so a size stored by another
-  // trigger in the same session is picked up too.
-  useEffect(() => {
-    if (open) setSize(readStoredDialogSize(mode));
-  }, [mode, open]);
-
-  const startResize = React.useCallback((event: React.PointerEvent<HTMLElement>) => {
-    const surface = surfaceRef.current;
-    if (!surface || event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-
-    const grip = event.currentTarget;
-    const rect = surface.getBoundingClientRect();
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const startW = rect.width;
-    const startH = rect.height;
-    // The dialog is centred by Fluent, so each edge only moves by half of the
-    // size change — without this the box drifts away from the cursor.
-    const scaleX = Math.abs(rect.left + rect.width / 2 - window.innerWidth / 2) < 8 ? 2 : 1;
-    const scaleY = Math.abs(rect.top + rect.height / 2 - window.innerHeight / 2) < 8 ? 2 : 1;
-
-    let latest: DialogSize = { width: startW, height: startH };
-
-    const onMove = (moveEvent: PointerEvent) => {
-      latest = {
-        width: clampSize(startW + (moveEvent.clientX - startX) * scaleX, DRILL_DIALOG_MIN_W, window.innerWidth - 16),
-        height: clampSize(startH + (moveEvent.clientY - startY) * scaleY, DRILL_DIALOG_MIN_H, window.innerHeight - 16),
-      };
-      setSize(latest);
-    };
-
-    const onUp = () => {
-      grip.removeEventListener('pointermove', onMove);
-      grip.removeEventListener('pointerup', onUp);
-      grip.removeEventListener('pointercancel', onUp);
-      try { grip.releasePointerCapture(event.pointerId); } catch { /* pointer already gone */ }
-      try {
-        window.localStorage.setItem(
-          `${DRILL_DIALOG_SIZE_KEY}.${mode}`,
-          JSON.stringify({ width: Math.round(latest.width), height: Math.round(latest.height) }),
-        );
-      } catch { /* private mode / quota — the size just won't persist */ }
-    };
-
-    grip.setPointerCapture(event.pointerId);
-    grip.addEventListener('pointermove', onMove);
-    grip.addEventListener('pointerup', onUp);
-    grip.addEventListener('pointercancel', onUp);
-  }, [mode]);
-
-  /** Back to the per-mode default size — the escape hatch from a bad drag. */
-  const resetSize = React.useCallback(() => {
-    setSize(null);
-    try {
-      window.localStorage.removeItem(`${DRILL_DIALOG_SIZE_KEY}.${mode}`);
-    } catch { /* nothing stored to forget */ }
-  }, [mode]);
-
-  return { surfaceRef, size, startResize, resetSize };
-}
-
-function clampSize(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), Math.max(min, max));
-}
 
 /**
  * Clickable expression wrapper — single-click opens the drill-down analysis
@@ -1503,7 +1407,14 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
   // Touch has no reliable double-tap of its own, and waiting for one only adds
   // lag; the dialog's own "open as tab" button covers that path instead.
   const coarse = useCoarsePointer();
-  const { surfaceRef, size: dialogSize, startResize, resetSize } = useResizableDialog(dialogViewMode, isDialogOpen);
+  const { surfaceRef, size: dialogSize, startResize, resetSize } = useResizableDialog(
+    {
+      storageKey: `${DRILL_DIALOG_SIZE_KEY}.${dialogViewMode}`,
+      minWidth: DRILL_DIALOG_MIN_W,
+      minHeight: DRILL_DIALOG_MIN_H,
+    },
+    isDialogOpen,
+  );
 
   React.useEffect(() => () => {
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
@@ -1625,11 +1536,11 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
             </DialogContent>
           </DialogBody>
           <span
-            className="dd-dialog-resize-grip"
+            className="dialog-resize-grip"
             role="separator"
             aria-orientation="vertical"
-            aria-label={t.drillResizeDialog}
-            title={t.drillResizeDialog}
+            aria-label={t.resizeDialog}
+            title={t.resizeDialog}
             onPointerDown={startResize}
             onDoubleClick={() => resetSize()}
           />
