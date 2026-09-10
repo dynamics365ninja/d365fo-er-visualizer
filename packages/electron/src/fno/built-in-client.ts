@@ -11,7 +11,7 @@
  *   - Supported account types: accounts in any organizational directory,
  *   - a "Mobile and desktop applications" platform with `http://localhost`,
  *   - "Allow public client flows" = Yes,
- *   - the delegated Dynamics ERP permission (`user_impersonation`).
+ *   - the delegated Dynamics ERP permission `CustomService.FullAccess`.
  */
 
 /**

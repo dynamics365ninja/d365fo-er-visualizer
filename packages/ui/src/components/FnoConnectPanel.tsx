@@ -4065,13 +4065,13 @@ function explainAuthError(err: unknown): string {
   const code = raw.match(/AADSTS(\d{4,6})/)?.[1];
   switch (code) {
     case '700016':
-      return 'AADSTS700016: Application (client) ID v tomto tenantu neexistuje. Zaregistruj app v Microsoft Entra ID (App registrations → New registration), povol „Allow public client flows", přidej redirect URI „http://localhost" a použij přesně to Application ID.';
+      return 'AADSTS700016: Application (client) ID zabudované v tomto buildu není v tomto tenantu dostupné. Pokud si nástroj hostuješ sám, nastav VITE_FNO_CLIENT_ID (resp. FNO_CLIENT_ID u desktopu) na vlastní víceklientskou registraci.';
     case '65001':
-      return 'AADSTS65001: Uživatel/administrátor neudělil consent. V Entra portálu otevři registraci aplikace → API permissions → Grant admin consent pro F&O (Dynamics ERP) user_impersonation.';
+      return 'AADSTS65001: Přihlášení nebylo schváleno. Správce tenantu musí aplikaci jednorázově schválit (Entra → Enterprise applications → Admin consent requests) pro delegované oprávnění Dynamics ERP CustomService.FullAccess.';
     case '500011':
       return 'AADSTS500011: Scope (envUrl) neodpovídá žádnému service principálu. Ověř přesnou URL prostředí (bez lomítka na konci) a že v daném tenantu je Dynamics 365 F&O nainstalován.';
     case '50020':
-      return 'AADSTS50020: Uživatel není v domovském tenantu této aplikace. Buď přihlaš se guest účtem přijatým v tomto tenantu, nebo změň registraci aplikace na „Accounts in any organizational directory".';
+      return 'AADSTS50020: Přihlášený účet není v tenantu, kde F&O prostředí běží. Přihlas se pracovním účtem daného tenantu, případně guest účtem, který v něm byl přijat.';
     case '54005':
     case '9002313':
       return `AADSTS${code}: Autorizační kód byl již použit nebo je neplatný. Zkus se přihlásit znovu.`;

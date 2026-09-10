@@ -14,7 +14,7 @@
  * the Application (client) ID of a registration that has:
  *   - Supported account types: accounts in any organizational directory,
  *   - a Single-page application platform listing this build's origins,
- *   - the delegated Dynamics ERP permission (`user_impersonation`).
+ *   - the delegated Dynamics ERP permission `CustomService.FullAccess`.
  */
 
 /**

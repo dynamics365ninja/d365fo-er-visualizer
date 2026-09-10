@@ -124,7 +124,7 @@ keeps Entra identifiers out of the UI. Configure it once:
 | Electron | `FNO_CLIENT_ID`, or `FALLBACK_CLIENT_ID` in `packages/electron/src/fno/built-in-client.ts` for packaged builds |
 
 The registration must be multi-tenant, allow public client flows, hold the delegated *Dynamics
-ERP* `user_impersonation` permission, and list the app's origins as **Single-page application**
+ERP* `CustomService.FullAccess` permission, and list the app's origins as **Single-page application**
 redirect URIs (plus `http://localhost` under **Mobile and desktop applications** for Electron). A
 build without it shows the connect panel with an explicit "not configured" message instead of
 failing at sign-in. See [`docs/connect-to-fno`](packages/site/app/docs/connect-to-fno/page.mdx).
