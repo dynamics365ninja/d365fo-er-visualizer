@@ -726,9 +726,11 @@ function RightPanel({
           aria-selected={tab === 'properties'}
           className={mergeClasses(styles.rightTab, tab === 'properties' && styles.rightTabActive)}
           onClick={() => onTabChange('properties')}
+          title={t.properties}
+          aria-label={t.properties}
         >
           <span className={styles.rightTabIcon} aria-hidden><AppsListDetailRegular fontSize={13} /></span>
-          {t.properties}
+          {tab === 'properties' && t.properties}
         </button>
         <button
           type="button"
@@ -736,9 +738,11 @@ function RightPanel({
           aria-selected={tab === 'search'}
           className={mergeClasses(styles.rightTab, tab === 'search' && styles.rightTabActive)}
           onClick={() => onTabChange('search')}
+          title={t.search}
+          aria-label={t.search}
         >
           <span className={styles.rightTabIcon} aria-hidden><SearchRegular fontSize={13} /></span>
-          {t.search}
+          {tab === 'search' && t.search}
         </button>
         <button
           type="button"
@@ -746,9 +750,11 @@ function RightPanel({
           aria-selected={tab === 'where-used'}
           className={mergeClasses(styles.rightTab, tab === 'where-used' && styles.rightTabActive)}
           onClick={() => onTabChange('where-used')}
+          title={t.whereUsedAction}
+          aria-label={t.whereUsedAction}
         >
           <span className={styles.rightTabIcon} aria-hidden><LinkRegular fontSize={13} /></span>
-          {t.whereUsedAction}
+          {tab === 'where-used' && t.whereUsedAction}
         </button>
         <div className={styles.rightTabSpacer} />
         <div className={styles.rightTabActions}>

@@ -190,6 +190,15 @@
   --er-font-display: var(--font-space-grotesk, 'Space Grotesk'), var(--er-font-sans);
   --er-font-mono: var(--font-jetbrains-mono, 'JetBrains Mono'), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
+  /* UI type scale. Fifteen hand-picked sizes between 8 and 14px used to fight
+     each other inside one row; these five are the whole workbench vocabulary.
+     Display sizes (the landing page's headings) stay bespoke. */
+  --er-text-2xs: 9.5px;   /* type badges, attribution — smallest legible */
+  --er-text-xs: 10.5px;   /* pills, counts, uppercase section labels */
+  --er-text-sm: 11.5px;   /* secondary labels, hints, expressions */
+  --er-text-md: 12.5px;   /* rows and body copy */
+  --er-text-lg: 14px;     /* panel and section titles */
+
   --er-radius-sm: 4px;
   --er-radius-md: 6px;
   --er-radius-lg: 10px;
