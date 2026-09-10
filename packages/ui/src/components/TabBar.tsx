@@ -20,6 +20,10 @@ const useStyles = makeStyles({
     borderBottomColor: 'var(--er-border)',
     overflowX: 'auto',
     overflowY: 'hidden',
+    // 40px including the rule, so the bar lines up with the explorer header
+    // and the right panel's tab strip either side of it.
+    boxSizing: 'border-box',
+    height: '40px',
     minHeight: '40px',
   },
   tab: {

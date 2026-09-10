@@ -111,6 +111,18 @@ function getExplorerGroupLabel(kind: 'DataModel' | 'ModelMapping' | 'Format'): s
   return kind === 'DataModel' ? 'Data Models' : kind === 'ModelMapping' ? 'Model Mappings' : 'Formats';
 }
 
+/**
+ * The filter chips get one grid column each, which is not enough for
+ * "Datové modely" / "Mapování modelu" — those were cut mid-word. The full
+ * label stays on the chip's tooltip.
+ */
+function getExplorerChipLabel(kind: 'DataModel' | 'ModelMapping' | 'Format'): string {
+  if (locale === 'cs') {
+    return kind === 'DataModel' ? 'Modely' : kind === 'ModelMapping' ? 'Mapování' : 'Formáty';
+  }
+  return kind === 'DataModel' ? 'Models' : kind === 'ModelMapping' ? 'Mappings' : 'Formats';
+}
+
 function getExplorerGroupAccent(kind: 'DataModel' | 'ModelMapping' | 'Format'): string {
   return kind === 'DataModel'
     ? 'explorer-kind-group-model'
@@ -1066,7 +1078,7 @@ function ExplorerKindChip({
       aria-label={label}
     >
       <span className="explorer-kind-chip-icon" aria-hidden="true">{icon}</span>
-      <span className="explorer-kind-chip-label">{label}</span>
+      <span className="explorer-kind-chip-label">{getExplorerChipLabel(kind)}</span>
       <span className="explorer-kind-chip-count">{count}</span>
     </button>
   );

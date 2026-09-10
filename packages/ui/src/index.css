@@ -1627,6 +1627,8 @@ body {
   fill: var(--er-text);
 }
 
+/* Lifted clear of the xyflow attribution, which is pinned to the same corner
+   and used to sit half under the minimap's own shadow. */
 .er-minimap {
   border: 1px solid var(--er-border);
   border-radius: var(--er-radius-lg);
@@ -1635,23 +1637,42 @@ body {
   box-shadow: var(--er-shadow-2);
 }
 
+/* Three classes on purpose: xyflow's own stylesheet is injected after ours and
+   pins its panels with `.react-flow__panel.bottom`, so an equally specific
+   rule of ours loses on order. */
+.react-flow .react-flow__panel.er-minimap {
+  bottom: 24px;
+}
+
 .react-flow__attribution {
   background: transparent;
   font-size: 9px;
+  padding: 0 4px;
+  opacity: 0.75;
 }
 
 .react-flow__attribution a {
   color: var(--er-text-subtle);
 }
 
-/* Header hint sits opposite the stats and must not crowd them. */
+/* The hint lives behind an icon at the end of the header — see DesignerHint. */
 .fmt-header-hint {
   margin-left: auto;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: var(--er-radius-md);
   color: var(--er-text-subtle);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  cursor: help;
+}
+
+.fmt-header-hint:hover,
+.fmt-header-hint:focus-visible {
+  background: var(--er-surface-2);
+  color: var(--er-text-muted);
 }
 
 /* ─── Mapping Designer Rows ─── */
@@ -5734,6 +5755,9 @@ body {
 }
 
 .ws-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   padding: 0 6px;
   border-radius: var(--er-radius-pill);
   border: 1px solid var(--er-border);
@@ -5837,8 +5861,10 @@ body {
   background: var(--er-surface);
 }
 
+/* 40px, like the editor tab bar and the right panel's tab strip: the rule
+   under the top bar has to run unbroken across all three columns. */
 .explorer-panel-header {
-  height: 36px;
+  height: 40px;
   gap: 6px;
   padding: 0 4px 0 10px;
 }
@@ -6466,18 +6492,22 @@ body {
      non-visible overflow to render the grip. */
   width: min(1100px, calc(100vw - 48px));
   max-width: calc(100vw - 32px);
-  height: min(820px, calc(100vh - 80px));
+  /* Height follows the lists (they carry their own vh caps), so a workspace of
+     three files gets a three-file dialog instead of 820px with the sections
+     stranded at either end. Dragging the grip still sets an explicit height. */
+  height: auto;
+  /* The native <dialog> stretches its child, which turned `height: auto` into
+     the max-height; centring it lets the surface keep its content height. */
+  align-self: center;
+  justify-self: center;
   min-width: 460px;
-  min-height: 340px;
-  max-height: calc(100vh - 32px);
+  min-height: 300px;
+  max-height: calc(100vh - 64px);
   resize: both;
   overflow: hidden;
 }
 
-/* The lists share whatever height the surface has, so resizing it actually
-   shows more rows instead of just padding the dialog. */
 .ws-dialog-body {
-  height: 100%;
   max-height: 100%;
   overflow: hidden;
 }
@@ -6539,17 +6569,21 @@ body {
   min-height: 22px;
 }
 
+/* Sized by its rows, not by the dialog: growing to a 3:2 share left a short
+   list floating above 200px of nothing, with the second section stranded at
+   the bottom edge. It still takes the free space when it has rows to fill it,
+   which is what the generous max-height is for. */
 .ws-list {
   gap: 2px;
-  flex: 3 1 0;
-  min-height: 96px;
-  max-height: none;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 52vh;
   padding: 2px 0;
 }
 
 .ws-list--available {
-  flex: 2 1 0;
-  max-height: none;
+  flex: 0 1 auto;
+  max-height: 34vh;
 }
 
 .ws-row {
