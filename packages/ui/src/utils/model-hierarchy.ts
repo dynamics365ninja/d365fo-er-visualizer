@@ -121,6 +121,12 @@ export function relatedConfigIndices(
 }
 
 /**
+ * How one mapping definition is named in the UI. Re-exported from core so the
+ * registry, the tree and the search panel all agree on the same label.
+ */
+export { mappingDefinitionLabel } from '@er-visualizer/core';
+
+/**
  * The root container names through which `cfg` enters its data model(s).
  *
  * A model configuration routinely carries several unrelated root containers

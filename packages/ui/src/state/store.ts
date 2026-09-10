@@ -12,7 +12,7 @@ import { locale } from '../i18n';
 import { buildFormatBindingPresentation } from '../utils/format-binding-display';
 import { useFnoSession } from './fno-session';
 import { onFnoDownloadEvent } from '../fno/session';
-import { formatReferencedModelIds } from '../utils/model-hierarchy';
+import { formatReferencedModelIds, mappingDefinitionLabel } from '../utils/model-hierarchy';
 import { FnoEmptyContentError } from '@er-visualizer/fno-client';
 import {
   saveFileContent,
@@ -319,6 +319,13 @@ export interface TreeNode {
   children?: TreeNode[];
   data?: any; // reference to the original typed object
   configIndex?: number; // index in configurations array
+  /**
+   * Mapping definition (`Name [DataContainerDescriptor]`) this node lives
+   * under. A model-mapping solution carries one definition per model root
+   * (SalesInvoice, TMSCommercialInvoice, …) that reuse the same datasource and
+   * binding names, so search results have to say which one they came from.
+   */
+  mappingDefinition?: string;
 }
 
 interface NavigationSnapshot {
@@ -541,6 +548,8 @@ export interface WhereUsedEntry {
     expr: string;
     configIndex: number;
     configName: string;
+    /** Mapping definition (`Name [DataContainerDescriptor]`) the hit sits in. */
+    definition?: string;
     /** Optional pre-resolved tree node id for direct click-through navigation. */
     treeNodeId?: string;
     /** Optional short label shown in place of the binding kind chip (e.g. "calc", "validation"). */
@@ -715,6 +724,55 @@ export function selectMappingDefinition(version: any, configurations: ERConfigur
   const definitions = getMappingDefinitions(version);
   if (definitions.length <= 1) return definitions[0] ?? version?.mapping;
   return orderMappingDefinitions(definitions, getAllFormatDescriptorNames(configurations))[0];
+}
+
+/**
+ * Label of the definition a configuration is actually used through — the one
+ * whose `DataContainerDescriptor` a loaded format binds to. Hits that exist in
+ * several definitions (the same binding path is mapped in each of them) have
+ * to be reported against this one instead of whichever comes first in the file.
+ */
+export function activeMappingDefinitionLabel(
+  configurations: ERConfiguration[],
+  configIndex: number | null | undefined,
+): string | undefined {
+  if (configIndex == null) return undefined;
+  return mappingDefinitionLabel(getScopedMappingDefinitions(configurations, configIndex)[0]);
+}
+
+/**
+ * Definition labels that are in scope for a search started from
+ * `activeConfigIndex` — i.e. the mapping definitions whose
+ * `DataContainerDescriptor` the active format binds to.
+ *
+ * A mapping solution maps the same paths in each of its definitions, so a
+ * search run from the Sales invoice format otherwise also reports the
+ * InvoiceCustomer or InvoiceVendor copies of every hit. Returns `null` when
+ * nothing narrows the scope (no active format, or the format names no
+ * descriptor), meaning every definition stays visible.
+ */
+export function relatedMappingDefinitionLabels(
+  configurations: ERConfiguration[],
+  activeConfigIndex: number | null | undefined,
+): Set<string> | null {
+  if (activeConfigIndex == null) return null;
+  const active = configurations[activeConfigIndex];
+  if (active?.content.kind !== 'Format') return null;
+
+  const descriptors = getFormatDescriptorNames(active.content as ERFormatContent);
+  if (descriptors.size === 0) return null;
+
+  const labels = new Set<string>();
+  for (let i = 0; i < configurations.length; i++) {
+    for (const definition of getScopedMappingDefinitions(configurations, i)) {
+      const descriptor = (definition?.dataContainerDescriptor ?? '').trim().toLowerCase();
+      if (!descriptor || !descriptors.has(descriptor)) continue;
+      const label = mappingDefinitionLabel(definition);
+      if (label) labels.add(label);
+    }
+  }
+
+  return labels.size > 0 ? labels : null;
 }
 
 /**
@@ -2026,6 +2084,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             expr: b.expressionAsString,
             configIndex: ci,
             configName: source.configName,
+            definition: mappingDefinitionLabel(mm),
           }));
 
           const formatUsages: WhereUsedEntry['formatUsages'] = [];
@@ -2279,11 +2338,17 @@ function collectExpressionTextMatches(state: AppState, query: string): WhereUsed
     const configName = config.solutionVersion.solution.name;
 
     if (config.content.kind === 'ModelMapping') {
-      for (const mm of getMappingDefinitions((config.content as ERModelMappingContent).version)) {
+      // Active definition first: the same binding is usually mapped in every
+      // definition of the solution, and the hit belongs to the one the loaded
+      // format actually goes through — not to whichever comes first in the file.
+      const perDefinition: WhereUsedEntry['modelPaths'] = [];
+      for (const mm of getScopedMappingDefinitions(state.configurations, ci)) {
+        const definition = mappingDefinitionLabel(mm);
+        const firstPushed = perDefinition.length;
         for (const b of mm.bindings ?? []) {
           const expr = b.expressionAsString ?? '';
           if (expr && re.test(expr)) {
-            modelPaths.push({
+            perDefinition.push({
               path: b.path,
               expr,
               configIndex: ci,
@@ -2292,10 +2357,13 @@ function collectExpressionTextMatches(state: AppState, query: string): WhereUsed
           }
         }
         // Datasource-level expressions (calc fields, user params, groupBy aggregations)
-        scanDatasourceExpressions(mm.datasources ?? [], re, ci, configName, state, modelPaths);
+        scanDatasourceExpressions(mm.datasources ?? [], re, ci, configName, state, perDefinition, definition);
         // Validations
-        scanValidations(mm.validations ?? [], re, ci, configName, modelPaths);
+        scanValidations(mm.validations ?? [], re, ci, configName, perDefinition);
+        // Stamped in one pass so the scanners stay unaware of definitions.
+        for (let i = firstPushed; i < perDefinition.length; i++) perDefinition[i].definition = definition;
       }
+      modelPaths.push(...dedupeAcrossDefinitions(perDefinition));
     } else if (config.content.kind === 'Format') {
       const fc = config.content as ERFormatContent;
       const fmtMap = fc.formatMappingVersion.formatMapping;
@@ -2323,24 +2391,27 @@ function collectExpressionTextMatches(state: AppState, query: string): WhereUsed
       }
       // Format-level datasource expressions
       scanDatasourceExpressions(fmtMap.datasources ?? [], re, ci, configName, state, modelPaths);
-      // Embedded model mappings inside format configs
-      for (const version of fc.embeddedModelMappingVersions ?? []) {
-        for (const mapping of getMappingDefinitions(version)) {
-          for (const b of mapping.bindings ?? []) {
-            const expr = b.expressionAsString ?? '';
-            if (expr && re.test(expr)) {
-              modelPaths.push({
-                path: b.path,
-                expr,
-                configIndex: ci,
-                configName,
-              });
-            }
+      // Embedded model mappings inside format configs — same active-first rule.
+      const perDefinition: WhereUsedEntry['modelPaths'] = [];
+      for (const mapping of getScopedMappingDefinitions(state.configurations, ci)) {
+        const definition = mappingDefinitionLabel(mapping);
+        const firstPushed = perDefinition.length;
+        for (const b of mapping.bindings ?? []) {
+          const expr = b.expressionAsString ?? '';
+          if (expr && re.test(expr)) {
+            perDefinition.push({
+              path: b.path,
+              expr,
+              configIndex: ci,
+              configName,
+            });
           }
-          scanDatasourceExpressions(mapping.datasources ?? [], re, ci, configName, state, modelPaths);
-          scanValidations(mapping.validations ?? [], re, ci, configName, modelPaths);
         }
+        scanDatasourceExpressions(mapping.datasources ?? [], re, ci, configName, state, perDefinition, definition);
+        scanValidations(mapping.validations ?? [], re, ci, configName, perDefinition);
+        for (let i = firstPushed; i < perDefinition.length; i++) perDefinition[i].definition = definition;
       }
+      modelPaths.push(...dedupeAcrossDefinitions(perDefinition));
     }
   }
 
@@ -2361,6 +2432,26 @@ function collectExpressionTextMatches(state: AppState, query: string): WhereUsed
 }
 
 /**
+ * Collapse hits that the definitions of one solution share.
+ *
+ * A model-mapping solution maps the same binding in every definition
+ * (SalesInvoice, InvoiceCustomer, TMSCommercialInvoice, …), so an unfiltered
+ * scan reports the same line six times. The input arrives with the active
+ * definition first, so keeping the first occurrence reports the hit against
+ * the definition the loaded format actually goes through; hits that only exist
+ * in one definition are untouched.
+ */
+function dedupeAcrossDefinitions(hits: WhereUsedEntry['modelPaths']): WhereUsedEntry['modelPaths'] {
+  const seen = new Set<string>();
+  return hits.filter(hit => {
+    const key = `${hit.path}|${hit.expr}|${hit.kindLabel ?? ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
  * Walk every datasource (recursively through children) and collect text matches
  * for calculated fields, user-parameter expressions, and groupBy aggregations.
  */
@@ -2371,16 +2462,20 @@ function scanDatasourceExpressions(
   configName: string,
   state: AppState,
   out: WhereUsedEntry['modelPaths'],
+  /** Mapping definition being scanned, so navigation lands in the right one. */
+  definition?: string,
 ): void {
   const rootNode = state.treeNodes[configIndex];
   const locate = (dsName: string, parentPath?: string): string | undefined => {
     if (!rootNode) return undefined;
     const key = buildDatasourceLookupKey(dsName, parentPath);
-    const node = findNodeByMatch(
-      rootNode,
-      n => n.type === 'datasource'
-        && buildDatasourceLookupKey(n.name, n.data?.parentPath) === key,
-    );
+    const matches = (n: TreeNode) => n.type === 'datasource'
+      && buildDatasourceLookupKey(n.name, n.data?.parentPath) === key;
+    // Definitions reuse datasource names, so the plain first match routinely
+    // belongs to a different model root than the hit does.
+    const node = (definition
+      ? findNodeByMatch(rootNode, n => matches(n) && n.mappingDefinition === definition)
+      : null) ?? findNodeByMatch(rootNode, matches);
     return node?.id;
   };
 
@@ -3338,6 +3433,19 @@ function groupBindingNodes(bindingNodes: TreeNode[], prefix: string): TreeNode[]
   return buildGroupedBindingSections(root, `${prefix}-group`, 0);
 }
 
+/**
+ * Tag a mapping subtree with the definition it belongs to, so a search hit can
+ * name its definition however deep it sits. A model-mapping solution reuses
+ * datasource and binding names across definitions, and the hoisted
+ * single-definition tree has no mapping node to walk up to.
+ */
+function stampMappingDefinition(node: TreeNode, definition: string | undefined): TreeNode {
+  if (!definition) return node;
+  node.mappingDefinition = definition;
+  for (const child of node.children ?? []) stampMappingDefinition(child, definition);
+  return node;
+}
+
 function buildMappingTree(mapping: any, prefix: string, configIndex: number, versionNumber: number | undefined, allConfigurations: ERConfiguration[]): TreeNode {
   const mappingSectionLabels = getMappingSectionLabels();
   const dsNodes = mapping.datasources.map((ds: any, di: number) =>
@@ -3367,9 +3475,11 @@ function buildMappingTree(mapping: any, prefix: string, configIndex: number, ver
   const descriptor = (mapping.dataContainerDescriptor ?? '').trim();
   const descriptorSuffix = descriptor && descriptor !== mapping.name ? ` [${descriptor}]` : '';
 
-  return {
+  return stampMappingDefinition({
     id: prefix,
-    name: `${mappingSectionLabels.title}: ${mapping.name}${descriptorSuffix}${versionSuffix}`,
+    // The row is already marked as a mapping by its icon and accent, so the
+    // "Mapování: " prefix only pushed the definition name out of sight.
+    name: `${mapping.name}${descriptorSuffix}${versionSuffix}`,
     icon: '🔗',
     type: 'mapping',
     configIndex,
@@ -3379,7 +3489,7 @@ function buildMappingTree(mapping: any, prefix: string, configIndex: number, ver
       { id: `${prefix}-bind-section`, name: `${mappingSectionLabels.bindings} (${bindingNodes.length})`, icon: '📂', type: 'section', children: groupedBindingNodes },
       { id: `${prefix}-val-section`, name: `${mappingSectionLabels.validations} (${validationNodes.length})`, icon: '📂', type: 'section', children: validationNodes },
     ],
-  };
+  }, mappingDefinitionLabel(mapping));
 }
 
 function buildTreeForConfig(config: ERConfiguration, index: number, allConfigurations: ERConfiguration[]): TreeNode {

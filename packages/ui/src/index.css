@@ -360,6 +360,14 @@ body {
   background: var(--er-surface);
 }
 
+.explorer-panel-header .explorer-workspace-button {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
 .explorer-panel-title {
   display: inline-flex;
   align-items: center;
@@ -1361,6 +1369,22 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono);
+}
+
+/* Names the data model a mapping binds to, so mappings of unrelated models
+   stay tellable apart once the search reach widens to "All". */
+.search-result-group-model {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: 2px;
+  border: 1px solid var(--border-subtle, var(--border));
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 10px;
 }
 
 .search-result-group-count {
@@ -6459,8 +6483,31 @@ body {
 /* ─── Workspace manager ─── */
 
 .ws-surface {
-  max-width: 760px;
-  width: calc(100vw - 48px);
+  /* Roomier by default — the workspace routinely holds a dozen files whose
+     names are long. `resize` lets the user drag it larger still; it needs a
+     non-visible overflow to render the grip. */
+  width: min(1100px, calc(100vw - 48px));
+  max-width: calc(100vw - 32px);
+  height: min(820px, calc(100vh - 80px));
+  min-width: 460px;
+  min-height: 340px;
+  max-height: calc(100vh - 32px);
+  resize: both;
+  overflow: hidden;
+}
+
+/* The lists share whatever height the surface has, so resizing it actually
+   shows more rows instead of just padding the dialog. */
+.ws-dialog-body {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.ws-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .ws-title {
@@ -6516,12 +6563,15 @@ body {
 
 .ws-list {
   gap: 2px;
-  max-height: 34vh;
+  flex: 3 1 0;
+  min-height: 96px;
+  max-height: none;
   padding: 2px 0;
 }
 
 .ws-list--available {
-  max-height: 26vh;
+  flex: 2 1 0;
+  max-height: none;
 }
 
 .ws-row {

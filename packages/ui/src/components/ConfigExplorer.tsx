@@ -75,8 +75,8 @@ function getExplorerKindLabel(node: TreeNode): string | null {
   }
 
   if (kind === 'DataModel' || node.type === 'model') return labels.DataModel;
-  // The mapping-definition row is already named "Mapování: <name>", so the pill
-  // would only repeat it. Configuration rows still get theirs.
+  // The mapping-definition row is named after the definition itself, so the
+  // pill is what says it is a mapping. Configuration rows still get theirs.
   if (kind === 'ModelMapping') return labels.ModelMapping;
   if (kind === 'Format' || node.type === 'format') return labels.Format;
 
@@ -573,11 +573,14 @@ export function ConfigExplorer() {
         <Button
           appearance="subtle"
           size="small"
+          className="explorer-workspace-button"
           icon={<AppsListDetailRegular />}
           aria-label={t.workspaceManager}
           title={t.workspaceManager}
           onClick={() => setWorkspaceOpen(true)}
-        />
+        >
+          {t.workspaceManager}
+        </Button>
         <Menu>
           <MenuTrigger disableButtonEnhancement>
             <Button
@@ -613,9 +616,6 @@ export function ConfigExplorer() {
                 {t.explorerSortNameDesc}
               </MenuItem>
               <MenuDivider />
-              <MenuItem icon={<AppsListDetailRegular />} onClick={() => setWorkspaceOpen(true)}>
-                {t.workspaceManager}
-              </MenuItem>
               <MenuItem icon={<DismissSquareMultipleRegular />} onClick={removeAllConfigurations}>
                 {t.closeAllConfigurations}
               </MenuItem>

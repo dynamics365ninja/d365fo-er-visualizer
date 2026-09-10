@@ -201,8 +201,23 @@ export function WorkspaceManager({
   return (
     <>
       <Dialog open={open} onOpenChange={(_, d) => onOpenChange(d.open)}>
-        <DialogSurface className="ws-surface">
-          <DialogBody>
+        {/* Fluent injects its Griffel styles after our stylesheet, so plain
+            class rules lose against the surface defaults — set the geometry
+            inline. `resize` needs a non-visible overflow to draw the grip. */}
+        <DialogSurface
+          className="ws-surface"
+          style={{
+            width: 'min(1100px, calc(100vw - 48px))',
+            maxWidth: 'calc(100vw - 32px)',
+            height: 'min(820px, calc(100vh - 80px))',
+            maxHeight: 'calc(100vh - 32px)',
+            minWidth: '460px',
+            minHeight: '340px',
+            resize: 'both',
+            overflow: 'hidden',
+          }}
+        >
+          <DialogBody className="ws-dialog-body" style={{ height: '100%', maxHeight: '100%', overflow: 'hidden' }}>
             <DialogTitle>
               <span className="ws-title">
                 {t.workspaceManager}
@@ -213,7 +228,7 @@ export function WorkspaceManager({
                 </span>
               </span>
             </DialogTitle>
-            <DialogContent>
+            <DialogContent className="ws-content" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <div className="ws-toolbar">
                 <Input
                   size="small"

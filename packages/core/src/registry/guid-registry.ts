@@ -14,6 +14,23 @@ export interface GUIDEntry {
   componentKind: ERComponentKind;
 }
 
+/**
+ * How one mapping definition is named across the app.
+ *
+ * A model-mapping solution carries one definition per model root
+ * (SalesInvoice, TMSCommercialInvoice, …) and those definitions reuse the same
+ * datasource and binding names, so the definition is what tells two otherwise
+ * identical hits apart. The descriptor is appended only when it differs from
+ * the definition name, matching the tree label.
+ */
+export function mappingDefinitionLabel(mapping: unknown): string | undefined {
+  const m = mapping as { name?: string; dataContainerDescriptor?: string } | undefined;
+  const name = (m?.name ?? '').trim();
+  const descriptor = (m?.dataContainerDescriptor ?? '').trim();
+  if (!name) return descriptor || undefined;
+  return descriptor && descriptor !== name ? `${name} [${descriptor}]` : name;
+}
+
 export interface CrossRefEntry {
   /** What is being referenced (table name, field path, GUID, etc.) */
   target: string;
@@ -21,6 +38,13 @@ export interface CrossRefEntry {
   /** Where the reference occurs */
   sourceConfigPath: string;
   sourceComponent: string;
+  /**
+   * Mapping definition the reference was found in — a model mapping solution
+   * repeats the same bindings and datasource names in a definition per model
+   * root (SalesInvoice, InvoiceCustomer, …), and a search started from one
+   * format must be able to tell them apart.
+   */
+  sourceDefinition?: string;
   sourceContext: string; // human-readable description
 }
 
@@ -29,6 +53,12 @@ export class GUIDRegistry {
   private crossRefs: CrossRefEntry[] = [];
   /** Secondary index: normalized target → cross-refs. Built lazily, invalidated on mutation. */
   private targetIndex: Map<string, CrossRefEntry[]> | null = null;
+  /**
+   * Mapping definition being indexed right now. Stamped onto every cross-ref
+   * it produces, so hits keep the definition they belong to instead of being
+   * indistinguishable from the copies in the sibling definitions.
+   */
+  private currentDefinition: string | undefined;
 
   clear(): void {
     this.entries.clear();
@@ -51,7 +81,11 @@ export class GUIDRegistry {
   }
 
   addCrossRef(ref: CrossRefEntry): void {
-    this.crossRefs.push(ref);
+    this.crossRefs.push(
+      ref.sourceDefinition === undefined && this.currentDefinition !== undefined
+        ? { ...ref, sourceDefinition: this.currentDefinition }
+        : ref,
+    );
     this.targetIndex = null; // invalidate
   }
 
@@ -147,6 +181,7 @@ export class GUIDRegistry {
       });
 
       for (const mapping of c.version.mappings ?? [c.version.mapping]) {
+        this.currentDefinition = mappingDefinitionLabel(mapping);
         // Model reference
         this.addCrossRef({
           target: mapping.modelId,
@@ -159,6 +194,7 @@ export class GUIDRegistry {
         this.indexDatasources(mapping.datasources, fp);
         this.indexBindings(mapping.bindings, fp, mapping.name);
         this.indexValidations(mapping.validations, fp);
+        this.currentDefinition = undefined;
       }
     }
 
