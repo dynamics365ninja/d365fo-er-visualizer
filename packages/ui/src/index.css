@@ -4268,30 +4268,58 @@ body {
    after ours and reset `resize`/`overflow` on DialogSurface. The surface is a
    native <dialog>, which is already a positioned containing block, so the grip
    anchors to it without overriding `position`. */
-.dd-dialog-resize-grip {
+/* The corner grab handle, shared by every resizable dialog.
+   It used to be an 18px square drawn right into the corner — a target you had
+   to hunt for and could miss by two pixels. The drawn corner stays modest; the
+   element around it is 34px, so the pointer finds it well before the eye has
+   to. Hidden where a drag is impossible anyway (see the touch rules that turn
+   dialogs into full-height sheets). */
+.dialog-resize-grip {
   position: absolute;
-  right: 2px;
-  bottom: 2px;
-  width: 18px;
-  height: 18px;
+  right: 0;
+  bottom: 0;
+  width: 34px;
+  height: 34px;
   z-index: 5;
   cursor: nwse-resize;
   touch-action: none;
-  border-radius: var(--er-radius-sm);
-  background:
-    linear-gradient(135deg, transparent 0 46%, var(--colorNeutralForeground4, #8a8886) 46% 54%, transparent 54% 100%),
-    linear-gradient(135deg, transparent 0 70%, var(--colorNeutralForeground4, #8a8886) 70% 78%, transparent 78% 100%);
-  opacity: 0.65;
+  color: var(--er-text-subtle);
 }
 
-.dd-dialog-resize-grip:hover,
-.dd-dialog-resize-grip:active {
+.dialog-resize-grip::before {
+  content: '';
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 15px;
+  height: 15px;
+  background:
+    linear-gradient(135deg, transparent 0 42%, currentColor 42% 58%, transparent 58% 100%),
+    linear-gradient(135deg, transparent 0 66%, currentColor 66% 82%, transparent 82% 100%);
+  opacity: 0.7;
+  transition: opacity 120ms ease;
+}
+
+.dialog-resize-grip:hover,
+.dialog-resize-grip:active {
+  color: var(--er-accent);
+}
+
+.dialog-resize-grip:hover::before,
+.dialog-resize-grip:active::before {
   opacity: 1;
+}
+
+/* A drag needs a pointer; on touch the dialogs fill the screen instead. */
+@media (pointer: coarse) {
+  .dialog-resize-grip {
+    display: none;
+  }
 }
 
 /* Keep the grip clear of the dialog's own content. */
 .dd-dialog-surface--resizable .dd-dialog-body {
-  padding-bottom: 6px !important;
+  padding-bottom: 10px !important;
 }
 
 .dd-dialog-body {
@@ -6503,7 +6531,6 @@ body {
   min-width: 460px;
   min-height: 300px;
   max-height: calc(100vh - 64px);
-  resize: both;
   overflow: hidden;
 }
 
@@ -7922,6 +7949,5 @@ div.path-tooltip-card {
     max-width: calc(100vw - 24px) !important;
     height: calc(100dvh - 40px) !important;
     max-height: calc(100dvh - 40px) !important;
-    resize: none;
   }
 }

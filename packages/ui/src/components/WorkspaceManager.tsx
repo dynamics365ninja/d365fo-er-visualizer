@@ -26,6 +26,7 @@ import {
 import { findRelatedRecentFiles, useAppStore, type RecentFile } from '../state/store';
 import { t, useLocale } from '../i18n';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
+import { useResizableDialog } from '../utils/resizable-dialog';
 import { buildExplorerModelGroups, getBestVersion, type ExplorerModelGroup } from '../utils/model-hierarchy';
 import {
   DependencyKindIcon,
@@ -70,6 +71,11 @@ function matches(query: string, ...parts: Array<string | undefined>): boolean {
  * or cached entries that were closed earlier) and closes individual entries.
  * Re-adding a format or mapping offers its related model + mapping.
  */
+/** Smallest workspace dialog that still shows a row and its actions. */
+const WS_DIALOG_MIN_W = 460;
+const WS_DIALOG_MIN_H = 300;
+const WS_DIALOG_SIZE_KEY = 'er-visualizer.workspace.dialogSize';
+
 export function WorkspaceManager({
   open,
   onOpenChange,
@@ -81,6 +87,10 @@ export function WorkspaceManager({
   onRequestFno?: () => void;
 }) {
   useLocale();
+  const { surfaceRef, size: dialogSize, startResize, resetSize } = useResizableDialog(
+    { storageKey: WS_DIALOG_SIZE_KEY, minWidth: WS_DIALOG_MIN_W, minHeight: WS_DIALOG_MIN_H },
+    open,
+  );
   const configurations = useAppStore(s => s.configurations);
   const recentFiles = useAppStore(s => s.recentFiles);
   const cachedPaths = useAppStore(s => s.cachedPaths);
@@ -207,6 +217,7 @@ export function WorkspaceManager({
             class rules lose against the surface defaults — set the geometry
             inline. `resize` needs a non-visible overflow to draw the grip. */}
         <DialogSurface
+          ref={surfaceRef}
           className="ws-surface"
           style={{
             width: 'min(1100px, calc(100vw - 48px))',
@@ -215,9 +226,10 @@ export function WorkspaceManager({
             // workspace of three files left two thirds of the dialog empty.
             height: 'auto',
             maxHeight: 'calc(100vh - 64px)',
-            minWidth: '460px',
-            minHeight: '340px',
-            resize: 'both',
+            minWidth: `${WS_DIALOG_MIN_W}px`,
+            minHeight: `${WS_DIALOG_MIN_H}px`,
+            // A size the user dragged wins over the content-driven default.
+            ...(dialogSize ? { width: dialogSize.width, height: dialogSize.height } : {}),
             overflow: 'hidden',
           }}
         >
@@ -371,6 +383,15 @@ export function WorkspaceManager({
               />
             </DialogContent>
           </DialogBody>
+          <span
+            className="dialog-resize-grip"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t.resizeDialog}
+            title={t.resizeDialog}
+            onPointerDown={startResize}
+            onDoubleClick={() => resetSize()}
+          />
         </DialogSurface>
       </Dialog>
 

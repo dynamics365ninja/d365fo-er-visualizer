@@ -245,7 +245,7 @@ export interface Translations {
   drillLabelId: string;
   drillLabelElement: string;
   drillLabelEmpty: string;
-  drillResizeDialog: string;
+  resizeDialog: string;
   drillHowFilledTitle: string;
   drillHowFilledHint: string;
   lineageTitle: string;
@@ -789,7 +789,7 @@ const cs: Translations = {
   drillLabelId: 'ID popisku',
   drillLabelElement: 'Prvek',
   drillLabelEmpty: 'Pro tento popisek není v načtených konfiguracích žádný překlad.',
-  drillResizeDialog: 'Tažením změníte velikost okna (dvojklik obnoví výchozí)',
+  resizeDialog: 'Tažením změníte velikost okna (dvojklik obnoví výchozí)',
   drillHowFilledTitle: 'Jak se hodnota naplní',
   drillHowFilledHint: 'Vzorce, kterými vzniká hodnota tohoto kroku. Klikni na kteroukoli část vzorce a propadneš se do ní.',
   lineageTitle: 'Cesta hodnoty',
@@ -1341,7 +1341,7 @@ const en: Translations = {
   drillLabelId: 'Label ID',
   drillLabelElement: 'Element',
   drillLabelEmpty: 'No translation for this label in the loaded configurations.',
-  drillResizeDialog: 'Drag to resize the dialog (double-click to reset)',
+  resizeDialog: 'Drag to resize the dialog (double-click to reset)',
   drillHowFilledTitle: 'How the value is filled',
   drillHowFilledHint: 'The formulas that produce this step\'s value. Click any part of a formula to drill into it.',
   lineageTitle: 'Value path',
