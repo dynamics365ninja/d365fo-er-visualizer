@@ -6655,12 +6655,15 @@ body {
   color: var(--er-text-subtle);
 }
 
+/* Wide enough for the longest kind in either language ("Mapování modelu"),
+   and no wider than it needs to be: a fixed 112px column cut that label in
+   half. The minimum keeps the names below it lined up across rows. */
 .ws-kind {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-width: 0;
-  width: 112px;
+  width: auto;
+  min-width: 136px;
   justify-content: flex-start;
   padding: 2px 7px;
   border-radius: var(--er-radius-pill);
@@ -6669,8 +6672,6 @@ body {
   text-transform: none;
   font-weight: 600;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .ws-kind svg { flex-shrink: 0; }
