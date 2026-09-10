@@ -52,8 +52,9 @@ import {
 import { useAppStore, resolveDeepExpression, selectMappingDefinition, getScopedMappingDefinitions } from '../state/store';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
-import { resolveLabel, buildLabelPool, labelDisplayText } from '../utils/label-resolver';
+import { resolveLabel, buildLabelPool, labelDisplayText, collectLabelTranslations, getUserLanguageTag } from '../utils/label-resolver';
 import { useCoarsePointer } from '../utils/responsive';
+import type { ERLabel } from '@er-visualizer/core';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -452,6 +453,28 @@ export function shouldShowFullExpression(expr: string): boolean {
   const kind = classifyExpr(expr);
   if (kind === 'er-function' || kind === 'compound' || expr.includes('(')) return true;
   return tokenizeERExpr(expr).some(tok => tok.kind === 'label');
+}
+
+/**
+ * Label references of an expression that is *only* made of labels and literal
+ * text (`@"GER_LABEL:Foo"`, or `@"A" & " " & @"B"`) — no datasource ever
+ * contributes to it.
+ *
+ * Such an expression reads no D365FO data and has no value path worth walking,
+ * so the drill-down answers a different question for it: what does the label
+ * say in each language. Returns `null` when the expression touches anything
+ * else, in which case the normal lineage view stays.
+ */
+export function labelOnlyReferences(expr: string): string[] | null {
+  const labels: string[] = [];
+  for (const tok of tokenizeERExpr(expr)) {
+    if (tok.kind === 'label') { labels.push(tok.raw); continue; }
+    if (tok.kind === 'ws' || tok.kind === 'str') continue;
+    // Text concatenation between labels is still "just text".
+    if (tok.kind === 'op' && (tok.raw === '&' || tok.raw === '+')) continue;
+    return null;
+  }
+  return labels.length > 0 ? labels : null;
 }
 
 function uniqueDsTokens(tokens: ERToken[]): UniqueDsToken[] {
@@ -944,6 +967,59 @@ function LineageRow({ node, depth, highlightKey, openIds, onToggle, registerRef,
  * The whole drill-down body: what data the expression uses, and the complete
  * path each value travels to get there.
  */
+/**
+ * What a label reference says, per language. Replaces the lineage cards when
+ * the expression is nothing but labels — there is no data to trace, only text
+ * to read.
+ */
+function LabelTranslationCard({ labelRef, labels, elementName }: {
+  labelRef: string;
+  labels: ERLabel[];
+  elementName?: string;
+}) {
+  const resolved = resolveLabel(labelRef, labels);
+  const translations = collectLabelTranslations(labelRef, labels);
+  const userLang = getUserLanguageTag();
+
+  return (
+    <section className="lin-summary lin-label">
+      <header className="lin-summary__head">
+        <span className="lin-summary__title">{t.drillLabelTitle}</span>
+        <span className="lin-summary__count">{translations.length}</span>
+      </header>
+      <p className="lin-summary__hint">{t.drillLabelHint}</p>
+
+      <dl className="lin-label__meta">
+        {elementName && (
+          <>
+            <dt>{t.drillLabelElement}</dt>
+            <dd>{elementName}</dd>
+          </>
+        )}
+        <dt>{t.drillLabelId}</dt>
+        <dd><code>{resolved?.id || labelRef}</code></dd>
+      </dl>
+
+      {translations.length > 0 ? (
+        <ul className="lin-label__list">
+          {translations.map(tr => {
+            const isUser = tr.languageId.toLowerCase() === userLang.toLowerCase()
+              || tr.languageId.toLowerCase().split('-')[0] === userLang.toLowerCase().split('-')[0];
+            return (
+              <li key={tr.languageId} className={`lin-label__item${isUser ? ' is-active' : ''}`}>
+                <span className="lin-label__lang">{tr.languageId}</span>
+                <span className="lin-label__text">{tr.value}</span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="lin-summary__empty">{t.drillLabelEmpty}</p>
+      )}
+    </section>
+  );
+}
+
 function DrillDownLineageView({ expression, configIndex, configurations, elementName }: {
   expression: string;
   configIndex: number;
@@ -1086,40 +1162,27 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
   const shownRegisterRef = peek ? noopRef : registerRef;
   const shownHighlight = peek ? null : highlightKey;
 
+  // A pure label reference reads no D365FO data, so the "data used" and
+  // "value path" cards would only show noise ("text + unresolved reference").
+  // Answer the question that actually applies instead: the translations.
+  const labelRefs = useMemo(() => labelOnlyReferences(expression), [expression]);
+  const labelPool = useMemo(
+    () => (labelRefs ? buildLabelPool(configurations, configIndex) : []),
+    [labelRefs, configurations, configIndex],
+  );
+
+  if (labelRefs) {
+    return (
+      <div className="lin">
+        {labelRefs.map((ref, idx) => (
+          <LabelTranslationCard key={`${ref}-${idx}`} labelRef={ref} labels={labelPool} elementName={idx === 0 ? elementName : undefined} />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="lin">
-      {/* The headline question — which D365FO data does this element read? */}
-      <section className="lin-summary">
-        <header className="lin-summary__head">
-          <span className="lin-summary__title">{t.drillUsedDataTitle}</span>
-          <span className="lin-summary__count">{usedSources.length}</span>
-        </header>
-        <p className="lin-summary__hint">{t.drillUsedDataHint}</p>
-        {usedSources.length > 0 ? (
-          <ul className="lin-chips">
-            {usedSources.map(src => {
-              const key = lineageSourceKey(src.badge, src.name);
-              return (
-                <li key={src.key}>
-                  <button
-                    type="button"
-                    className={`lin-chip${highlightKey === key ? ' is-active' : ''}`}
-                    onClick={() => reveal(index.byKey.get(key) ?? index.byName.get(normalizeExpr(src.name)))}
-                    title={t.lineageShowInPath(src.name)}
-                  >
-                    <BadgeIcon badge={src.badge} size={13} />
-                    <span className="lin-chip__name">{src.name}</span>
-                    <span className="lin-chip__type">{localizeBadgeLabel(src.badge)}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="lin-summary__empty">{t.drillUsedDataEmpty}</p>
-        )}
-      </section>
-
       {/* The full chain, expanded — no navigation, nothing to lose track of. */}
       <section className="lin-path">
         <header className="lin-path__head">
@@ -1198,12 +1261,146 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
           </li>
         </ul>
       </section>
+      {/* The headline question — which D365FO data does this element read? */}
+      <section className="lin-summary">
+        <header className="lin-summary__head">
+          <span className="lin-summary__title">{t.drillUsedDataTitle}</span>
+          <span className="lin-summary__count">{usedSources.length}</span>
+        </header>
+        <p className="lin-summary__hint">{t.drillUsedDataHint}</p>
+        {usedSources.length > 0 ? (
+          <ul className="lin-chips">
+            {usedSources.map(src => {
+              const key = lineageSourceKey(src.badge, src.name);
+              return (
+                <li key={src.key}>
+                  <button
+                    type="button"
+                    className={`lin-chip${highlightKey === key ? ' is-active' : ''}`}
+                    onClick={() => reveal(index.byKey.get(key) ?? index.byName.get(normalizeExpr(src.name)))}
+                    title={t.lineageShowInPath(src.name)}
+                  >
+                    <BadgeIcon badge={src.badge} size={13} />
+                    <span className="lin-chip__name">{src.name}</span>
+                    <span className="lin-chip__type">{localizeBadgeLabel(src.badge)}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="lin-summary__empty">{t.drillUsedDataEmpty}</p>
+        )}
+      </section>
     </div>
   );
 }
 
 /** Delay before a single click opens the dialog — long enough to detect a double-click. */
 const DRILL_TRIGGER_CLICK_DELAY_MS = 250;
+
+/** Smallest useful drill-down dialog — below this the outline stops being readable. */
+const DRILL_DIALOG_MIN_W = 420;
+const DRILL_DIALOG_MIN_H = 320;
+const DRILL_DIALOG_SIZE_KEY = 'er-visualizer.drilldown.dialogSize';
+
+interface DialogSize { width: number; height: number }
+
+function readStoredDialogSize(mode: string): DialogSize | null {
+  try {
+    const raw = window.localStorage.getItem(`${DRILL_DIALOG_SIZE_KEY}.${mode}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<DialogSize>;
+    if (typeof parsed?.width !== 'number' || typeof parsed?.height !== 'number') return null;
+    if (!Number.isFinite(parsed.width) || !Number.isFinite(parsed.height)) return null;
+    return {
+      width: Math.max(DRILL_DIALOG_MIN_W, parsed.width),
+      height: Math.max(DRILL_DIALOG_MIN_H, parsed.height),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Lets the user drag the drill-down dialog to whatever size the expression
+ * needs and remembers it per view mode — the tree and the workbench want very
+ * different shapes, and a fixed size made deep lineages unreadable.
+ *
+ * The size is driven by an explicit grip rather than CSS `resize`, because
+ * Fluent's own surface styles are injected after ours and reset both `resize`
+ * and `overflow` on `DialogSurface`.
+ */
+function useResizableDialog(mode: string, open: boolean) {
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState<DialogSize | null>(null);
+
+  // localStorage is read on open (not on mount) so a size stored by another
+  // trigger in the same session is picked up too.
+  useEffect(() => {
+    if (open) setSize(readStoredDialogSize(mode));
+  }, [mode, open]);
+
+  const startResize = React.useCallback((event: React.PointerEvent<HTMLElement>) => {
+    const surface = surfaceRef.current;
+    if (!surface || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const grip = event.currentTarget;
+    const rect = surface.getBoundingClientRect();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startW = rect.width;
+    const startH = rect.height;
+    // The dialog is centred by Fluent, so each edge only moves by half of the
+    // size change — without this the box drifts away from the cursor.
+    const scaleX = Math.abs(rect.left + rect.width / 2 - window.innerWidth / 2) < 8 ? 2 : 1;
+    const scaleY = Math.abs(rect.top + rect.height / 2 - window.innerHeight / 2) < 8 ? 2 : 1;
+
+    let latest: DialogSize = { width: startW, height: startH };
+
+    const onMove = (moveEvent: PointerEvent) => {
+      latest = {
+        width: clampSize(startW + (moveEvent.clientX - startX) * scaleX, DRILL_DIALOG_MIN_W, window.innerWidth - 16),
+        height: clampSize(startH + (moveEvent.clientY - startY) * scaleY, DRILL_DIALOG_MIN_H, window.innerHeight - 16),
+      };
+      setSize(latest);
+    };
+
+    const onUp = () => {
+      grip.removeEventListener('pointermove', onMove);
+      grip.removeEventListener('pointerup', onUp);
+      grip.removeEventListener('pointercancel', onUp);
+      try { grip.releasePointerCapture(event.pointerId); } catch { /* pointer already gone */ }
+      try {
+        window.localStorage.setItem(
+          `${DRILL_DIALOG_SIZE_KEY}.${mode}`,
+          JSON.stringify({ width: Math.round(latest.width), height: Math.round(latest.height) }),
+        );
+      } catch { /* private mode / quota — the size just won't persist */ }
+    };
+
+    grip.setPointerCapture(event.pointerId);
+    grip.addEventListener('pointermove', onMove);
+    grip.addEventListener('pointerup', onUp);
+    grip.addEventListener('pointercancel', onUp);
+  }, [mode]);
+
+  /** Back to the per-mode default size — the escape hatch from a bad drag. */
+  const resetSize = React.useCallback(() => {
+    setSize(null);
+    try {
+      window.localStorage.removeItem(`${DRILL_DIALOG_SIZE_KEY}.${mode}`);
+    } catch { /* nothing stored to forget */ }
+  }, [mode]);
+
+  return { surfaceRef, size, startResize, resetSize };
+}
+
+function clampSize(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), Math.max(min, max));
+}
 
 /**
  * Clickable expression wrapper — single-click opens the drill-down analysis
@@ -1230,6 +1427,7 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
   // Touch has no reliable double-tap of its own, and waiting for one only adds
   // lag; the dialog's own "open as tab" button covers that path instead.
   const coarse = useCoarsePointer();
+  const { surfaceRef, size: dialogSize, startResize, resetSize } = useResizableDialog(dialogViewMode, isDialogOpen);
 
   React.useEffect(() => () => {
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
@@ -1306,11 +1504,20 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
       </span>
       <Dialog open={isDialogOpen} onOpenChange={(_, d) => setIsDialogOpen(d.open)} modalType="modal">
         <DialogSurface
-          className="dd-dialog-surface"
-          style={dialogViewMode === 'tree'
-            // The tree needs room to pan/zoom; the detail view reads better narrow.
-            ? { width: '96vw', maxWidth: '96vw', height: '92vh', maxHeight: '92vh' }
-            : { width: 'min(1080px, 94vw)', maxWidth: 'min(1080px, 94vw)', height: 'min(760px, 88vh)', maxHeight: 'min(760px, 88vh)' }}
+          ref={surfaceRef}
+          className="dd-dialog-surface dd-dialog-surface--resizable"
+          style={{
+            ...(dialogViewMode === 'tree'
+              // The tree needs room to pan/zoom; the detail view reads better narrow.
+              ? { width: '96vw', height: '92vh' }
+              : { width: 'min(1080px, 94vw)', height: 'min(760px, 88vh)' }),
+            // A size the user dragged wins over the per-mode default.
+            ...(dialogSize ? { width: dialogSize.width, height: dialogSize.height } : {}),
+            maxWidth: '98vw',
+            maxHeight: '96vh',
+            minWidth: DRILL_DIALOG_MIN_W,
+            minHeight: DRILL_DIALOG_MIN_H,
+          }}
         >
           <DialogBody className="dd-dialog-body">
             <DialogTitle
@@ -1341,6 +1548,15 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
               />
             </DialogContent>
           </DialogBody>
+          <span
+            className="dd-dialog-resize-grip"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t.drillResizeDialog}
+            title={t.drillResizeDialog}
+            onPointerDown={startResize}
+            onDoubleClick={() => resetSize()}
+          />
         </DialogSurface>
       </Dialog>
     </>

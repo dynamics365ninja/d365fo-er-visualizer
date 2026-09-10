@@ -180,8 +180,8 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
               <span className="property-empty-tip-label">{t.explorer}</span>
             </div>
             <div className="property-empty-tip">
-              <span className="property-empty-tip-key">Ctrl+K</span>
-              <span className="property-empty-tip-label">{t.commandPalette}</span>
+              <span className="property-empty-tip-key">Ctrl+J</span>
+              <span className="property-empty-tip-label">{t.properties}</span>
             </div>
           </div>
         )}

@@ -3543,8 +3543,11 @@ function buildTreeForConfig(config: ERConfiguration, index: number, allConfigura
     );
     const embeddedMappingNodes = fc.embeddedModelMappingVersions.flatMap((version, embeddedIndex) => {
       const embeddedDefinitions = getMappingDefinitions(version);
+      // Scope to this format's own `model` datasources — a sibling format in
+      // the workspace must not decide which definition is starred here.
+      const ownDescriptors = getFormatDescriptorNames(fc);
       const usedDefinition = embeddedDefinitions.length > 1
-        ? selectMappingDefinition(version, allConfigurations)
+        ? orderMappingDefinitions(embeddedDefinitions, ownDescriptors)[0]
         : null;
       const usedSuffix = locale === 'cs' ? '  ✓ použito načteným formátem' : '  ✓ used by loaded format';
       return embeddedDefinitions.map((definition, di) => {

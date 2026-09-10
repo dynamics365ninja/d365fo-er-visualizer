@@ -33,7 +33,7 @@ This tool parses the full ER XML bundle, merges cross-references across all load
 | 🗂️ **Workspace manager** | See exactly which configurations are loaded (grouped by data model), add or close individual entries, and re-open ones closed earlier. Adding a format or mapping offers its related model + mapping |
 | 💾 **Recent files & sessions** | Loaded XML is cached in the browser's IndexedDB, so the landing page can re-open a previous file or a whole session without re-picking the files |
 | 🌐 **F&O server browser** | Connect to a live environment, browse the ER solution hierarchy, multi-select configurations across drill levels, and ingest them in one click. Connection profiles are remembered (no secrets) |
-| ⌨️ **Command palette** | `Ctrl/⌘+K` jump-to-anything across configurations, tabs, and panel actions; `Alt+←/→` walk the navigation history |
+| ⌨️ **Keyboard shortcuts** | `Ctrl/⌘+B/F/U/J` toggle the Explorer, Search, Where-used and Properties panels; `Alt+←/→` walk the navigation history |
 | 🖥️ **Electron shell** | Optional native desktop app with native file-open dialogs and loopback MSAL sign-in |
 | 🌍 **Czech / English UI** | `cs` and `en` — detected from the browser locale, switchable from the toolbar and remembered |
 

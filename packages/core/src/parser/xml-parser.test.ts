@@ -753,6 +753,46 @@ describe('parseERConfiguration', () => {
     expect(getFormatElementDataType(cell!)).toBe('String');
   });
 
+  it('prefers the embedded Excel workbook over the reference-only attachment node', () => {
+    // Real exports carry the attachment reference first (no binary) and the
+    // embedded workbook further down. Taking the first hit in document order
+    // left the preview without a template.
+    const xml = buildSolutionEnvelope(`
+      <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Format>
+          <ERTextFormat ID.="{FORMAT}" Name="Free text invoice (Excel)">
+            <Attachment>
+              <ERTextFormatExcelTemplate Filename="&lt;descr/&gt;Free text invoice (Excel)" />
+            </Attachment>
+            <Root>
+              <ERTextFormatExcelFileComponent ID.="{XLSX}" Name="Report">
+                <Template>
+                  <ERTextFormatExcelTemplate Filename="FTIModTemplate.xlsx">
+                    <Contents.>UEsDBBQ=</Contents.>
+                  </ERTextFormatExcelTemplate>
+                </Template>
+              </ERTextFormatExcelFileComponent>
+            </Root>
+          </ERTextFormat>
+        </Format>
+      </ERFormatVersion>
+      <ERFormatMappingVersion ID.="{FORMAT-MAP},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERFormatMapping ID.="{FORMAT-MAP}" Format="{FORMAT}" FormatVersion="{FORMAT},1" Name="Free text invoice (Excel)" />
+        </Mapping>
+      </ERFormatMappingVersion>
+    `, { contentRefIds: ['{FORMAT}', '{FORMAT-MAP}'] });
+
+    const config = parseERConfiguration(xml, 'excel-template.xml');
+    if (config.content.kind !== 'Format') {
+      throw new Error('Expected format content');
+    }
+
+    const template = config.content.formatVersion.format.template;
+    expect(template?.filename).toBe('FTIModTemplate.xlsx');
+    expect(template?.base64).toBe('UEsDBBQ=');
+  });
+
   it('recognizes import formats from DataImportSupport="1"', () => {
     const xml = buildSolutionEnvelope(`
       <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildLabelPool, labelDisplayText, looksLikeLabelRef, normalizeLabelRef, resolveLabel } from './label-resolver';
+import { buildLabelPool, collectLabelTranslations, labelDisplayText, looksLikeLabelRef, normalizeLabelRef, resolveLabel } from './label-resolver';
 
 const config = (labels: Array<{ labelId: string; languageId: string; labelValue: string }>) => ({
   solutionVersion: { solution: { labels } },
@@ -121,5 +121,32 @@ describe('harvested label pool', () => {
     const pool = buildLabelPool([cfg], 0);
     expect(labelDisplayText('@"GER_LABEL:Fax"', pool, 'en-us')).toBe('Fax');
     expect(labelDisplayText('@Own', pool, 'en-us')).toBe('Vlastní');
+  });
+});
+
+describe('collectLabelTranslations', () => {
+  const labels = [
+    { labelId: 'GER_LABEL:Invoice', languageId: 'cs', labelValue: 'Faktura' },
+    { labelId: 'GER_LABEL:Invoice', languageId: 'en-US', labelValue: 'Invoice' },
+    { labelId: 'GER_LABEL:Invoice', languageId: 'de', labelValue: 'Rechnung' },
+    { labelId: 'GER_LABEL:Other', languageId: 'en-US', labelValue: 'Other' },
+  ];
+
+  it('returns every translation of the label, English first', () => {
+    expect(collectLabelTranslations('@"GER_LABEL:Invoice"', labels)).toEqual([
+      { languageId: 'en-US', value: 'Invoice' },
+      { languageId: 'cs', value: 'Faktura' },
+      { languageId: 'de', value: 'Rechnung' },
+    ]);
+  });
+
+  it('matches the bare reference form too', () => {
+    expect(collectLabelTranslations('@GER_LABEL:Invoice', labels)).toHaveLength(3);
+  });
+
+  it('returns nothing for an unknown label', () => {
+    expect(collectLabelTranslations('@"GER_LABEL:Missing"', labels)).toEqual([]);
+    expect(collectLabelTranslations('@"GER_LABEL:Invoice"', [])).toEqual([]);
+    expect(collectLabelTranslations(null, labels)).toEqual([]);
   });
 });

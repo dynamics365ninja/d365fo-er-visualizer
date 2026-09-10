@@ -3430,6 +3430,68 @@ body {
   color: var(--text-secondary);
 }
 
+/* ── Label translation card ───────────────────────────────────────────────── */
+
+.lin-label__meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0 0 10px;
+  font-size: 11px;
+}
+
+.lin-label__meta dt {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.lin-label__meta dd {
+  margin: 0;
+  color: var(--text-primary);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lin-label__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lin-label__item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+  background: var(--bg-secondary);
+}
+
+.lin-label__item.is-active {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-secondary));
+}
+
+.lin-label__lang {
+  flex: 0 0 auto;
+  min-width: 52px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.lin-label__text {
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
 .lin-path__toggle {
   margin-left: auto;
   padding: 2px 8px;
@@ -4178,6 +4240,37 @@ body {
   height: min(99vh, 99dvh);
 }
 
+/* The drill-down dialog is dragged to size by the user via the bottom-right
+   grip. CSS `resize` is not used: Fluent's own surface styles are injected
+   after ours and reset `resize`/`overflow` on DialogSurface. The surface is a
+   native <dialog>, which is already a positioned containing block, so the grip
+   anchors to it without overriding `position`. */
+.dd-dialog-resize-grip {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 18px;
+  height: 18px;
+  z-index: 5;
+  cursor: nwse-resize;
+  touch-action: none;
+  border-radius: 3px;
+  background:
+    linear-gradient(135deg, transparent 0 46%, var(--colorNeutralForeground4, #8a8886) 46% 54%, transparent 54% 100%),
+    linear-gradient(135deg, transparent 0 70%, var(--colorNeutralForeground4, #8a8886) 70% 78%, transparent 78% 100%);
+  opacity: 0.65;
+}
+
+.dd-dialog-resize-grip:hover,
+.dd-dialog-resize-grip:active {
+  opacity: 1;
+}
+
+/* Keep the grip clear of the dialog's own content. */
+.dd-dialog-surface--resizable .dd-dialog-body {
+  padding-bottom: 6px !important;
+}
+
 .dd-dialog-body {
   display: flex;
   flex-direction: column;
@@ -4371,8 +4464,8 @@ body {
 
 /* ─── Dialog / popup backdrop blur ─── */
 /* Fluent UI v9 renders the modal overlay via DialogSurface::before.
-   Apply a subtle blur so the app behind a dialog (Command Palette,
-   Drill-down, etc.) feels visually receded. */
+   Apply a subtle blur so the app behind a dialog (drill-down, workspace
+   manager, etc.) feels visually receded. */
 [class*="fui-DialogSurface"]::before {
   backdrop-filter: blur(6px) saturate(0.9);
   -webkit-backdrop-filter: blur(6px) saturate(0.9);

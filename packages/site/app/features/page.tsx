@@ -67,7 +67,6 @@ const blocks: FeatureBlock[] = [
       'Where-used returns every format binding, model binding, and datasource that references an element',
       'Results carry their source context, so you can tell duplicates apart',
       'Where-used results group by file, with a scope toggle for mappings only or format only',
-      'Command palette on Ctrl/⌘+K jumps to configurations, tabs, and panel actions',
     ],
     docHref: '/docs/search-and-where-used',
     docLabel: 'Search and where-used',

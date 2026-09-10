@@ -47,7 +47,6 @@ const SearchPanel = React.lazy(() =>
 import { LandingPage } from './LandingPage';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ToastHost } from './ToastHost';
-import { CommandPalette, type CommandItem } from './CommandPalette';
 import { ActivityBar } from './ActivityBar';
 import { TouchTitleTooltip } from './TouchTitleTooltip';
 import { useCompactLayout, useStackedLayout } from '../utils/responsive';
@@ -348,7 +347,6 @@ export function App() {
   useEffect(() => {
     if (landingRequest) setShowLanding(true);
   }, [landingRequest]);
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const [statusWarningsOpen, setStatusWarningsOpen] = useState(false);
   const configs = useAppStore(s => s.configurations);
   const treeNodes = useAppStore(s => s.treeNodes);
@@ -475,17 +473,12 @@ export function App() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // Workspace shortcuts have nothing to act on while the landing page is
-      // shown (palette/panels are not mounted) — leave the browser's defaults.
+      // shown (panels are not mounted) — leave the browser's defaults.
       if (landingVisibleRef.current) return;
       const mod = e.ctrlKey || e.metaKey;
       const target = e.target as HTMLElement | null;
       const inEditable = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || (target as HTMLElement).isContentEditable);
 
-      if (mod && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault();
-        setPaletteOpen(p => !p);
-        return;
-      }
       if (inEditable) return;
 
       if (mod && (e.key === 'f' || e.key === 'F')) {
@@ -523,19 +516,6 @@ export function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [navigateBack, navigateForward, toggleSearch, toggleWhereUsed, toggleProperties, toggleExplorer]);
 
-  const paletteCommands = useMemo<CommandItem[]>(() => [
-    { id: 'home', group: t.cmdGroupNav, label: t.cmdGoHome, action: () => { setShowLanding(true); } },
-    { id: 'back', group: t.cmdGroupNav, label: t.cmdBack, hint: 'Alt+←', action: navigateBack },
-    { id: 'forward', group: t.cmdGroupNav, label: t.cmdForward, hint: 'Alt+→', action: navigateForward },
-    { id: 'search', group: t.cmdGroupView, label: t.cmdToggleSearch, hint: 'Ctrl+F', action: toggleSearch },
-    { id: 'explorer', group: t.cmdGroupView, label: t.cmdToggleExplorer, hint: 'Ctrl+B', action: toggleExplorer },
-    { id: 'props', group: t.cmdGroupView, label: t.cmdToggleProperties, hint: 'Ctrl+J', action: toggleProperties },
-    { id: 'theme', group: t.cmdGroupView, label: t.cmdToggleTheme, action: cycleTheme },
-    { id: 'tech', group: t.cmdGroupView, label: t.cmdToggleTechnical, action: () => setShowTechnicalDetails(!showTechnicalDetails) },
-    { id: 'collapse', group: t.cmdGroupTools, label: t.cmdCollapseAll, action: () => requestExplorerExpand('none') },
-    { id: 'expand', group: t.cmdGroupTools, label: t.cmdExpandAll, action: () => requestExplorerExpand('all') },
-  ], [navigateBack, navigateForward, toggleSearch, toggleProperties, toggleExplorer, cycleTheme, setShowTechnicalDetails, showTechnicalDetails, requestExplorerExpand, locale]);
-
   // Entering a drill-down tab hides the side panels once; re-opening them
   // while staying on that tab must survive unrelated tab-list changes.
   const activeTabKind = openTabs.find(tab => tab.id === activeTabId)?.kind;
@@ -572,7 +552,6 @@ export function App() {
         onToggleSearch={toggleSearch}
         onToggleWhereUsed={toggleWhereUsed}
         onGoHome={() => { setShowLanding(true); }}
-        onOpenPalette={() => setPaletteOpen(true)}
       />
       <div className={styles.workarea}>
           <Toolbar />
@@ -681,11 +660,6 @@ export function App() {
       </div>
       <ToastHost />
       <TouchTitleTooltip />
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-        extraCommands={paletteCommands}
-      />
     </div>
   );
 }

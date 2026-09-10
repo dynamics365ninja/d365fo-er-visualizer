@@ -34,6 +34,7 @@ import { useAppStore, type TreeNode } from '../state/store';
 import { ERDirection } from '@er-visualizer/core';
 import type { ERConfiguration } from '@er-visualizer/core';
 import { buildExplorerModelGroups, getBestVersion, type ExplorerModelGroup } from '../utils/model-hierarchy';
+import { getActiveFormatDescriptors, collectActiveScopeNodeIds } from '../utils/active-format-scope';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 import { buildLabelPool, labelDisplayText, looksLikeLabelRef } from '../utils/label-resolver';
 import { useCoarsePointer } from '../utils/responsive';
@@ -74,7 +75,9 @@ function getExplorerKindLabel(node: TreeNode): string | null {
   }
 
   if (kind === 'DataModel' || node.type === 'model') return labels.DataModel;
-  if (kind === 'ModelMapping' || node.type === 'mapping') return labels.ModelMapping;
+  // The mapping-definition row is already named "Mapování: <name>", so the pill
+  // would only repeat it. Configuration rows still get theirs.
+  if (kind === 'ModelMapping') return labels.ModelMapping;
   if (kind === 'Format' || node.type === 'format') return labels.Format;
 
   return null;
@@ -253,6 +256,8 @@ function sortExplorerGroups(
 export function ConfigExplorer() {
   const treeNodes = useAppStore(s => s.treeNodes);
   const configurations = useAppStore(s => s.configurations);
+  const activeTabId = useAppStore(s => s.activeTabId);
+  const openTabs = useAppStore(s => s.openTabs);
   const selectedNodeId = useAppStore(s => s.selectedNodeId);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const removeConfiguration = useAppStore(s => s.closeConfigurationWithUndo);
@@ -294,6 +299,17 @@ export function ConfigExplorer() {
     () => new Set<ConfigKind>(),
   );
   const [hierarchyView, setHierarchyView] = useState(false);
+
+  // The mapping definition / model root the *active* format binds to. Computed
+  // here (not while the tree is built) so switching designer tabs re-points the
+  // highlight instead of freezing on whichever format loaded first.
+  const activeScopeNodeIds = useMemo(() => {
+    const activeConfigIndex = openTabs.find(tab => tab.id === activeTabId)?.configIndex ?? null;
+    return collectActiveScopeNodeIds(
+      treeNodes,
+      getActiveFormatDescriptors(configurations, activeConfigIndex),
+    );
+  }, [treeNodes, configurations, openTabs, activeTabId]);
 
   const toggleKind = useCallback((kind: ConfigKind) => {
     setKindFilter(prev => {
@@ -512,6 +528,7 @@ export function ConfigExplorer() {
   }
 
   return (
+    <ActiveScopeContext.Provider value={activeScopeNodeIds}>
     <div
       className={`explorer-tree-shell explorer-dropzone ${isDragging ? 'explorer-dropzone-dragging' : ''}`}
       onDragEnter={handleDragEnter}
@@ -801,8 +818,16 @@ export function ConfigExplorer() {
         </div>
       )}
     </div>
+    </ActiveScopeContext.Provider>
   );
 }
+
+/**
+ * Node ids that belong to the active format's scope. Read deep inside the
+ * recursive row component, so a context beats drilling a prop through every
+ * level of the tree.
+ */
+const ActiveScopeContext = React.createContext<ReadonlySet<string>>(new Set<string>());
 
 interface TreeNodeRowProps {
   node: TreeNode;
@@ -861,9 +886,13 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
 
   const isSelected = node.id === selectedId;
   const isAncestor = !isSelected && selectedPathIds.has(node.id);
-  // The mapping definition the loaded format actually binds to — bold, so the
-  // active one is obvious among sibling DataContainerDescriptor roots.
-  const isActiveMappingDefinition = node.data?.isActiveMappingDefinition === true;
+  // The mapping definition / model root the format in the active designer tab
+  // binds to — bold, so the relevant one is obvious among its siblings. Falls
+  // back to the tree's build-time guess when no format tab is active.
+  const activeScopeIds = React.useContext(ActiveScopeContext);
+  const isActiveMappingDefinition = activeScopeIds.size > 0
+    ? activeScopeIds.has(node.id)
+    : node.data?.isActiveMappingDefinition === true;
 
   // Selection can come from outside the explorer (designer rows, search,
   // where-used). Ancestors expand above, but the row itself may sit far

@@ -12,7 +12,6 @@ import {
   SearchRegular,
   LinkRegular,
   AppsListDetailRegular,
-  KeyboardRegular,
   EyeRegular,
   CodeRegular,
 } from '@fluentui/react-icons';
@@ -34,7 +33,6 @@ interface ActivityBarProps {
   onToggleSearch: () => void;
   onToggleWhereUsed: () => void;
   onGoHome: () => void;
-  onOpenPalette: () => void;
 }
 
 const useStyles = makeStyles({
@@ -149,12 +147,6 @@ export function ActivityBar(props: ActivityBarProps) {
         onClick={props.onToggleRight}
         active={props.showRight && props.rightTab === 'properties'}
         shortcut="Ctrl+J"
-      />
-      <ActivityButton
-        Icon={KeyboardRegular}
-        label={t.commandPalette}
-        onClick={props.onOpenPalette}
-        shortcut="Ctrl+K"
       />
 
       <div className={styles.spacer} />

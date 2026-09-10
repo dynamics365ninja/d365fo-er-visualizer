@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   Button,
   Tooltip,
@@ -10,10 +10,12 @@ import {
   ArrowLeftRegular,
   ArrowRightRegular,
   FolderOpenRegular,
+  AppsListDetailRegular,
 } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
 import { setLocale, t, useLocale } from '../i18n';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
+import { WorkspaceManager } from './WorkspaceManager';
 
 const useStyles = makeStyles({
   root: {
@@ -74,8 +76,8 @@ const useStyles = makeStyles({
 });
 
 /**
- * Slim top toolbar — file/history operations. View toggles, theme, and the
- * command palette live on the left ActivityBar.
+ * Slim top toolbar — file/history operations. View toggles and the theme live
+ * on the left ActivityBar.
  */
 export function Toolbar() {
   const styles = useStyles();
@@ -86,6 +88,8 @@ export function Toolbar() {
   const navigateBack = useAppStore(s => s.navigateBack);
   const navigateForward = useAppStore(s => s.navigateForward);
   const pushToast = useAppStore(s => s.pushToast);
+  const requestLanding = useAppStore(s => s.requestLanding);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reportLoadErrors = useCallback((errors: string[]) => {
@@ -156,6 +160,23 @@ export function Toolbar() {
             {t.loadXml}
           </Button>
         </Tooltip>
+
+        <Tooltip content={t.workspaceManager} relationship="label" withArrow>
+          <Button
+            appearance="secondary"
+            size="small"
+            icon={<AppsListDetailRegular />}
+            onClick={() => setWorkspaceOpen(true)}
+          >
+            {t.workspaceManager}
+          </Button>
+        </Tooltip>
+
+        <WorkspaceManager
+          open={workspaceOpen}
+          onOpenChange={setWorkspaceOpen}
+          onRequestFno={() => requestLanding('remote')}
+        />
       </div>
 
       <div className={styles.rightGroup}>
