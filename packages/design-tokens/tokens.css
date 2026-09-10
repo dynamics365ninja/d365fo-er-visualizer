@@ -28,13 +28,13 @@
   --er-surface-3: #e6e7e9;
   /* Dialogs and popovers sit on white; the shadow does the lifting here. */
   --er-surface-raised: #ffffff;
-  --er-surface-raised-2: #f4f5f6;
+  --er-surface-raised-2: #f2f4f7;
   /* Code, formulas, anything quoted verbatim. */
-  --er-surface-sunken: #f4f5f6;
+  --er-surface-sunken: #eef1f5;
   --er-selected: #dfeced;
 
   --er-border: #e2e3e5;
-  --er-border-strong: #c8cacd;
+  --er-border-strong: #b4bac1;
 
   --er-text: #101214;
   --er-text-muted: #5c6165;
@@ -95,14 +95,14 @@
     --er-surface-3: #2b3036;
     /* Above the app: dialogs, popovers, menus. A modal darker than the
        window behind it reads as a hole, not as something on top. */
-    --er-surface-raised: #262b30;
-    --er-surface-raised-2: #2e343a;
+    --er-surface-raised: #2b3138;
+    --er-surface-raised-2: #363d45;
     /* Below the app: code, formulas, anything quoted verbatim. */
-    --er-surface-sunken: #0f1113;
+    --er-surface-sunken: #15181c;
     --er-selected: #16343a;
 
     --er-border: #2f343a;
-    --er-border-strong: #434a51;
+    --er-border-strong: #5a636d;
 
     --er-text: #ecedef;
     --er-text-muted: #a5aab0;
@@ -150,13 +150,13 @@
   --er-surface: #1a1d20;
   --er-surface-2: #22262a;
   --er-surface-3: #2b3036;
-  --er-surface-raised: #262b30;
-  --er-surface-raised-2: #2e343a;
-  --er-surface-sunken: #0f1113;
+  --er-surface-raised: #2b3138;
+  --er-surface-raised-2: #363d45;
+  --er-surface-sunken: #15181c;
   --er-selected: #16343a;
 
   --er-border: #2f343a;
-  --er-border-strong: #434a51;
+  --er-border-strong: #5a636d;
 
   --er-text: #ecedef;
   --er-text-muted: #a5aab0;

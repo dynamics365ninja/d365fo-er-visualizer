@@ -6571,19 +6571,24 @@ body {
 
 /* Sized by its rows, not by the dialog: growing to a 3:2 share left a short
    list floating above 200px of nothing, with the second section stranded at
-   the bottom edge. It still takes the free space when it has rows to fill it,
-   which is what the generous max-height is for. */
+   the bottom edge. No vh cap either — that cap was what kept the dialog short
+   on a tall screen while its own lists scrolled inside it. The surface's
+   max-height does the limiting, and the lists shrink and scroll once it is
+   reached. */
 .ws-list {
   gap: 2px;
   flex: 0 1 auto;
   min-height: 0;
-  max-height: 52vh;
+  max-height: none;
+  overflow-y: auto;
   padding: 2px 0;
 }
 
 .ws-list--available {
   flex: 0 1 auto;
-  max-height: 34vh;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
 }
 
 .ws-row {
@@ -7830,13 +7835,17 @@ div.path-tooltip-card {
   --bg-primary: var(--er-surface-raised);
   --bg-secondary: var(--er-surface-raised-2);
   --bg-tertiary: var(--er-surface-3);
+  /* A hairline that reads on the app's own surfaces disappears on a modal's
+     lighter one, and a modal is all edges: sections, cards, code blocks. Every
+     line inside one comes from the strong outline. */
+  --border-color: var(--er-border-strong);
   /* The `--ui-*` layer resolves its `var(--bg-*)` at :root, so re-levelling
      `--bg-*` alone would not reach anything painted through it. */
   --ui-surface-0: var(--er-surface-raised);
   --ui-surface-1: color-mix(in srgb, var(--er-accent) 8%, var(--er-surface-raised));
   --ui-surface-2: var(--er-surface-raised-2);
   --ui-stroke-1: var(--er-border-strong);
-  --ui-stroke-2: var(--er-border);
+  --ui-stroke-2: color-mix(in srgb, var(--er-border-strong) 70%, transparent);
 }
 
 .dd-dialog-surface .er-expr,
@@ -7902,4 +7911,17 @@ div.path-tooltip-card {
   color: var(--er-text-muted);
   font-size: var(--er-text-2xs);
   font-variant-numeric: tabular-nums;
+}
+
+/* A tablet or a phone cannot drag the resize grip, so the workspace manager
+   stops pretending it is a window there and becomes a full-height sheet — it
+   used to sit half the screen tall with no way to stretch it. */
+@media (max-width: 900px), (pointer: coarse) {
+  .ws-surface {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    height: calc(100dvh - 40px) !important;
+    max-height: calc(100dvh - 40px) !important;
+    resize: none;
+  }
 }
