@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Button,
-  Input,
   Menu,
   MenuTrigger,
   MenuPopover,
@@ -10,7 +9,6 @@ import {
   MenuDivider,
 } from '@fluentui/react-components';
 import {
-  DismissRegular,
   MoreVerticalRegular,
   ArrowSortRegular,
   OpenRegular,
@@ -38,6 +36,8 @@ import { getActiveFormatDescriptors, collectActiveScopeNodeIds } from '../utils/
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 import { buildLabelPool, labelDisplayText, looksLikeLabelRef } from '../utils/label-resolver';
 import { useCoarsePointer } from '../utils/responsive';
+import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../utils/filter-suggestions';
+import { FilterField } from './FilterField';
 import { WorkspaceManager } from './WorkspaceManager';
 import { FnoIngestPanel } from './FnoIngestPanel';
 import {
@@ -160,6 +160,28 @@ function getExplorerNodeIcon(node: TreeNode): React.ReactNode {
   return <DocumentFilled fontSize={14} />;
 }
 
+/**
+ * The explorer view of one configuration tree.
+ *
+ * A model mapping is explored as a plain list of its definitions: the data
+ * sources, bindings and validations underneath one definition are three more
+ * levels of tree for content the designer already lays out with room to read
+ * it, so they are dropped here. Formats keep their embedded mapping subtrees —
+ * there the mapping is a part of the format, not the thing being explored.
+ * The store tree stays untouched, so search, where-used and navigation still
+ * resolve every node inside a mapping.
+ */
+function toExplorerTreeNode(node: TreeNode, config: ERConfiguration | undefined): TreeNode {
+  if (config?.content.kind !== 'ModelMapping') return node;
+  if (!node.children?.length) return node;
+  return {
+    ...node,
+    children: node.children.map(child => (
+      child.type === 'mapping' && child.children?.length ? { ...child, children: undefined } : child
+    )),
+  };
+}
+
 function filterTreeNodes(nodes: TreeNode[], query: string): TreeNode[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return nodes;
@@ -254,8 +276,14 @@ function sortExplorerGroups(
 }
 
 export function ConfigExplorer() {
-  const treeNodes = useAppStore(s => s.treeNodes);
+  const storeTreeNodes = useAppStore(s => s.treeNodes);
   const configurations = useAppStore(s => s.configurations);
+  // Everything the explorer renders goes through the pruned view; the store
+  // tree stays the one that node ids and navigation are resolved against.
+  const treeNodes = useMemo(
+    () => storeTreeNodes.map((node, idx) => toExplorerTreeNode(node, configurations[idx])),
+    [storeTreeNodes, configurations],
+  );
   const activeTabId = useAppStore(s => s.activeTabId);
   const openTabs = useAppStore(s => s.openTabs);
   const selectedNodeId = useAppStore(s => s.selectedNodeId);
@@ -306,10 +334,10 @@ export function ConfigExplorer() {
   const activeScopeNodeIds = useMemo(() => {
     const activeConfigIndex = openTabs.find(tab => tab.id === activeTabId)?.configIndex ?? null;
     return collectActiveScopeNodeIds(
-      treeNodes,
+      storeTreeNodes,
       getActiveFormatDescriptors(configurations, activeConfigIndex),
     );
-  }, [treeNodes, configurations, openTabs, activeTabId]);
+  }, [storeTreeNodes, configurations, openTabs, activeTabId]);
 
   const toggleKind = useCallback((kind: ConfigKind) => {
     setKindFilter(prev => {
@@ -421,7 +449,10 @@ export function ConfigExplorer() {
   }, [navigateToTreeNode, openDrillDownTab, openNodeInConfigTab, resolveNodeDrillExpression, selectNode]);
 
   const filteredTreeNodes = useMemo(() => filterTreeNodes(treeNodes, filterQuery), [treeNodes, filterQuery]);
-  const selectedPathIds = useMemo(() => collectAncestorIds(treeNodes, selectedNodeId), [treeNodes, selectedNodeId]);
+  // Ancestors come from the store tree: a node selected from search or
+  // where-used can sit below a pruned mapping definition, and its definition
+  // row still has to open and highlight.
+  const selectedPathIds = useMemo(() => collectAncestorIds(storeTreeNodes, selectedNodeId), [storeTreeNodes, selectedNodeId]);
 
   // Counts across the full unfiltered set so the chip badges stay stable.
   const kindCounts = useMemo(() => {
@@ -432,6 +463,27 @@ export function ConfigExplorer() {
     }
     return counts;
   }, [treeNodes]);
+
+  /* Terms the explorer filter can actually hit, grouped by configuration kind.
+     Row names carry trailing detail — a binding's expression, a definition's
+     descriptor and version — separated by a double space; suggesting the whole
+     string would be unreadable, and the leading name filters just as well. */
+  const filterSuggestions = useMemo<FilterSuggestion[]>(() => {
+    const byKind = new Map<ConfigKind, string[]>();
+    const collect = (node: TreeNode, bucket: string[]) => {
+      if (node.type !== 'section') bucket.push(node.name.split('  ')[0]);
+      for (const child of node.children ?? []) collect(child, bucket);
+    };
+    treeNodes.forEach((node, idx) => {
+      const kind = configurations[idx]?.content.kind as ConfigKind | undefined;
+      if (!kind) return;
+      const bucket = byKind.get(kind) ?? [];
+      collect(node, bucket);
+      byKind.set(kind, bucket);
+    });
+    return (['DataModel', 'ModelMapping', 'Format'] as const)
+      .flatMap(kind => suggestionsFromCounts(countTerms(byKind.get(kind) ?? []), getExplorerGroupLabel(kind)));
+  }, [treeNodes, configurations]);
 
   const sortNodes = useCallback((nodes: TreeNode[]) => {
     if (sortMode === 'loadOrder') return nodes;
@@ -565,14 +617,6 @@ export function ConfigExplorer() {
         <Button
           appearance="subtle"
           size="small"
-          icon={<AddRegular />}
-          aria-label={t.explorerAddConfigurations}
-          title={t.explorerAddConfigurations}
-          onClick={openAddFiles}
-        />
-        <Button
-          appearance="subtle"
-          size="small"
           className="explorer-workspace-button"
           icon={<AppsListDetailRegular />}
           aria-label={t.workspaceManager}
@@ -641,21 +685,13 @@ export function ConfigExplorer() {
 
       <div className="explorer-toolbar config-explorer-toolbar">
         <div className="panel-filter-row explorer-toolbar-filter">
-          <Input
-            size="small"
+          <FilterField
             value={filterQuery}
-            onChange={(_, d) => setFilterQuery(d.value)}
+            onChange={setFilterQuery}
             placeholder={t.explorerFilterPlaceholder}
-            className="fmt-filter-input explorer-filter-input"
-            contentAfter={filterQuery ? (
-              <Button
-                appearance="transparent"
-                size="small"
-                icon={<DismissRegular />}
-                aria-label={t.clearFilter}
-                onClick={() => setFilterQuery('')}
-              />
-            ) : undefined}
+            suggestions={filterSuggestions}
+            historyScope="explorer"
+            className="explorer-filter-field"
           />
         </div>
 

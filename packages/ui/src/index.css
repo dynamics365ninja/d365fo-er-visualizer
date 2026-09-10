@@ -1656,22 +1656,6 @@ body {
 
 /* ─── Mapping Designer Rows ─── */
 
-.density-compact .mm-binding-row {
-  padding: 4px 10px 4px 14px;
-  margin: 2px 4px 2px 8px;
-  border-radius: 8px;
-}
-
-.density-compact .mm-tree-branch {
-  margin-top: 2px;
-  margin-bottom: 2px;
-}
-
-.density-compact .mm-group-header {
-  padding: 4px 8px;
-  min-height: 26px;
-}
-
 /* ─── Format Bindings tab: element card with inline binding list ─── */
 .fmt-bind-card {
   display: flex;
@@ -1685,10 +1669,6 @@ body {
 
 .fmt-bind-card:hover {
   background: color-mix(in srgb, var(--text-primary) 3%, transparent);
-}
-
-.density-compact .fmt-bind-card {
-  padding: 4px 10px 5px;
 }
 
 .fmt-bind-card-head {
@@ -1997,7 +1977,7 @@ body {
   color: var(--er-text);
 }
 
-/* Square icon button used across designer toolbars (density, actions). */
+/* Square icon button used across designer toolbars. */
 .fmt-icon-btn {
   display: inline-flex;
   align-items: center;
@@ -2105,12 +2085,20 @@ body {
 }
 
 /* Plain canvas on purpose — only the rows carry a surface, otherwise the tree
-   and its background merge into one tinted block and stop being readable. */
+   and its background merge into one tinted block and stop being readable.
+   No padding: the pane is a scrollport, and padding here left the sticky group
+   headers pinned 6px short of the top edge with rows sliding through the gap
+   above them. The one view that wants an inset carries it itself, so headers
+   pin flush and full-bleed exactly like the model-mapping designer's. */
 .designer-list-pane {
   flex: 1;
   overflow: auto;
-  padding: 6px;
   background: var(--er-bg-soft);
+}
+
+/* The element tree is plain rows with no group headers of its own. */
+.fmt-structure-list {
+  padding: 6px;
 }
 
 /* Format Element Tree Row */
@@ -2156,12 +2144,6 @@ body {
 
 .fmt-element-row.nav-flash {
   animation: nav-flash-pulse 1.4s ease-out;
-}
-
-.density-compact .fmt-element-row {
-  min-height: 28px;
-  padding: 4px 8px;
-  margin: 2px 0;
 }
 
 .fmt-toggle {
@@ -2746,10 +2728,6 @@ body {
   border: 1px solid var(--er-border);
   border-radius: 12px;
   background: var(--er-surface);
-}
-
-.density-compact .ds-row {
-  padding: 6px 10px;
 }
 
 .ds-row:hover {
@@ -7197,9 +7175,9 @@ body {
 
   /* ── Hit targets ───────────────────────────────────────────────
      Rows sit at 22–28px for density on a mouse; a finger needs ~40px.
-     Prefixed with `.app-shell` so these beat the density overrides further
-     up the file (`.explorer-tree-shell .tree-node` and friends) and the
-     Griffel classes, which all outrank a bare element selector. */
+     Prefixed with `.app-shell` so these beat the row rules further up the
+     file (`.explorer-tree-shell .tree-node` and friends) and the Griffel
+     classes, which all outrank a bare element selector. */
   .app-shell .tree-node,
   .app-shell .explorer-tree-shell .tree-node,
   .app-shell .explorer-tree-shell .tree-node[data-depth='0'],
@@ -7267,7 +7245,7 @@ body {
   }
 
   /* ── Designer toolbar controls ─────────────────────────────────
-     The density toggle (28px square) and the expand/collapse slider (22px
+     The icon buttons (28px square) and the expand/collapse slider (22px
      options) sat at three different heights next to the 36px tabs. Give the
      whole toolbar one height and let the labelled variants set their width
      from their text. */
@@ -7476,5 +7454,195 @@ body {
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
     padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ─── Model-mapping validations ───
+   The mapping designer listed bindings and data sources only, so validations
+   were visible as a header count and nowhere else. They render as cards: the
+   guarded model path on top, then one block per rule with its condition and
+   message expression, each with the row drill-down bindings already have. */
+.mm-validation-list {
+  padding: 4px 0 12px;
+}
+
+.mm-validation-row {
+  margin: 5px 12px;
+  cursor: pointer;
+}
+
+.mm-validation-row:hover {
+  background: var(--bg-hover);
+}
+
+.mm-validation-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--er-accent);
+}
+
+.mm-validation-rule {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-md);
+  background: var(--bg-secondary);
+}
+
+.mm-validation-rule-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.mm-validation-rule-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--er-text-muted);
+}
+
+.mm-validation-badge {
+  padding: 1px 6px;
+  border: 1px solid var(--er-border);
+  border-radius: 999px;
+  background: var(--er-surface);
+  color: var(--er-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.mm-validation-expr {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+  min-width: 0;
+}
+
+.mm-validation-expr-label {
+  flex-shrink: 0;
+  width: 68px;
+  padding-top: 1px;
+  color: var(--er-text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.mm-validation-expr .mm-binding-expr {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The label column costs more than it gives on a phone-width panel. */
+@media (max-width: 640px) {
+  .mm-validation-expr {
+    flex-wrap: wrap;
+  }
+
+  .mm-validation-expr-label {
+    width: auto;
+  }
+}
+
+/* ─── Filter type-ahead ───
+   The dropdown under the explorer and designer filter boxes. It floats over
+   the panel below (the toolbars it sits in are only ~36px tall, so there is
+   nowhere to push content to) and is anchored to the field, which is why
+   `.filter-field` is the positioned ancestor. */
+.filter-suggest {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  /* At least as wide as the field, but free to grow for long names — a
+     toolbar filter is ~180px and every suggestion would read as an ellipsis. */
+  min-width: 100%;
+  width: max-content;
+  max-width: min(420px, 70vw);
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  z-index: 30;
+}
+
+.filter-suggest__group {
+  padding: 6px 8px 3px;
+  color: var(--er-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.filter-suggest__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--er-radius-md);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+/* The keyboard cursor. The soft tint alone was easy to miss against the
+   dropdown surface, so the active row also carries an accent bar and the
+   accent text colour. */
+.filter-suggest__item.active {
+  background: var(--er-accent-soft);
+  box-shadow: inset 2px 0 0 var(--er-accent);
+  color: var(--er-accent);
+}
+
+.filter-suggest__item.active .filter-suggest__count {
+  background: var(--er-surface);
+  color: var(--er-accent);
+}
+
+.filter-suggest__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The typed part, so it is obvious why a row is being offered. */
+.filter-suggest__label mark {
+  background: none;
+  color: var(--er-accent);
+  font-weight: 700;
+}
+
+.filter-suggest__count {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: var(--er-radius-pill);
+  background: var(--bg-hover);
+  color: var(--er-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The explorer field used to be a Fluent Input; keep its softer surface. */
+.explorer-filter-field .filter-field__input {
+  min-height: 26px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-radius: var(--er-radius-md);
+  background: var(--er-bg-soft);
+}
+
+/* A finger needs the rows taller than a mouse does. */
+@media (pointer: coarse) {
+  .app-shell .filter-suggest__item {
+    min-height: 36px;
   }
 }

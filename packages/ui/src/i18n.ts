@@ -100,8 +100,6 @@ export interface Translations {
   structure: string;
   bindings: string;
   dataSources: string;
-  lightBindings: string;
-  lightDataSources: string;
   elements: string;
   bound: string;
   unbound: string;
@@ -109,6 +107,9 @@ export interface Translations {
   statsTooltip: (b: number, u: number, s: number) => string;
   transforms: string;
   clearFilter: string;
+  filterRecent: string;
+  filterSuggestions: string;
+  filterMatchCount: (n: number) => string;
   clearSearch: string;
   clearWhereUsedSearch: string;
   noConfigurationsLoaded: string;
@@ -183,7 +184,6 @@ export interface Translations {
   fnoIngestOpenWorkspace: string;
   explorerUnlinked: string;
   explorerLoading: string;
-  explorerAddConfigurations: string;
   fnoFooterIdle: string;
   fnoFooterDownloading: string;
   openInExplorerAction: string;
@@ -191,8 +191,6 @@ export interface Translations {
   noSelection: string;
   selectElementHint: string;
   viewLabel: string;
-  compactDensity: string;
-  comfortableDensity: string;
   // Drill-down panel
   drillDown: string;
   drillLabelFormat: string;
@@ -458,6 +456,8 @@ export interface Translations {
   propDatasources: string;
   propBindings: string;
   propValidations: string;
+  /** Empty state of the model-mapping designer's Validations tab. */
+  mappingNoValidations: string;
   propModelGuid: string;
   propModelVersionRaw: string;
   propRootContainer: string;
@@ -644,8 +644,6 @@ const cs: Translations = {
   structure: 'Struktura',
   bindings: 'Vazby',
   dataSources: 'Datové zdroje',
-  lightBindings: 'Napojení',
-  lightDataSources: 'Zdroje dat',
   elements: 'prvků',
   bound: 'vázaných',
   unbound: 'nevázaných',
@@ -653,6 +651,9 @@ const cs: Translations = {
   statsTooltip: (b: number, u: number, s: number) => `${b} vázaných + ${u} nevázaných + ${s} strukturních`,
   transforms: 'transformací',
   clearFilter: 'Vymazat filtr',
+  filterRecent: 'Naposledy hledané',
+  filterSuggestions: 'Návrhy filtru',
+  filterMatchCount: (n: number) => `Počet shod: ${n}`,
   clearSearch: 'Vymazat hledání',
   clearWhereUsedSearch: 'Vymazat hledání míst použití',
   noConfigurationsLoaded: 'Nejsou načtené žádné konfigurace.',
@@ -727,7 +728,6 @@ const cs: Translations = {
   fnoIngestOpenWorkspace: 'Otevřít pracovní plochu',
   explorerUnlinked: 'Nepřiřazeno',
   explorerLoading: 'Načítám',
-  explorerAddConfigurations: 'Přidat konfigurace',
   fnoFooterIdle: 'Vyberte konfigurace ke stažení',
   fnoFooterDownloading: 'Stahování konfigurací…',
   openInExplorerAction: 'Otevřít v Exploreru',
@@ -735,8 +735,6 @@ const cs: Translations = {
   noSelection: 'Není vybraný žádný prvek.',
   selectElementHint: 'Vyber v exploreru nebo v návrháři uzel, jehož vlastnosti chceš zobrazit.',
   viewLabel: 'Pohled',
-  compactDensity: 'Kompaktní',
-  comfortableDensity: 'Pohodlný',
 
   // Drill-down panel
   drillDown: 'Rozpad',
@@ -1000,6 +998,7 @@ const cs: Translations = {
   propDatasources: 'Datové zdroje',
   propBindings: 'Vazby',
   propValidations: 'Validace',
+  mappingNoValidations: 'Toto mapování nemá žádné validace',
   propModelGuid: 'GUID modelu',
   propModelVersionRaw: 'Verze modelu (raw)',
   propRootContainer: 'Kořenový kontejner',
@@ -1199,8 +1198,6 @@ const en: Translations = {
   structure: 'Structure',
   bindings: 'Bindings',
   dataSources: 'Data Sources',
-  lightBindings: 'Links',
-  lightDataSources: 'Data sources',
   elements: 'elements',
   bound: 'bound',
   unbound: 'unbound',
@@ -1208,6 +1205,9 @@ const en: Translations = {
   statsTooltip: (b: number, u: number, s: number) => `${b} bound + ${u} unbound + ${s} structural`,
   transforms: 'transforms',
   clearFilter: 'Clear filter',
+  filterRecent: 'Recent filters',
+  filterSuggestions: 'Filter suggestions',
+  filterMatchCount: (n: number) => `Matches: ${n}`,
   clearSearch: 'Clear search',
   clearWhereUsedSearch: 'Clear where-used search',
   noConfigurationsLoaded: 'No configurations loaded.',
@@ -1282,7 +1282,6 @@ const en: Translations = {
   fnoIngestOpenWorkspace: 'Open workspace',
   explorerUnlinked: 'Unlinked',
   explorerLoading: 'Loading',
-  explorerAddConfigurations: 'Add configurations',
   fnoFooterIdle: 'Select configurations to download',
   fnoFooterDownloading: 'Downloading configurations…',
   openInExplorerAction: 'Open in Explorer',
@@ -1290,8 +1289,6 @@ const en: Translations = {
   noSelection: 'No element selected.',
   selectElementHint: 'Select a node in the explorer or designer to inspect its properties.',
   viewLabel: 'View',
-  compactDensity: 'Compact',
-  comfortableDensity: 'Comfortable',
 
   drillDown: 'Drill-down',
   drillLabelFormat: 'Format',
@@ -1551,6 +1548,7 @@ const en: Translations = {
   propDatasources: 'Datasources',
   propBindings: 'Bindings',
   propValidations: 'Validations',
+  mappingNoValidations: 'This mapping defines no validations',
   propModelGuid: 'Model GUID',
   propModelVersionRaw: 'Model Version (raw)',
   propRootContainer: 'Root Container',

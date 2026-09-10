@@ -3546,22 +3546,19 @@ function buildTreeForConfig(config: ERConfiguration, index: number, allConfigura
   if (config.content.kind === 'ModelMapping') {
     const mm = (config.content as ERModelMappingContent).version;
     const definitions = getMappingDefinitions(mm);
-    if (definitions.length === 1) {
-      const inner = buildMappingTree(definitions[0], `${prefix}-mapping`, index, mm.number, allConfigurations);
-      children.push(...(inner.children ?? []));
-    } else {
-      // Multiple definitions — keep each visible under its own node so the
-      // user can tell the DataContainerDescriptor roots apart, and mark the
-      // one the loaded format actually binds to.
-      const usedDefinition = selectMappingDefinition(mm, allConfigurations);
-      children.push(...definitions.map((definition, di) => {
-        const node = buildMappingTree(definition, `${prefix}-mapping-${di}`, index, mm.number, allConfigurations);
-        if (definition === usedDefinition) {
-          node.data = { ...(node.data ?? {}), isActiveMappingDefinition: true };
-        }
-        return node;
-      }));
-    }
+    // One node per definition, always — the explorer lists a model mapping's
+    // definitions and nothing below them, so hoisting a lone definition's
+    // sections into the configuration row would leave that definition (and its
+    // DataContainerDescriptor) unnamed. Mark the one the loaded format binds to
+    // only when there is actually a choice.
+    const usedDefinition = definitions.length > 1 ? selectMappingDefinition(mm, allConfigurations) : null;
+    children.push(...definitions.map((definition, di) => {
+      const node = buildMappingTree(definition, `${prefix}-mapping-${di}`, index, mm.number, allConfigurations);
+      if (usedDefinition && definition === usedDefinition) {
+        node.data = { ...(node.data ?? {}), isActiveMappingDefinition: true };
+      }
+      return node;
+    }));
   }
 
   const displayName = sol.name;
