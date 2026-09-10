@@ -15,6 +15,10 @@ Click an expression anywhere it appears — on a format element, on a mapping bi
 Properties panel. The workbench opens with the expression on the left and its resolution on the
 right.
 
+**Double-click** the same expression — or `Ctrl`-click it (`⌘` on macOS) — and it opens as its own
+tab instead of a dialog. That is what you want when you are comparing two chains, or when you want
+the trace to stay open while you work elsewhere. Each tab keeps its own frame stack.
+
 ## How it works
 
 The workbench keeps a **stack of frames**. Each frame is one expression resolved to one source.
@@ -27,6 +31,15 @@ The whole breakdown is also available as a graph. The toggle in the top-right sw
 entire expression out as a node graph you can pan and zoom. The workbench is the better tool for
 following one thread; the tree is the better one for seeing how wide a formula actually is. Your
 choice is remembered.
+
+The tree view adds two controls of its own: a **Compact / Full** switch for how much of each label
+is written on a node, and an **Unresolved** toggle that reveals the references the resolver could
+not place — off by default, because on a complete workspace they are noise. Both choices are
+remembered.
+
+In its dialog form the panel is resizable: drag the grip in the bottom-right corner, or
+double-click the grip to go back to the default. The size is stored separately for the workbench
+and the tree, since the tree usually wants more room.
 
 A typical descent through a format element:
 
@@ -52,6 +65,7 @@ stopping:
 | **Datasource not found in loaded configurations** | The expression names a datasource that lives in a file you have not loaded |
 | **Complex ER function** | The expression cannot resolve to a single source; read the breakdown instead |
 | **Constant value** | There is no data source behind it |
+| **Label translation** | The expression is label text only — it renders a caption and reads no data |
 | **Reference to the current loop record** | `@` refers to the record of the enclosing format element — look at the parent to find the source |
 
 The first three are the ones you will actually hit, and all three mean the same thing in practice:

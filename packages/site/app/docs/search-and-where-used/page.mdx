@@ -21,22 +21,55 @@ solution inevitably contains.
 Clicking a result selects the node — in the Explorer, in the designer, and in the Properties
 panel — and highlights it so you can see where you landed.
 
+### How results are organised
+
+Results are grouped by the configuration they came from, and inside each configuration by what
+kind of hit it is: **Structure**, **Bindings**, **Expressions**, **Data sources** and
+**References**. A name that appears as a model container, as the binding that fills it, and inside
+three expressions lands in three separate sections rather than one undifferentiated list.
+
+When a configuration defines several mapping definitions, each one gets its own group labelled
+**Definition:** followed by the definition name, because sibling definitions usually map the same
+paths and would otherwise look like duplicates.
+
+Two independent filters sit above the results:
+
+- **All / Format / Mappings / Model** — restricts results to one component type.
+- **Related only / All** — the *reach*. See below.
+
+The slider on the right expands or collapses every group at once.
+
+### Reach: "Related only" vs "All"
+
+A workspace often holds several unrelated model trees, and an unscoped search reports hits from
+all of them. So the reach defaults to **Related only**: the open configuration, its data model,
+mappings of that same model — and, when the open configuration is a format, the one mapping
+definition that format actually goes through.
+
+When something is hidden by that filter, a **+N elsewhere** note appears next to the toggle, so
+you always know there is more to see. Switch to **All** to include unrelated models; results from
+the related tree stay at the top of the list.
+
+The toggle only appears when there is an open configuration to be related *to*.
+
 ## Where used
 
 Where-used runs the reference graph backwards. Open it from the activity bar or with `Ctrl+U`,
 enter the name of a table, enum, class, or datasource — the field suggests examples such as
 `TaxTrans`, `CustTable`, or a calculated field name — and run the trace.
 
-The result lists every place that consumes it:
+Results are grouped by the configuration they were found in — and by mapping definition within it
+— so you can see immediately whether a change is contained in one format or spreads across the
+whole solution. Inside each group the references are split into colour-coded sections:
 
-- **Format bindings** — format elements whose expressions read from it
-- **Model bindings** — model paths filled from it
-- **Datasources** — datasources defined in terms of it, including calculated fields that wrap it
+- **Mapping bindings** — model paths filled from it
+- **Expressions and validations** — expressions and validation rules that read it
+- **Format elements** — format elements whose bindings reach it
 
-Results are grouped by the file they were found in, so you can see immediately whether a change is
-contained in one format or spreads across the whole solution. An **All / Mappings / Format** scope
-toggle above the results narrows them to one side of the trace — useful when a table is read by a
-dozen mapping bindings but you only care about which output elements change.
+An **All / Mappings / Format** scope toggle above the results narrows them to one side of the
+trace — useful when a table is read by a dozen mapping bindings but you only care about which
+output elements change. The same **Related only / All** reach toggle as in search applies here
+too.
 
 ## The workflow this is for
 
@@ -46,7 +79,9 @@ particular transaction table.
 
 1. Load every configuration in the solution — formats, mappings, and the data models they build
    on. Coverage is only as complete as what you loaded.
-2. Run where-used on the table or field in question.
+2. Run where-used on the table or field in question. Switch the reach to **All** — the default
+   keeps you inside the open configuration's own model tree, which is not what you want when the
+   question is "what breaks anywhere?".
 3. Work through the format bindings in the result. Each one is a place where the output would
    change.
 4. For anything non-obvious, open the binding in the [drill-down
@@ -64,4 +99,5 @@ particular transaction table.
 | `Alt+←` / `Alt+→` | Back / forward through the places you have navigated to |
 
 On macOS, use `⌘` in place of `Ctrl`. The back and forward steps are also the two arrow buttons at
-the left end of the toolbar.
+the left end of the toolbar. The shortcuts act on the workspace, so they do nothing on the landing
+page or while you are typing in a field.

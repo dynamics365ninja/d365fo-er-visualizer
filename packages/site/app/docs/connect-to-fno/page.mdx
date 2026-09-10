@@ -97,10 +97,10 @@ Once connected, the panel walks the ER hierarchy of the environment:
 3. **Load selected** — downloads and parses everything you picked.
 
 Ingestion runs in phases, and the progress display names the one it is in: resolving data model
-identifiers, downloading data models, downloading formats and mappings, downloading model
-mappings, and finally resolving data models discovered inside the mapping XML. That last phase is
-why a load sometimes pulls in more configurations than you selected — dependencies found along
-the way are fetched so bindings actually resolve.
+identifiers, downloading data models, downloading formats and mappings, resolving labels from
+ancestor models, downloading model mappings, and finally resolving data models discovered inside
+the mapping XML. That last phase is why a load sometimes pulls in more configurations than you
+selected — dependencies found along the way are fetched so bindings actually resolve.
 
 Configurations loaded this way behave exactly like files opened from disk, and cross-reference
 them freely.
@@ -112,6 +112,11 @@ them freely.
 - **Model mappings are not always downloadable.** When `GetModelMappingByID` returns nothing for a
   data model, the panel says so — format element bindings still resolve through the format's own
   mapping information, but the mapping-level trace stops there.
+- **Import-only formats have no data model to fetch.** For formats that only read files — bank
+  statements, for example — the F&amp;O API exposes no data model, so only the format
+  configuration itself can be downloaded.
+- **An empty solution list is not a sign-in failure.** It means the environment has no ER
+  configurations imported yet — see [Troubleshooting](/docs/troubleshooting).
 - **Nothing is written back.** Every call the tool makes is a read.
 
 ## How the network path works
