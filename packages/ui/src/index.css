@@ -7775,3 +7775,73 @@ body {
 .search-reach-toggle__badge {
   font-variant-numeric: tabular-nums;
 }
+
+/* ─── Elevation ───
+   Dark themes read depth as light: something on top of the window is lighter
+   than the window, something quoted from it is darker. The dialogs used to be
+   a shade *below* the app they covered — a drill-down opened as a black slab
+   on a black workbench — and the code blocks inside them were the same colour
+   as the dialog, so the formula had no frame at all. */
+[class*="fui-DialogSurface"]:not(.fui-DialogSurface__backdrop) {
+  background-color: var(--er-surface-raised);
+  border: 1px solid var(--er-border-strong);
+  box-shadow: var(--er-shadow-3);
+}
+
+/* Menus, popovers and the drill-down's own floating card ride the same level.
+   Compound selectors on purpose: Fluent's styles are injected after ours, so a
+   single class ties on specificity and loses on order. */
+div[class*="fui-MenuPopover"],
+div[class*="fui-PopoverSurface"],
+div.command-palette-surface,
+div.path-tooltip-card {
+  background-color: var(--er-surface-raised);
+  border-color: var(--er-border-strong);
+}
+
+/* Inside a raised dialog the panel is the dialog: no second, darker box. */
+.dd-panel--dialog,
+.dd-panel--dialog .dd-frame-content {
+  background: transparent;
+}
+
+/* The drill-down header band. Its gradient is switched off app-wide, which
+   left it a flat slab of the same colour as everything else; a wash of the
+   accent over the raised surface gives the dialog a head again. */
+.dd-hero {
+  background-color: color-mix(in srgb, var(--er-accent) 7%, var(--er-surface-raised));
+}
+
+/* Verbatim content sits below the surface it is quoted on. */
+.er-expr,
+.dd-formula,
+.dd-panel--dialog .dd-step,
+.dd-panel--dialog .dd-ds-card {
+  background-color: var(--er-surface-sunken);
+  background-image: none;
+}
+
+/* Elevation context: inside a dialog the "page" is the raised surface, so
+   every card, band and code block that levels itself against `--bg-*` lands
+   one step above the app instead of one step below it. The `!important` rules
+   below are the same weight as the flattening layer above; they win on order,
+   which is the only lever left once that layer set the tone for everything. */
+[class*="fui-DialogSurface"] {
+  --bg-primary: var(--er-surface-raised);
+  --bg-secondary: var(--er-surface-raised-2);
+  --bg-tertiary: var(--er-surface-3);
+  /* The `--ui-*` layer resolves its `var(--bg-*)` at :root, so re-levelling
+     `--bg-*` alone would not reach anything painted through it. */
+  --ui-surface-0: var(--er-surface-raised);
+  --ui-surface-1: color-mix(in srgb, var(--er-accent) 8%, var(--er-surface-raised));
+  --ui-surface-2: var(--er-surface-raised-2);
+  --ui-stroke-1: var(--er-border-strong);
+  --ui-stroke-2: var(--er-border);
+}
+
+.dd-dialog-surface .er-expr,
+.dd-dialog-surface .dd-hero__expr-wrap,
+.dd-dialog-surface .dd-hero__consolidated,
+.dd-dialog-surface .dd-formula {
+  background: var(--er-surface-sunken) !important;
+}
