@@ -14,8 +14,7 @@ interface ExpandCollapseSliderProps {
 /**
  * Two-way sliding switch that replaces a bare pair of "Expand all" / "Collapse all"
  * icon buttons. Each click still fires its action immediately; the thumb simply
- * slides to the side that was last used, giving compact, consistent visual feedback
- * (same interaction pattern as the density toggle).
+ * slides to the side that was last used, giving compact, consistent visual feedback.
  *
  * Stays icon-only on touch as well: it shares the format header with the type
  * badge and the bound/unbound counters, and spelled-out labels there push the

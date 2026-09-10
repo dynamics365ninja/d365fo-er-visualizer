@@ -22,8 +22,6 @@ import {
   ArrowUploadRegular,
   ArrowDownloadRegular,
   SearchRegular,
-  TextAlignJustifyRegular,
-  TextBulletListSquareRegular,
 } from '@fluentui/react-icons';
 import '@xyflow/react/dist/style.css';
 import { useAppStore, resolveDeepExpression, selectMappingDefinition } from '../state/store';
@@ -31,10 +29,12 @@ import { ClickablePath } from './ClickablePath';
 import { DrillDownBody, DrillDownTrigger } from './DrillDownPanel';
 import { PropertyInspector } from './PropertyInspector';
 import { ExpandCollapseSlider } from './ExpandCollapseSlider';
+import { FilterField } from './FilterField';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { buildFormatBindingPresentation, groupFormatBindingsByCategory } from '../utils/format-binding-display';
 import { buildFormatTreeIndex, type FormatTreeIndex } from '../utils/format-tree-filter';
+import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../utils/filter-suggestions';
 import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/theme-colors';
 import { ERDirection, getFormatElementExcelRange, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent, type ERFormatElement, type ERLabel } from '@er-visualizer/core';
 import { resolveLabel, buildLabelPool } from '../utils/label-resolver';
@@ -457,8 +457,6 @@ function ExpressionDetailLink({ expression, configIndex, className, interactive 
   );
 }
 
-type DensityMode = 'comfortable' | 'compact';
-
 /**
  * Returns `true` for a brief window right after `active` flips from false → true,
  * so callers can layer a one-shot "just navigated here" flash animation on top of
@@ -480,29 +478,6 @@ function useNavFlash(active: boolean, duration = 1400): boolean {
   }, [active, duration]);
 
   return flash;
-}
-
-/**
- * Row-density switch. Icon-only: two labelled options used to eat ~200px of
- * every designer toolbar for a preference that is toggled rarely.
- */
-function DensityToggle({ density, onChange }: { density: DensityMode; onChange: (value: DensityMode) => void }) {
-  const compact = density === 'compact';
-  const label = compact ? t.comfortableDensity : t.compactDensity;
-  return (
-    <button
-      type="button"
-      className="fmt-icon-btn"
-      aria-pressed={compact}
-      title={`${locale === 'cs' ? 'Hustota zobrazení' : 'Display density'} — ${label}`}
-      aria-label={label}
-      onClick={() => onChange(compact ? 'comfortable' : 'compact')}
-    >
-      {compact
-        ? <TextBulletListSquareRegular fontSize={15} />
-        : <TextAlignJustifyRegular fontSize={15} />}
-    </button>
-  );
 }
 
 /** Segmented tab strip with a sliding highlight that animates to the active tab's own position/width. */
@@ -1048,6 +1023,23 @@ function buildBindingTree(bindings: any[]): BindingTreeNode[] {
   return roots;
 }
 
+/** Every datasource name in a tree, children included. */
+function collectDatasourceTerms(datasources: any[], out: string[] = []): string[] {
+  for (const ds of datasources ?? []) {
+    if (ds?.name) out.push(ds.name);
+    if (ds?.children?.length) collectDatasourceTerms(ds.children, out);
+  }
+  return out;
+}
+
+/** Every element name in a format tree, children included. */
+function collectFormatElementTerms(element: any, out: string[] = []): string[] {
+  if (!element) return out;
+  if (element.name) out.push(element.name);
+  for (const child of element.children ?? []) collectFormatElementTerms(child, out);
+  return out;
+}
+
 const EMPTY_STRING_SET: ReadonlySet<string> = new Set();
 
 /** Every ancestor path of `path`, outermost first. */
@@ -1063,17 +1055,18 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
   const selectNode = useAppStore(s => s.selectNode);
   const treeNodes = useAppStore(s => s.treeNodes);
   const [filter, setFilter] = useTabState(tabId, 'mapping.filter', '');
-  const [view, setView] = useTabState<'bindings' | 'datasources'>(tabId, 'mapping.view', 'bindings');
-  const [density, setDensity] = useTabState<DensityMode>(tabId, 'mapping.density', 'comfortable');
+  const [view, setView] = useTabState<'bindings' | 'datasources' | 'validations'>(tabId, 'mapping.view', 'bindings');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   const focusBindingPath: string | undefined = focusNode?.type === 'binding' ? focusNode.data?.path : undefined;
+  const focusValidationPath: string | undefined = focusNode?.type === 'validation' ? focusNode.data?.path : undefined;
   const bindingScrollRef = useRef<HTMLDivElement | null>(null);
+  const validationScrollRef = useRef<HTMLDivElement | null>(null);
   const dsListRef = useRef<GroupedDatasourceListHandle>(null);
 
   useEffect(() => {
     if (!focusNode) return;
-    if (focusNode.type === 'binding' || focusNode.type === 'validation') {
+    if (focusNode.type === 'binding') {
       setView('bindings');
       const focusPath = focusNode.data?.path as string | undefined;
       if (focusPath) {
@@ -1086,8 +1079,17 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
         });
       }
     }
+    // A validation used to land on the binding tree, which never lists it —
+    // the row the user came from simply was not there.
+    if (focusNode.type === 'validation') setView('validations');
     if (focusNode.type === 'datasource') setView('datasources');
   }, [focusNode]);
+
+  useEffect(() => {
+    if (!focusValidationPath) return;
+    const timer = setTimeout(() => validationScrollRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
+    return () => clearTimeout(timer);
+  }, [focusValidationPath]);
 
   useEffect(() => {
     if (!focusBindingPath) return;
@@ -1167,6 +1169,13 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
     if (match) selectNode(match.id);
   }, [treeNodes, configIndex, selectNode]);
 
+  const selectValidationByPath = useCallback((path: string) => {
+    const rootNode = treeNodes[configIndex];
+    if (!rootNode) return;
+    const match = findTreeNodeByMatch(rootNode, n => n.type === 'validation' && n.data?.path === path);
+    if (match) selectNode(match.id);
+  }, [treeNodes, configIndex, selectNode]);
+
   // Every level starts closed, not just the roots — the tree opens as the user
   // clicks down through it. This runs once per mapping (not on every filter
   // keystroke, which used to re-collapse everything and hide filter matches)
@@ -1187,6 +1196,39 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
 
   const totalShown = bindingTree.reduce((n, g) => n + g.count, 0);
 
+  const validations: any[] = mm.validations ?? [];
+  const filteredValidations = useMemo(() => {
+    if (!filter) return validations;
+    const lower = filter.toLowerCase();
+    return validations.filter((validation: any) =>
+      validation.path?.toLowerCase().includes(lower) ||
+      (validation.conditions ?? []).some((rule: any) =>
+        rule.conditionExpressionAsString?.toLowerCase().includes(lower) ||
+        rule.messageExpressionAsString?.toLowerCase().includes(lower) ||
+        rule.severity?.toLowerCase().includes(lower) ||
+        rule.action?.toLowerCase().includes(lower)
+      )
+    );
+  }, [validations, filter]);
+
+  /* What the three tabs can be filtered by, with how many rows each term hits.
+     The pool deliberately crosses tab boundaries: typing a datasource name
+     while Bindings is open should still offer it and take you to it, which is
+     what `view` on the suggestion is for. */
+  const filterSuggestions = useMemo<FilterSuggestion[]>(() => [
+    ...suggestionsFromCounts(
+      countTerms((mm.bindings ?? []).flatMap((binding: any) => String(binding.path ?? '').split('/'))),
+      t.bindings,
+      'bindings',
+    ),
+    ...suggestionsFromCounts(countTerms(collectDatasourceTerms(mm.datasources)), t.dataSources, 'datasources'),
+    ...suggestionsFromCounts(
+      countTerms((mm.validations ?? []).flatMap((validation: any) => String(validation.path ?? '').split('/'))),
+      t.propValidations,
+      'validations',
+    ),
+  ], [mm.bindings, mm.datasources, mm.validations]);
+
   const filteredDatasources = useMemo(() => {
     if (!filter) return mm.datasources;
     const lower = filter.toLowerCase();
@@ -1199,8 +1241,8 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Identity + counts — the mapping designer had no header at all, so you
-          could not tell what you were looking at or how big it was. */}
+      {/* Identity only — the counts moved out of here because the view tabs
+          right below already carry them, once each. */}
       <div className="fmt-header">
         <span className="fmt-header-title">
           <LinkFilled fontSize={15} />
@@ -1221,11 +1263,6 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
               }
             </span>
           )}
-          <span className="fmt-stat">{t.bindings}: {mm.bindings.length}</span>
-          <span className="fmt-stat">{t.dataSources}: {mm.datasources.length}</span>
-          {mm.validations?.length > 0 && (
-            <span className="fmt-stat">{t.propValidations}: {mm.validations.length}</span>
-          )}
         </div>
         <div className="fmt-header-hint">
           {locale === 'cs'
@@ -1238,12 +1275,12 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
           tabs={[
             { id: 'bindings' as const, label: `${t.bindings} (${totalShown})` },
             { id: 'datasources' as const, label: `${t.dataSources} (${mm.datasources.length})` },
+            { id: 'validations' as const, label: `${t.propValidations} (${filteredValidations.length})` },
           ]}
           activeId={view}
           onChange={setView}
         />
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
-          <DensityToggle density={density} onChange={setDensity} />
           {view === 'bindings' && (
             <ExpandCollapseSlider
               size="compact"
@@ -1286,36 +1323,20 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
               onCollapse={() => dsListRef.current?.collapseAll()}
             />
           )}
-          <div className="filter-field" style={{ width: 160 }}>
-            <svg className="filter-field__icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.4"/>
-              <path d="M10 10l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-            </svg>
-            <input
-              type="text"
-              value={filter}
-              onChange={e => setFilter(e.target.value)}
-              placeholder={t.filter}
-              className="filter-field__input"
-            />
-            {filter && (
-              <button
-                onClick={() => setFilter('')}
-                className="filter-field__clear"
-                title={t.clearFilter}
-                aria-label={t.clearFilter}
-              >
-                <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-              </button>
-            )}
-          </div>
+          <FilterField
+            value={filter}
+            onChange={setFilter}
+            placeholder={t.filter}
+            suggestions={filterSuggestions}
+            historyScope="mapping"
+            onPick={suggestion => { if (suggestion.view) setView(suggestion.view as typeof view); }}
+            style={{ width: 180 }}
+          />
         </div>
       </div>
 
       {/* Content */}
-      <div className={`designer-scroll-pane density-${density}`}>
+      <div className="designer-scroll-pane">
         {view === 'bindings' && (
           bindingTree.length === 0
             ? <div style={{ color: 'var(--text-secondary)', fontSize: 12, padding: 12 }}>{t.noResults}</div>
@@ -1340,7 +1361,109 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
         {view === 'datasources' && (
           <GroupedDatasourceList ref={dsListRef} datasources={filteredDatasources} filtering={Boolean(filter)} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusNode?.type === 'datasource' ? focusNode.name : undefined} />
         )}
+
+        {view === 'validations' && (
+          filteredValidations.length === 0
+            ? <div style={{ color: 'var(--text-secondary)', fontSize: 12, padding: 12 }}>
+                {validations.length === 0 ? t.mappingNoValidations : t.noResults}
+              </div>
+            : <div className="mm-validation-list">
+                {filteredValidations.map((validation: any, vi: number) => (
+                  <ValidationRow
+                    key={`${validation.path}-${vi}`}
+                    validation={validation}
+                    configIndex={configIndex}
+                    focused={validation.path === focusValidationPath}
+                    focusRef={validationScrollRef}
+                    onSelect={selectValidationByPath}
+                  />
+                ))}
+              </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * One validation of a model mapping: the model path it guards, plus a card per
+ * rule with its condition and message expressions. Both expressions get the
+ * same drill-down affordance as a binding — a validation message is usually
+ * the more tangled of the two formulas.
+ */
+function ValidationRow({ validation, configIndex, focused, focusRef, onSelect }: {
+  validation: any;
+  configIndex: number;
+  focused: boolean;
+  focusRef: React.MutableRefObject<HTMLDivElement | null>;
+  onSelect: (path: string) => void;
+}) {
+  const rules: any[] = validation.conditions ?? [];
+
+  return (
+    <div
+      className={`mm-binding-row mm-validation-row ${focused ? 'search-match' : ''}`}
+      ref={focused ? focusRef : null}
+      onClick={() => onSelect(validation.path)}
+    >
+      <div className="mm-tree-head">
+        <span className="mm-validation-icon" aria-hidden><CheckmarkCircleRegular fontSize={14} /></span>
+        <span className="mm-binding-name" title={validation.path}>{validation.path}</span>
+        {rules.length > 1 && (
+          <span
+            className="mm-group-count"
+            title={locale === 'cs' ? `Počet pravidel: ${rules.length}` : `Number of rules: ${rules.length}`}
+          >{rules.length}</span>
+        )}
+      </div>
+      {rules.map((rule: any, ri: number) => (
+        <div key={rule.id ?? ri} className="mm-validation-rule">
+          <div className="mm-validation-rule-head">
+            <span className="mm-validation-rule-title">{t.propRule(ri + 1)}</span>
+            {rule.severity && <span className="mm-validation-badge">{rule.severity}</span>}
+            {rule.action && <span className="mm-validation-badge">{rule.action}</span>}
+          </div>
+          <ValidationExpression
+            label={t.propCondition}
+            expression={rule.conditionExpressionAsString}
+            configIndex={configIndex}
+            elementName={`${validation.path} — ${t.propCondition}`}
+          />
+          <ValidationExpression
+            label={t.propMessage}
+            expression={rule.messageExpressionAsString}
+            configIndex={configIndex}
+            elementName={`${validation.path} — ${t.propMessage}`}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ValidationExpression({ label, expression, configIndex, elementName }: {
+  label: string;
+  expression: string | undefined;
+  configIndex: number;
+  elementName: string;
+}) {
+  const expr = (expression ?? '').trim();
+  if (!expr) return null;
+  return (
+    <div className="mm-validation-expr">
+      <span className="mm-validation-expr-label">{label}</span>
+      <div className="mm-binding-expr">
+        <ClickablePath expression={expr} configIndex={configIndex} />
+      </div>
+      <DrillDownTrigger
+        expression={expr}
+        configIndex={configIndex}
+        elementName={elementName}
+        className="mm-binding-drill"
+      >
+        <SearchRegular fontSize={14} />
+        <span>{locale === 'cs' ? 'Rozpad' : 'Drill-down'}</span>
+      </DrillDownTrigger>
     </div>
   );
 }
@@ -1483,7 +1606,6 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
 
   const [filter, setFilter] = useTabState(tabId, 'format.filter', '');
   const [view, setView] = useTabState<'structure' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping'>(tabId, 'format.view', 'structure');
-  const [density, setDensity] = useTabState<DensityMode>(tabId, 'format.density', 'comfortable');
   // Start collapsed: a fully expanded format tree buries the top level under
   // hundreds of rows. Expand-all is one click away in the toolbar.
   const [structureExpandMode, setStructureExpandMode] = useState<'all' | 'none'>('none');
@@ -1620,6 +1742,20 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
       }));
   }, [groupedBindings]);
 
+  /* Filter terms for the three list views, each row carrying the view it
+     belongs to so picking one also lands on the right tab. */
+  const filterSuggestions = useMemo<FilterSuggestion[]>(() => [
+    ...suggestionsFromCounts(countTerms(collectFormatElementTerms(rootElement)), t.structure, 'structure'),
+    ...suggestionsFromCounts(
+      // The unfiltered groups on purpose: a pool derived from the filtered
+      // rows would shrink as the user types and stop proposing anything.
+      countTerms(bindingPresentation.groups.map(row => row.elementName)),
+      t.bindings,
+      'bindings',
+    ),
+    ...suggestionsFromCounts(countTerms(collectDatasourceTerms(fmtMap.datasources)), t.dataSources, 'datasources'),
+  ], [rootElement, bindingPresentation.groups, fmtMap.datasources]);
+
   const [collapsedBindingTypeGroups, setCollapsedBindingTypeGroups] = useState<Set<string>>(new Set());
 
   // Collapse the type groups once per format; a text filter suspends the
@@ -1702,8 +1838,9 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
     }
   }, [treeNodes, configIndex, selectNode]);
 
-  const bindingsLabel = showTechnicalDetails ? t.bindings : t.lightBindings;
-  const dataSourcesLabel = showTechnicalDetails ? t.dataSources : t.lightDataSources;
+  // The same two words as the model-mapping designer, in both view modes: the
+  // consultant-mode aliases ("Links" / "Zdroje dat") named the very things F&O
+  // itself calls bindings and data sources.
   const groupCountLabel = locale === 'cs' ? (showTechnicalDetails ? 'typů' : 'skupin') : (showTechnicalDetails ? 'types' : 'groups');
 
   type FormatViewId = 'structure' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping';
@@ -1716,12 +1853,12 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
       },
       {
         id: 'bindings',
-        label: `${bindingsLabel} (${groupedBindingsByType.length} ${groupCountLabel})`,
+        label: `${t.bindings} (${groupedBindingsByType.length} ${groupCountLabel})`,
         title: locale === 'cs' ? 'Přehled všech vazeb výrazů — co z datového modelu se kam mapuje' : 'Overview of all expression bindings — what maps from data model to where',
       },
       {
         id: 'datasources',
-        label: `${dataSourcesLabel} (${stats.datasources})`,
+        label: `${t.dataSources} (${stats.datasources})`,
         title: locale === 'cs' ? 'Datové zdroje mapování — tabulky, výčty, třídy a vypočítaná pole' : 'Mapping data sources — tables, enums, classes and calculated fields',
       },
       {
@@ -1738,15 +1875,14 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
       });
     }
     return tabs;
-  }, [stats.totalElements, stats.datasources, bindingsLabel, dataSourcesLabel, groupCountLabel, groupedBindingsByType.length, fc.direction, fc.embeddedModelMappingVersions.length]);
+  }, [stats.totalElements, stats.datasources, groupCountLabel, groupedBindingsByType.length, fc.direction, fc.embeddedModelMappingVersions.length]);
 
-  /* Density plus expand/collapse. Rendered either in the toolbar next to the
-     filter (desktop, unchanged) or up in the header — below ~900px the tabs,
-     these two and the filter no longer share one toolbar line, and the header
-     is the only bar with room left. */
+  /* Expand/collapse. Rendered either in the toolbar next to the filter
+     (desktop, unchanged) or up in the header — below ~900px the tabs, this and
+     the filter no longer share one toolbar line, and the header is the only
+     bar with room left. */
   const designerTools = (
     <>
-      <DensityToggle density={density} onChange={setDensity} />
       {(view === 'structure' || view === 'bindings' || view === 'datasources') && (
         <ExpandCollapseSlider
           size="compact"
@@ -1849,31 +1985,14 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
               (the mapping designer carries its own filter), so the text
               filter is only offered where it actually filters something. */}
           {view !== 'preview' && view !== 'embedded-mapping' && (
-          <div className="filter-field">
-            <svg className="filter-field__icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <circle cx="6.5" cy="6.5" r="4" stroke="currentColor" strokeWidth="1.4"/>
-              <path d="M10 10l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-            </svg>
-            <input
-              type="text"
+            <FilterField
               value={filter}
-              onChange={e => setFilter(e.target.value)}
+              onChange={setFilter}
               placeholder={t.filter}
-              className="filter-field__input"
+              suggestions={filterSuggestions}
+              historyScope="format"
+              onPick={suggestion => { if (suggestion.view) setView(suggestion.view as typeof view); }}
             />
-            {filter && (
-              <button
-                onClick={() => setFilter('')}
-                className="filter-field__clear"
-                title={t.clearFilter}
-                aria-label={t.clearFilter}
-              >
-                <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-              </button>
-            )}
-          </div>
           )}
         </div>
       </div>
@@ -1881,24 +2000,26 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
       {/* ── Main Content ── */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left: tree / list */}
-        <div className={`designer-list-pane density-${density}`}>
+        <div className="designer-list-pane">
           {view === 'structure' && (
-            <FormatElementTree
-              element={rootElement}
-              depth={0}
-              bindingMap={bindingMap}
-              transformationMap={transformationMap}
-              configIndex={configIndex}
-              filter={filter}
-              expandMode={structureExpandMode}
-              expandVersion={structureExpandVersion}
-              selectedId={selectedElementId}
-              onSelect={handleSelectFormatElement}
-              showTechnicalDetails={showTechnicalDetails}
-              bindingFilter={structureBindingFilter}
-              treeIndex={treeIndex}
-              selectedAncestors={selectedAncestors}
-            />
+            <div className="fmt-structure-list">
+              <FormatElementTree
+                element={rootElement}
+                depth={0}
+                bindingMap={bindingMap}
+                transformationMap={transformationMap}
+                configIndex={configIndex}
+                filter={filter}
+                expandMode={structureExpandMode}
+                expandVersion={structureExpandVersion}
+                selectedId={selectedElementId}
+                onSelect={handleSelectFormatElement}
+                showTechnicalDetails={showTechnicalDetails}
+                bindingFilter={structureBindingFilter}
+                treeIndex={treeIndex}
+                selectedAncestors={selectedAncestors}
+              />
+            </div>
           )}
 
           {view === 'embedded-mapping' && fc.embeddedModelMappingVersions.length > 0 && (
