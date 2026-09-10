@@ -8,10 +8,21 @@ export interface FnoConnection {
   displayName: string;
   /** Full environment URL, e.g. `https://orgabc.sandbox.operations.dynamics.com`. */
   envUrl: string;
-  /** Microsoft Entra tenant id (GUID or domain). */
-  tenantId: string;
-  /** Application (client) id of the registered Entra app. */
-  clientId: string;
+  /**
+   * Microsoft Entra tenant id (GUID or domain).
+   *
+   * Optional: when omitted the shared `organizations` authority is used and the
+   * tenant is inferred from the account the user signs in with.
+   */
+  tenantId?: string;
+  /**
+   * Application (client) id of the registered Entra app.
+   *
+   * Optional: when omitted the host's built-in multi-tenant registration is
+   * used, so a profile only needs `envUrl`. Set it to pin the connection to a
+   * customer-owned app registration.
+   */
+  clientId?: string;
   /** Optional timestamp (ms since epoch) of last successful use. */
   lastUsedAt?: number;
   /** Creation time (ms since epoch). */

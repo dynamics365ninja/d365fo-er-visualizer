@@ -45,6 +45,7 @@ Host-agnostic F&O API client. Network I/O is delegated to a `FnoTransport` so th
 
 - **ER services** — calls F&O custom services under `/api/services` (not OData entities): solution/configuration tree enumeration, typed downloads for Format, ModelMapping, and DataModel.
 - **Path helpers** — `buildFnoPath` produces synthetic `fno://envHost/solution/config@version` URIs so live configs slot into the same workspace as on-disk XML.
+- **Auth helpers** — `buildFnoScope` (`${envUrl}/.default`), `buildAuthority`, `resolveClientId`, `authContextKey`. `FnoConnection.tenantId` / `clientId` are **optional and no longer part of the UI**: a profile is a name plus an `envUrl`. Sign-in uses the host's built-in multi-tenant registration (`VITE_FNO_CLIENT_ID` in the SPA, `FNO_CLIENT_ID` / `built-in-client.ts` in Electron) on the `organizations` authority, so the tenant is whatever the signed-in account belongs to. The fields remain on the type so legacy stored profiles (and `scripts/integration-test.ts`) keep working — when present they override the built-in values.
 - **Error hierarchy** — `FnoHttpError`, `FnoSourceUnsupportedError`, `FnoEmptyContentError` with verbose 4xx body propagation.
 
 ### `@er-visualizer/ui`

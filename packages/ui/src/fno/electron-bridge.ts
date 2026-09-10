@@ -29,8 +29,10 @@ export interface ElectronFnoAuthConnection {
   id: string;
   displayName: string;
   envUrl: string;
-  tenantId: string;
-  clientId: string;
+  /** Absent when the main process should use its built-in registration. */
+  tenantId?: string;
+  /** Absent when the main process should use its built-in registration. */
+  clientId?: string;
 }
 
 export interface ElectronFnoAuthResult {

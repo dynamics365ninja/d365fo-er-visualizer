@@ -6,49 +6,19 @@ export const metadata = docMetadata('connect-to-fno');
 <DocHeader slug="connect-to-fno" />
 
 Exporting configurations by hand gets old quickly. The live connection signs you in to a Finance
-&amp; Operations environment with your own Entra application registration and downloads ER
-configurations straight from it — read-only, using your own permissions.
+&amp; Operations environment and downloads ER configurations straight from it — read-only, using
+your own permissions.
 
 ## What you need
 
-- An **Entra ID (Azure AD) application registration** in the tenant of the environment. You need
-  someone with permission to create one, and usually an administrator to grant consent.
 - The **environment URL**, for example `https://myenv.sandbox.operations.dynamics.com`.
-- The **tenant ID** and the **application (client) ID** of that registration.
 - A user account with access to Electronic Reporting in that environment.
 
-## Register the application
-
-In the Entra admin center, go to **App registrations → New registration**.
-
-1. Give it a name — `ER Visualizer` is fine.
-2. Under **Supported account types**, single tenant is the normal choice.
-3. Add the platform you will use, under **Authentication → Add a platform**:
-   - **Single-page application** — redirect URI is the origin you open the app from, for example
-     `https://your-er-visualizer-domain` (no path). For local development that is
-     `http://localhost:5173`. Entra matches this string verbatim, so leave off the trailing slash,
-     and note that every Vercel preview deployment has its own hostname and needs its own entry.
-   - **Mobile and desktop applications** — add `http://localhost` if you will use the
-     [desktop app](/docs/desktop-app). The loopback flow picks a free port at runtime, and Entra
-     matches any port for `http://localhost`.
-4. Under **Authentication → Advanced settings**, set **Allow public client flows** to **Yes**.
-   This is what the desktop loopback flow needs.
-5. Under **API permissions → Add a permission → Dynamics ERP**, add the **delegated** permission
-   `user_impersonation` (shown as *Access Dynamics 365 as the signed-in user*). Grant admin
-   consent if your tenant requires it.
-
-Copy the **Directory (tenant) ID** and **Application (client) ID** from the registration overview.
-
-> The application is a public client — there is no client secret anywhere in this setup, and none
-> is needed. Sign-in happens with authorization code plus PKCE, and the resulting token lives in
-> your browser session only.
-
-### Register the user in Finance &amp; Operations
-
-The Entra registration also has to be known to the environment. In F&amp;O, open **System
-administration → Setup → Azure Active Directory applications** and add a row with the client ID,
-a name, and the user account whose permissions the calls should run under. Without this step,
-sign-in succeeds but the ER service calls come back empty or unauthorised.
+That is it. The app ships with its own multi-tenant Entra application registration, so a
+connection profile is just a name and a URL — there is no client ID or tenant ID to look up, and
+you do not create an app registration. Clicking **Connect** opens the ordinary Microsoft sign-in:
+you pick your work account, approve the consent prompt the first time, and you are in. If your
+tenant blocks user consent, an administrator approves it once for everyone.
 
 ## Create a connection profile
 
@@ -58,12 +28,63 @@ In the app, switch to the **D365 F&amp;O server** tab and click **New profile**.
 |---|---|
 | **Profile name** | Anything you will recognise — `Contoso UAT` |
 | **Environment URL** | `https://myenv.sandbox.operations.dynamics.com` |
-| **Tenant ID (Entra)** | Directory (tenant) ID from the registration |
-| **Application (client) ID** | Application (client) ID from the registration |
 
 Click **Save profile**, then **Connect**. Microsoft sign-in opens in a popup; after it completes
 the panel shows the account you are connected as. Profiles are stored in your browser's local
 storage so you only do this once per environment.
+
+Everything the tool then does runs as *you*: your Electronic Reporting permissions in that
+environment decide what you can see, and nothing is written back.
+
+## Self-hosting: register the application
+
+Skip this unless you are building and hosting the tool yourself — users of a ready-made build
+never touch it.
+
+A build carries its registration in `VITE_FNO_CLIENT_ID` (`FNO_CLIENT_ID`, or
+`packages/electron/src/fno/built-in-client.ts`, for the desktop shell). Without it the connect
+panel refuses to sign in and says so. Create the registration once, in any tenant you control:
+
+In the Entra admin center, go to **App registrations → New registration**.
+
+1. Give it a name — `ER Visualizer` is fine.
+2. Under **Supported account types**, pick **Accounts in any organizational directory
+   (multitenant)**. This is what lets your users sign in from their own tenants.
+3. Add the platform you will use, under **Authentication → Add a platform**:
+   - **Single-page application** — redirect URI is the origin the app is served from, for example
+     `https://your-er-visualizer-domain` (no path). For local development that is
+     `http://localhost:5173`. Entra matches this string verbatim, so leave off the trailing slash,
+     and note that every Vercel preview deployment has its own hostname and needs its own entry.
+     A misconfigured build prints the exact value to paste.
+   - **Mobile and desktop applications** — add `http://localhost` if you ship the
+     [desktop app](/docs/desktop-app). The loopback flow picks a free port at runtime, and Entra
+     matches any port for `http://localhost`.
+4. Under **Authentication → Advanced settings**, set **Allow public client flows** to **Yes**.
+   This is what the desktop loopback flow needs.
+5. Under **API permissions → Add a permission → Dynamics ERP**, add the single **delegated**
+   permission `CustomService.FullAccess`. The ER services this app calls live under
+   `/api/services`; no OData entity is ever read, so no OData permission is needed.
+6. The permission is user-consentable, but Microsoft's default tenant policy
+   (`ManagePermissionGrantsForSelf.microsoft-user-default-low`) only lets users self-consent to
+   permissions *classified as low impact*, and Dynamics ERP scopes are not classified by default.
+   Most tenants therefore need a one-time administrator approval — see
+   [Troubleshooting](/docs/troubleshooting).
+
+Copy the **Application (client) ID** from the registration overview into `VITE_FNO_CLIENT_ID`.
+There is no tenant ID to configure: sign-in uses the shared `organizations` authority, and the
+tenant comes back on the token from whichever account the user picks.
+
+> The application is a public client — there is no client secret anywhere in this setup, and none
+> is needed. Sign-in happens with authorization code plus PKCE, and the resulting token lives in
+> the browser session only.
+
+### Register the user in Finance &amp; Operations
+
+A **service-to-service** registration also has to be known to the environment: in F&amp;O, open
+**System administration → Setup → Microsoft Entra ID applications** and add a row with the client
+ID, a name, and the user account whose permissions the calls should run under. This step does not
+apply to the sign-in flow used here — the token already carries your own identity, so your regular
+F&amp;O user permissions are what count.
 
 ## Browse and ingest
 

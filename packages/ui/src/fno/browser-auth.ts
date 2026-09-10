@@ -13,8 +13,10 @@ import {
   type AuthenticationResult,
 } from '@azure/msal-browser';
 import {
+  authContextKey,
   buildAuthority,
   buildFnoScope,
+  resolveClientId,
   FnoAuthError,
   type AuthAccount,
   type AuthProvider,
@@ -22,13 +24,14 @@ import {
   type FnoConnection,
 } from '@er-visualizer/fno-client';
 import { clearRedirectPending, computeRedirectUri, markRedirectPending } from './redirect-state';
+import { BUILT_IN_CLIENT_ID } from './built-in-client';
 
 const pool = new Map<string, PublicClientApplication>();
 /** Auth response picked up by `handleRedirectPromise`, consumed by the next `acquireToken`. */
 const redirectResults = new Map<string, AuthenticationResult>();
 
 function appKey(conn: FnoConnection): string {
-  return `${conn.tenantId}::${conn.clientId}`;
+  return authContextKey(conn, BUILT_IN_CLIENT_ID);
 }
 
 /**
@@ -43,7 +46,7 @@ async function getOrCreate(conn: FnoConnection): Promise<PublicClientApplication
   if (existing) return existing;
   const config: Configuration = {
     auth: {
-      clientId: conn.clientId,
+      clientId: resolveClientId(conn, BUILT_IN_CLIENT_ID),
       authority: buildAuthority(conn.tenantId),
       redirectUri: computeRedirectUri(),
       navigateToLoginRequestUrl: false,

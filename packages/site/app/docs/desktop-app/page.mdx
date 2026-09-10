@@ -35,15 +35,18 @@ That starts the Vite dev server and opens the Electron window against it.
 
 ## Entra registration for the desktop flow
 
-The desktop flow needs two things in the app registration described under
-[F&amp;O connection](/docs/connect-to-fno):
+Connection profiles are entered exactly as in the browser: profile name and environment URL,
+nothing else. Since the shell runs from the repository, you supply the registration it signs in
+with — set `FNO_CLIENT_ID`, or fill in `FALLBACK_CLIENT_ID` in
+`packages/electron/src/fno/built-in-client.ts` for a packaged build.
+
+On top of what
+[Self-hosting: register the application](/docs/connect-to-fno#self-hosting-register-the-application)
+describes, the loopback flow needs two things:
 
 1. A **Mobile and desktop applications** platform with the redirect URI `http://localhost`. Entra
    matches any port for loopback URIs, which is what lets the shell pick a free one at runtime.
 2. **Allow public client flows** set to **Yes**, under *Authentication → Advanced settings*.
-
-Connection profiles are entered exactly as in the browser: profile name, environment URL, tenant
-ID, client ID.
 
 ## Which one should you use?
 

@@ -24,6 +24,33 @@ function isOwnElectronShell(): boolean {
 let cached: AuthProvider | null = null;
 
 /**
+ * Load an auth adapter chunk, turning a chunk-load failure into something
+ * actionable. The raw browser message ("Failed to fetch dynamically imported
+ * module: …/browser-auth.ts") says nothing about the actual cause, which is
+ * always the same: the code could not be downloaded — dev server stopped, the
+ * page is running against a redeployed build whose hashed chunks are gone, or
+ * the network dropped. All three are fixed by reloading the page.
+ */
+async function loadAdapter<T>(load: () => Promise<T>, moduleName: string): Promise<T> {
+  try {
+    return await load();
+  } catch (err) {
+    throw new FnoAuthError(
+      locale === 'cs'
+        ? `Nepodařilo se načíst přihlašovací modul (${moduleName}). ` +
+          'Aplikace ho stahuje až ve chvíli přihlášení a stažení selhalo — ' +
+          'typicky když neběží dev server, když se mezitím nasadila nová verze, ' +
+          'nebo při výpadku sítě. Načti stránku znovu (Ctrl+F5) a zkus to znovu.'
+        : `Could not load the sign-in module (${moduleName}). ` +
+          'It is downloaded on demand and the download failed — usually a stopped ' +
+          'dev server, a redeploy that replaced the chunk, or a network drop. ' +
+          'Reload the page (Ctrl+F5) and try again.',
+      err,
+    );
+  }
+}
+
+/**
  * Async so the adapters — and with them MSAL, ~0.4 MB of the bundle — load only
  * when someone actually signs in to F&O. Opening an XML file from disk should
  * not pay for an identity library.
@@ -32,7 +59,7 @@ export async function getAuthProvider(): Promise<AuthProvider> {
   if (cached) return cached;
   const api = getElectronApi();
   if (api?.fnoAuth) {
-    const { ElectronAuthProvider } = await import('./electron-auth');
+    const { ElectronAuthProvider } = await loadAdapter(() => import('./electron-auth'), 'electron-auth');
     cached = new ElectronAuthProvider();
     return cached;
   }
@@ -54,7 +81,7 @@ export async function getAuthProvider(): Promise<AuthProvider> {
           'Rebuild with `pnpm --filter @er-visualizer/electron build` and restart the application.',
     );
   }
-  const { BrowserAuthProvider } = await import('./browser-auth');
+  const { BrowserAuthProvider } = await loadAdapter(() => import('./browser-auth'), 'browser-auth');
   cached = new BrowserAuthProvider();
   return cached;
 }
