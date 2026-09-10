@@ -51,8 +51,12 @@
   /* ER component types — the same three hues everywhere they appear */
   --er-model: #6d5ce7;
   --er-model-soft: #ece9fd;
-  --er-mapping: #0a6f73;
-  --er-mapping-soft: #e4f1f1;
+  /* Deliberately not the accent: mapping is a kind, the accent is "you can
+     click this". While the two shared one teal, every mapping pill read as a
+     control and every control read as a mapping. Plum is the free slot
+     between the model's violet and the format's orange. */
+  --er-mapping: #a3308a;
+  --er-mapping-soft: #f8e8f4;
   --er-format: #c2681a;
   --er-format-soft: #fbeee0;
 
@@ -113,8 +117,8 @@
 
     --er-model: #a396ff;
     --er-model-soft: #241f3d;
-    --er-mapping: #35b8bd;
-    --er-mapping-soft: #0e2b2d;
+    --er-mapping: #e08fd0;
+    --er-mapping-soft: #331f31;
     --er-format: #e79a4f;
     --er-format-soft: #33260f;
 
@@ -167,8 +171,8 @@
 
   --er-model: #a396ff;
   --er-model-soft: #241f3d;
-  --er-mapping: #35b8bd;
-  --er-mapping-soft: #0e2b2d;
+  --er-mapping: #e08fd0;
+  --er-mapping-soft: #331f31;
   --er-format: #e79a4f;
   --er-format-soft: #33260f;
 
