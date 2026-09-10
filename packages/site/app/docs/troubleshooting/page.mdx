@@ -53,10 +53,15 @@ branch you care about.
 
 ### "Approval required" / "Žádost čeká na vyřízení"
 
-Sign-in stops on a Microsoft page saying an administrator has been notified. The tenant has
-**user consent disabled**, so nobody can approve the app for themselves — even though the
-permissions the app asks for (`Odata.FullAccess`, `CustomService.FullAccess` on Dynamics ERP) are
-ordinary user-consentable ones.
+Sign-in stops on a Microsoft page saying an administrator has been notified.
+
+This is not caused by the permission itself. `CustomService.FullAccess` is a **delegated**,
+user-consentable scope, so the API publisher allows an ordinary user to approve it. The tenant is
+the second gate: Microsoft's default consent policy,
+`ManagePermissionGrantsForSelf.microsoft-user-default-low`, lets users self-consent only to
+permissions that have been **classified as low impact** — out of the box that is just
+`User.Read`, `openid`, `profile` and `offline_access` on Microsoft Graph. Dynamics ERP
+scopes carry no classification, so Entra escalates to admin approval.
 
 A tenant administrator has to approve it once, after which everyone in the tenant signs in without
 a prompt. The approver needs the **Global Administrator**, **Application Administrator**, **Cloud
@@ -72,6 +77,15 @@ Or, from a shell signed in as such an administrator:
 ```bash
 az ad app permission admin-consent --id <application-client-id>
 ```
+
+Either way it is a **one-time, tenant-wide** grant (`consentType: AllPrincipals`) — it is not
+repeated per user. Only a new tenant, or a future release asking for an additional scope, triggers
+it again.
+
+An administrator who would rather not consent on everyone's behalf can instead classify
+`CustomService.FullAccess` as low impact (*Enterprise applications → Consent and permissions →
+Permission classifications*), which lets each user approve it for themselves at first sign-in.
+That still takes one administrator action per tenant.
 
 ### The sign-in popup is blocked
 

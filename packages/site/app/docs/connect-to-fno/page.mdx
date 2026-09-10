@@ -61,11 +61,13 @@ In the Entra admin center, go to **App registrations → New registration**.
      matches any port for `http://localhost`.
 4. Under **Authentication → Advanced settings**, set **Allow public client flows** to **Yes**.
    This is what the desktop loopback flow needs.
-5. Under **API permissions → Add a permission → Dynamics ERP**, add the **delegated** permissions
-   `CustomService.FullAccess` (the ER services this app calls live under `/api/services`) and
-   `Odata.FullAccess`.
-6. Both are user-consentable, so in most tenants each user approves them once at first sign-in.
-   Tenants that disable user consent need an administrator to approve the app instead — see
+5. Under **API permissions → Add a permission → Dynamics ERP**, add the single **delegated**
+   permission `CustomService.FullAccess`. The ER services this app calls live under
+   `/api/services`; no OData entity is ever read, so no OData permission is needed.
+6. The permission is user-consentable, but Microsoft's default tenant policy
+   (`ManagePermissionGrantsForSelf.microsoft-user-default-low`) only lets users self-consent to
+   permissions *classified as low impact*, and Dynamics ERP scopes are not classified by default.
+   Most tenants therefore need a one-time administrator approval — see
    [Troubleshooting](/docs/troubleshooting).
 
 Copy the **Application (client) ID** from the registration overview into `VITE_FNO_CLIENT_ID`.
