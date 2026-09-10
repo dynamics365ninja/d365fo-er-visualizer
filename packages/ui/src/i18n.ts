@@ -243,6 +243,12 @@ export interface Translations {
   drillUsedDataTitle: string;
   drillUsedDataHint: string;
   drillUsedDataEmpty: string;
+  drillLabelTitle: string;
+  drillLabelHint: string;
+  drillLabelId: string;
+  drillLabelElement: string;
+  drillLabelEmpty: string;
+  drillResizeDialog: string;
   drillHowFilledTitle: string;
   drillHowFilledHint: string;
   lineageTitle: string;
@@ -338,24 +344,9 @@ export interface Translations {
   validatorOk: string;
   validatorIssues: (n: number) => string;
   forward: string;
-  commandPalette: string;
-  commandPaletteHint: string;
-  cmdFilter: string;
-  cmdGroupNav: string;
-  cmdGroupOpen: string;
-  cmdGroupView: string;
-  cmdGroupTools: string;
-  cmdLoadXml: string;
-  cmdToggleSearch: string;
-  cmdToggleExplorer: string;
-  cmdToggleProperties: string;
-  cmdToggleTheme: string;
-  cmdToggleTechnical: string;
+  /** Explorer kebab menu — the only survivors of the removed command palette. */
   cmdCollapseAll: string;
   cmdExpandAll: string;
-  cmdGoHome: string;
-  cmdBack: string;
-  cmdForward: string;
   cmdExportWhereUsed: string;
 
   // Toasts / errors
@@ -495,6 +486,8 @@ export interface Translations {
   excelStructureView: string;
   excelTemplateCells: (n: number) => string;
   excelTemplateMerged: (n: number) => string;
+  excelTemplateImage: string;
+  excelTemplateImages: (n: number) => string;
   excelTemplateDropHint: string;
   excelTemplateDropActive: string;
   excelTemplateDropInvalid: string;
@@ -670,7 +663,7 @@ const cs: Translations = {
   explorerMoreActions: 'Další akce',
   explorerOpenInTab: 'Otevřít v záložce',
   explorerActiveMapping: 'aktivní',
-  explorerActiveMappingHint: 'Tuto definici modelu používá načtený formát',
+  explorerActiveMappingHint: 'Tuto definici modelu používá aktivní formát',
   detailOverview: 'Přehled výběru',
   attributes: 'Atributy',
   drillSteps: (n: number) => `${n} krok${n === 1 ? '' : n < 5 ? 'y' : 'ů'}`,
@@ -783,6 +776,12 @@ const cs: Translations = {
   drillUsedDataTitle: 'Použitá data z D365FO',
   drillUsedDataHint: 'Tabulky, pole a parametry, ze kterých se hodnota tohoto výrazu nakonec čte. Kliknutím na položku se ukáže její místo v cestě hodnoty níže.',
   drillUsedDataEmpty: 'Výraz nečte žádnou tabulku ani pole — jde o konstantu, funkci nebo hodnotu z nadřazeného prvku.',
+  drillLabelTitle: 'Překlad popisku',
+  drillLabelHint: 'Tento výraz je pouze text z popisku — nečte žádná data z D365FO.',
+  drillLabelId: 'ID popisku',
+  drillLabelElement: 'Prvek',
+  drillLabelEmpty: 'Pro tento popisek není v načtených konfiguracích žádný překlad.',
+  drillResizeDialog: 'Tažením změníte velikost okna (dvojklik obnoví výchozí)',
   drillHowFilledTitle: 'Jak se hodnota naplní',
   drillHowFilledHint: 'Vzorce, kterými vzniká hodnota tohoto kroku. Klikni na kteroukoli část vzorce a propadneš se do ní.',
   lineageTitle: 'Cesta hodnoty',
@@ -877,24 +876,8 @@ const cs: Translations = {
   validatorOk: 'Konfigurace vypadá v pořádku.',
   validatorIssues: (n: number) => `${n} upozornění`,
   forward: 'Vpřed',
-  commandPalette: 'Paleta příkazů',
-  commandPaletteHint: 'Ctrl+K / Cmd+K',
-  cmdFilter: 'Zadej příkaz nebo vyhledej…',
-  cmdGroupNav: 'Navigace',
-  cmdGroupOpen: 'Soubory',
-  cmdGroupView: 'Pohled',
-  cmdGroupTools: 'Nástroje',
-  cmdLoadXml: 'Načíst ER XML…',
-  cmdToggleSearch: 'Hledat / Místa použití',
-  cmdToggleExplorer: 'Přepnout Explorer',
-  cmdToggleProperties: 'Přepnout Vlastnosti',
-  cmdToggleTheme: 'Přepnout motiv (systém / světlý / tmavý)',
-  cmdToggleTechnical: 'Přepnout technický pohled',
   cmdCollapseAll: 'Sbalit celý strom',
   cmdExpandAll: 'Rozbalit celý strom',
-  cmdGoHome: 'Přejít na úvodní obrazovku',
-  cmdBack: 'Zpět v historii',
-  cmdForward: 'Vpřed v historii',
   cmdExportWhereUsed: 'Exportovat místa použití do CSV',
 
   toastLoadFailed: (file: string) => `Soubor „${file}" se nepodařilo načíst.`,
@@ -1030,6 +1013,8 @@ const cs: Translations = {
   excelStructureView: 'Struktura',
   excelTemplateCells: (n: number) => `${n} buň${n === 1 ? 'ka' : n < 5 ? 'ky' : 'ek'}`,
   excelTemplateMerged: (n: number) => `${n} sloučen${n === 1 ? 'á' : n < 5 ? 'é' : 'ých'}`,
+  excelTemplateImage: 'Obrázek šablony',
+  excelTemplateImages: (n: number) => `${n} obráz${n === 1 ? 'ek' : n < 5 ? 'ky' : 'ků'}`,
   excelTemplateDropHint: 'Přetáhněte sem soubor .xlsx z exportovaného ER solution package',
   excelTemplateDropActive: 'Pusťte soubor .xlsx…',
   excelTemplateDropInvalid: 'Pouze soubory .xlsx',
@@ -1218,7 +1203,7 @@ const en: Translations = {
   explorerMoreActions: 'More actions',
   explorerOpenInTab: 'Open in tab',
   explorerActiveMapping: 'active',
-  explorerActiveMappingHint: 'This model definition is the one the loaded format uses',
+  explorerActiveMappingHint: 'This model definition is the one the active format uses',
   detailOverview: 'Selection Overview',
   attributes: 'Attributes',
   drillSteps: (n: number) => `${n} step${n === 1 ? '' : 's'}`,
@@ -1330,6 +1315,12 @@ const en: Translations = {
   drillUsedDataTitle: 'D365FO data used',
   drillUsedDataHint: 'Tables, fields and parameters this expression finally reads from. Click an item to reveal where it sits in the value path below.',
   drillUsedDataEmpty: 'This expression reads no table or field — it is a constant, a function, or a value from the parent element.',
+  drillLabelTitle: 'Label translation',
+  drillLabelHint: 'This expression is label text only — it reads no D365FO data.',
+  drillLabelId: 'Label ID',
+  drillLabelElement: 'Element',
+  drillLabelEmpty: 'No translation for this label in the loaded configurations.',
+  drillResizeDialog: 'Drag to resize the dialog (double-click to reset)',
   drillHowFilledTitle: 'How the value is filled',
   drillHowFilledHint: 'The formulas that produce this step\'s value. Click any part of a formula to drill into it.',
   lineageTitle: 'Value path',
@@ -1421,24 +1412,8 @@ const en: Translations = {
   validatorOk: 'Configuration looks fine.',
   validatorIssues: (n: number) => `${n} warning${n === 1 ? '' : 's'}`,
   forward: 'Forward',
-  commandPalette: 'Command palette',
-  commandPaletteHint: 'Ctrl+K / Cmd+K',
-  cmdFilter: 'Type a command or search…',
-  cmdGroupNav: 'Navigation',
-  cmdGroupOpen: 'Files',
-  cmdGroupView: 'View',
-  cmdGroupTools: 'Tools',
-  cmdLoadXml: 'Load ER XML…',
-  cmdToggleSearch: 'Search / Where used',
-  cmdToggleExplorer: 'Toggle Explorer',
-  cmdToggleProperties: 'Toggle Properties',
-  cmdToggleTheme: 'Cycle theme (system / light / dark)',
-  cmdToggleTechnical: 'Toggle technical view',
   cmdCollapseAll: 'Collapse entire tree',
   cmdExpandAll: 'Expand entire tree',
-  cmdGoHome: 'Go to landing',
-  cmdBack: 'Navigate back',
-  cmdForward: 'Navigate forward',
   cmdExportWhereUsed: 'Export where-used to CSV',
 
   toastLoadFailed: (file: string) => `Failed to load "${file}".`,
@@ -1574,6 +1549,8 @@ const en: Translations = {
   excelStructureView: 'Structure',
   excelTemplateCells: (n: number) => `${n} cell${n === 1 ? '' : 's'}`,
   excelTemplateMerged: (n: number) => `${n} merged`,
+  excelTemplateImage: 'Template image',
+  excelTemplateImages: (n: number) => `${n} image${n === 1 ? '' : 's'}`,
   excelTemplateDropHint: 'Drop the .xlsx file from the exported ER solution package here',
   excelTemplateDropActive: 'Release to load .xlsx…',
   excelTemplateDropInvalid: '.xlsx files only',

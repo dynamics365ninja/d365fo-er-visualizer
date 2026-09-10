@@ -20,6 +20,41 @@ const MOVE_TOLERANCE_PX = 10;
 const AUTO_HIDE_MS = 6000;
 const MAX_WIDTH = 320;
 const VIEWPORT_MARGIN = 8;
+/**
+ * How long after a long press the trailing click is still considered part of
+ * that gesture. A long press on touch does not always produce a click at all
+ * (the platform may suppress it), so the swallow flag has to expire on its own
+ * — otherwise it would sit armed and eat the *next* unrelated tap.
+ */
+const SWALLOW_WINDOW_MS = 800;
+
+/**
+ * Controls act on tap, so a long press on one must never be hijacked into a
+ * tooltip: the tap that follows would be swallowed and the control would look
+ * dead. That is exactly what happened to the kebab menus on a tablet — resting
+ * a finger on the small target for over {@link LONG_PRESS_MS} meant the menu
+ * never opened. Their `title` is still reachable by hovering on a desktop.
+ */
+const INTERACTIVE_SELECTOR = [
+  'button',
+  'a[href]',
+  'input',
+  'select',
+  'textarea',
+  'summary',
+  '[contenteditable="true"]',
+  '[role="button"]',
+  '[role="link"]',
+  '[role="menuitem"]',
+  '[role="menuitemcheckbox"]',
+  '[role="menuitemradio"]',
+  '[role="tab"]',
+  '[role="switch"]',
+  '[role="checkbox"]',
+  '[role="radio"]',
+  '[role="combobox"]',
+  '[role="option"]',
+].join(',');
 
 interface TipState {
   text: string;
@@ -33,8 +68,8 @@ export function TouchTitleTooltip() {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const timerRef = useRef<number | null>(null);
   const originRef = useRef<{ x: number; y: number } | null>(null);
-  /** Set while a long press has just fired, so the trailing click is dropped. */
-  const swallowClickRef = useRef(false);
+  /** Deadline until which the trailing click of a long press is dropped. */
+  const swallowUntilRef = useRef(0);
 
   useEffect(() => {
     if (!coarse) return;
@@ -50,12 +85,16 @@ export function TouchTitleTooltip() {
       if (event.pointerType === 'mouse') return;
       setTip(null);
       clearTimer();
+      swallowUntilRef.current = 0;
       originRef.current = { x: event.clientX, y: event.clientY };
 
       const target = event.target as Element | null;
+      if (!target?.closest) return;
+      // Never hijack a press on a control — see INTERACTIVE_SELECTOR.
+      if (target.closest(INTERACTIVE_SELECTOR)) return;
       // The nearest ancestor that actually carries a title — titles are set on
       // labels and pills nested inside the interactive row.
-      const el = target?.closest?.('[title]:not([title=""])') as HTMLElement | null;
+      const el = target.closest('[title]:not([title=""])') as HTMLElement | null;
       if (!el) return;
       const text = el.getAttribute('title');
       if (!text) return;
@@ -63,7 +102,7 @@ export function TouchTitleTooltip() {
       timerRef.current = window.setTimeout(() => {
         timerRef.current = null;
         const rect = el.getBoundingClientRect();
-        swallowClickRef.current = true;
+        swallowUntilRef.current = Date.now() + SWALLOW_WINDOW_MS;
         setTip({
           text,
           anchor: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
@@ -88,11 +127,11 @@ export function TouchTitleTooltip() {
     };
 
     // A long press is also a `click` as far as the DOM is concerned; letting it
-    // through would select the row or trigger the button the user was only
-    // asking about.
+    // through would select the row the user was only asking about. The window
+    // is time-bound so a suppressed click never leaves the flag armed.
     const onClickCapture = (event: MouseEvent) => {
-      if (!swallowClickRef.current) return;
-      swallowClickRef.current = false;
+      if (Date.now() > swallowUntilRef.current) return;
+      swallowUntilRef.current = 0;
       event.preventDefault();
       event.stopPropagation();
     };

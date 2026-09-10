@@ -39,7 +39,8 @@ import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/the
 import { ERDirection, getFormatElementExcelRange, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent, type ERFormatElement, type ERLabel } from '@er-visualizer/core';
 import { resolveLabel, buildLabelPool } from '../utils/label-resolver';
 import { useCoarsePointer, useCompactLayout } from '../utils/responsive';
-import { parseXlsxBase64, colToLetter, type XlsxWorkbook, type XlsxCell as XlsxCellType, type XlsxMerge, type XlsxArea } from '../utils/xlsx-parser';
+import { useTabState, pruneTabViewState } from '../utils/tab-view-state';
+import { parseXlsxBase64, colToLetter, type XlsxWorkbook, type XlsxCell as XlsxCellType, type XlsxMerge, type XlsxArea, type XlsxDrawing, type XlsxAnchorPoint } from '../utils/xlsx-parser';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -132,6 +133,8 @@ export function DesignerView() {
   const coarse = useCoarsePointer();
   const openHint = coarse ? t.openInExplorerTouch : t.openInExplorer;
 
+  useEffect(() => { pruneTabViewState(tabs.map(tb => tb.id)); }, [tabs]);
+
   if (!activeTabId) {
     return (
       <div className="designer-empty-state">
@@ -194,9 +197,9 @@ export function DesignerView() {
     return <FocusedNodeTab node={tabNode} />;
   }
 
-  if (config.kind === 'DataModel') return <ModelDesigner config={config} focusNode={activeNode} />;
-  if (config.kind === 'ModelMapping') return <MappingDesigner mapping={resolveActiveMappingDefinition((config.content as ERModelMappingContent).version, configs, activeNode)} configIndex={tab.configIndex} focusNode={activeNode} />;
-  if (config.kind === 'Format') return <FormatDesigner config={config} configIndex={tab.configIndex} focusNode={activeNode} />;
+  if (config.kind === 'DataModel') return <ModelDesigner key={tab.id} config={config} focusNode={activeNode} />;
+  if (config.kind === 'ModelMapping') return <MappingDesigner key={tab.id} tabId={tab.id} mapping={resolveActiveMappingDefinition((config.content as ERModelMappingContent).version, configs, activeNode)} configIndex={tab.configIndex} focusNode={activeNode} />;
+  if (config.kind === 'Format') return <FormatDesigner key={tab.id} tabId={tab.id} config={config} configIndex={tab.configIndex} focusNode={activeNode} />;
 
   return <div style={{ padding: 16 }}>{t.designerUnsupportedView(config.kind)}</div>;
 }
@@ -1053,15 +1056,15 @@ function bindingAncestorKeys(path: string): string[] {
   return segments.slice(0, -1).map((_, i) => segments.slice(0, i + 1).join('/'));
 }
 
-function MappingDesigner({ mapping, configIndex, focusNode }: { mapping: any; configIndex: number; focusNode: any | null }) {
+function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: any; configIndex: number; focusNode: any | null; tabId?: string }) {
 
   const mm = mapping;
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const selectNode = useAppStore(s => s.selectNode);
   const treeNodes = useAppStore(s => s.treeNodes);
-  const [filter, setFilter] = useState('');
-  const [view, setView] = useState<'bindings' | 'datasources'>('bindings');
-  const [density, setDensity] = useState<DensityMode>('comfortable');
+  const [filter, setFilter] = useTabState(tabId, 'mapping.filter', '');
+  const [view, setView] = useTabState<'bindings' | 'datasources'>(tabId, 'mapping.view', 'bindings');
+  const [density, setDensity] = useTabState<DensityMode>(tabId, 'mapping.density', 'comfortable');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   const focusBindingPath: string | undefined = focusNode?.type === 'binding' ? focusNode.data?.path : undefined;
@@ -1464,7 +1467,7 @@ function hasImportFormatDatasource(datasources: any[], normalizedFormatId: strin
   return false;
 }
 
-function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfiguration; configIndex: number; focusNode: any | null }) {
+function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERConfiguration; configIndex: number; focusNode: any | null; tabId?: string }) {
   const fc = config.content as ERFormatContent;
   const fmt = fc.formatVersion.format;
   const fmtMap = fc.formatMappingVersion.formatMapping;
@@ -1478,16 +1481,16 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
   // toolbar line, so the tools move up into the header, which has slack there.
   const toolsInHeader = useCompactLayout();
 
-  const [filter, setFilter] = useState('');
-  const [view, setView] = useState<'structure' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping'>('structure');
-  const [density, setDensity] = useState<DensityMode>('comfortable');
+  const [filter, setFilter] = useTabState(tabId, 'format.filter', '');
+  const [view, setView] = useTabState<'structure' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping'>(tabId, 'format.view', 'structure');
+  const [density, setDensity] = useTabState<DensityMode>(tabId, 'format.density', 'comfortable');
   // Start collapsed: a fully expanded format tree buries the top level under
   // hundreds of rows. Expand-all is one click away in the toolbar.
   const [structureExpandMode, setStructureExpandMode] = useState<'all' | 'none'>('none');
   const [structureExpandVersion, setStructureExpandVersion] = useState(0);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
-  const [selectedEmbeddedMappingIdx, setSelectedEmbeddedMappingIdx] = useState(0);
-  const [structureBindingFilter, setStructureBindingFilter] = useState<'all' | 'bound' | 'unbound'>('all');
+  const [selectedEmbeddedMappingIdx, setSelectedEmbeddedMappingIdx] = useTabState(tabId, 'format.embeddedMapping', 0);
+  const [structureBindingFilter, setStructureBindingFilter] = useTabState<'all' | 'bound' | 'unbound'>(tabId, 'format.bindingFilter', 'all');
 
   // For import formats: find all loaded standalone ModelMapping configs that reference this format
   const linkedMappings = useMemo(() => {
@@ -1948,7 +1951,7 @@ function FormatDesigner({ config, configIndex, focusNode }: { config: ERConfigur
           )}
 
           <div style={{ display: view === 'preview' ? 'contents' : 'none' }}>
-            <FormatPreview rootElement={rootElement} direction={fc.direction} bindingMap={bindingMap} configIndex={configIndex} onNavigateToElement={(elementId) => {
+            <FormatPreview rootElement={rootElement} direction={fc.direction} bindingMap={bindingMap} configIndex={configIndex} tabId={tabId} onNavigateToElement={(elementId) => {
               setStructureExpandMode('all');
               setStructureExpandVersion(v => v + 1);
               setView('structure');
@@ -2236,6 +2239,15 @@ function buildCellBindingMap(root: ERFormatElement, bm: BindingMap, labels?: ERL
 
 // ── Excel Template Grid (renders parsed .xlsx with binding overlays) ──
 
+/** English Metric Units per CSS pixel (Office uses 914400 EMU per inch at 96 dpi). */
+const EMU_PER_PX = 9525;
+/** Height of the sticky column-letter header row, in px. */
+const EXCEL_HEADER_H = 20;
+/** Width of the sticky row-number gutter, in px. */
+const EXCEL_GUTTER_W = 32;
+/** Row height used when the sheet does not store an explicit one. */
+const EXCEL_DEFAULT_ROW_H = 20;
+
 /** Marks an Excel preview that is only an intermediate step — F&O converts it to PDF. */
 function PdfOutputBadge() {
   return (
@@ -2333,6 +2345,15 @@ function ExcelTemplateGrid({
     if (merge.endCol > maxCol) maxCol = merge.endCol;
     if (merge.endRow > maxRow) maxRow = merge.endRow;
   }
+  // A logo or a floating title may sit past the last filled cell (F&O anchors
+  // the report header in the drawing layer), so the grid has to reach it or the
+  // overlay would be clipped away.
+  for (const drawing of [...sheet.images, ...sheet.textShapes]) {
+    const endCol = (drawing.to?.col ?? drawing.from.col) + 1;
+    const endRow = (drawing.to?.row ?? drawing.from.row) + 1;
+    if (endCol > maxCol) maxCol = endCol;
+    if (endRow > maxRow) maxRow = endRow;
+  }
   // Limit to reasonable viewport
   maxCol = Math.min(maxCol, 30);
   maxRow = Math.min(maxRow, 200);
@@ -2364,6 +2385,51 @@ function ExcelTemplateGrid({
     const w = sheet.colWidths.get(col);
     return w ? Math.max(30, Math.round(w * 8)) : 64;
   };
+
+  // Row heights in pixels. The drawing layer is positioned against the same
+  // geometry, so an approximated row height would push the logo off its band.
+  const rowHeights = new Map<number, number>();
+  for (const row of sheet.rows) {
+    if (row.height != null && row.height > 0) {
+      rowHeights.set(row.index, Math.max(6, Math.round(row.height * (96 / 72))));
+    }
+  }
+  const rowHeight = (row: number) => rowHeights.get(row) ?? EXCEL_DEFAULT_ROW_H;
+
+  /** Left edge of a 1-based column, relative to the top-left of the table. */
+  const colX = (col: number) => {
+    let x = EXCEL_GUTTER_W;
+    for (let c = 1; c < col; c++) x += colWidth(c);
+    return x;
+  };
+  /** Top edge of a 1-based row, relative to the top-left of the table. */
+  const rowY = (row: number) => {
+    let y = EXCEL_HEADER_H;
+    for (let r = 1; r < row; r++) y += rowHeight(r);
+    return y;
+  };
+  /** Anchor (0-based col/row + EMU offsets) → pixel position on the grid. */
+  const anchorToPx = (a: XlsxAnchorPoint) => ({
+    x: colX(a.col + 1) + a.colOff / EMU_PER_PX,
+    y: rowY(a.row + 1) + a.rowOff / EMU_PER_PX,
+  });
+  const drawingBox = (d: XlsxDrawing) => {
+    const start = anchorToPx(d.from);
+    if (d.to) {
+      const end = anchorToPx(d.to);
+      return { left: start.x, top: start.y, width: Math.max(1, end.x - start.x), height: Math.max(1, end.y - start.y) };
+    }
+    return {
+      left: start.x,
+      top: start.y,
+      width: Math.max(1, (d.ext?.cx ?? 0) / EMU_PER_PX),
+      height: Math.max(1, (d.ext?.cy ?? 0) / EMU_PER_PX),
+    };
+  };
+
+  const gridWidth = colX(maxCol + 1);
+  const gridHeight = rowY(maxRow + 1);
+  const drawings = [...sheet.images, ...sheet.textShapes];
 
   const totalCells = sheet.rows.reduce((s, r) => s + r.cells.length, 0);
 
@@ -2419,12 +2485,13 @@ function ExcelTemplateGrid({
         <span style={{ marginLeft: 'auto', fontWeight: 400, fontSize: 11, opacity: 0.8 }}>
           {hoveredRef
             ? `${hovered ? `${hovered.name} · ${colToLetter(hovered.area.startCol)}${hovered.area.startRow}:${colToLetter(hovered.area.endCol)}${hovered.area.endRow}` : hoveredRef}`
-            : `${t.excelTemplateCells(totalCells)}${sheet.merges.length > 0 ? `, ${t.excelTemplateMerged(sheet.merges.length)}` : ''}`}
+            : `${t.excelTemplateCells(totalCells)}${sheet.merges.length > 0 ? `, ${t.excelTemplateMerged(sheet.merges.length)}` : ''}${sheet.images.length > 0 ? `, ${t.excelTemplateImages(sheet.images.length)}` : ''}`}
         </span>
       </div>
 
       {/* Grid */}
       <div style={{ flex: 1, overflow: 'auto', background: excelPaper.gridBg }} onMouseLeave={() => setHoveredRef(null)}>
+        <div style={{ position: 'relative', width: gridWidth, minHeight: gridHeight }}>
         <table style={{
           borderCollapse: 'collapse',
           fontSize: 11,
@@ -2433,10 +2500,10 @@ function ExcelTemplateGrid({
         }}>
           {/* Column headers */}
           <thead>
-            <tr>
+            <tr style={{ height: EXCEL_HEADER_H }}>
               <th style={{
-                width: 32,
-                minWidth: 32,
+                width: EXCEL_GUTTER_W,
+                minWidth: EXCEL_GUTTER_W,
                 background: excelPaper.headerBg,
                 borderRight: `1px solid ${excelPaper.cellBorder}`,
                 borderBottom: `1px solid ${excelPaper.cellBorder}`,
@@ -2470,7 +2537,7 @@ function ExcelTemplateGrid({
           </thead>
           <tbody>
             {Array.from({ length: maxRow }, (_, i) => i + 1).map(row => (
-              <tr key={row}>
+              <tr key={row} style={{ height: rowHeight(row) }}>
                 {/* Row header */}
                 <td style={{
                   padding: '1px 4px',
@@ -2550,7 +2617,7 @@ function ExcelTemplateGrid({
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         maxWidth: merge ? undefined : colWidth(col),
-                        height: 20,
+                        height: rowHeight(row),
                         cursor: hasBinding && onElementClick ? 'pointer' : undefined,
                         // The whole named area lights up together, so it is obvious
                         // how far the range under the pointer reaches.
@@ -2567,6 +2634,61 @@ function ExcelTemplateGrid({
             ))}
           </tbody>
         </table>
+
+        {/* Drawing layer — logos and floating text boxes sit above the cells.
+            F&O report templates keep the company logo and the report title
+            here, so without this overlay the header band renders empty. */}
+        {drawings.length > 0 && (
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+            {sheet.images.map(img => {
+              const box = drawingBox(img);
+              return (
+                <img
+                  key={`img-${img.id}`}
+                  src={img.dataUrl}
+                  alt={img.name || t.excelTemplateImage}
+                  title={img.name || t.excelTemplateImage}
+                  style={{
+                    position: 'absolute',
+                    left: box.left,
+                    top: box.top,
+                    width: box.width,
+                    height: box.height,
+                    objectFit: 'fill',
+                  }}
+                />
+              );
+            })}
+            {sheet.textShapes.map(shape => {
+              const box = drawingBox(shape);
+              return (
+                <div
+                  key={`txt-${shape.id}`}
+                  title={shape.name || undefined}
+                  style={{
+                    position: 'absolute',
+                    left: box.left,
+                    top: box.top,
+                    width: box.width,
+                    height: box.height,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: shape.align === 'ctr' ? 'center' : shape.align === 'r' ? 'flex-end' : 'flex-start',
+                    fontSize: shape.fontSize ? `${shape.fontSize}pt` : undefined,
+                    fontWeight: shape.bold ? 700 : undefined,
+                    color: shape.color ? `#${shape.color}` : excelPaper.cellText,
+                    lineHeight: 1.1,
+                    overflow: 'hidden',
+                    whiteSpace: 'pre-wrap',
+                  }}
+                >
+                  {shape.text}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        </div>
       </div>
 
       {/* Legend */}
@@ -2648,15 +2770,15 @@ function collectSheetColumns(sheet: ExcelSheetData): string[] {
   return Array.from(cols).sort((a, b) => a.length - b.length || a.localeCompare(b));
 }
 
-function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, template, onNavigateToElement, pdfOutput }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; template?: { filename: string; base64?: string }; onNavigateToElement?: (elementId: string) => void; pdfOutput?: boolean }) {
+function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, template, onNavigateToElement, pdfOutput, tabId }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; template?: { filename: string; base64?: string }; onNavigateToElement?: (elementId: string) => void; pdfOutput?: boolean; tabId?: string }) {
   const configurations = useAppStore(s => s.configurations);
   const labels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
   const previewOptions = useMemo<PreviewRenderOptions>(() => ({ placeholderMode: 'sample' }), []);
   const sheets = useMemo(() => collectExcelSheets(rootElement, bindingMap, labels, previewOptions), [rootElement, bindingMap, labels, previewOptions, locale]);
-  const [activeSheet, setActiveSheet] = useState(0);
+  const [activeSheet, setActiveSheet] = useTabState(tabId, 'excel.sheet', 0);
   const [selectedCell, setSelectedCell] = useState<ExcelCellData | null>(null);
   // Default to template view when template is available (even filename-only — shows drop zone)
-  const [viewMode, setViewMode] = useState<'structure' | 'template'>(template ? 'template' : 'structure');
+  const [viewMode, setViewMode] = useTabState<'structure' | 'template'>(tabId, 'excel.viewMode', template ? 'template' : 'structure');
   const [xlsxData, setXlsxData] = useState<XlsxWorkbook | null>(null);
   const [xlsxError, setXlsxError] = useState<string | null>(null);
   const [xlsxLoading, setXlsxLoading] = useState(false);
@@ -2666,7 +2788,22 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
 
   const effectiveBase64 = droppedBase64 ?? template?.base64 ?? null;
 
-  // Parse xlsx whenever effectiveBase64 becomes available
+  // A dropped workbook belongs to the format it was dropped on. Switching to
+  // another format tab reuses this component instance, so the override has to
+  // be cleared or the previous format's template leaks into the new one.
+  const templateKey = `${configIndex}\u0000${template?.filename ?? ''}`;
+  const templateKeyRef = useRef(templateKey);
+  if (templateKeyRef.current !== templateKey) {
+    templateKeyRef.current = templateKey;
+    if (droppedBase64 !== null) setDroppedBase64(null);
+  }
+
+  // Parse xlsx whenever effectiveBase64 becomes available.
+  // The parsed workbook is cached against the base64 it came from: without
+  // that key the guard below (`xlsxData` already set) would keep showing the
+  // template of the format that was open first when several Excel formats are
+  // loaded and the user switches tabs.
+  const parsedForRef = useRef<string | null>(null);
   // Leaving the preview while the workbook is still parsing must not set
   // state on an unmounted component (the effect itself re-runs on every
   // state change, so a per-run flag would cancel the in-flight parse).
@@ -2679,12 +2816,27 @@ function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, t
     return () => { mountedRef.current = false; };
   }, []);
   useEffect(() => {
-    if (!effectiveBase64 || xlsxData || xlsxLoading || xlsxError) return;
+    if (!effectiveBase64) {
+      parsedForRef.current = null;
+      if (xlsxData) setXlsxData(null);
+      if (xlsxError) setXlsxError(null);
+      return;
+    }
+    if (parsedForRef.current === effectiveBase64) return;
+    parsedForRef.current = effectiveBase64;
+    setXlsxData(null);
+    setXlsxError(null);
     setXlsxLoading(true);
     parseXlsxBase64(effectiveBase64)
-      .then(wb => { if (!mountedRef.current) return; setXlsxData(wb); setXlsxLoading(false); })
-      .catch(err => { if (!mountedRef.current) return; setXlsxError(String(err)); setXlsxLoading(false); });
-  }, [effectiveBase64, xlsxData, xlsxLoading, xlsxError]);
+      .then(wb => {
+        if (!mountedRef.current || parsedForRef.current !== effectiveBase64) return;
+        setXlsxData(wb); setXlsxLoading(false);
+      })
+      .catch(err => {
+        if (!mountedRef.current || parsedForRef.current !== effectiveBase64) return;
+        setXlsxError(String(err)); setXlsxLoading(false);
+      });
+  }, [effectiveBase64, xlsxData, xlsxError]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -3344,7 +3496,7 @@ function parseDelimitedPreview(text: string): DelimitedPreviewData | null {
   return { delimiter: best.delimiter, rows, columnCount };
 }
 
-function FormatPreview({ rootElement, direction, bindingMap, configIndex, onNavigateToElement }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; onNavigateToElement?: (elementId: string) => void }) {
+function FormatPreview({ rootElement, direction, bindingMap, configIndex, onNavigateToElement, tabId }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; onNavigateToElement?: (elementId: string) => void; tabId?: string }) {
   const isPdf = rootElement?.elementType === 'PDFFile';
   const previewRoot = unwrapConverterRoot(rootElement);
   const info = detectFormatType(previewRoot);
@@ -3367,6 +3519,7 @@ function FormatPreview({ rootElement, direction, bindingMap, configIndex, onNavi
   if (info.label === 'Excel') {
     return (
       <ExcelVisualPreview
+        key={`excel-${configIndex}`}
         rootElement={previewRoot}
         direction={direction}
         bindingMap={bindingMap}
@@ -3374,6 +3527,7 @@ function FormatPreview({ rootElement, direction, bindingMap, configIndex, onNavi
         template={template}
         onNavigateToElement={onNavigateToElement}
         pdfOutput={isPdf}
+        tabId={tabId}
       />
     );
   }

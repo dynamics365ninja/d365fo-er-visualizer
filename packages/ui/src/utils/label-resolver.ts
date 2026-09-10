@@ -154,6 +154,44 @@ export function isLabelResolved(resolved: ResolvedLabel | null | undefined): boo
   return Boolean(resolved && (resolved.enUs || resolved.localized));
 }
 
+export interface LabelTranslation {
+  /** LanguageId exactly as stored in the XML (e.g. `en-US`, `cs`). */
+  languageId: string;
+  value: string;
+}
+
+/**
+ * Every translation stored for a label reference, en-us first and the rest
+ * alphabetically. Used by the drill-down, where the interesting answer for a
+ * label is "what does it say in each language", not a data-lineage tree.
+ */
+export function collectLabelTranslations(
+  labelRef: string | null | undefined,
+  labels: ERLabel[] | undefined,
+): LabelTranslation[] {
+  if (!labelRef || !labels || labels.length === 0) return [];
+  const { bare, core } = normalizeLabelRef(String(labelRef).trim());
+  if (!core) return [];
+
+  const bucket = indexLabels(labels).get(core.toLowerCase()) ?? [];
+  let pool = bucket.filter(l => l.labelId === bare || l.labelId === core);
+  if (pool.length === 0) pool = bucket;
+
+  const byLang = new Map<string, LabelTranslation>();
+  for (const label of pool) {
+    if (!label.labelValue) continue;
+    const key = normalizeLang(label.languageId ?? '');
+    if (!byLang.has(key)) byLang.set(key, { languageId: label.languageId, value: label.labelValue });
+  }
+
+  return [...byLang.values()].sort((left, right) => {
+    const leftEn = normalizeLang(left.languageId).startsWith('en');
+    const rightEn = normalizeLang(right.languageId).startsWith('en');
+    if (leftEn !== rightEn) return leftEn ? -1 : 1;
+    return left.languageId.localeCompare(right.languageId);
+  });
+}
+
 interface LabelBearingConfiguration {
   solutionVersion?: { solution?: { labels?: ERLabel[] } };
 }

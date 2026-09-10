@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getDrillDownEffectiveResolutionInput } from './DrillDownPanel';
+import { getDrillDownEffectiveResolutionInput, labelOnlyReferences } from './DrillDownPanel';
 
 describe('getDrillDownEffectiveResolutionInput', () => {
   it('keeps selected non-model expression even when mapping context exists', () => {
@@ -102,5 +102,28 @@ describe('shouldShowFullExpression', () => {
   it('hides the card for a bare path already covered by the breadcrumb', () => {
     expect(shouldShowFullExpression("'001_System'.TaxTransactionLines")).toBe(false);
     expect(shouldShowFullExpression('model.Invoice.Amount')).toBe(false);
+  });
+});
+
+describe('labelOnlyReferences', () => {
+  it('detects a plain label reference', () => {
+    expect(labelOnlyReferences('@"GER_LABEL:Invoice"')).toEqual(['@"GER_LABEL:Invoice"']);
+    expect(labelOnlyReferences('@GER_LABEL:Invoice')).toEqual(['@GER_LABEL:Invoice']);
+  });
+
+  it('detects labels concatenated with literal text', () => {
+    expect(labelOnlyReferences('@"GER_LABEL:A" & " " & @"GER_LABEL:B"'))
+      .toEqual(['@"GER_LABEL:A"', '@"GER_LABEL:B"']);
+  });
+
+  it('returns null once real data is involved', () => {
+    expect(labelOnlyReferences('@"GER_LABEL:A" & model.Invoice.Number')).toBeNull();
+    expect(labelOnlyReferences('model.Invoice.Number')).toBeNull();
+    expect(labelOnlyReferences('TEXT(model.Invoice.Amount)')).toBeNull();
+  });
+
+  it('returns null when there is no label at all', () => {
+    expect(labelOnlyReferences('"plain text"')).toBeNull();
+    expect(labelOnlyReferences('')).toBeNull();
   });
 });

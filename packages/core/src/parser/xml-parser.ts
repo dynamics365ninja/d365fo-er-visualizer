@@ -1430,21 +1430,31 @@ function parseFormat(node: any): ERFormat {
 /** Recursively search for ERTextFormatExcelTemplate in a node tree (max depth 8).
  * Returns a template descriptor with filename and optional base64 (embedded binary).
  * When the format only stores a filename reference (self-closing element), base64 is undefined.
+ *
+ * A format routinely carries *both* shapes: an attachment-level reference-only
+ * node (`Filename="<descr/>Sales invoice (Excel)"`) and the real embedded
+ * workbook further down. Taking the first hit in document order would drop the
+ * binary, so every candidate is collected and the embedded one wins.
  */
 function findExcelTemplate(node: any, depth = 0): { filename: string; base64?: string } | undefined {
-  if (!node || typeof node !== 'object' || depth > 8) return undefined;
-  // Direct hit — two element names seen in the wild:
+  const candidates = collectExcelTemplates(node, depth);
+  return candidates.find(c => c.base64) ?? candidates[0];
+}
+
+function collectExcelTemplates(node: any, depth = 0, out: Array<{ filename: string; base64?: string }> = []): Array<{ filename: string; base64?: string }> {
+  if (!node || typeof node !== 'object' || depth > 8) return out;
+  // Two element names seen in the wild:
   // ERTextFormatExcelTemplate (reference-only or older embedded style)
   // ERTextFormatExcelFileComponentTemplate (newer embedded style inside ExcelFileComponent)
-  const tplNode = node['ERTextFormatExcelTemplate'] ?? node['ERTextFormatExcelFileComponentTemplate'];
-  if (tplNode) {
-    const tpl = Array.isArray(tplNode) ? tplNode[0] : tplNode;
-    const filename = tpl?.['@_Filename'] ?? '';
-    // Return even when no binary is embedded (reference-only template)
-    if (filename) {
+  for (const key of ['ERTextFormatExcelTemplate', 'ERTextFormatExcelFileComponentTemplate']) {
+    const tplNode = node[key];
+    if (!tplNode) continue;
+    for (const tpl of Array.isArray(tplNode) ? tplNode : [tplNode]) {
+      const filename = tpl?.['@_Filename'] ?? '';
+      if (!filename) continue;
       const rawBase64 = tpl?.['Contents.'];
       const base64 = rawBase64 && typeof rawBase64 === 'string' ? rawBase64.trim() : undefined;
-      return { filename, base64 };
+      out.push({ filename, base64 });
     }
   }
   // Search children
@@ -1452,13 +1462,12 @@ function findExcelTemplate(node: any, depth = 0): { filename: string; base64?: s
     if (key.startsWith('@_') || key === '#text') continue;
     const items = Array.isArray(val) ? val : [val];
     for (const item of items) {
+      collectExcelTemplates(item, depth + 1, out);
       // Also check inside Contents. sub-nodes
-      const found = findExcelTemplate(item, depth + 1)
-        ?? findExcelTemplate(item?.['Contents.'], depth + 2);
-      if (found) return found;
+      collectExcelTemplates(item?.['Contents.'], depth + 2, out);
     }
   }
-  return undefined;
+  return out;
 }
 
 function parseRootFormatElement(rootNode: any): ERFormatElement {

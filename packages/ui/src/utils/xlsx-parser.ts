@@ -31,6 +31,41 @@ export interface XlsxSheet {
   rows: XlsxRow[];
   merges: XlsxMerge[];
   colWidths: Map<number, number>; // 1-based column index → width in chars
+  /** Pictures anchored on the sheet (logos, signatures, …). */
+  images: XlsxDrawing[];
+  /** Free-floating text boxes from the drawing layer (report title, company name, …). */
+  textShapes: XlsxDrawing[];
+}
+
+/** Where a drawing sits on the grid. Columns/rows are 0-based, offsets are EMU. */
+export interface XlsxAnchorPoint {
+  col: number;
+  colOff: number;
+  row: number;
+  rowOff: number;
+}
+
+/** A picture or text box from `xl/drawings/drawingN.xml`. */
+export interface XlsxDrawing {
+  id: string;
+  /** Shape name as authored in Excel, e.g. `rptHeader_ReportLogo`. */
+  name: string;
+  from: XlsxAnchorPoint;
+  /** Present for `twoCellAnchor` drawings — the bottom-right grid anchor. */
+  to?: XlsxAnchorPoint;
+  /** Present for `oneCellAnchor` drawings — explicit size in EMU. */
+  ext?: { cx: number; cy: number };
+  /** Pictures: `data:` URL of the embedded media, ready for an `<img src>`. */
+  dataUrl?: string;
+  /** Text boxes: the concatenated run text. */
+  text?: string;
+  /** Text boxes: font size in points of the first run. */
+  fontSize?: number;
+  /** Text boxes: resolved 6-char hex colour of the first run. */
+  color?: string;
+  bold?: boolean;
+  /** Text boxes: `l` | `ctr` | `r`. */
+  align?: string;
 }
 
 export interface XlsxRow {
@@ -108,7 +143,12 @@ export async function parseXlsxBase64(base64: string): Promise<XlsxWorkbook> {
     const sheetPath = relPath.startsWith('/') ? relPath.slice(1) : `xl/${relPath}`;
     const sheetXml = await zip.file(sheetPath)?.async('text');
     if (!sheetXml) continue;
-    sheets.push(parseSheet(meta.name, sheetXml, sharedStrings, styles));
+    const sheet = parseSheet(meta.name, sheetXml, sharedStrings, styles);
+    // 7. Drawing layer — logos and floating text boxes live outside the cell grid.
+    const drawings = await readSheetDrawings(zip, sheetPath, sheetXml, themeColors);
+    sheet.images = drawings.images;
+    sheet.textShapes = drawings.textShapes;
+    sheets.push(sheet);
   }
 
   return { sheets, definedNames, definedRanges };
@@ -493,7 +533,177 @@ function parseSheet(name: string, xml: string, sharedStrings: string[], styles: 
     }
   }
 
-  return { name, rows, merges, colWidths };
+  return { name, rows, merges, colWidths, images: [], textShapes: [] };
+}
+
+// ─── Drawing layer (pictures + text boxes) ───────────────────────────────
+
+const MIME_BY_EXT: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  bmp: 'image/bmp',
+  svg: 'image/svg+xml',
+  webp: 'image/webp',
+  tif: 'image/tiff',
+  tiff: 'image/tiff',
+  emf: 'image/emf',
+  wmf: 'image/wmf',
+};
+
+/** Resolve a relationship target that may be relative (`../media/x.png`) against its owner. */
+function resolveZipPath(ownerPath: string, target: string): string {
+  if (target.startsWith('/')) return target.slice(1);
+  const base = ownerPath.split('/').slice(0, -1);
+  for (const part of target.split('/')) {
+    if (part === '.' || part === '') continue;
+    if (part === '..') base.pop();
+    else base.push(part);
+  }
+  return base.join('/');
+}
+
+/** `<xdr:from>` / `<xdr:to>` → anchor point (0-based col/row + EMU offsets). */
+function parseAnchorPoint(inner: string): XlsxAnchorPoint {
+  const num = (tag: string) => {
+    const found = parseXmlTags(inner, tag);
+    return found.length > 0 ? parseInt(found[0]!.inner.trim(), 10) || 0 : 0;
+  };
+  return {
+    col: num('xdr:col'),
+    colOff: num('xdr:colOff'),
+    row: num('xdr:row'),
+    rowOff: num('xdr:rowOff'),
+  };
+}
+
+/** `<a:schemeClr val="bg1">` and friends → 6-char hex, using the workbook theme. */
+function resolveDrawingColor(inner: string, themeColors: string[]): string | undefined {
+  const srgb = /<a:srgbClr\s+val="([0-9A-Fa-f]{6})"/.exec(inner);
+  if (srgb) return srgb[1]!.toUpperCase();
+  const scheme = /<a:schemeClr\s+val="([A-Za-z0-9]+)"/.exec(inner);
+  if (!scheme) return undefined;
+  // Drawing slot names differ from the clrScheme element names.
+  const alias: Record<string, string> = { bg1: 'lt1', tx1: 'dk1', bg2: 'lt2', tx2: 'dk2' };
+  const slot = alias[scheme[1]!] ?? scheme[1]!;
+  const idx = THEME_SLOT_ORDER.indexOf(slot);
+  return idx >= 0 ? (themeColors[idx] || undefined) : undefined;
+}
+
+/**
+ * Pictures and text boxes anchored on a sheet.
+ *
+ * F&O report templates put the company logo, the report title and the company
+ * name in the drawing layer rather than in cells, so a preview that only walks
+ * the cell grid renders a blank header band.
+ */
+async function readSheetDrawings(
+  zip: JSZip,
+  sheetPath: string,
+  sheetXml: string,
+  themeColors: string[],
+): Promise<{ images: XlsxDrawing[]; textShapes: XlsxDrawing[] }> {
+  const empty = { images: [] as XlsxDrawing[], textShapes: [] as XlsxDrawing[] };
+
+  const drawingRefs = parseXmlTags(sheetXml, 'drawing');
+  const drawingRid = drawingRefs[0]?.attrs['r:id'];
+  if (!drawingRid) return empty;
+
+  const sheetName = sheetPath.split('/').pop()!;
+  const sheetRelsPath = resolveZipPath(sheetPath, `_rels/${sheetName}.rels`);
+  const sheetRels = await readRels(zip, sheetRelsPath);
+  const drawingTarget = sheetRels.get(drawingRid);
+  if (!drawingTarget) return empty;
+
+  const drawingPath = resolveZipPath(sheetPath, drawingTarget);
+  const drawingXml = await zip.file(drawingPath)?.async('text');
+  if (!drawingXml) return empty;
+
+  const drawingRels = await readRels(zip, resolveZipPath(drawingPath, `_rels/${drawingPath.split('/').pop()}.rels`));
+
+  // Media is shared between anchors, so each file is only read once.
+  const mediaCache = new Map<string, string | undefined>();
+  const readMedia = async (rid: string): Promise<string | undefined> => {
+    if (mediaCache.has(rid)) return mediaCache.get(rid);
+    const target = drawingRels.get(rid);
+    let dataUrl: string | undefined;
+    if (target) {
+      const mediaPath = resolveZipPath(drawingPath, target);
+      const ext = mediaPath.split('.').pop()?.toLowerCase() ?? '';
+      const base64 = await zip.file(mediaPath)?.async('base64');
+      if (base64) dataUrl = `data:${MIME_BY_EXT[ext] ?? 'application/octet-stream'};base64,${base64}`;
+    }
+    mediaCache.set(rid, dataUrl);
+    return dataUrl;
+  };
+
+  const images: XlsxDrawing[] = [];
+  const textShapes: XlsxDrawing[] = [];
+
+  for (const anchorTag of ['xdr:twoCellAnchor', 'xdr:oneCellAnchor'] as const) {
+    for (const anchor of parseXmlTags(drawingXml, anchorTag)) {
+      const fromTags = parseXmlTags(anchor.inner, 'xdr:from');
+      if (fromTags.length === 0) continue;
+      const from = parseAnchorPoint(fromTags[0]!.inner);
+      const toTags = parseXmlTags(anchor.inner, 'xdr:to');
+      const to = toTags.length > 0 ? parseAnchorPoint(toTags[0]!.inner) : undefined;
+      const extTag = parseXmlTags(anchor.inner, 'xdr:ext')[0];
+      const ext = extTag
+        ? { cx: parseInt(extTag.attrs['cx'] ?? '0', 10) || 0, cy: parseInt(extTag.attrs['cy'] ?? '0', 10) || 0 }
+        : undefined;
+
+      const nameTag = parseXmlTags(anchor.inner, 'xdr:cNvPr')[0];
+      const id = nameTag?.attrs['id'] ?? String(images.length + textShapes.length);
+      const name = nameTag?.attrs['name'] ?? '';
+
+      const picTags = parseXmlTags(anchor.inner, 'xdr:pic');
+      if (picTags.length > 0) {
+        const embed = /<a:blip[^>]*r:embed="([^"]+)"/.exec(picTags[0]!.inner);
+        const dataUrl = embed ? await readMedia(embed[1]!) : undefined;
+        if (dataUrl) images.push({ id, name, from, to, ext, dataUrl });
+        continue;
+      }
+
+      const spTags = parseXmlTags(anchor.inner, 'xdr:sp');
+      if (spTags.length > 0) {
+        const body = parseXmlTags(spTags[0]!.inner, 'xdr:txBody')[0];
+        if (!body) continue;
+        const runs = parseXmlTags(body.inner, 'a:r');
+        const text = (runs.length > 0
+          ? runs.map(r => parseXmlTags(r.inner, 'a:t').map(t => decodeXmlEntities(t.inner)).join(''))
+          : parseXmlTags(body.inner, 'a:t').map(t => decodeXmlEntities(t.inner))
+        ).join('').trim();
+        if (!text) continue;
+        const rPr = runs.length > 0 ? parseXmlTags(runs[0]!.inner, 'a:rPr')[0] : undefined;
+        const align = /<a:pPr[^>]*algn="([^"]+)"/.exec(body.inner)?.[1];
+        textShapes.push({
+          id,
+          name,
+          from,
+          to,
+          ext,
+          text,
+          fontSize: rPr?.attrs['sz'] ? parseInt(rPr.attrs['sz'], 10) / 100 : undefined,
+          bold: rPr?.attrs['b'] === '1',
+          color: rPr ? resolveDrawingColor(rPr.inner, themeColors) : undefined,
+          align,
+        });
+      }
+    }
+  }
+
+  return { images, textShapes };
+}
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&amp;/g, '&');
 }
 
 /** Convert cell reference like "AB12" to { col: 28, row: 12 } (1-based). */
