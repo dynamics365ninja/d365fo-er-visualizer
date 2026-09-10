@@ -4520,7 +4520,7 @@ body {
 [class*="fui-DialogSurface"]::before {
   backdrop-filter: blur(6px) saturate(0.9);
   -webkit-backdrop-filter: blur(6px) saturate(0.9);
-  background-color: color-mix(in srgb, var(--bg-primary) 35%, transparent) !important;
+  background-color: var(--er-scrim) !important;
   transition: backdrop-filter 160ms ease, background-color 160ms ease;
 }
 
