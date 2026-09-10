@@ -51,6 +51,7 @@ import {
 } from '@fluentui/react-icons';
 import { useAppStore, resolveDeepExpression, selectMappingDefinition, getScopedMappingDefinitions } from '../state/store';
 import { locale, t } from '../i18n';
+import { dsPathToExpression } from '../utils/ds-path';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { resolveLabel, buildLabelPool, labelDisplayText, collectLabelTranslations, getUserLanguageTag } from '../utils/label-resolver';
 import { useCoarsePointer } from '../utils/responsive';
@@ -1874,7 +1875,7 @@ function buildDsNode(
     const listToGroup = String(ds.groupByInfo.listToGroup ?? '').trim();
     dsNode.badge = 'groupby';
     dsNode.sublabel = listToGroup || undefined;
-    if (listToGroup) expandExpression(dsNode, listToGroup.replace(/\//g, '.'), 'ds-grp-ref', configIndex);
+    if (listToGroup) expandExpression(dsNode, dsPathToExpression(listToGroup), 'ds-grp-ref', configIndex);
   } else if (ds.calculatedField?.expressionAsString && depth < MAX_CALC_DEPTH) {
     const calcExpr: string = ds.calculatedField.expressionAsString;
     dsNode.badge = 'calc';

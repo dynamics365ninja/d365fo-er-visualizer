@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Dialog,
-  DialogActions,
   DialogBody,
   DialogContent,
   DialogSurface,
@@ -223,7 +222,19 @@ export function WorkspaceManager({
           }}
         >
           <DialogBody className="ws-dialog-body" style={{ maxHeight: '100%', overflow: 'hidden' }}>
-            <DialogTitle>
+            <DialogTitle
+              className="ws-titlebar"
+              action={
+                <Button
+                  className="ws-dialog-close"
+                  appearance="subtle"
+                  size="small"
+                  icon={<DismissRegular />}
+                  aria-label={t.dismiss}
+                  onClick={() => onOpenChange(false)}
+                />
+              }
+            >
               <span className="ws-title">
                 {t.workspaceManager}
                 {/* Three bare numbers said nothing about what they counted;
@@ -359,11 +370,6 @@ export function WorkspaceManager({
                 }}
               />
             </DialogContent>
-            <DialogActions>
-              <Button appearance="primary" onClick={() => onOpenChange(false)}>
-                {t.workspaceClose}
-              </Button>
-            </DialogActions>
           </DialogBody>
         </DialogSurface>
       </Dialog>

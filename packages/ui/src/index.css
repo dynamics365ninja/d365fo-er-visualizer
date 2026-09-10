@@ -7845,3 +7845,17 @@ div.path-tooltip-card {
 .dd-dialog-surface .dd-formula {
   background: var(--er-surface-sunken) !important;
 }
+
+/* Workspace manager: closed by the corner ✕, like the drill-down dialog — a
+   full-width action bar for a single "Close" was a row of chrome saying what
+   the ✕ already says. */
+.ws-dialog-close {
+  position: absolute !important;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+}
+
+.ws-titlebar {
+  padding-right: 40px;
+}
