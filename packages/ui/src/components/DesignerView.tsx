@@ -23,8 +23,9 @@ import {
   ArrowDownloadRegular,
   SearchRegular,
   InfoRegular,
+  MoreVerticalRegular,
 } from '@fluentui/react-icons';
-import { Tooltip } from '@fluentui/react-components';
+import { Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip } from '@fluentui/react-components';
 import '@xyflow/react/dist/style.css';
 import { useAppStore, resolveDeepExpression, selectMappingDefinition } from '../state/store';
 import { ClickablePath } from './ClickablePath';
@@ -34,7 +35,7 @@ import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 import { FilterField } from './FilterField';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
-import { adjacentRow, treeArrowAction } from '../utils/tree-keyboard';
+import { adjacentRow, isTreeArrowKey, treeArrowAction } from '../utils/tree-keyboard';
 import { getBindingCategoryLabel, getConsultantBindingLabel, getConsultantFormatTypeLabel, isXmlNamespaceDeclaration } from '../utils/consultant-labels';
 import { buildFormatBindingPresentation, groupFormatBindingsByCategory } from '../utils/format-binding-display';
 import { buildFormatTreeIndex, type FormatTreeIndex } from '../utils/format-tree-filter';
@@ -1153,15 +1154,29 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
     const rootNode = treeNodes[configIndex];
     if (!rootNode) return;
     const match = findTreeNodeByMatch(rootNode, n => n.type === 'binding' && n.data?.path === path);
-    if (match) selectNode(match.id);
+    // As in the format designer: selecting a row leaves the explorer alone;
+    // the row's ⋮ menu reveals it there.
+    if (match) selectNode(match.id, { revealInExplorer: false });
   }, [treeNodes, configIndex, selectNode]);
 
   const selectValidationByPath = useCallback((path: string) => {
     const rootNode = treeNodes[configIndex];
     if (!rootNode) return;
     const match = findTreeNodeByMatch(rootNode, n => n.type === 'validation' && n.data?.path === path);
-    if (match) selectNode(match.id);
+    if (match) selectNode(match.id, { revealInExplorer: false });
   }, [treeNodes, configIndex, selectNode]);
+
+  const revealBindingInExplorer = useCallback((path: string) => {
+    const rootNode = treeNodes[configIndex];
+    const match = rootNode ? findTreeNodeByMatch(rootNode, n => n.type === 'binding' && n.data?.path === path) : null;
+    if (match) navigateToTreeNode(match.id);
+  }, [treeNodes, configIndex, navigateToTreeNode]);
+
+  const revealValidationInExplorer = useCallback((path: string) => {
+    const rootNode = treeNodes[configIndex];
+    const match = rootNode ? findTreeNodeByMatch(rootNode, n => n.type === 'validation' && n.data?.path === path) : null;
+    if (match) navigateToTreeNode(match.id);
+  }, [treeNodes, configIndex, navigateToTreeNode]);
 
   // Every level starts closed, not just the roots — the tree opens as the user
   // clicks down through it. This runs once per mapping (not on every filter
@@ -1343,6 +1358,7 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
                     flashBindingPath={flashBindingPath}
                     focusRef={bindingScrollRef}
                     onSelectBinding={selectBindingByPath}
+                    onRevealBinding={revealBindingInExplorer}
                   />
                 ))}
               </div>
@@ -1366,6 +1382,7 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
                     focused={validation.path === focusValidationPath}
                     focusRef={validationScrollRef}
                     onSelect={selectValidationByPath}
+                    onReveal={revealValidationInExplorer}
                   />
                 ))}
               </div>
@@ -1381,12 +1398,13 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
  * same drill-down affordance as a binding — a validation message is usually
  * the more tangled of the two formulas.
  */
-function ValidationRow({ validation, configIndex, focused, focusRef, onSelect }: {
+function ValidationRow({ validation, configIndex, focused, focusRef, onSelect, onReveal }: {
   validation: any;
   configIndex: number;
   focused: boolean;
   focusRef: React.MutableRefObject<HTMLDivElement | null>;
   onSelect: (path: string) => void;
+  onReveal?: (path: string) => void;
 }) {
   const rules: any[] = validation.conditions ?? [];
 
@@ -1405,6 +1423,7 @@ function ValidationRow({ validation, configIndex, focused, focusRef, onSelect }:
             title={locale === 'cs' ? `Počet pravidel: ${rules.length}` : `Number of rules: ${rules.length}`}
           >{rules.length}</span>
         )}
+        {onReveal && <RevealInExplorerMenu onReveal={() => onReveal(validation.path)} />}
       </div>
       {rules.map((rule: any, ri: number) => (
         <div key={rule.id ?? ri} className="mm-validation-rule">
@@ -1464,7 +1483,7 @@ function ValidationExpression({ label, expression, configIndex, elementName }: {
  * the drill-down trigger, so a node that is both keeps a single row.
  */
 function BindingTreeRows({
-  node, depth, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding,
+  node, depth, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding, onRevealBinding,
 }: {
   node: BindingTreeNode;
   depth: number;
@@ -1475,6 +1494,8 @@ function BindingTreeRows({
   flashBindingPath: string | null;
   focusRef: React.MutableRefObject<HTMLDivElement | null>;
   onSelectBinding: (path: string) => void;
+  /** Shows the binding's node in the explorer — offered in each bound row's ⋮ menu. */
+  onRevealBinding?: (path: string) => void;
 }) {
   const hasChildren = node.children.length > 0;
   const isCollapsed = hasChildren && collapsed.has(node.key);
@@ -1533,6 +1554,7 @@ function BindingTreeRows({
               <span>{locale === 'cs' ? 'Rozpad' : 'Drill-down'}</span>
             </DrillDownTrigger>
           )}
+          {binding && onRevealBinding && <RevealInExplorerMenu onReveal={() => onRevealBinding(node.key)} />}
         </div>
         {binding && (
           <div className="mm-binding-expr">
@@ -1555,6 +1577,7 @@ function BindingTreeRows({
               flashBindingPath={flashBindingPath}
               focusRef={focusRef}
               onSelectBinding={onSelectBinding}
+              onRevealBinding={onRevealBinding}
             />
           ))}
         </div>
@@ -1815,15 +1838,16 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
   }, [treeNodes, configIndex, navigateToTreeNode]);
 
   const handleSelectFormatElement = useCallback((elementId: string | null) => {
-    // Single-click merely selects the element so its binding / drill-down details
-    // expand inline. Navigation to the element's own tree node is an explicit,
-    // user-initiated action — use `revealFormatElementInExplorer` for that.
+    // A click or an arrow key merely selects the element so its binding details
+    // expand inline and the inspector follows. The explorer does not: showing
+    // the element there is an explicit action — the row's ⋮ menu calls
+    // `revealFormatElementInExplorer` for that.
     setSelectedElementId(elementId);
     if (elementId) {
       const rootNode = treeNodes[configIndex];
       if (rootNode) {
         const match = findTreeNodeByMatch(rootNode, n => n.type === 'formatElement' && n.data?.id === elementId);
-        if (match) selectNode(match.id);
+        if (match) selectNode(match.id, { revealInExplorer: false });
       }
     }
   }, [treeNodes, configIndex, selectNode]);
@@ -1992,7 +2016,15 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
         {/* Left: tree / list */}
         <div className="designer-list-pane">
           {view === 'structure' && (
-            <div className="fmt-structure-list" role="tree" aria-label={t.structure}>
+            <div
+              className="fmt-structure-list"
+              role="tree"
+              aria-label={t.structure}
+              // Focusable, but not a tab stop: a click on empty space keeps
+              // focus in the tree so the arrows still reach it.
+              tabIndex={-1}
+              onKeyDown={forwardArrowKeyToSelectedRow}
+            >
               <FormatElementTree
                 element={rootElement}
                 depth={0}
@@ -2008,6 +2040,7 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
                 bindingFilter={structureBindingFilter}
                 treeIndex={treeIndex}
                 selectedAncestors={selectedAncestors}
+                onReveal={revealFormatElementInExplorer}
               />
             </div>
           )}
@@ -4054,9 +4087,66 @@ interface FormatElementTreeProps {
   treeIndex: FormatTreeIndex;
   /** Ancestors of the selected element — those rows auto-expand. */
   selectedAncestors: Set<string>;
+  /** Shows the element's node in the explorer — offered in each row's ⋮ menu. */
+  onReveal?: (elementId: string) => void;
 }
 
-function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, showAll, expandMode, expandVersion, selectedId, onSelect, showTechnicalDetails, bindingFilter, treeIndex, selectedAncestors }: FormatElementTreeProps) {
+/**
+ * A designer row's ⋮ menu. Selecting a row in a designer leaves the explorer
+ * alone; this is where the user asks it to follow.
+ */
+function RevealInExplorerMenu({ onReveal, onClosed }: { onReveal: () => void; onClosed?: () => void }) {
+  return (
+    <Menu onOpenChange={(_, data) => { if (!data.open) onClosed?.(); }}>
+      <MenuTrigger disableButtonEnhancement>
+        <button
+          type="button"
+          className="fmt-row-actions"
+          title={t.explorerMoreActions}
+          aria-label={t.explorerMoreActions}
+          onClick={event => event.stopPropagation()}
+        >
+          <MoreVerticalRegular fontSize={14} />
+        </button>
+      </MenuTrigger>
+      {/* The popover is portalled, but React still bubbles its clicks to the
+          row, whose onClick would re-select (and re-mute) it right after the
+          reveal. */}
+      <MenuPopover onClick={event => event.stopPropagation()}>
+        <MenuList>
+          <MenuItem icon={<AppsListDetailRegular />} onClick={onReveal}>
+            {t.propRevealInExplorer}
+          </MenuItem>
+        </MenuList>
+      </MenuPopover>
+    </Menu>
+  );
+}
+
+/**
+ * Arrow keys work wherever focus sits in the structure tree — on an expression
+ * in the binding card under the selected row, or on the list's empty space —
+ * by handing the key to the selected row, which owns its expanded state. The
+ * forwarded event targets the row itself, so it stops there on the way back up.
+ */
+function forwardArrowKeyToSelectedRow(event: React.KeyboardEvent<HTMLDivElement>) {
+  if (!isTreeArrowKey(event.key) || event.defaultPrevented) return;
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  const target = event.target as HTMLElement;
+  // React bubbles keys from portals (a row's ⋮ menu) up to here too; those
+  // arrows belong to the menu.
+  if (!event.currentTarget.contains(target)) return;
+  if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
+  const row = event.currentTarget.querySelector<HTMLElement>('.fmt-element-row.selected')
+    ?? event.currentTarget.querySelector<HTMLElement>('.fmt-element-row');
+  if (!row || row === target) return;
+  row.focus({ preventScroll: true });
+  const forwarded = new KeyboardEvent('keydown', { key: event.key, bubbles: true, cancelable: true });
+  row.dispatchEvent(forwarded);
+  if (forwarded.defaultPrevented) event.preventDefault();
+}
+
+function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, showAll, expandMode, expandVersion, selectedId, onSelect, showTechnicalDetails, bindingFilter, treeIndex, selectedAncestors, onReveal }: FormatElementTreeProps) {
   const [expanded, setExpanded] = useState(expandMode === 'all');
   const configurations = useAppStore(s => s.configurations);
   const labels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
@@ -4167,6 +4257,16 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
       if (hasBoundUnbound) return null;
     }
   }
+
+  // Closing the ⋮ menu hands focus back to the row rather than the ⋮ button:
+  // on the button, ↓ reopens the menu instead of walking the tree. Focus that
+  // has already moved elsewhere — a click outside the menu — is left alone.
+  const returnFocusToRow = () => requestAnimationFrame(() => {
+    const active = document.activeElement;
+    if (!active || active === document.body || rowRef.current?.contains(active)) {
+      rowRef.current?.focus({ preventScroll: true });
+    }
+  });
 
   const handleRowKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     // Modified arrows are taken: Alt+← / Alt+→ walk the navigation history.
@@ -4307,6 +4407,9 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
         {!mainBinding && hasChildren === false && (
           <span className="fmt-unbound-marker">○ {t.unbound}</span>
         )}
+
+        {/* Row actions — the explorer only follows the designer from here. */}
+        {onReveal && <RevealInExplorerMenu onReveal={() => onReveal(element.id)} onClosed={returnFocusToRow} />}
       </div>
 
       {/* Why this row matched, when the match is not visible on the row itself. */}
@@ -4327,13 +4430,11 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
       )}
 
       {/* Expanded Binding Details — shown when element is selected */}
-      {isSelected && (
+      {/* Only when there is something to show: an element without bindings
+          would open a card that merely says so. */}
+      {isSelected && bindings.length > 0 && (
         <div className="fmt-binding-expanded" style={{ marginLeft: depth * 20 + 28 }}>
-          {bindings.length === 0 ? (
-            <div className="fmt-drill-hint fmt-drill-hint-unbound">
-              {t.drillUnbound}
-            </div>
-          ) : bindingCategories.map(category => (
+          {bindingCategories.map(category => (
             <div key={category.key}>
               <div className="fmt-binding-category-title">
                 {showTechnicalDetails ? category.label : getBindingCategoryLabel(category.key)} ({category.bindings.length})
@@ -4384,6 +4485,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
           bindingFilter={bindingFilter}
           treeIndex={treeIndex}
           selectedAncestors={selectedAncestors}
+          onReveal={onReveal}
         />
       ))}
     </div>
@@ -4693,6 +4795,7 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
   const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const triggerWhereUsed = useAppStore(s => s.triggerWhereUsed);
+  const selectNode = useAppStore(s => s.selectNode);
   const isDirectTarget = Boolean(focusDsName && ds.name === focusDsName);
   const isAncestor = Boolean(focusDsName && !isDirectTarget && containsDatasourceName(ds, focusDsName));
   const [expanded, setExpanded] = useState(false);
@@ -4713,10 +4816,16 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
   const aggregatedFields = ds.groupByInfo?.aggregations ?? [];
   const [showGroupedFields, setShowGroupedFields] = useState(groupByFields.length > 0 && groupByFields.length <= 6);
   const [showAggregatedFields, setShowAggregatedFields] = useState(aggregatedFields.length > 0 && aggregatedFields.length <= 6);
+  // Selecting a datasource — the row or one of its grouped fields — leaves the
+  // explorer alone, as everywhere in the designers; the row's ⋮ menu reveals it.
   const navigateToDatasource = useCallback((name: string, parentPath?: string) => {
     const nodeId = findDatasourceNode(name, configIndex, parentPath);
+    if (nodeId) selectNode(nodeId, { revealInExplorer: false });
+  }, [findDatasourceNode, configIndex, selectNode]);
+  const revealDatasourceInExplorer = useCallback(() => {
+    const nodeId = findDatasourceNode(ds.name, configIndex, ds.parentPath);
     if (nodeId) navigateToTreeNode(nodeId);
-  }, [findDatasourceNode, configIndex, navigateToTreeNode]);
+  }, [findDatasourceNode, configIndex, ds.name, ds.parentPath, navigateToTreeNode]);
   const getParentPathFromModelPath = useCallback((path: string) => {
     const lastSlash = path.lastIndexOf('/');
     return lastSlash >= 0 ? path.slice(0, lastSlash) : undefined;
@@ -4786,6 +4895,7 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
           >
             🔍
           </button>
+          <RevealInExplorerMenu onReveal={revealDatasourceInExplorer} />
         </div>
         {/* Line 2: target reference */}
         {targetLabel && (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adjacentRow, treeArrowAction, type TreeArrowRow } from './tree-keyboard';
+import { adjacentRow, isTreeArrowKey, treeArrowAction, type TreeArrowRow } from './tree-keyboard';
 
 const row = (partial: Partial<TreeArrowRow>): TreeArrowRow => ({
   hasChildren: true,
@@ -62,5 +62,13 @@ describe('adjacentRow', () => {
 
   it('returns nothing for a row that is not in the list', () => {
     expect(adjacentRow(rows, 'gone', 'next')).toBeUndefined();
+  });
+});
+
+describe('isTreeArrowKey', () => {
+  it('accepts the four arrows only', () => {
+    expect(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].every(isTreeArrowKey)).toBe(true);
+    expect(isTreeArrowKey('Enter')).toBe(false);
+    expect(isTreeArrowKey('Right')).toBe(false);
   });
 });

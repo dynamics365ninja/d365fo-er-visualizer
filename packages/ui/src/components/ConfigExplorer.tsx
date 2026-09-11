@@ -299,7 +299,11 @@ export function ConfigExplorer() {
   );
   const activeTabId = useAppStore(s => s.activeTabId);
   const openTabs = useAppStore(s => s.openTabs);
-  const selectedNodeId = useAppStore(s => s.selectedNodeId);
+  const storeSelectedNodeId = useAppStore(s => s.selectedNodeId);
+  const explorerMutedSelectionId = useAppStore(s => s.explorerMutedSelectionId);
+  // A muted selection (walking the format designer's structure) neither
+  // expands, highlights nor scrolls the explorer.
+  const selectedNodeId = storeSelectedNodeId === explorerMutedSelectionId ? null : storeSelectedNodeId;
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const removeConfiguration = useAppStore(s => s.closeConfigurationWithUndo);
   const removeAllConfigurations = useAppStore(s => s.removeAllConfigurations);
