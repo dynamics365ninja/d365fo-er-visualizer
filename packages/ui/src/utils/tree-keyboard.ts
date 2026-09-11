@@ -1,3 +1,10 @@
+const TREE_ARROW_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+
+/** The keys a tree answers to. */
+export function isTreeArrowKey(key: string): boolean {
+  return TREE_ARROW_KEYS.has(key);
+}
+
 /** What an arrow key does to the focused row of a tree. */
 export type TreeArrowAction = 'expand' | 'collapse' | 'firstChild' | 'parent' | 'previous' | 'next';
 

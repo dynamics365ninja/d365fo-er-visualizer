@@ -369,6 +369,13 @@ export interface AppState {
   treeNodes: TreeNode[];
   selectedNodeId: string | null;
   selectedNode: TreeNode | null;
+  /**
+   * A selection the explorer should not follow. The format designer selects
+   * rows as the user walks its structure; expanding the explorer along with
+   * every step is noise, so that selection is muted until something else —
+   * "Reveal in Explorer", search, the explorer itself — selects a node.
+   */
+  explorerMutedSelectionId: string | null;
   openTabs: OpenTab[];
   activeTabId: string | null;
   searchQuery: string;
@@ -412,7 +419,7 @@ export interface AppState {
   beginFnoIngest: (items: Array<Pick<FnoIngestItem, 'key' | 'name' | 'kind' | 'explicit'>>) => void;
   updateFnoIngestItem: (item: Pick<FnoIngestItem, 'key' | 'name' | 'kind'> & Partial<FnoIngestItem>) => void;
   endFnoIngest: () => void;
-  selectNode: (nodeId: string | null) => void;
+  selectNode: (nodeId: string | null, options?: { revealInExplorer?: boolean }) => void;
   openTab: (id: string, label: string, configIndex: number) => void;
   openDrillDownTab: (expression: string, configIndex: number, elementName?: string) => void;
   closeTab: (id: string) => void;
@@ -1063,6 +1070,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   treeNodes: [],
   selectedNodeId: null,
   selectedNode: null,
+  explorerMutedSelectionId: null,
   openTabs: [],
   activeTabId: null,
   searchQuery: '',
@@ -1354,14 +1362,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     useFnoSession.getState().clearSelection();
   },
 
-  selectNode: (nodeId: string | null) => {
+  selectNode: (nodeId: string | null, options?: { revealInExplorer?: boolean }) => {
     if (!nodeId) {
-      set({ selectedNodeId: null, selectedNode: null });
+      set({ selectedNodeId: null, selectedNode: null, explorerMutedSelectionId: null });
       return;
     }
     const state = get();
     const node = findNodeById(state.treeNodes, nodeId);
-    set({ selectedNodeId: nodeId, selectedNode: node });
+    set({
+      selectedNodeId: nodeId,
+      selectedNode: node,
+      explorerMutedSelectionId: options?.revealInExplorer === false ? nodeId : null,
+    });
   },
 
   openTab: (id: string, label: string, configIndex: number) => {
@@ -1569,6 +1581,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       selectedNodeId: nodeId,
       selectedNode: node,
+      // Navigating is an explicit request to show the node — the explorer follows.
+      explorerMutedSelectionId: null,
       navigationHistory,
       navigationForward: [],
       canNavigateBack: navigationHistory.length > 0,
