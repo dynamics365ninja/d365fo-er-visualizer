@@ -753,12 +753,15 @@ body {
   flex-shrink: 0;
 }
 
-.prop-head__meta {
+/* Name on the left, kind pill pinned to the top-right corner. */
+.prop-head__top {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
 }
+
+.prop-head__top .prop-head__name { min-width: 0; }
 
 .prop-head__kind {
   display: inline-flex;
@@ -780,12 +783,6 @@ body {
 .prop-head__kind--mapping { color: var(--er-mapping); border-color: color-mix(in srgb, var(--er-mapping) 38%, transparent); }
 .prop-head__kind--format  { color: var(--er-format);  border-color: color-mix(in srgb, var(--er-format) 38%, transparent); }
 
-.prop-head__type {
-  font-family: var(--font-mono);
-  font-size: var(--er-text-xs);
-  color: var(--er-text-subtle);
-}
-
 .prop-head__name {
   margin: 0;
   font-family: var(--er-font-display);
@@ -805,14 +802,14 @@ body {
   white-space: nowrap;
 }
 
-.prop-head__actions {
+/* Actions sit below the property table. */
+.prop-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 2px;
 }
 
-.prop-head__action {
+.prop-action {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -828,7 +825,7 @@ body {
   transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 
-.prop-head__action:hover {
+.prop-action:hover {
   background: var(--er-accent-soft);
   border-color: var(--er-accent-border);
   color: var(--er-accent);
@@ -5657,7 +5654,7 @@ body {
   border-left-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
-/* Root configuration rows anchor the tree — give them weight and a hue rail. */
+/* Root configuration rows anchor the tree — give them weight. */
 .explorer-tree-shell .tree-node[data-depth="0"] {
   min-height: 30px;
   font-size: var(--er-text-md);
@@ -5667,10 +5664,6 @@ body {
   border-bottom: 1px solid var(--er-border);
   margin-top: 4px;
 }
-
-.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-model { border-left-color: var(--kind-model); }
-.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-mapping { border-left-color: var(--kind-mapping); }
-.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-format { border-left-color: var(--kind-format); }
 
 /* Section rows (Data sources, Bindings, …) read as labels, not as data. */
 .explorer-tree-shell .tree-node-group {
@@ -6154,7 +6147,7 @@ body {
   width: 14px;
 }
 
-/* Root configuration rows anchor the tree: taller, kind rail, version pill. */
+/* Root configuration rows anchor the tree: taller, kind-tinted icon, version pill. */
 .explorer-tree-shell .tree-node[data-depth="0"] {
   min-height: var(--px-root);
   margin: 2px 4px 0;
@@ -6164,12 +6157,7 @@ body {
   background: var(--er-surface-2);
   border: 1px solid var(--er-border);
   border-radius: var(--er-radius-md);
-  box-shadow: inset 3px 0 0 var(--er-text-subtle);
 }
-
-.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-model { box-shadow: inset 3px 0 0 var(--er-model); }
-.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-mapping { box-shadow: inset 3px 0 0 var(--er-mapping); }
-.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-format { box-shadow: inset 3px 0 0 var(--er-format); }
 
 .explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-model .icon { color: var(--er-model); }
 .explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-mapping .icon { color: var(--er-mapping); }
@@ -6183,10 +6171,6 @@ body {
   background: var(--er-accent-soft);
   border-color: var(--er-accent-border);
 }
-
-.explorer-tree-shell .tree-node[data-depth="0"].selected.tree-node-accent-model { box-shadow: inset 3px 0 0 var(--er-model); }
-.explorer-tree-shell .tree-node[data-depth="0"].selected.tree-node-accent-mapping { box-shadow: inset 3px 0 0 var(--er-mapping); }
-.explorer-tree-shell .tree-node[data-depth="0"].selected.tree-node-accent-format { box-shadow: inset 3px 0 0 var(--er-format); }
 
 /* Section rows (Model definition, Data sources, …) read as labels. */
 .explorer-tree-shell .tree-node-group {
@@ -7086,18 +7070,6 @@ body {
   flex: 1 1 0;
 }
 
-/* Root rows: kind rail as a real border (an earlier reset kills box-shadows). */
-.explorer-tree-shell .tree-node[data-depth="0"] {
-  border-left: 3px solid var(--er-text-subtle);
-  padding-left: 6px !important;
-}
-.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-model,
-.explorer-tree-shell .tree-node[data-depth="0"].selected.tree-node-accent-model { border-left-color: var(--er-model); }
-.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-mapping,
-.explorer-tree-shell .tree-node[data-depth="0"].selected.tree-node-accent-mapping { border-left-color: var(--er-mapping); }
-.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-format,
-.explorer-tree-shell .tree-node[data-depth="0"].selected.tree-node-accent-format { border-left-color: var(--er-format); }
-
 .explorer-tree-shell .tree-node.selected,
 .explorer-tree-shell .tree-node.selected:hover {
   border-left: 2px solid var(--er-accent);
@@ -7107,9 +7079,12 @@ body {
   border-left: 2px solid transparent;
   padding-left: calc(8px + var(--depth, 0) * 16px - 2px) !important;
 }
-.explorer-tree-shell .tree-node[data-depth="0"].selected {
-  border-left-width: 3px;
-  padding-left: 6px !important;
+/* A selected root row keeps its plain frame — the tint marks the selection,
+   no rail on the left edge. */
+.explorer-tree-shell .tree-node[data-depth="0"].selected,
+.explorer-tree-shell .tree-node[data-depth="0"].selected:hover {
+  border-left: 1px solid var(--er-accent-border);
+  padding-left: 8px !important;
 }
 
 /* ─── Explorer tree owns the scrollbar ───

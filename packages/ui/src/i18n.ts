@@ -66,7 +66,6 @@ export interface Translations {
   loadXml: string;
   searchPlaceholder: string;
   search: string;
-  whereUsed: string;
   propRevealInExplorer: string;
   whereUsedPlaceholder: string;
   whereUsedLabel: string;
@@ -647,7 +646,6 @@ const cs: Translations = {
   loadXml: 'Načíst XML',
   searchPlaceholder: 'Název tabulky, pole, cesty…',
   search: 'Hledat',
-  whereUsed: 'Místa použití',
   propRevealInExplorer: 'Zobrazit v Exploreru',
   whereUsedPlaceholder: 'např. TaxTrans, CustTable, MyCalcField…',
   whereUsedLabel: 'Zadej název tabulky, výčtu, třídy nebo datasource:',
@@ -1245,7 +1243,6 @@ const en: Translations = {
   loadXml: 'Load XML',
   searchPlaceholder: 'Table name, field, path…',
   search: 'Search',
-  whereUsed: 'Where used',
   propRevealInExplorer: 'Reveal in Explorer',
   whereUsedPlaceholder: 'e.g. TaxTrans, CustTable, MyCalcField…',
   whereUsedLabel: 'Enter table, enum, class or datasource name:',

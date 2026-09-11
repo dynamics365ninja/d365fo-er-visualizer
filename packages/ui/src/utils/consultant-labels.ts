@@ -101,6 +101,12 @@ export function getBindingCategoryLabel(category: FormatBindingCategory): string
   return bindingCategoryLabels[isCs() ? 'cs' : 'en'][category];
 }
 
+/** Named properties of the "other properties" category, e.g. a file component's output name. */
+const propertyLabels: Record<'cs' | 'en', Record<string, string>> = {
+  cs: { FileName: 'Název souboru', FileLanguage: 'Jazyk', FileCulture: 'Jazyková verze' },
+  en: { FileName: 'File name', FileLanguage: 'Language', FileCulture: 'Culture' },
+};
+
 interface BindingLike {
   bindingCategory?: FormatBindingCategory;
   propertyName?: string | null;
@@ -115,6 +121,9 @@ interface BindingLike {
 export function getConsultantBindingLabel(binding: BindingLike): string {
   const category = binding.bindingCategory
     ?? classifyFormatBindingCategory({ propertyName: binding.propertyName ?? '' });
+  if (category === 'property') {
+    return propertyLabels[isCs() ? 'cs' : 'en'][(binding.propertyName ?? '').trim()] ?? getBindingCategoryLabel(category);
+  }
   if (category !== 'visibility') return getBindingCategoryLabel(category);
 
   const prop = (binding.propertyName ?? '').trim().toLowerCase();

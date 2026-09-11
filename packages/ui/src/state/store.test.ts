@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ERConfiguration } from '@er-visualizer/core';
 import { ERComponentKind } from '@er-visualizer/core';
 import type { RecentFile, RecentSession } from './store.js';
-import { deriveRecentSessionsAfterConfigChange, useAppStore } from './store.js';
+import { deriveRecentSessionsAfterConfigChange, expressionRootToken, useAppStore } from './store.js';
 import { useFnoSession } from './fno-session.js';
 
 function makeConfig(filePath: string, kind: ERComponentKind = ERComponentKind.Format): ERConfiguration {
@@ -122,6 +122,26 @@ describe('deriveRecentSessionsAfterConfigChange', () => {
     expect(useFnoSession.getState().selected.size).toBe(0);
   });
 });
+describe('expressionRootToken', () => {
+  it('looks past a unary minus to the model root', () => {
+    expect(expressionRootToken("-model.InvoiceBase.'$Tax05TotalsByCode'.aggregated.Amount")).toBe('model');
+  });
+
+  it('looks past a negated group to its first operand', () => {
+    expect(expressionRootToken(
+      "-(model.InvoiceBase.'$Tax05TotalsByCode'.aggregated.TaxAmount+model.InvoiceBase.'$Tax05TotalsByCode'.aggregated.TaxBaseAmount)",
+    )).toBe('model');
+    expect(expressionRootToken("('$Company'.Name)")).toBe("'$Company'");
+  });
+
+  it('keeps datasources, functions and literals as they are', () => {
+    expect(expressionRootToken("'$Company'.Name")).toBe("'$Company'");
+    expect(expressionRootToken('CONCATENATE(a, b)')).toBe('CONCATENATE');
+    expect(expressionRootToken('-5')).toBe('5');
+    expect(expressionRootToken('"-text"')).toBe('"-text"');
+  });
+});
+
 describe('addInheritedLabels', () => {
   afterEach(() => {
     useAppStore.setState({ configurations: [] });
