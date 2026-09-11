@@ -175,6 +175,15 @@ function sessionFingerprint(paths: string[]): string {
   return [...paths].sort().join('\u0001');
 }
 
+/**
+ * The content-cache key a configuration path is stored under. A bundled
+ * extract (`bundle.xml#datamodel:{guid}`) has no cache entry of its own — the
+ * bundle's XML is cached once, and loading it brings every extract back.
+ */
+export function bundleContentPath(path: string): string {
+  return path.replace(/#datamodel:.*$/, '');
+}
+
 function buildRecentSessionFiles(configurations: ERConfiguration[], recentFiles: RecentFile[]): RecentFile[] {
   return configurations.map(config => {
     const cachedFromList = recentFiles.find(entry => entry.path === config.filePath);
@@ -943,6 +952,15 @@ function buildDerivedState(configurations: ERConfiguration[]): { registry: GUIDR
 }
 
 /**
+ * The token an expression starts with — what the unknown-datasource check
+ * looks up. A unary sign or grouping parenthesis is not part of it:
+ * `-(model.A + model.B)` starts at `model`, not at `-`.
+ */
+export function expressionRootToken(expr: string): string {
+  return expr.trim().replace(/^[\s+\-(]+/, '').split(/[.(\[]/)[0].trim();
+}
+
+/**
  * Lightweight validator that walks the parsed configurations and reports
  * issues surfaced to the status bar. Intentionally fast: runs only at load.
  */
@@ -1033,7 +1051,7 @@ function collectConfigurationWarnings(configurations: ERConfiguration[]): Config
         if (b.propertyName === 'Validation') continue;
         const expr = (b.expressionAsString ?? '').trim();
         if (!expr) continue;
-        const rawRoot = expr.split(/[.(\[]/)[0].trim();
+        const rawRoot = expressionRootToken(expr);
         // Double-quoted string literals, numbers, parameters (@) and the model
         // root are never datasource references — check BEFORE stripping quotes.
         // (Single quotes wrap identifiers in ER: '$Company'.Name.)
@@ -1758,11 +1776,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!session) return false;
 
     // Fetch all content from IDB up-front so we can reset state only after
-    // we know at least one file is actually available.
+    // we know at least one file is actually available. A bundle and its
+    // extracts share one cache entry, so each is read and loaded once.
+    const contentPaths = [...new Set(session.files.map(f => bundleContentPath(f.path)))];
     const contents = await Promise.all(
-      session.files.map(async f => ({ file: f, content: await readFileContent(f.path) })),
+      contentPaths.map(async path => ({ path, content: await readFileContent(path) })),
     );
-    const missing = contents.filter(c => !c.content).map(c => c.file.name);
+    const missing = contents.filter(c => !c.content).map(c => c.path.split(/[\\/]/).pop() ?? c.path);
     const available = contents.filter(c => c.content);
     if (available.length === 0) {
       get().pushToast({
@@ -1801,10 +1821,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
     }
     let loaded = 0;
-    for (const { file, content } of available) {
+    for (const { path, content } of available) {
       if (!content) continue;
       try {
-        get().loadXmlFile(content, file.path);
+        get().loadXmlFile(content, path);
         loaded++;
       } catch {
         // loadXmlFile already surfaces a toast on parse failure.
@@ -1831,7 +1851,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       return true;
     }
-    const contentPath = entry?.bundlePath ?? path;
+    const contentPath = entry?.bundlePath ?? bundleContentPath(path);
     const content = await readFileContent(contentPath);
     if (!content) {
       get().pushToast({

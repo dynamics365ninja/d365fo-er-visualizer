@@ -33,6 +33,14 @@ describe('consultant labels', () => {
       expect(getConsultantBindingLabel({})).toBe('Value');
     });
 
+    it('names the file properties instead of lumping them together', () => {
+      expect(getConsultantBindingLabel({ bindingCategory: 'property', propertyName: 'FileName' })).toBe('File name');
+      expect(getConsultantBindingLabel({ propertyName: 'FileLanguage' })).toBe('Language');
+      expect(getConsultantBindingLabel({ propertyName: 'SomethingElse' })).toBe('Other properties');
+      setLocale('cs');
+      expect(getConsultantBindingLabel({ propertyName: 'FileCulture' })).toBe('Jazyková verze');
+    });
+
     it('speaks Czech when the app does', () => {
       setLocale('cs');
       expect(getConsultantBindingLabel({ bindingCategory: 'visibility', propertyName: 'Enabled', expressionAsString: 'false' })).toBe('Vypnuto');

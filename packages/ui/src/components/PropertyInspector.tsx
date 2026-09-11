@@ -143,25 +143,11 @@ function getNodeKindBadge(node: any): { label: string; tone: 'model' | 'mapping'
   return tone ? { label: t.nodeTypeLabel(type), tone } : { label: type ? t.nodeTypeLabel(type) : '', tone: 'neutral' };
 }
 
-/**
- * The name to trace with "where used". For a table datasource the interesting
- * entity is the table itself, not the alias the mapping gave it.
- */
-function whereUsedQueryFor(node: any): string | null {
-  const data = node?.data;
-  const candidate =
-    data?.tableInfo?.tableName ??
-    data?.enumInfo?.enumName ??
-    data?.classInfo?.className ??
-    node?.name;
-  return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null;
-}
-
 export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {}) {
   const selectedNode = useAppStore(s => s.selectedNode);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const configurations = useAppStore(s => s.configurations);
-  const triggerWhereUsed = useAppStore(s => s.triggerWhereUsed);
+  const treeNodes = useAppStore(s => s.treeNodes);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const coarse = useCoarsePointer();
   const node = nodeOverride ?? selectedNode;
@@ -202,45 +188,24 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
   const badge = getNodeKindBadge(node);
   const ownerConfig = configurations[configIndex];
   const ownerName = ownerConfig?.solutionVersion?.solution?.name;
-  const whereUsedQuery = whereUsedQueryFor(node);
   const displayName = getNodeDisplayName(node, showTechnicalDetails);
+  // A configuration's root row is the explorer's top level — revealing it
+  // would only re-select what is already in view.
+  const isTreeRoot = treeNodes.some(root => root.id === node.id);
 
   return (
     <div className="property-inspector">
       <header className="prop-head">
-        <div className="prop-head__meta">
+        <div className="prop-head__top">
+          <h2 className="prop-head__name" title={displayName}>{displayName}</h2>
           <span className={`prop-head__kind prop-head__kind--${badge.tone}`}>
             {getNodeHeaderIcon(node)}
             {badge.label}
           </span>
-          {showTechnicalDetails && <span className="prop-head__type">{node.type}</span>}
         </div>
-        <h2 className="prop-head__name" title={displayName}>{displayName}</h2>
         {ownerName && node.type !== 'file' && (
           <p className="prop-head__owner" title={ownerName}>{ownerName}</p>
         )}
-        <div className="prop-head__actions">
-          {whereUsedQuery && (
-            <button
-              type="button"
-              className="prop-head__action"
-              onClick={() => triggerWhereUsed(whereUsedQuery)}
-              title={`${t.whereUsed}: ${whereUsedQuery}`}
-            >
-              <LinkFilled fontSize={13} />
-              {t.whereUsed}
-            </button>
-          )}
-          <button
-            type="button"
-            className="prop-head__action"
-            onClick={() => navigateToTreeNode(node.id)}
-            title={t.propRevealInExplorer}
-          >
-            <AppsListDetailRegular fontSize={13} />
-            {t.propRevealInExplorer}
-          </button>
-        </div>
       </header>
 
       {node.type === 'file' && data && <FileProps data={data} showTechnicalDetails={showTechnicalDetails} />}
@@ -257,6 +222,19 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
       {node.type === 'enumValue' && data && <EnumValueProps data={data} configIndex={configIndex} showTechnicalDetails={showTechnicalDetails} />}
       {node.type === 'section' && <SectionProps node={node} />}
 
+      {!isTreeRoot && (
+        <div className="prop-actions">
+          <button
+            type="button"
+            className="prop-action"
+            onClick={() => navigateToTreeNode(node.id)}
+            title={t.propRevealInExplorer}
+          >
+            <AppsListDetailRegular fontSize={13} />
+            {t.propRevealInExplorer}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
