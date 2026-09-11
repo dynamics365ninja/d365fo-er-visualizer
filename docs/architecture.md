@@ -36,6 +36,7 @@ Pure TypeScript library, no UI dependencies.
 
 **Key design choices:**
 - Datasources use a flat interface with optional sub-objects (`tableInfo`, `enumInfo`, `classInfo`, …) — no class hierarchy, trivial JSON serialization.
+- Datasources are nested by `ParentPath`. A segment the definition never declares — a data model record under `model` (`model/InvoiceLines/LineBase`), the `Values` of a calculated record list — becomes an `implicit` node instead of lifting the datasource to the root, where two same-named calculated fields could no longer be told apart. The UI's Data sources view (`utils/datasource-tree.ts`) lays the loaded data model's structure over those nodes.
 - Expressions use discriminated unions keyed by `kind` — exhaustive `switch`, no `instanceof`.
 - Parsing is synchronous — ER files are < 5 MB; async would only add complexity.
 

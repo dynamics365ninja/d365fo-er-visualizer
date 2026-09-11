@@ -3003,7 +3003,8 @@ body {
 
 /* The row under the pointer lifts its button out of the background. */
 .mm-tree-row:hover .dd-trigger-expr.mm-binding-drill,
-.mm-validation-expr:hover .dd-trigger-expr.mm-binding-drill {
+.mm-validation-expr:hover .dd-trigger-expr.mm-binding-drill,
+.ds-row:hover .dd-trigger-expr.mm-binding-drill {
   color: var(--er-text);
   border-color: var(--er-border);
   background: var(--er-surface);
@@ -3057,12 +3058,20 @@ body {
 }
 
 .ds-row {
-  padding: 8px 12px;
+  padding: 4px 12px;
   cursor: pointer;
   font-size: var(--er-text-md);
   border: 1px solid var(--er-border);
   border-radius: var(--er-radius-lg);
   background: var(--er-surface);
+}
+
+/* The row's buttons overlap its padding instead of growing it: a datasource
+   with where-used, drill-down and menu stays one line tall, like the model
+   fields beside it. */
+.ds-row-main > .ds-row-where-used,
+.ds-row-main .fmt-row-actions {
+  margin-block: -3px;
 }
 
 .ds-row:hover {
@@ -3100,6 +3109,100 @@ body {
 .ds-row-toggle:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+.ds-row-expander,
+.ds-row-expander-spacer {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-left: -6px;
+}
+
+.ds-row-expander {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--er-radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.ds-row-expander:hover {
+  background: var(--bg-hover);
+}
+
+.ds-row-expander:hover .tree-chevron {
+  color: var(--text-primary);
+}
+
+/* Datasources declared below this row */
+.ds-row-count {
+  flex-shrink: 0;
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: var(--er-radius-pill);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--text-primary);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Rows the definition does not declare: a record the path runs through and
+   the data model fields beside it. Bare lines — the declared datasources are
+   the cards; the record carrying them stands out by its name and count. */
+.ds-row.ds-row-structural,
+.ds-row.ds-row-field {
+  padding: 4px 12px;
+  background: transparent;
+}
+
+.ds-row.ds-row-structural:hover,
+.ds-row.ds-row-field:hover {
+  background: var(--bg-hover);
+}
+
+.ds-row-structural .ds-row-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.ds-row-field .ds-row-name {
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+/* The name takes its own width; what the row reads fills the rest. */
+.ds-row-main .ds-row-name {
+  flex: 0 1 auto;
+}
+
+.ds-row-meta strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.ds-row-formula {
+  font-family: var(--er-font-mono, monospace);
+}
+
+.ds-row-meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--er-text-xs);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ds-row-children {
+  margin-left: 8px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border-color);
 }
 
 .ds-row-target {

@@ -30,6 +30,8 @@ import '@xyflow/react/dist/style.css';
 import { useAppStore, resolveDeepExpression, selectMappingDefinition, getScopedMappingDefinitions } from '../state/store';
 import { buildModelUsageTree, countModelUsageIntents, filterModelUsageTree, type ModelUsageNode } from '../utils/format-model-usage';
 import { formatReferencedModelIds, normGuid } from '../utils/model-hierarchy';
+import { dsPathToExpression } from '../utils/ds-path';
+import { ancestorPathKeys, buildDatasourceTree, countDeclaredDatasources, datasourcePathKey, filterDatasources, findModelForDescriptor, keysWithDeclaredDescendants, type DatasourceModel, type DatasourceTree, type DatasourceTreeFilter, type DatasourceTreeNode } from '../utils/datasource-tree';
 import { ClickablePath } from './ClickablePath';
 import { DrillDownBody, DrillDownTrigger } from './DrillDownPanel';
 import { PropertyInspector } from './PropertyInspector';
@@ -38,7 +40,7 @@ import { FilterField } from './FilterField';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { adjacentRow, isTreeArrowKey, treeArrowAction } from '../utils/tree-keyboard';
-import { getBindingCategoryLabel, getConsultantBindingLabel, getConsultantFormatTypeLabel, isXmlNamespaceDeclaration } from '../utils/consultant-labels';
+import { getBindingCategoryLabel, getConsultantBindingLabel, getConsultantFieldTypeLabel, getConsultantFormatTypeLabel, isXmlNamespaceDeclaration } from '../utils/consultant-labels';
 import { buildFormatBindingPresentation, getFormatBindingCategoryLabel, getFormatBindingDisplayLabel, groupFormatBindingsByCategory, type NormalizedFormatBinding, type NormalizedFormatBindingGroup } from '../utils/format-binding-display';
 import {
   BINDING_INTENT_ORDER,
@@ -54,7 +56,7 @@ import {
 import { buildFormatTreeIndex, type FormatTreeIndex } from '../utils/format-tree-filter';
 import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../utils/filter-suggestions';
 import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/theme-colors';
-import { ERDirection, getFormatElementExcelRange, type ERConfiguration, type ERDataModelContent, type ERModelMappingContent, type ERFormatContent, type ERFormatElement, type ERLabel } from '@er-visualizer/core';
+import { ERDirection, getFormatElementExcelRange, type ERConfiguration, type ERDataModelContent, type ERDatasource, type ERModelMappingContent, type ERFormatContent, type ERFormatElement, type ERLabel } from '@er-visualizer/core';
 import { resolveLabel, buildLabelPool } from '../utils/label-resolver';
 import { useCoarsePointer, useCompactLayout } from '../utils/responsive';
 import { useTabState, pruneTabViewState } from '../utils/tab-view-state';
@@ -626,10 +628,13 @@ function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): s
   return labels[type] ?? (locale === 'cs' ? 'Ostatní' : 'Other');
 }
 
-/** Returns true if ds or any of its descendants has the given name */
-function containsDatasourceName(ds: any, name: string): boolean {
-  if (ds.name === name) return true;
-  return (ds.children ?? []).some((c: any) => containsDatasourceName(c, name));
+/**
+ * The datasource a designer tab was opened for, as a datasource path key —
+ * the name alone cannot tell apart two `$Split_Note` fields under different
+ * model records.
+ */
+function datasourceFocusKey(focusNode: any): string | undefined {
+  return focusNode?.type === 'datasource' ? datasourcePathKey(focusNode.data?.parentPath, focusNode.name) : undefined;
 }
 
 /** Datasource types the consultant view names; the rest share one "Other" group. */
@@ -1234,16 +1239,6 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
     ),
   ], [mm.bindings, mm.datasources, mm.validations]);
 
-  const filteredDatasources = useMemo(() => {
-    if (!filter) return mm.datasources;
-    const lower = filter.toLowerCase();
-    return mm.datasources.filter((ds: any) =>
-      ds.name.toLowerCase().includes(lower) ||
-      ds.type.toLowerCase().includes(lower) ||
-      ds.tableInfo?.tableName?.toLowerCase().includes(lower)
-    );
-  }, [mm.datasources, filter]);
-
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Identity only — the counts moved out of here because the view tabs
@@ -1282,7 +1277,7 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
         <SlidingTabs
           tabs={[
             { id: 'bindings' as const, label: `${t.bindings} (${totalShown})` },
-            { id: 'datasources' as const, label: `${t.dataSources} (${mm.datasources.length})` },
+            { id: 'datasources' as const, label: `${t.dataSources} (${countDeclaredDatasources(mm.datasources)})` },
             { id: 'validations' as const, label: `${t.propValidations} (${filteredValidations.length})` },
           ]}
           activeId={view}
@@ -1368,7 +1363,7 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
         )}
 
         {view === 'datasources' && (
-          <GroupedDatasourceList ref={dsListRef} datasources={filteredDatasources} filtering={Boolean(filter)} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusNode?.type === 'datasource' ? focusNode.name : undefined} />
+          <GroupedDatasourceList ref={dsListRef} datasources={mm.datasources} filter={filter} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusKey={datasourceFocusKey(focusNode)} revealInExplorer={false} />
         )}
 
         {view === 'validations' && (
@@ -1710,7 +1705,7 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
       el.children?.forEach(countElements);
     };
     countElements(rootElement);
-    return { totalElements, boundElements, unboundElements, structuralElements, typeCount, bindings: fmtMap.bindings.length, datasources: fmtMap.datasources.length, enums: fmt.enumDefinitions.length, transformations: fmt.transformations.length };
+    return { totalElements, boundElements, unboundElements, structuralElements, typeCount, bindings: fmtMap.bindings.length, datasources: countDeclaredDatasources(fmtMap.datasources), enums: fmt.enumDefinitions.length, transformations: fmt.transformations.length };
   }, [rootElement, bindingMap, fmtMap, fmt]);
 
   // Bindings view. Elements whose only bindings are trivial switches
@@ -1746,6 +1741,9 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
      model mapping fills it. The mapping is the definition for the format's own
      DataContainerDescriptor — embedded in the format first, then any loaded
      mapping configuration, preferring one built on the same model. */
+  const loadedModels = useMemo(() => configurations
+    .filter(cfg => cfg.content.kind === 'DataModel')
+    .map(cfg => (cfg.content as ERDataModelContent).version.model), [configurations]);
   const modelContext = useMemo(() => {
     const modelDatasources = fmtMap.datasources.filter(ds => ds.type === 'DataModel');
     const modelNames = new Set((modelDatasources.length > 0 ? modelDatasources.map(ds => ds.name) : ['model']).map(name => name.toLowerCase()));
@@ -1767,16 +1765,10 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
     }
     const mapping = candidates.find(candidate => modelIds.has(normGuid(candidate.definition.modelId))) ?? candidates[0] ?? null;
 
-    const models = configurations
-      .filter(cfg => cfg.content.kind === 'DataModel')
-      .map(cfg => (cfg.content as ERDataModelContent).version.model);
-    const model = descriptorKey
-      ? [...models.filter(m => modelIds.has(normGuid(m.id))), ...models.filter(m => !modelIds.has(normGuid(m.id)))]
-          .find(m => m.containers.some(c => c.name.toLowerCase() === descriptorKey || c.id.toLowerCase() === descriptorKey))
-      : undefined;
+    const model = findModelForDescriptor(loadedModels, descriptor, modelIds);
 
     return { modelNames, descriptor, mapping, dataModel: model ? { model, descriptor } : null };
-  }, [fmtMap.datasources, fc, configurations, configIndex]);
+  }, [fmtMap.datasources, fc, configurations, configIndex, loadedModels]);
 
   const modelUsageTree = useMemo(() => buildModelUsageTree({
     rootElement,
@@ -1789,6 +1781,22 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
   const modelLabels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
   const modelFieldLabel = useCallback((node: ModelUsageNode): string | undefined => {
     const resolved = resolveLabel(node.field?.label, modelLabels);
+    return resolved?.localized ?? resolved?.enUs;
+  }, [modelLabels, locale]);
+
+  /* Data sources: a `model` datasource shows the structure of the data model
+     it enters through its own descriptor, preferring the model it names. */
+  const resolveDatasourceModel = useCallback((datasource: ERDatasource): DatasourceModel | null => {
+    const descriptor = datasource.modelInfo?.dataContainerDescriptorName?.trim();
+    if (!descriptor) return null;
+    const preferredIds = new Set(
+      [normGuid(datasource.modelInfo?.modelGuid), ...formatReferencedModelIds(fc).map(normGuid)].filter(Boolean),
+    );
+    const model = findModelForDescriptor(loadedModels, descriptor, preferredIds);
+    return model ? { model, descriptor } : null;
+  }, [loadedModels, fc]);
+  const modelLabelFor = useCallback((labelRef: string | undefined): string | undefined => {
+    const resolved = resolveLabel(labelRef, modelLabels);
     return resolved?.localized ?? resolved?.enUs;
   }, [modelLabels, locale]);
 
@@ -1945,17 +1953,6 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
   }, [selectedElementId, treeIndex]);
 
   const dsListRef = useRef<GroupedDatasourceListHandle>(null);
-
-  // Filter for datasources view
-  const filteredDatasources = useMemo(() => {
-    if (!filter) return fmtMap.datasources;
-    const lower = filter.toLowerCase();
-    return fmtMap.datasources.filter((ds: any) =>
-      ds.name.toLowerCase().includes(lower) ||
-      ds.type.toLowerCase().includes(lower) ||
-      ds.tableInfo?.tableName?.toLowerCase().includes(lower)
-    );
-  }, [fmtMap.datasources, filter]);
 
   const revealFormatElementInExplorer = useCallback((elementId: string) => {
     const rootNode = treeNodes[configIndex];
@@ -2299,7 +2296,7 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
           )}
 
           {view === 'datasources' && (
-            <GroupedDatasourceList ref={dsListRef} datasources={filteredDatasources} filtering={Boolean(filter)} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusNode?.type === 'datasource' ? focusNode.name : undefined} />
+            <GroupedDatasourceList ref={dsListRef} datasources={fmtMap.datasources} filter={filter} resolveModel={resolveDatasourceModel} labelFor={modelLabelFor} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusKey={datasourceFocusKey(focusNode)} />
           )}
 
           <div style={{ display: view === 'preview' ? 'contents' : 'none' }}>
@@ -5356,27 +5353,39 @@ function getAggregationFunctionBadgeClass(fn: string | undefined): string {
   return 'ds-row-groupby-fn-generic';
 }
 
-// ── Datasource Row (for Data Sources tab) ──
+// ── Datasource tree (Data Sources tab) ──
 
-function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName }: {
-  ds: any;
+interface DatasourceListContext {
+  tree: DatasourceTree;
+  filter: DatasourceTreeFilter | null;
+  focusKey?: string;
+  isExpanded: (key: string) => boolean;
+  toggle: (key: string) => void;
   configIndex: number;
   navigateToTreeNode: (nodeId: string) => void;
-  focusDsName?: string;
+  labelFor?: (labelRef: string | undefined) => string | undefined;
+  /** Whether the explorer lists these datasources, so a row can offer to reveal itself there. */
+  revealInExplorer: boolean;
+}
+
+function DatasourceTreeRow({ node, ctx, insideMatch }: {
+  node: DatasourceTreeNode;
+  ctx: DatasourceListContext;
+  /** A match at or above this row — its children are shown unfiltered. */
+  insideMatch: boolean;
 }) {
   const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const triggerWhereUsed = useAppStore(s => s.triggerWhereUsed);
   const selectNode = useAppStore(s => s.selectNode);
-  const isDirectTarget = Boolean(focusDsName && ds.name === focusDsName);
-  const isAncestor = Boolean(focusDsName && !isDirectTarget && containsDatasourceName(ds, focusDsName));
-  const [expanded, setExpanded] = useState(false);
+  const ds: any = node.datasource;
+  const field = node.field;
+  const declared = Boolean(ds && !ds.implicit);
+  const isDirectTarget = ctx.focusKey === node.key;
+  const matched = Boolean(ctx.filter?.matched.has(node.key));
+  const expandable = ctx.tree.hasChildren(node);
+  const expanded = expandable && ctx.isExpanded(node.key);
   const rowRef = React.useRef<HTMLDivElement>(null);
-
-  // Auto-expand when this row contains the focused descendant
-  useEffect(() => {
-    if (isAncestor) setExpanded(true);
-  }, [isAncestor]);
 
   // Scroll into view when this row IS the direct target
   useEffect(() => {
@@ -5384,20 +5393,21 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
       rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [isDirectTarget]);
-  const groupByFields = ds.groupByInfo?.groupedFields ?? [];
-  const aggregatedFields = ds.groupByInfo?.aggregations ?? [];
+  const groupByFields = ds?.groupByInfo?.groupedFields ?? [];
+  const aggregatedFields = ds?.groupByInfo?.aggregations ?? [];
   const [showGroupedFields, setShowGroupedFields] = useState(groupByFields.length > 0 && groupByFields.length <= 6);
   const [showAggregatedFields, setShowAggregatedFields] = useState(aggregatedFields.length > 0 && aggregatedFields.length <= 6);
   // Selecting a datasource — the row or one of its grouped fields — leaves the
   // explorer alone, as everywhere in the designers; the row's ⋮ menu reveals it.
   const navigateToDatasource = useCallback((name: string, parentPath?: string) => {
-    const nodeId = findDatasourceNode(name, configIndex, parentPath);
+    const nodeId = findDatasourceNode(name, ctx.configIndex, parentPath);
     if (nodeId) selectNode(nodeId, { revealInExplorer: false });
-  }, [findDatasourceNode, configIndex, selectNode]);
+  }, [findDatasourceNode, ctx.configIndex, selectNode]);
   const revealDatasourceInExplorer = useCallback(() => {
-    const nodeId = findDatasourceNode(ds.name, configIndex, ds.parentPath);
-    if (nodeId) navigateToTreeNode(nodeId);
-  }, [findDatasourceNode, configIndex, ds.name, ds.parentPath, navigateToTreeNode]);
+    if (!ds) return;
+    const nodeId = findDatasourceNode(ds.name, ctx.configIndex, ds.parentPath);
+    if (nodeId) ctx.navigateToTreeNode(nodeId);
+  }, [findDatasourceNode, ctx, ds]);
   const getParentPathFromModelPath = useCallback((path: string) => {
     const lastSlash = path.lastIndexOf('/');
     return lastSlash >= 0 ? path.slice(0, lastSlash) : undefined;
@@ -5406,11 +5416,20 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
   useEffect(() => {
     setShowGroupedFields(groupByFields.length > 0 && groupByFields.length <= 6);
     setShowAggregatedFields(aggregatedFields.length > 0 && aggregatedFields.length <= 6);
-  }, [ds.name, groupByFields.length, aggregatedFields.length]);
+  }, [ds?.name, groupByFields.length, aggregatedFields.length]);
 
   // Build human-readable target string
   let targetLabel: string | null = null;
-  if (ds.tableInfo) {
+  if (!declared) {
+    // A model field — or the implicit record standing in for one: what it is,
+    // in the model's own words.
+    if (field) {
+      targetLabel = [
+        showTechnicalDetails ? null : getConsultantFieldTypeLabel(field.type),
+        ctx.labelFor?.(field.label),
+      ].filter(Boolean).join(' · ') || null;
+    }
+  } else if (ds.tableInfo) {
     targetLabel = ds.tableInfo.tableName;
     if (showTechnicalDetails && ds.tableInfo.isCrossCompany) targetLabel += ` (${t.dsCrossCompany})`;
     if (showTechnicalDetails && ds.tableInfo.selectedFields?.length) targetLabel += ` [${ds.tableInfo.selectedFields.join(', ')}]`;
@@ -5432,55 +5451,97 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
           ? `list: ${ds.groupByInfo.listToGroup}`
           : `${locale === 'cs' ? 'Seskupení podle' : 'Grouped by'}: ${ds.groupByInfo.listToGroup.split('/').pop()}`)
       : null;
+  } else if (ds.modelInfo) {
+    const descriptor = ds.modelInfo.dataContainerDescriptorName || null;
+    targetLabel = node.container ? descriptor : [descriptor, `(${t.dsModelNotLoaded})`].filter(Boolean).join(' ');
   }
+
+  const children = expanded
+    ? ctx.tree.childrenOf(node).filter(child =>
+        !ctx.filter || insideMatch || matched || ctx.filter.matched.has(child.key) || ctx.filter.ancestors.has(child.key))
+    : [];
+  const rowKind = declared ? '' : ds ? ' ds-row-structural' : ' ds-row-field';
 
   return (
     <div className={`ds-row-wrap${isDirectTarget ? ' search-match' : ''}`} ref={rowRef}>
       <div
-        className="ds-row"
+        className={`ds-row${rowKind}`}
+        title={declared ? node.path.join('/') : `${field ? t.dsModelField : t.dsImplicitType}: ${node.path.join('/')}`}
         onClick={() => {
-          navigateToDatasource(ds.name, ds.parentPath);
+          if (ds) navigateToDatasource(ds.name, ds.parentPath);
+          // A path node carries nothing to inspect but what is below it.
+          if (!declared && expandable) ctx.toggle(node.key);
         }}
       >
-        {/* Line 1: type badge + name + nested toggle */}
+        {/* Line 1: expander + type badge + name + nested count */}
         <div className="ds-row-main">
-          {showTechnicalDetails && (
+          {expandable ? (
+            <button
+              type="button"
+              className="ds-row-expander"
+              aria-expanded={expanded}
+              aria-label={expanded ? t.treeCollapseNode : t.treeExpandNode}
+              onClick={e => { e.stopPropagation(); ctx.toggle(node.key); }}
+            >
+              <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
+            </button>
+          ) : (
+            <span className="ds-row-expander-spacer" aria-hidden="true" />
+          )}
+          {showTechnicalDetails && declared && (
             <span className={`badge ${getDsBadgeClass(ds.type)}`} style={{ flexShrink: 0 }}>
               {ds.type}
             </span>
           )}
-          <span className="ds-row-name">{ds.name}</span>
-          {ds.children?.length > 0 && (
-            <span
-              className="ds-row-toggle"
-              title={t.dsNestedCount(ds.children.length)}
-              onClick={e => { e.stopPropagation(); setExpanded(p => !p); }}
-            >
-              {ds.children.length} <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
+          {showTechnicalDetails && !declared && field && (
+            <span className="badge badge-xml" style={{ flexShrink: 0 }}>
+              {fieldTypeLabel(field.type)}
             </span>
           )}
-          <button
-            type="button"
-            className="ds-row-where-used"
-            onClick={e => { e.stopPropagation(); triggerWhereUsed(ds.name); }}
-            title={locale === 'cs' ? 'Kde je použito' : 'Where used'}
-          >
-            🔍
-          </button>
-          <RevealInExplorerMenu onReveal={revealDatasourceInExplorer} />
+          <span className="ds-row-name">{node.name}</span>
+          {/* What a row is, or what it reads, stays on the name line — one line
+              per row keeps a record of a few hundred fields browsable. */}
+          <span className="ds-row-meta" title={targetLabel ?? undefined}>
+            {targetLabel && (!declared
+              ? targetLabel
+              : ds.calculatedField
+                ? <span className="ds-row-formula">= {targetLabel}</span>
+                : <>→ <strong>{targetLabel}</strong></>)}
+          </span>
+          {node.declaredCount > 0 && (
+            <span className="ds-row-count" title={t.dsNestedCount(node.declaredCount)}>
+              {node.declaredCount}
+            </span>
+          )}
+          {declared && ds.calculatedField?.expressionAsString && (
+            // The breakdown of this very field — addressed by its full path, so
+            // a `$Split_Note` under one record never opens its namesake.
+            <span style={{ display: 'contents' }} onClick={event => event.stopPropagation()}>
+              <DrillDownTrigger
+                expression={dsPathToExpression(ds.parentPath ? `${ds.parentPath}/${ds.name}` : ds.name)}
+                configIndex={ctx.configIndex}
+                elementName={ds.name}
+                className="mm-binding-drill"
+                label={t.drillCollapsibleLabel}
+              >
+                <TextBulletListTreeRegular fontSize={16} aria-hidden="true" />
+              </DrillDownTrigger>
+            </span>
+          )}
+          {declared && (
+            <button
+              type="button"
+              className="ds-row-where-used"
+              onClick={e => { e.stopPropagation(); triggerWhereUsed(ds.name); }}
+              title={locale === 'cs' ? 'Kde je použito' : 'Where used'}
+            >
+              🔍
+            </button>
+          )}
+          {ds && ctx.revealInExplorer && <RevealInExplorerMenu onReveal={revealDatasourceInExplorer} />}
         </div>
-        {/* Line 2: target reference */}
-        {targetLabel && (
-          <div className="ds-row-target">
-            {ds.calculatedField ? (
-              <span style={{ fontFamily: 'monospace', fontSize: 11 }}>= {targetLabel}</span>
-            ) : (
-              <span>→ <strong>{targetLabel}</strong></span>
-            )}
-          </div>
-        )}
       </div>
-      {ds.groupByInfo && (groupByFields.length > 0 || aggregatedFields.length > 0) && (
+      {ds?.groupByInfo && (groupByFields.length > 0 || aggregatedFields.length > 0) && (
         <div className="ds-row-groupby-meta">
           <div className="ds-row-groupby-grid">
             {groupByFields.length > 0 && (
@@ -5499,17 +5560,17 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
                 </button>
                 {showGroupedFields && (
                   <div className="ds-row-groupby-list">
-                    {groupByFields.map((field: any) => (
+                    {groupByFields.map((groupedField: any) => (
                       <button
-                        key={field.path}
+                        key={groupedField.path}
                         type="button"
                         className="ds-row-groupby-item"
                         onClick={event => {
                           event.stopPropagation();
-                          navigateToDatasource(field.name, getParentPathFromModelPath(field.path));
+                          navigateToDatasource(groupedField.name, getParentPathFromModelPath(groupedField.path));
                         }}
                       >
-                        {field.name}
+                        {groupedField.name}
                       </button>
                     ))}
                   </div>
@@ -5532,20 +5593,20 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
                 </button>
                 {showAggregatedFields && (
                   <div className="ds-row-groupby-list">
-                    {aggregatedFields.map((field: any) => (
+                    {aggregatedFields.map((aggregatedField: any) => (
                       <button
-                        key={field.path}
+                        key={aggregatedField.path}
                         type="button"
                         className="ds-row-groupby-item"
                         onClick={event => {
                           event.stopPropagation();
-                          navigateToDatasource(field.name, getParentPathFromModelPath(field.path));
+                          navigateToDatasource(aggregatedField.name, getParentPathFromModelPath(aggregatedField.path));
                         }}
                       >
-                        <span className="ds-row-groupby-item-text">{field.name}</span>
-                        {field.function && (
-                          <span className={`ds-row-groupby-fn-badge ${getAggregationFunctionBadgeClass(field.function)}`}>
-                            {field.function}
+                        <span className="ds-row-groupby-item-text">{aggregatedField.name}</span>
+                        {aggregatedField.function && (
+                          <span className={`ds-row-groupby-fn-badge ${getAggregationFunctionBadgeClass(aggregatedField.function)}`}>
+                            {aggregatedField.function}
                           </span>
                         )}
                       </button>
@@ -5558,18 +5619,22 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
         </div>
       )}
       {/* Nested children (indented) */}
-      {expanded && ds.children?.map((child: any, i: number) => (
-        <div key={i} style={{ paddingLeft: 12, borderLeft: '2px solid var(--border-color)', marginLeft: 8 }}>
-          <FormatDatasourceRow ds={child} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusDsName} />
+      {children.length > 0 && (
+        <div className="ds-row-children">
+          {children.map((child, i) => (
+            // Definitions do repeat a datasource path; the index keeps both rows.
+            <DatasourceTreeRow key={`${child.key}#${i}`} node={child} ctx={ctx} insideMatch={insideMatch || matched} />
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
 
 // ── Grouped Datasource List ──
 
-const dsGroupOrder = ['Table', 'CalculatedField', 'Class', 'Object', 'Enum', 'ModelEnum', 'FormatEnum', 'Values', 'UserParameter', 'GroupBy', 'Container', 'Join', 'DataModel', 'Other'];
+// The data model leads: in a format, calculated fields hang off its records.
+const dsGroupOrder = ['DataModel', 'Table', 'CalculatedField', 'Class', 'Object', 'Enum', 'ModelEnum', 'FormatEnum', 'Values', 'UserParameter', 'GroupBy', 'Container', 'Join', 'Other'];
 /** Group titles in the technical view, one per raw datasource type. */
 const dsGroupLabels: Record<'cs' | 'en', Record<string, string>> = {
   cs: {
@@ -5613,44 +5678,76 @@ const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandle, {
   datasources: any[];
   configIndex: number;
   navigateToTreeNode: (nodeId: string) => void;
-  focusDsName?: string;
-  /** True while a text filter is applied — every group is shown expanded. */
-  filtering?: boolean;
-}>(function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode, focusDsName, filtering }, ref) {
+  /** The datasource the tab was opened for, as a datasource path key. */
+  focusKey?: string;
+  /** Text filter — matches datasources at any depth. */
+  filter?: string;
+  /** The loaded data model behind a `model` datasource, whose structure is shown under it. */
+  resolveModel?: (datasource: ERDatasource) => DatasourceModel | null;
+  labelFor?: (labelRef: string | undefined) => string | undefined;
+  /** Off where the explorer does not list the datasources — the reveal menu would find nothing. */
+  revealInExplorer?: boolean;
+}>(function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode, focusKey, filter = '', resolveModel, labelFor, revealInExplorer = true }, ref) {
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const tree = useMemo(() => buildDatasourceTree(datasources, resolveModel), [datasources, resolveModel]);
+  const filterState = useMemo(() => filterDatasources(datasources, filter), [datasources, filter]);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  // While a filter is applied the paths to its matches open by themselves; a
+  // click flips one of them for as long as that filter stands.
+  const [filterToggles, setFilterToggles] = useState<Set<string>>(new Set());
+  useEffect(() => { setFilterToggles(new Set()); }, [filter]);
+
+  const groupKeyOf = useCallback(
+    (node: DatasourceTreeNode) => getDatasourceGroupKey(node.datasource?.type || 'Unknown', showTechnicalDetails),
+    [showTechnicalDetails],
+  );
 
   const groups = useMemo(() => {
-    const map = new Map<string, any[]>();
-    for (const ds of datasources) {
-      const type = getDatasourceGroupKey(ds.type || 'Unknown', showTechnicalDetails);
+    const map = new Map<string, DatasourceTreeNode[]>();
+    for (const node of tree.roots) {
+      if (filterState && !filterState.matched.has(node.key) && !filterState.ancestors.has(node.key)) continue;
+      const type = groupKeyOf(node);
       if (!map.has(type)) map.set(type, []);
-      map.get(type)!.push(ds);
+      map.get(type)!.push(node);
     }
     // Sort groups by predefined order, unknowns at the end
-    const sorted: [string, any[]][] = [];
+    const sorted: [string, DatasourceTreeNode[]][] = [];
     for (const key of dsGroupOrder) {
       if (map.has(key)) { sorted.push([key, map.get(key)!]); map.delete(key); }
     }
     for (const [key, val] of map) { sorted.push([key, val]); }
     return sorted;
-  }, [datasources, showTechnicalDetails]);
+  }, [tree, filterState, groupKeyOf]);
 
-  // Initial collapse (all groups except the focused one) runs when the list
-  // target changes — not on every `datasources` change, which happens on each
-  // filter keystroke and used to wipe the user's expand state.
-  const groupsRef = useRef(groups);
-  groupsRef.current = groups;
-  const groupsInitKey = groups.length === 0 ? '' : 'ready';
+  // Opening the tab for a datasource reveals it: its group and every node above it.
   useEffect(() => {
-    const current = groupsRef.current;
-    if (current.length === 0) return;
-    const focusGroupType = focusDsName
-      ? current.find(([, items]) => items.some((ds: any) => containsDatasourceName(ds, focusDsName)))?.[0]
-      : undefined;
-    setCollapsedGroups(new Set(current.map(([type]) => type).filter(t => t !== focusGroupType)));
-  }, [focusDsName, configIndex, groupsInitKey]);
-  const effectiveCollapsedGroups = filtering ? EMPTY_STRING_SET : collapsedGroups;
+    if (!focusKey) return;
+    setExpandedKeys(prev => new Set([...prev, ...ancestorPathKeys(focusKey)]));
+    const root = tree.roots.find(node => node.key === focusKey.split('/')[0]);
+    if (!root) return;
+    const group = groupKeyOf(root);
+    setCollapsedGroups(prev => {
+      if (!prev.has(group)) return prev;
+      const next = new Set(prev);
+      next.delete(group);
+      return next;
+    });
+  }, [focusKey, tree, groupKeyOf]);
+
+  const isExpanded = useCallback(
+    (key: string) => (filterState ? filterState.ancestors.has(key) !== filterToggles.has(key) : expandedKeys.has(key)),
+    [filterState, filterToggles, expandedKeys],
+  );
+
+  const toggle = useCallback((key: string) => {
+    const flip = (prev: Set<string>) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    };
+    if (filterState) setFilterToggles(flip); else setExpandedKeys(flip);
+  }, [filterState]);
 
   const toggleGroup = useCallback((type: string) => {
     setCollapsedGroups(prev => {
@@ -5660,18 +5757,31 @@ const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandle, {
     });
   }, []);
 
-  const expandAllGroups = useCallback(() => {
+  const expandAll = useCallback(() => {
     setCollapsedGroups(new Set());
-  }, []);
+    // Every path down to a datasource the definition declares — not the whole
+    // data model, which would open thousands of fields.
+    setExpandedKeys(keysWithDeclaredDescendants(datasources));
+    setFilterToggles(new Set());
+  }, [datasources]);
 
-  const collapseAllGroups = useCallback(() => {
-    setCollapsedGroups(new Set(groups.map(([type]) => type)));
-  }, [groups]);
+  const collapseAll = useCallback(() => {
+    setExpandedKeys(new Set());
+    if (filterState) setFilterToggles(new Set(filterState.ancestors));
+    else setCollapsedGroups(new Set(groups.map(([type]) => type)));
+  }, [filterState, groups]);
 
-  React.useImperativeHandle(ref, () => ({
-    expandAll: expandAllGroups,
-    collapseAll: collapseAllGroups,
-  }), [expandAllGroups, collapseAllGroups]);
+  React.useImperativeHandle(ref, () => ({ expandAll, collapseAll }), [expandAll, collapseAll]);
+
+  const ctx = useMemo<DatasourceListContext>(() => ({
+    tree, filter: filterState, focusKey, isExpanded, toggle, configIndex, navigateToTreeNode, labelFor, revealInExplorer,
+  }), [tree, filterState, focusKey, isExpanded, toggle, configIndex, navigateToTreeNode, labelFor, revealInExplorer]);
+
+  const effectiveCollapsedGroups = filterState ? EMPTY_STRING_SET : collapsedGroups;
+
+  if (groups.length === 0) {
+    return <div style={{ color: 'var(--text-secondary)', fontSize: 12, padding: 12 }}>{t.noResults}</div>;
+  }
 
   return (
     <div>
@@ -5687,8 +5797,8 @@ const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandle, {
               <span className="ds-group-label">{getDatasourceGroupLabel(type, showTechnicalDetails)}</span>
               <span className="ds-group-count">{items.length}</span>
             </div>
-            {!isCollapsed && items.map((ds: any, i: number) => (
-              <FormatDatasourceRow key={i} ds={ds} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusDsName={focusDsName} />
+            {!isCollapsed && items.map((node, i) => (
+              <DatasourceTreeRow key={`${node.key}#${i}`} node={node} ctx={ctx} insideMatch={false} />
             ))}
           </div>
         );

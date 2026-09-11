@@ -92,6 +92,17 @@ export function getConsultantDataTypeLabel(dataType: string): string | undefined
   return dataTypeLabels[isCs() ? 'cs' : 'en'][dataType] ?? dataType;
 }
 
+/** ER field type codes (`ERFieldType`) of data model fields. */
+const fieldTypeLabels: Record<'cs' | 'en', Record<number, string>> = {
+  cs: { 1: 'Ano/ne', 3: 'Celé číslo', 4: 'Celé číslo', 5: 'Číslo', 6: 'Text', 7: 'Datum', 9: 'Výčet', 10: 'Záznam', 11: 'Seznam záznamů', 13: 'Binární data' },
+  en: { 1: 'Yes/no', 3: 'Whole number', 4: 'Whole number', 5: 'Number', 6: 'Text', 7: 'Date', 9: 'Enumeration', 10: 'Record', 11: 'Record list', 13: 'Binary data' },
+};
+
+/** A data model field's type in plain words. */
+export function getConsultantFieldTypeLabel(type: number): string | undefined {
+  return fieldTypeLabels[isCs() ? 'cs' : 'en'][type];
+}
+
 const bindingCategoryLabels: Record<'cs' | 'en', Record<FormatBindingCategory, string>> = {
   cs: { data: 'Hodnota', visibility: 'Viditelnost', formatting: 'Formátování', property: 'Další vlastnosti' },
   en: { data: 'Value', visibility: 'Visibility', formatting: 'Formatting', property: 'Other properties' },

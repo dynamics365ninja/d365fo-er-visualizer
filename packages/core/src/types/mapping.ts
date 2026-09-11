@@ -63,6 +63,13 @@ export interface ERDatasource {
   label?: string;
   description?: string;
   children: ERDatasource[];
+  /**
+   * Not declared in the definition: stands in for a `ParentPath` segment that
+   * other datasources hang under — a record of the data model
+   * (`model/InvoiceLines`) or the `Values` of a calculated record list. Carries
+   * no source of its own; `type` is `Container`.
+   */
+  implicit?: boolean;
 
   // Type-specific properties (polymorphic)
   tableInfo?: ERTableDatasource;

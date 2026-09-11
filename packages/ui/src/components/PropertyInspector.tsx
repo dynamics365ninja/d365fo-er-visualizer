@@ -314,6 +314,14 @@ function FieldProps({ data, configIndex, showTechnicalDetails }: { data: any; co
 }
 
 function DatasourceProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
+  if (data.implicit) {
+    // Nothing is declared here: the node only holds the path other datasources
+    // hang under, so its type and label would be made up.
+    const pathItems: [string, React.ReactNode, string?][] = [[t.propType, t.dsImplicitType], ['', t.dsImplicitHint]];
+    if (showTechnicalDetails) pathItems.push([t.propParentPath, data.parentPath ?? '–']);
+    return <PropGrid items={pathItems} />;
+  }
+
   const items: [string, React.ReactNode, string?][] = [
     [t.propLabel, <LabelValue labelRef={data.label} configIndex={configIndex} />],
   ];

@@ -882,22 +882,44 @@ function parseDatasources(defNode: any): ERDatasource[] {
   // Build parent-child tree using normalized paths so XML ordering does not matter.
   const roots: ERDatasource[] = [];
 
+  // ER names are case-insensitive, so the lookup key is too.
   const pathMap = new Map<string, ERDatasource>();
   for (const ds of flat) {
-    pathMap.set(buildDatasourcePath(ds.parentPath, ds.name), ds);
+    pathMap.set(buildDatasourcePath(ds.parentPath, ds.name).toLowerCase(), ds);
   }
 
+  // A ParentPath routinely runs through nodes the definition never declares:
+  // the records of the data model (`model/InvoiceLines/LineBase`) or the
+  // `Values` of a calculated record list. Each such segment gets an implicit
+  // node. Lifting the datasource to the root instead loses its parent — the
+  // only thing telling two same-named calculated fields apart.
+  const ensureParent = (parentPath: string): ERDatasource => {
+    const segments = parentPath.split('/').map(segment => segment.trim()).filter(Boolean);
+    let parent: ERDatasource | null = null;
+    for (let i = 0; i < segments.length; i++) {
+      const key = normalizeDatasourcePath(segments.slice(0, i + 1).join('/')).toLowerCase();
+      let node = pathMap.get(key);
+      if (!node) {
+        node = {
+          name: segments[i],
+          parentPath: i > 0 ? segments.slice(0, i).join('/') : undefined,
+          type: 'Container',
+          implicit: true,
+          children: [],
+        };
+        pathMap.set(key, node);
+        (parent ? parent.children : roots).push(node);
+      }
+      parent = node;
+    }
+    return parent!;
+  };
+
   for (const ds of flat) {
-    const parentKey = normalizeDatasourcePath(ds.parentPath);
-    if (!parentKey) {
+    if (!normalizeDatasourcePath(ds.parentPath)) {
       roots.push(ds);
     } else {
-      const parent = pathMap.get(parentKey);
-      if (parent) {
-        parent.children.push(ds);
-      } else {
-        roots.push(ds);
-      }
+      ensureParent(ds.parentPath!).children.push(ds);
     }
   }
 

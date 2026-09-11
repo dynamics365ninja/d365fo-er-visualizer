@@ -562,6 +562,10 @@ export interface Translations {
   dsNestedCount: (n: number) => string;
   dsGroupBy: string;
   dsAggregated: string;
+  dsImplicitType: string;
+  dsImplicitHint: string;
+  dsModelField: string;
+  dsModelNotLoaded: string;
   bindingCount: (n: number) => string;
   bindingVia: string;
   searchNoResultsInScope: string;
@@ -1139,6 +1143,10 @@ const cs: Translations = {
   dsNestedCount: (n) => `${n} vnořených datových zdrojů`,
   dsGroupBy: 'Seskupit podle',
   dsAggregated: 'Agregované',
+  dsImplicitType: 'Uzel cesty',
+  dsImplicitHint: 'Není deklarován jako datový zdroj — je to záznam datového modelu nebo část cesty, pod kterou jsou vnořeny další datové zdroje.',
+  dsModelField: 'Pole datového modelu',
+  dsModelNotLoaded: 'datový model není načten',
   bindingCount: (n) => `${n} ${n === 1 ? 'vazba' : n < 5 ? 'vazby' : 'vazeb'}`,
   bindingVia: 'přes',
   searchNoResultsInScope: 'V tomto rozsahu nic nenalezeno.',
@@ -1735,6 +1743,10 @@ const en: Translations = {
   dsNestedCount: (n) => `${n} nested datasource${n === 1 ? '' : 's'}`,
   dsGroupBy: 'Group By',
   dsAggregated: 'Aggregated',
+  dsImplicitType: 'Path node',
+  dsImplicitHint: 'Not declared as a datasource — a data model record or a path segment that other datasources are nested under.',
+  dsModelField: 'Data model field',
+  dsModelNotLoaded: 'data model not loaded',
   bindingCount: (n) => `${n} binding${n === 1 ? '' : 's'}`,
   bindingVia: 'via',
   searchNoResultsInScope: 'No results in this scope.',
