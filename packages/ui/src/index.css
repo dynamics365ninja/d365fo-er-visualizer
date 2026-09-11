@@ -7940,8 +7940,21 @@ div.path-tooltip-card {
   margin-left: 6px;
 }
 
+/* Mapping rows and datasource rows carry the same ⋮ after their drill-down,
+   count or where-used control; those may already push right. */
+.mm-binding-drill + .fmt-row-actions,
+.mm-group-count + .fmt-row-actions,
+.ds-row-where-used + .fmt-row-actions {
+  margin-left: 4px;
+}
+
 .fmt-element-row:hover .fmt-row-actions,
 .fmt-element-row.selected .fmt-row-actions,
+.mm-tree-row:hover .fmt-row-actions,
+.mm-validation-row:hover .fmt-row-actions,
+.mm-binding-row.search-match .fmt-row-actions,
+.ds-row:hover .fmt-row-actions,
+.ds-row-wrap.search-match .fmt-row-actions,
 .fmt-row-actions:focus-visible,
 .fmt-row-actions[aria-expanded="true"] {
   opacity: 1;
