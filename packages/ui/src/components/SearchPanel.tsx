@@ -10,6 +10,7 @@ import { useAppStore, activeMappingDefinitionLabel, relatedMappingDefinitionLabe
 import type { TreeNode } from '../state/store';
 import type { ERConfiguration, GUIDEntry } from '@er-visualizer/core';
 import { locale, t, useLocale } from '../i18n';
+import { getConsultantFormatTypeLabel } from '../utils/consultant-labels';
 import { getFormatTypeThemeColor } from '../utils/theme-colors';
 import { relatedConfigIndices, relatedContainerRules, hitPassesContainerRule, type ScopeContainerRule } from '../utils/model-hierarchy';
 import { referenceCategory, WHERE_USED_CATEGORY_ORDER, type ReferenceCategory } from '../utils/where-used-category';
@@ -834,14 +835,14 @@ function SearchResultsGrouped({
 }
 
 /** Maps a format binding propertyName to a human label + CSS kind key. */
-function formatBindingLabel(prop: string, cs: boolean): { label: string; labelKind: string } {
+function formatBindingLabel(prop: string, cs: boolean, showTechnicalDetails: boolean): { label: string; labelKind: string } {
   const p = prop.trim().toLowerCase();
-  if (!p) return { label: cs ? 'Výraz formátu' : 'Fmt data', labelKind: 'formula' };
+  if (!p) return { label: cs ? 'Výraz formátu' : 'Format expression', labelKind: 'formula' };
   if (['enabled', 'visible', 'disabled', 'printable', 'active'].includes(p))
     return { label: cs ? 'Viditelnost' : 'Visibility', labelKind: 'visibility' };
   if (['format', 'encoding', 'transformation', 'locale', 'separator', 'decimalseparator', 'groupseparator', 'mask'].includes(p))
     return { label: cs ? `Formátování` : `Formatting`, labelKind: 'formatting' };
-  return { label: prop, labelKind: 'property' };
+  return { label: showTechnicalDetails ? prop : (cs ? 'Vlastnost' : 'Property'), labelKind: 'property' };
 }
 
 type HitCategory = 'structure' | 'bindings' | 'expressions' | 'datasources' | 'references';
@@ -876,6 +877,7 @@ function hitCategoryLabel(category: HitCategory): string {
 function parseSearchHit(
   result: SearchResultEntry,
   registry: { lookup: (guid: string) => GUIDEntry | undefined },
+  showTechnicalDetails: boolean,
 ): ParsedHit {
   const ctx = result.sourceContext ?? '';
   const comp = result.sourceComponent ?? '';
@@ -893,7 +895,7 @@ function parseSearchHit(
     return { label: cs ? 'Třída' : 'Class', labelKind: 'class', category: 'datasources', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
   }
   if (/^User parameter ".+" uses EDT "/.test(ctx)) {
-    return { label: 'EDT', labelKind: 'edt', category: 'datasources', location: tgt, expression: cs ? `parametr: ${comp}` : `param: ${comp}`, tab: 'datasources' };
+    return { label: showTechnicalDetails ? 'EDT' : (cs ? 'Parametr' : 'Parameter'), labelKind: 'edt', category: 'datasources', location: tgt, expression: cs ? `parametr: ${comp}` : `param: ${comp}`, tab: 'datasources' };
   }
   if (ctx.startsWith('Selected field in datasource "')) {
     return { label: cs ? 'Pole' : 'Field', labelKind: 'field', category: 'datasources', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
@@ -923,7 +925,7 @@ function parseSearchHit(
     // Extract optional property name from "Format binding [PropName] expression"
     const propMatch = ctx.match(/Format binding \[([^\]]+)\] expression/);
     const prop = propMatch?.[1] ?? '';
-    const { label, labelKind } = formatBindingLabel(prop, cs);
+    const { label, labelKind } = formatBindingLabel(prop, cs, showTechnicalDetails);
     return { label, labelKind, category: 'bindings' as const, location: comp, expression: expr, tab: 'bindings' as const };
   }
 
@@ -933,7 +935,7 @@ function parseSearchHit(
     const resolved = registry.lookup(tgt);
     const propMatch = ctx.match(/Format binding \[([^\]]+)\] to component/);
     const prop = propMatch?.[1] ?? '';
-    const { label, labelKind } = formatBindingLabel(prop, cs);
+    const { label, labelKind } = formatBindingLabel(prop, cs, showTechnicalDetails);
     return {
       label,
       labelKind,
@@ -952,7 +954,8 @@ function parseSearchHit(
 
   // ── TypeDescriptor ────────────────────────────────────────────────
   if (ctx === 'TypeDescriptor reference in model field') {
-    return { label: cs ? 'Typ pole' : 'Field type', labelKind: 'field', category: 'structure', location: comp, expression: tgt, tab: 'structure' as const };
+    // The target is the TypeDescriptor's GUID — nothing to read for a consultant.
+    return { label: cs ? 'Typ pole' : 'Field type', labelKind: 'field', category: 'structure', location: comp, expression: showTechnicalDetails ? tgt : '', tab: 'structure' as const };
   }
 
   // ── Structural references ─────────────────────────────────────────
@@ -974,13 +977,16 @@ function parseSearchHit(
   }
 
   // ── GUID fallback ─────────────────────────────────────────────────
+  // Registry kinds ("MappingVersion", "FormatElement") and bare GUIDs are
+  // internals; the consultant view calls them references.
+  const referenceLabel = cs ? 'Odkaz' : 'Reference';
   if (result.targetType === 'GUID') {
     const resolved = registry.lookup(tgt);
     return {
-      label: resolved?.kind ?? 'GUID',
+      label: showTechnicalDetails ? (resolved?.kind ?? 'GUID') : referenceLabel,
       labelKind: 'guid',
       category: 'references' as const,
-      location: resolved?.name ?? tgt,
+      location: resolved?.name ?? (showTechnicalDetails ? tgt : (cs ? 'Nerozpoznaný odkaz' : 'Unresolved reference')),
       expression: '',
       tab: null,
     };
@@ -988,7 +994,7 @@ function parseSearchHit(
 
   // ── Generic fallback ──────────────────────────────────────────────
   return {
-    label: result.targetType ?? '',
+    label: showTechnicalDetails ? (result.targetType ?? '') : referenceLabel,
     labelKind: (result.targetType ?? '').toLowerCase(),
     category: 'references' as const,
     location: comp || tgt,
@@ -1045,11 +1051,12 @@ function SearchResultGroup({
   // Items arrive deduplicated and navigable; the node lookup was done once by
   // the panel so no row (or group) walks the tree again. Splitting them by hit
   // category turns one long mixed list into short, self-describing sections.
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const sections = useMemo(() => {
     const nested = nestBindingResults(items.filter(r => nodeByResult.has(r)));
     const byCategory = new Map<HitCategory, Array<{ entry: SearchResultEntry; node: TreeNode; hit: ParsedHit }>>();
     for (const n of nested) {
-      const hit = parseSearchHit(n.entry, registry);
+      const hit = parseSearchHit(n.entry, registry, showTechnicalDetails);
       const bucket = byCategory.get(hit.category) ?? [];
       bucket.push({ entry: n.entry, node: nodeByResult.get(n.entry)!, hit });
       byCategory.set(hit.category, bucket);
@@ -1057,7 +1064,7 @@ function SearchResultGroup({
     return HIT_CATEGORY_ORDER
       .filter(category => byCategory.has(category))
       .map(category => ({ category, rows: byCategory.get(category)! }));
-  }, [items, nodeByResult, registry]);
+  }, [items, nodeByResult, registry, showTechnicalDetails]);
 
   const totalRows = useMemo(() => sections.reduce((n, s) => n + s.rows.length, 0), [sections]);
 
@@ -1228,8 +1235,8 @@ function referenceCategoryLabel(category: ReferenceCategory): string {
 /** Expand the terse kind codes the where-used scan emits. They only ever show
  *  up inside the expressions section, where they are the one thing telling the
  *  rows apart. */
-function toLocalizedRefKind(ref: Reference): string {
-  if (ref.kind === 'formatElement') return ref.kindLabel;
+function toLocalizedRefKind(ref: Reference, showTechnicalDetails: boolean): string {
+  if (ref.kind === 'formatElement') return showTechnicalDetails ? ref.kindLabel : getConsultantFormatTypeLabel(ref.kindLabel);
   const cs = locale === 'cs';
   switch (ref.kindLabel.trim().toLowerCase()) {
     case 'calc': return cs ? 'Výpočet' : 'Calculated';
@@ -1351,7 +1358,8 @@ function ReferenceRow({
   const { location, preview, kindColor, onOpen } = reference;
   const breadcrumb = location.slice(0, -1);
   const leaf = location[location.length - 1] ?? '';
-  const localizedKind = toLocalizedRefKind(reference);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const localizedKind = toLocalizedRefKind(reference, showTechnicalDetails);
   const isActive = activeRefKey === referenceKey;
 
   const openReference = () => {

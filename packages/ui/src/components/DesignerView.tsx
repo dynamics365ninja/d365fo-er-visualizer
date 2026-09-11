@@ -34,6 +34,7 @@ import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 import { FilterField } from './FilterField';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
+import { getBindingCategoryLabel, getConsultantBindingLabel, getConsultantFormatTypeLabel, isXmlNamespaceDeclaration } from '../utils/consultant-labels';
 import { buildFormatBindingPresentation, groupFormatBindingsByCategory } from '../utils/format-binding-display';
 import { buildFormatTreeIndex, type FormatTreeIndex } from '../utils/format-tree-filter';
 import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../utils/filter-suggestions';
@@ -296,12 +297,14 @@ function FormatElementFocusTab({ node, configIndex }: { node: any; configIndex: 
             {categories.map(category => (
               <div key={category.key}>
                 {categories.length > 1 && (
-                  <div className="fmt-detail-subsection-title">{category.label} ({category.bindings.length})</div>
+                  <div className="fmt-detail-subsection-title">
+                    {showTechnicalDetails ? category.label : getBindingCategoryLabel(category.key)} ({category.bindings.length})
+                  </div>
                 )}
                 {category.bindings.map((b: any, i: number) => (
                   <div key={`${category.key}-${i}`} className="fmt-detail-binding">
                     <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'}`} style={{ marginRight: 6 }}>
-                      {b.bindingDisplayLabel}
+                      {showTechnicalDetails ? b.bindingDisplayLabel : getConsultantBindingLabel(b)}
                     </span>
                     {showTechnicalDetails && b.promotedFromChild && b.rawElementType && (
                       <span className="fmt-binding-origin">{t.bindingVia} {b.rawElementType}</span>
@@ -557,68 +560,19 @@ function SlidingTabs<TId extends string>({ tabs, activeId, onChange }: {
   );
 }
 
-function getConsultantFormatTypeLabel(type: string): string {
-  const csLabels: Record<string, string> = {
-    File: 'Soubor',
-    ExcelFile: 'Excel',
-    WordFile: 'Word',
-    PDFFile: 'PDF',
-    XMLElement: 'Element',
-    XMLAttribute: 'Atribut',
-    XMLSequence: 'Sekvence',
-    String: 'Text',
-    Numeric: 'Číslo',
-    DateTime: 'Datum a čas',
-    Base64: 'Příloha',
-    ExcelSheet: 'List',
-    ExcelRange: 'Oblast',
-    ExcelCell: 'Buňka',
-    ExcelHeader: 'Záhlaví',
-    ExcelFooter: 'Zápatí',
-    TextSequence: 'Sekvence',
-    TextLine: 'Řádek',
-    Sequence: 'Sekvence',
-    Common: 'Prvek',
-    Empty: 'Prázdný prvek',
-  };
-  const enLabels: Record<string, string> = {
-    File: 'File',
-    ExcelFile: 'Excel',
-    WordFile: 'Word',
-    PDFFile: 'PDF',
-    XMLElement: 'Element',
-    XMLAttribute: 'Attribute',
-    XMLSequence: 'Sequence',
-    String: 'Text',
-    Numeric: 'Number',
-    DateTime: 'Date and time',
-    Base64: 'Attachment',
-    ExcelSheet: 'Sheet',
-    ExcelRange: 'Range',
-    ExcelCell: 'Cell',
-    ExcelHeader: 'Header',
-    ExcelFooter: 'Footer',
-    TextSequence: 'Sequence',
-    TextLine: 'Line',
-    Sequence: 'Sequence',
-    Common: 'Element',
-    Empty: 'Empty element',
-  };
-  const labels = locale === 'cs' ? csLabels : enLabels;
-  return labels[type] ?? humanizeFormatTypeName(type);
+/** Enum name, with its source kind ("Ax Enum", …) only in the technical view. */
+function enumLabelFor(enumInfo: any, showTechnicalDetails: boolean): string {
+  return showTechnicalDetails ? formatEnumDisplayName(enumInfo.enumName, enumInfo) : enumInfo.enumName;
 }
 
-/**
- * Last resort for an element type the consultant labels don't cover: turn the
- * raw ER identifier into plain words instead of leaking `XMLSequenceElement`.
- */
-function humanizeFormatTypeName(type: string): string {
-  const words = String(type ?? '')
-    .replace(/^(XML|Excel|Text|Word|PDF)/, '')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .trim();
-  if (!words) return locale === 'cs' ? 'Prvek' : 'Element';
-  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+/** "4 skupiny", "5 skupin", "1 group" — the word after the Bindings tab count. */
+function bindingGroupCountWord(count: number, showTechnicalDetails: boolean): string {
+  if (locale === 'cs') {
+    const [one, few, many] = showTechnicalDetails ? ['typ', 'typy', 'typů'] : ['skupina', 'skupiny', 'skupin'];
+    return count === 1 ? one : count >= 2 && count <= 4 ? few : many;
+  }
+  const word = showTechnicalDetails ? 'type' : 'group';
+  return count === 1 ? word : `${word}s`;
 }
 
 /** Element type as it should read in the current mode. */
@@ -643,6 +597,9 @@ function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): s
     UserParameter: 'Parametry',
     GroupBy: 'Seskupená data',
     Container: 'Kontejnery',
+    Join: 'Spojení',
+    DataModel: 'Datový model',
+    Values: 'Hodnoty',
   };
   const enLabels: Record<string, string> = {
     Table: 'Tables',
@@ -656,6 +613,9 @@ function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): s
     UserParameter: 'Parameters',
     GroupBy: 'Grouped data',
     Container: 'Containers',
+    Join: 'Joins',
+    DataModel: 'Data model',
+    Values: 'Values',
   };
   const labels = locale === 'cs' ? csLabels : enLabels;
   return labels[type] ?? (locale === 'cs' ? 'Ostatní' : 'Other');
@@ -667,10 +627,15 @@ function containsDatasourceName(ds: any, name: string): boolean {
   return (ds.children ?? []).some((c: any) => containsDatasourceName(c, name));
 }
 
+/** Datasource types the consultant view names; the rest share one "Other" group. */
+const CONSULTANT_DS_GROUP_TYPES = new Set(['Table', 'CalculatedField', 'Class', 'Object', 'ImportFormat', 'UserParameter', 'GroupBy', 'Container', 'Join', 'DataModel']);
+
 function getDatasourceGroupKey(type: string, showTechnicalDetails: boolean): string {
   if (showTechnicalDetails) return type;
+  // The three enum kinds share a key, and that key needs a label of its own —
+  // without one the enums fell through to "Other", next to the real "Other".
   if (type === 'Enum' || type === 'ModelEnum' || type === 'FormatEnum') return 'Values';
-  return type;
+  return CONSULTANT_DS_GROUP_TYPES.has(type) ? type : 'Other';
 }
 
 // ─── Model Designer ───
@@ -1074,6 +1039,7 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const selectNode = useAppStore(s => s.selectNode);
   const treeNodes = useAppStore(s => s.treeNodes);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const [filter, setFilter] = useTabState(tabId, 'mapping.filter', '');
   const [view, setView] = useTabState<'bindings' | 'datasources' | 'validations'>(tabId, 'mapping.view', 'bindings');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -1272,14 +1238,18 @@ function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { mapping: 
           {(mm.dataContainerDescriptor || mm.name) && (
             <span
               className="fmt-stat"
-              title={locale === 'cs'
-                ? 'Definice mapování (DataContainerDescriptor — kořenový kontejner datového modelu)'
-                : 'Mapping definition (DataContainerDescriptor — root container of the data model)'}
+              title={showTechnicalDetails
+                ? (locale === 'cs'
+                  ? 'Definice mapování (DataContainerDescriptor — kořenový kontejner datového modelu)'
+                  : 'Mapping definition (DataContainerDescriptor — root container of the data model)')
+                : (locale === 'cs' ? 'Definice mapování' : 'Mapping definition')}
             >
               {locale === 'cs' ? 'Definice' : 'Definition'}: {
-                mm.name && mm.dataContainerDescriptor && mm.name !== mm.dataContainerDescriptor
+                // The descriptor is the model root's technical name; consultants
+                // get the definition's own name.
+                showTechnicalDetails && mm.name && mm.dataContainerDescriptor && mm.name !== mm.dataContainerDescriptor
                   ? `${mm.name} (${mm.dataContainerDescriptor})`
-                  : (mm.dataContainerDescriptor || mm.name)
+                  : (showTechnicalDetails ? (mm.dataContainerDescriptor || mm.name) : (mm.name || mm.dataContainerDescriptor))
               }
             </span>
           )}
@@ -1860,7 +1830,7 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
   // The same two words as the model-mapping designer, in both view modes: the
   // consultant-mode aliases ("Links" / "Zdroje dat") named the very things F&O
   // itself calls bindings and data sources.
-  const groupCountLabel = locale === 'cs' ? (showTechnicalDetails ? 'typů' : 'skupin') : (showTechnicalDetails ? 'types' : 'groups');
+  const groupCountLabel = bindingGroupCountWord(groupedBindingsByType.length, showTechnicalDetails);
 
   type FormatViewId = 'structure' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping';
   const formatTabs = useMemo<Array<{ id: FormatViewId; label: React.ReactNode; title: string }>>(() => {
@@ -4104,7 +4074,8 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
   // Resolve label for this element
   const labelRef = element.attributes?.['Label'];
   const resolvedLabel = useMemo(() => resolveLabel(labelRef, labels), [labelRef, labels, locale]);
-  const labelText = resolvedLabel?.localized ?? resolvedLabel?.enUs ?? (resolvedLabel?.id ? resolvedLabel.id : undefined);
+  // An unresolved reference is only an id — worth showing in the technical view alone.
+  const labelText = resolvedLabel?.localized ?? resolvedLabel?.enUs ?? (showTechnicalDetails && resolvedLabel?.id ? resolvedLabel.id : undefined);
   const excelRange = getFormatElementExcelRange(element);
 
   const matchesFilter = !filter || treeIndex.selfMatch.has(element.id);
@@ -4166,6 +4137,8 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
   }, [isSelected]);
 
   if (filter && !showAll && !matchesFilter && !descendantMatches) return null;
+
+  if (!showTechnicalDetails && isXmlNamespaceDeclaration(element)) return null;
 
   // Binding filter
   if (bindingFilter && bindingFilter !== 'all') {
@@ -4257,11 +4230,14 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
         )}
 
         {/* Conditional Bindings indicators */}
-        {conditionalBindings.length > 0 && conditionalBindings.map((cb: any, i: number) => (
-          <span key={i} className="fmt-cond-badge" title={`${cb.bindingDisplayLabel}: ${cb.expressionAsString}`}>
-            {cb.bindingDisplayLabel}
-          </span>
-        ))}
+        {conditionalBindings.length > 0 && conditionalBindings.map((cb: any, i: number) => {
+          const label = showTechnicalDetails ? cb.bindingDisplayLabel : getConsultantBindingLabel(cb);
+          return (
+            <span key={i} className="fmt-cond-badge" title={`${label}: ${cb.expressionAsString}`}>
+              {label}
+            </span>
+          );
+        })}
 
         {/* Main Binding — the original formula shown inline */}
         {mainBinding && (
@@ -4280,7 +4256,9 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
       {matchedBinding && (
         <div className="fmt-match-reason" style={{ paddingLeft: depth * 20 + 30 }}>
           <span className="fmt-match-reason__prop">
-            {matchedBinding.bindingDisplayLabel || matchedBinding.propertyName || t.bindings}
+            {showTechnicalDetails
+              ? (matchedBinding.bindingDisplayLabel || matchedBinding.propertyName || t.bindings)
+              : getConsultantBindingLabel(matchedBinding)}
           </span>
           <ExpressionDetailLink
             expression={matchedBinding.expressionAsString}
@@ -4300,10 +4278,14 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
             </div>
           ) : bindingCategories.map(category => (
             <div key={category.key}>
-              <div className="fmt-binding-category-title">{category.label} ({category.bindings.length})</div>
+              <div className="fmt-binding-category-title">
+                {showTechnicalDetails ? category.label : getBindingCategoryLabel(category.key)} ({category.bindings.length})
+              </div>
               {category.bindings.map((b: any, i: number) => (
                 <div key={`${category.key}-${i}`} className="fmt-binding-detail-row">
-                  <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'}`}>{b.bindingDisplayLabel}</span>
+                  <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'}`}>
+                    {showTechnicalDetails ? b.bindingDisplayLabel : getConsultantBindingLabel(b)}
+                  </span>
                   {showTechnicalDetails && b.promotedFromChild && b.rawElementType && (
                     <span className="fmt-binding-origin">{t.bindingVia} {b.rawElementType}</span>
                   )}
@@ -4405,7 +4387,7 @@ function FormatElementBindingGroup({ row, configIndex, onReveal, showTechnicalDe
           category.bindings.map((binding: any, i: number) => (
             <div key={`${category.key}-${i}`} className="fmt-bind-row">
               <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'} fmt-bind-row-label`}>
-                {binding.bindingDisplayLabel}
+                {showTechnicalDetails ? binding.bindingDisplayLabel : getConsultantBindingLabel(binding)}
               </span>
               {showTechnicalDetails && binding.promotedFromChild && binding.rawElementType && (
                 <span className="fmt-binding-origin">{t.bindingVia} {binding.rawElementType}</span>
@@ -4519,14 +4501,15 @@ function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: n
 
   if (node.type === 'datasource') {
     const datasource = node.data ?? {};
-    const rows: Array<[string, React.ReactNode]> = [
-      [t.propName, datasource.name ?? '–'],
-      [t.propType, datasource.type ?? '–'],
-      [t.propParentPath, datasource.parentPath ?? '–'],
-    ];
+    const rows: Array<[string, React.ReactNode]> = [[t.propName, datasource.name ?? '–']];
+    // Gated like the property inspector: the raw type and parent path are
+    // implementation detail.
+    if (showTechnicalDetails) {
+      rows.push([t.propType, datasource.type ?? '–'], [t.propParentPath, datasource.parentPath ?? '–']);
+    }
 
     if (datasource.tableInfo?.tableName) rows.push([t.drillLabelTable, datasource.tableInfo.tableName]);
-    if (datasource.enumInfo?.enumName) rows.push([t.drillLabelEnum, formatEnumDisplayName(datasource.enumInfo.enumName, datasource.enumInfo)]);
+    if (datasource.enumInfo?.enumName) rows.push([t.drillLabelEnum, enumLabelFor(datasource.enumInfo, showTechnicalDetails)]);
     if (datasource.classInfo?.className) rows.push([t.drillLabelClass, datasource.classInfo.className]);
     if (showTechnicalDetails && datasource.calculatedField?.expressionAsString) {
       rows.push([t.expression, <ClickablePath expression={datasource.calculatedField.expressionAsString} configIndex={configIndex} mode="binding-expr" />]);
@@ -4542,7 +4525,7 @@ function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: n
         <div className="focused-detail-card">
           <div className="focused-detail-card__head">
             <span className="focused-detail-card__title">{locale === 'cs' ? 'Vlastnosti datového zdroje' : 'Datasource properties'}</span>
-            <span className="focused-detail-card__badge">{datasource.type ?? t.nodeTypeLabel('datasource')}</span>
+            <span className="focused-detail-card__badge">{(showTechnicalDetails && datasource.type) || t.nodeTypeLabel('datasource')}</span>
           </div>
           <div className="focused-detail-grid">
             {rows.map(([label, value], index) => (
@@ -4592,7 +4575,7 @@ function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: n
   if (showTechnicalDetails && node.data?.path) summaryRows.push([t.path, <ClickablePath expression={node.data.path} configIndex={configIndex} mode="model-path" />]);
   if (showTechnicalDetails && node.data?.expressionAsString) summaryRows.push([t.expression, <ClickablePath expression={node.data.expressionAsString} configIndex={configIndex} mode="binding-expr" />]);
   if (node.data?.tableInfo?.tableName) summaryRows.push([t.drillLabelTable, node.data.tableInfo.tableName]);
-  if (node.data?.enumInfo?.enumName) summaryRows.push([t.drillLabelEnum, formatEnumDisplayName(node.data.enumInfo.enumName, node.data.enumInfo)]);
+  if (node.data?.enumInfo?.enumName) summaryRows.push([t.drillLabelEnum, enumLabelFor(node.data.enumInfo, showTechnicalDetails)]);
   if (node.data?.classInfo?.className) summaryRows.push([t.drillLabelClass, node.data.classInfo.className]);
   if (showTechnicalDetails && node.data?.id) summaryRows.push([t.propId, <span className="prop-value guid" style={{ padding: 0, background: 'transparent' }}>{node.data.id}</span>]);
 
@@ -4694,11 +4677,13 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
     if (showTechnicalDetails && ds.tableInfo.isCrossCompany) targetLabel += ` (${t.dsCrossCompany})`;
     if (showTechnicalDetails && ds.tableInfo.selectedFields?.length) targetLabel += ` [${ds.tableInfo.selectedFields.join(', ')}]`;
   } else if (ds.enumInfo) {
-    targetLabel = formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo);
+    targetLabel = enumLabelFor(ds.enumInfo, showTechnicalDetails);
   } else if (ds.classInfo) {
     targetLabel = ds.classInfo.className;
   } else if (ds.calculatedField) {
-    targetLabel = ds.calculatedField.expressionAsString ?? '';
+    // The group header already says "calculated values"; the formula itself
+    // belongs to the technical view and the drill-down — same as the inspector.
+    targetLabel = showTechnicalDetails ? (ds.calculatedField.expressionAsString ?? '') : null;
   } else if (ds.importFormatInfo) {
     targetLabel = showTechnicalDetails
       ? ds.importFormatInfo.formatGuid
@@ -4845,7 +4830,7 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
 
 // ── Grouped Datasource List ──
 
-const dsGroupOrder = ['Table', 'CalculatedField', 'Class', 'Object', 'Enum', 'ModelEnum', 'FormatEnum', 'UserParameter', 'GroupBy', 'Container'];
+const dsGroupOrder = ['Table', 'CalculatedField', 'Class', 'Object', 'Enum', 'ModelEnum', 'FormatEnum', 'Values', 'UserParameter', 'GroupBy', 'Container', 'Join', 'DataModel', 'Other'];
 const dsGroupLabels: Record<string, string> = {
   Table: 'Tables',
   CalculatedField: 'Calculated Fields',

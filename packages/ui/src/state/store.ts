@@ -3587,6 +3587,8 @@ function buildTreeForConfig(config: ERConfiguration, index: number, allConfigura
         name: `${elementType} (${groups.length})`,
         icon: '📂',
         type: 'section' as const,
+        // Lets the consultant view name the section without the raw type.
+        data: { bindingElementType: elementType, count: groups.length },
         children: groups
           .sort((left, right) => left.elementName.localeCompare(right.elementName))
           .map((g, bi) => {
@@ -3600,13 +3602,14 @@ function buildTreeForConfig(config: ERConfiguration, index: number, allConfigura
               name: label,
               icon: primaryDataExpr ? '↔️' : '⚙️',
               type: 'formatBinding' as const,
-              data: { componentId: g.componentId, expressionAsString: primaryDataExpr, propBindings: g.bindings.filter(binding => binding.bindingCategory !== 'data') },
+              data: { componentId: g.componentId, elementName: g.elementName, expressionAsString: primaryDataExpr, propBindings: g.bindings.filter(binding => binding.bindingCategory !== 'data') },
               configIndex: index,
               children: nonDataCategories.length > 0 ? nonDataCategories.map((category, ci) => ({
                 id: `${prefix}-fmtbind-${typeIndex}-${bi}-cat-${ci}`,
                 name: `${category.label} (${category.bindings.length})`,
                 icon: '📂',
                 type: 'section' as const,
+                data: { bindingCategory: category.key, count: category.bindings.length },
                 children: category.bindings.map((binding, pi) => ({
                   id: `${prefix}-fmtbind-${typeIndex}-${bi}-cat-${ci}-prop-${pi}`,
                   name: `${binding.bindingDisplayLabel}  ←  ${binding.expressionAsString.substring(0, 45)}`,
