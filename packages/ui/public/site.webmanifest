@@ -2,7 +2,7 @@
   "name": "D365FO ER Visualizer",
   "short_name": "ER Visualizer",
   "description": "Visualize Dynamics 365 Finance & Operations Electronic Reporting configurations, bindings, and structure.",
-  "theme_color": "#0a6f73",
+  "theme_color": "#16171b",
   "background_color": "#181a1f",
   "display": "standalone",
   "start_url": "./",

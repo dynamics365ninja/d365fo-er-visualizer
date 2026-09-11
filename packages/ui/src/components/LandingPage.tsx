@@ -26,6 +26,7 @@ import {
 import { FnoIngestPanel } from './FnoIngestPanel';
 import { useAppStore } from '../state/store';
 import { ThemeSwitch } from './ThemeSwitch';
+import { BrandWordmark } from './BrandWordmark';
 import { setLocale, t, useLocale } from '../i18n';
 import { FnoConnectPanel } from './FnoConnectPanel';
 import { peekRedirectPending } from '../fno/redirect-state';
@@ -64,16 +65,11 @@ const useStyles = makeStyles({
   brand: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: '10px',
-    fontFamily: 'var(--er-font-display)',
-    fontSize: '15px',
-    fontWeight: 700,
-    letterSpacing: '-0.01em',
-    color: 'var(--er-text)',
     textDecorationLine: 'none',
     borderRadius: 'var(--er-radius-md)',
+    // The wordmark is gradient-clipped text, so a colour change would not show.
     ':hover': {
-      color: 'var(--er-accent)',
+      opacity: 0.8,
     },
     ':focus-visible': {
       outline: '2px solid var(--er-accent)',
@@ -383,21 +379,6 @@ interface LandingPageProps {
   onFilesLoaded: () => void;
 }
 
-function ErVisualizerMark({ size = 28 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true">
-      <rect x="4" y="4" width="56" height="56" rx="14" fill="var(--er-accent)" />
-      <path d="M23 16h14l8 8v23a3 3 0 0 1-3 3H23a3 3 0 0 1-3-3V19a3 3 0 0 1 3-3Z" fill="var(--er-accent-contrast)" opacity="0.94" />
-      <path d="M37 16v8h8" stroke="var(--er-accent)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M27 38h8.5l6-6" stroke="var(--er-accent)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M27 38l6 6h8.5" stroke="var(--er-accent)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="25" cy="38" r="3.4" fill="var(--er-accent)" />
-      <circle cx="43" cy="32" r="3" fill="var(--er-accent)" />
-      <circle cx="43" cy="44" r="3" fill="var(--er-accent)" />
-    </svg>
-  );
-}
-
 /** Documentation lives on the marketing site; fall back to the repo in dev. */
 function docsHref(): string {
   if (typeof window !== 'undefined' && window.location.pathname.startsWith('/app')) {
@@ -515,8 +496,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
           title={t.landingHomeLinkLabel}
           aria-label={t.landingHomeLinkLabel}
         >
-          <ErVisualizerMark />
-          {t.appName}
+          <BrandWordmark />
         </a>
         <div className={styles.topbarActions}>
           <a className={styles.docsLink} href={docsHref()} target="_blank" rel="noreferrer noopener">
