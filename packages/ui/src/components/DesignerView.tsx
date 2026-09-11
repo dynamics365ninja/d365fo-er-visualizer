@@ -27,7 +27,9 @@ import {
 } from '@fluentui/react-icons';
 import { Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip } from '@fluentui/react-components';
 import '@xyflow/react/dist/style.css';
-import { useAppStore, resolveDeepExpression, selectMappingDefinition } from '../state/store';
+import { useAppStore, resolveDeepExpression, selectMappingDefinition, getScopedMappingDefinitions } from '../state/store';
+import { buildModelUsageTree, countModelUsageIntents, filterModelUsageTree, type ModelUsageNode } from '../utils/format-model-usage';
+import { formatReferencedModelIds, normGuid } from '../utils/model-hierarchy';
 import { ClickablePath } from './ClickablePath';
 import { DrillDownBody, DrillDownTrigger } from './DrillDownPanel';
 import { PropertyInspector } from './PropertyInspector';
@@ -1712,19 +1714,21 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
   }, [rootElement, bindingMap, fmtMap, fmt]);
 
   // Bindings view. Elements whose only bindings are trivial switches
-  // (`Enabled ← false`) stay out; the text filter narrows what is left, and the
-  // intent chips count what the text filter let through.
-  const filteredBindingGroups = useMemo(() => {
+  // (`Enabled ← false`) stay out of both layouts.
+  const meaningfulBindingGroups = useMemo(() => {
     const isTrivialExpr = (expr: string) => /^(false|true|0|1|""|'')$/i.test(expr.trim());
-
-    const rows = bindingPresentation.groups.filter(row => {
+    return bindingPresentation.groups.filter(row => {
       if (row.dataBindings.length > 0) return true;
       return row.bindings.some(binding => !isTrivialExpr(binding.expressionAsString ?? ''));
     });
-    if (!filter) return rows;
+  }, [bindingPresentation.groups]);
 
+  // The format layout narrows elements by the text filter; its intent chips
+  // count what the text filter let through.
+  const filteredBindingGroups = useMemo(() => {
+    if (!filter) return meaningfulBindingGroups;
     const lower = filter.toLowerCase();
-    return rows.filter(row =>
+    return meaningfulBindingGroups.filter(row =>
       row.elementName.toLowerCase().includes(lower) ||
       row.elementType.toLowerCase().includes(lower) ||
       row.bindings.some(binding =>
@@ -1732,10 +1736,91 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
         binding.bindingDisplayLabel.toLowerCase().includes(lower),
       ),
     );
-  }, [bindingPresentation.groups, filter]);
+  }, [meaningfulBindingGroups, filter]);
 
+  const [bindingsLayout, setBindingsLayout] = useTabState<'format' | 'model'>(tabId, 'format.bindingsLayout', 'format');
   const [bindingIntents, setBindingIntents] = useTabState<readonly BindingIntent[]>(tabId, 'format.bindingIntents', DEFAULT_BINDING_INTENTS);
   const bindingIntentCounts = useMemo(() => countBindingIntents(filteredBindingGroups), [filteredBindingGroups]);
+
+  /* Model layout: what the format reads from its data model, and what in the
+     model mapping fills it. The mapping is the definition for the format's own
+     DataContainerDescriptor — embedded in the format first, then any loaded
+     mapping configuration, preferring one built on the same model. */
+  const modelContext = useMemo(() => {
+    const modelDatasources = fmtMap.datasources.filter(ds => ds.type === 'DataModel');
+    const modelNames = new Set((modelDatasources.length > 0 ? modelDatasources.map(ds => ds.name) : ['model']).map(name => name.toLowerCase()));
+    const descriptor = modelDatasources.map(ds => ds.modelInfo?.dataContainerDescriptorName?.trim()).find(Boolean) ?? '';
+    const descriptorKey = descriptor.toLowerCase();
+    const modelIds = new Set(formatReferencedModelIds(fc).map(normGuid));
+
+    const candidates: Array<{ definition: any; configIndex: number }> = [];
+    if (descriptorKey) {
+      for (const i of [configIndex, ...configurations.map((_, index) => index).filter(index => index !== configIndex)]) {
+        const kind = configurations[i]?.content.kind;
+        if (kind !== 'ModelMapping' && i !== configIndex) continue;
+        for (const definition of getScopedMappingDefinitions(configurations, i)) {
+          if ((definition?.dataContainerDescriptor ?? '').trim().toLowerCase() === descriptorKey) {
+            candidates.push({ definition, configIndex: i });
+          }
+        }
+      }
+    }
+    const mapping = candidates.find(candidate => modelIds.has(normGuid(candidate.definition.modelId))) ?? candidates[0] ?? null;
+
+    const models = configurations
+      .filter(cfg => cfg.content.kind === 'DataModel')
+      .map(cfg => (cfg.content as ERDataModelContent).version.model);
+    const model = descriptorKey
+      ? [...models.filter(m => modelIds.has(normGuid(m.id))), ...models.filter(m => !modelIds.has(normGuid(m.id)))]
+          .find(m => m.containers.some(c => c.name.toLowerCase() === descriptorKey || c.id.toLowerCase() === descriptorKey))
+      : undefined;
+
+    return { modelNames, descriptor, mapping, dataModel: model ? { model, descriptor } : null };
+  }, [fmtMap.datasources, fc, configurations, configIndex]);
+
+  const modelUsageTree = useMemo(() => buildModelUsageTree({
+    rootElement,
+    groups: meaningfulBindingGroups,
+    modelNames: modelContext.modelNames,
+    mappingBindings: modelContext.mapping?.definition.bindings ?? null,
+    dataModel: modelContext.dataModel,
+  }), [rootElement, meaningfulBindingGroups, modelContext]);
+
+  const modelLabels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
+  const modelFieldLabel = useCallback((node: ModelUsageNode): string | undefined => {
+    const resolved = resolveLabel(node.field?.label, modelLabels);
+    return resolved?.localized ?? resolved?.enUs;
+  }, [modelLabels, locale]);
+
+  // The text filter matches a model path, its field label, its mapping
+  // expression or an element that reads it; a match keeps its subtree.
+  const textFilteredModelTree = useMemo(() => {
+    if (!filter) return modelUsageTree;
+    const lower = filter.toLowerCase();
+    return filterModelUsageTree(modelUsageTree, {
+      matchNode: node =>
+        node.path.toLowerCase().includes(lower)
+        || Boolean(modelFieldLabel(node)?.toLowerCase().includes(lower))
+        || Boolean(node.mapping?.expressionAsString?.toLowerCase().includes(lower))
+        || node.usages.some(usage => usage.group.elementName.toLowerCase().includes(lower)),
+    });
+  }, [modelUsageTree, filter, modelFieldLabel]);
+
+  const modelIntentCounts = useMemo(() => countModelUsageIntents(textFilteredModelTree), [textFilteredModelTree]);
+  const intentModelTree = useMemo(() => {
+    const active = new Set(bindingIntents);
+    return filterModelUsageTree(textFilteredModelTree, { keepUsage: usage => active.has(usage.intent) });
+  }, [textFilteredModelTree, bindingIntents]);
+
+  const [onlyUnmappedModelPaths, setOnlyUnmappedModelPaths] = useTabState(tabId, 'format.onlyUnmappedModelPaths', false);
+  const visibleModelTree = useMemo(
+    () => (onlyUnmappedModelPaths ? filterModelUsageTree(intentModelTree, { onlyUnmapped: true }) : intentModelTree),
+    [intentModelTree, onlyUnmappedModelPaths],
+  );
+  const modelUsageStats = useMemo(() => ({
+    fields: intentModelTree.reduce((sum, node) => sum + node.fieldCount, 0),
+    unmapped: intentModelTree.reduce((sum, node) => sum + node.unmappedCount, 0),
+  }), [intentModelTree]);
 
   // The element the user navigated to (explorer, search) keeps all of its
   // bindings on screen even when their intent is filtered out — otherwise the
@@ -2053,9 +2138,15 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
         </div>
       </div>
 
-      {/* Intent filter: sits outside the scrolling list so it stays in reach. */}
+      {/* Layout switch and intent filter: outside the scrolling list so they stay in reach. */}
       {view === 'bindings' && (
-        <BindingIntentBar counts={bindingIntentCounts} active={bindingIntents} onChange={setBindingIntents} />
+        <BindingIntentBar
+          layout={bindingsLayout}
+          onLayoutChange={setBindingsLayout}
+          counts={bindingsLayout === 'model' ? modelIntentCounts : bindingIntentCounts}
+          active={bindingIntents}
+          onChange={setBindingIntents}
+        />
       )}
 
       {/* ── Main Content ── */}
@@ -2116,7 +2207,43 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
             </>
           )}
 
-          {view === 'bindings' && (
+          {view === 'bindings' && bindingsLayout === 'model' && (
+            <ModelUsageView
+              tree={visibleModelTree}
+              stats={modelUsageStats}
+              descriptor={modelContext.descriptor}
+              mapping={modelContext.mapping
+                ? {
+                    name: modelContext.mapping.configIndex === configIndex
+                      ? modelContext.mapping.definition.name
+                      : `${configurations[modelContext.mapping.configIndex]?.solutionVersion.solution.name} › ${modelContext.mapping.definition.name}`,
+                    configIndex: modelContext.mapping.configIndex,
+                  }
+                : null}
+              dataModelLoaded={Boolean(modelContext.dataModel)}
+              onlyUnmapped={onlyUnmappedModelPaths}
+              onOnlyUnmappedChange={setOnlyUnmappedModelPaths}
+              isCollapsed={key => isBindingSectionCollapsed(`m:${key}`)}
+              onToggle={key => toggleBindingSection(`m:${key}`)}
+              labelFor={modelFieldLabel}
+              showTechnicalDetails={showTechnicalDetails}
+              onOpenElement={elementId => {
+                setView('structure');
+                handleSelectFormatElement(elementId);
+              }}
+              onOpenMapping={target => {
+                if (target === configIndex) {
+                  setView('embedded-mapping');
+                  return;
+                }
+                const rootNode = treeNodes[target];
+                if (rootNode) navigateToTreeNode(rootNode.id);
+              }}
+              empty={<BindingListEmpty filter={filter} counts={modelIntentCounts} active={bindingIntents} onShowAll={() => setBindingIntents(BINDING_INTENT_ORDER)} />}
+            />
+          )}
+
+          {view === 'bindings' && bindingsLayout === 'format' && (
             bindingSections.length === 0
               ? <BindingListEmpty filter={filter} counts={bindingIntentCounts} active={bindingIntents} onShowAll={() => setBindingIntents(BINDING_INTENT_ORDER)} />
               : bindingSections.map(section => {
@@ -4578,13 +4705,301 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
 /** Above this many bindings the tab opens as an outline of its sections. */
 const BINDING_OUTLINE_THRESHOLD = 40;
 
-function BindingIntentBar({ counts, active, onChange }: {
+/** Elements listed per model field before the rest hide behind "+N more". */
+const MODEL_USAGE_CHIP_LIMIT = 8;
+
+/** The Bindings tab by model: summary line and the tree of model paths the format reads. */
+function ModelUsageView({
+  tree, stats, descriptor, mapping, dataModelLoaded, onlyUnmapped, onOnlyUnmappedChange,
+  isCollapsed, onToggle, labelFor, showTechnicalDetails, onOpenElement, onOpenMapping, empty,
+}: {
+  tree: ModelUsageNode[];
+  stats: { fields: number; unmapped: number };
+  descriptor: string;
+  mapping: { name: string; configIndex: number } | null;
+  dataModelLoaded: boolean;
+  onlyUnmapped: boolean;
+  onOnlyUnmappedChange: (next: boolean) => void;
+  isCollapsed: (key: string) => boolean;
+  onToggle: (key: string) => void;
+  labelFor: (node: ModelUsageNode) => string | undefined;
+  showTechnicalDetails: boolean;
+  onOpenElement: (elementId: string) => void;
+  onOpenMapping: (configIndex: number) => void;
+  empty: React.ReactNode;
+}) {
+  const cs = locale === 'cs';
+  const fieldsWord = cs
+    ? (stats.fields >= 1 && stats.fields <= 4 ? 'pole' : 'polí')
+    : (stats.fields === 1 ? 'field' : 'fields');
+
+  return (
+    <>
+      <div className="fmt-model-summary">
+        <span>
+          {cs ? 'Formát čte ' : 'The format reads '}
+          <strong>{stats.fields}</strong>
+          {cs ? ` ${fieldsWord} modelu` : ` model ${fieldsWord}`}
+        </span>
+        {mapping
+          ? (
+            <span>
+              {cs ? 'Mapování: ' : 'Mapping: '}
+              <button type="button" className="fmt-model-summary-link" onClick={() => onOpenMapping(mapping.configIndex)}>
+                {mapping.name}
+              </button>
+            </span>
+          )
+          : (
+            <span className="fmt-model-summary-warning">
+              {cs
+                ? `Mapování pro ${descriptor || 'datový model'} není načtené`
+                : `No model mapping loaded for ${descriptor || 'the data model'}`}
+            </span>
+          )}
+        {mapping && stats.unmapped > 0 && (
+          <span className="fmt-model-summary-warning">
+            {cs ? `${stats.unmapped} bez vazby v mapování` : `${stats.unmapped} without a mapping binding`}
+          </span>
+        )}
+        {!dataModelLoaded && (
+          <span>{cs ? 'Popisky polí se ukážou po načtení datového modelu' : 'Load the data model to see field labels'}</span>
+        )}
+        {mapping && (
+          <button
+            type="button"
+            className={`fmt-bind-intent-chip fmt-bind-intent--condition fmt-model-unmapped-toggle ${onlyUnmapped ? 'active' : ''}`}
+            aria-pressed={onlyUnmapped}
+            disabled={stats.unmapped === 0 && !onlyUnmapped}
+            title={cs ? 'Jen pole, která formát čte a mapování neplní' : 'Only fields the format reads and the mapping never fills'}
+            onClick={() => onOnlyUnmappedChange(!onlyUnmapped)}
+          >
+            <span className="fmt-bind-intent-dot" aria-hidden="true" />
+            <span>{cs ? 'Jen bez vazby' : 'Unmapped only'}</span>
+            <span className="fmt-bind-intent-count">{stats.unmapped}</span>
+          </button>
+        )}
+      </div>
+
+      {tree.length === 0
+        ? (onlyUnmapped
+            ? <div className="fmt-bind-empty">{cs ? 'Každé pole, které formát čte, má vazbu v mapování.' : 'Every field the format reads has a mapping binding.'}</div>
+            : empty)
+        : (
+          <div className="mm-tree" role="tree">
+            {tree.map(node => (
+              <ModelUsageTreeRows
+                key={node.key}
+                node={node}
+                depth={0}
+                mappingConfigIndex={mapping?.configIndex ?? 0}
+                isCollapsed={isCollapsed}
+                onToggle={onToggle}
+                labelFor={labelFor}
+                showTechnicalDetails={showTechnicalDetails}
+                onOpenElement={onOpenElement}
+              />
+            ))}
+          </div>
+        )}
+    </>
+  );
+}
+
+/**
+ * One model path: its field label, the mapping binding that fills it (with the
+ * drill-down), and the format elements that read it.
+ */
+function ModelUsageTreeRows({ node, depth, mappingConfigIndex, isCollapsed, onToggle, labelFor, showTechnicalDetails, onOpenElement }: {
+  node: ModelUsageNode;
+  depth: number;
+  mappingConfigIndex: number;
+  isCollapsed: (key: string) => boolean;
+  onToggle: (key: string) => void;
+  labelFor: (node: ModelUsageNode) => string | undefined;
+  showTechnicalDetails: boolean;
+  onOpenElement: (elementId: string) => void;
+}) {
+  const [showAllUsages, setShowAllUsages] = useState(false);
+  const cs = locale === 'cs';
+  const hasChildren = node.children.length > 0;
+  const collapsed = hasChildren && isCollapsed(node.key);
+  const used = node.usages.length > 0;
+  const label = labelFor(node);
+  const usages = showAllUsages ? node.usages : node.usages.slice(0, MODEL_USAGE_CHIP_LIMIT);
+
+  const classes = [
+    'mm-tree-row',
+    used ? 'mm-binding-row' : 'mm-tree-branch',
+    hasChildren ? 'mm-tree-expandable' : '',
+    node.unmapped ? 'fmt-model-row--unmapped' : '',
+  ].filter(Boolean).join(' ');
+
+  return (
+    <div className="mm-tree-node" style={{ ['--mm-depth' as string]: depth }}>
+      <div className={classes} role="treeitem" aria-expanded={hasChildren ? !collapsed : undefined}>
+        <div
+          className="mm-tree-head"
+          onClick={hasChildren ? () => onToggle(node.key) : undefined}
+          style={hasChildren ? { cursor: 'pointer' } : undefined}
+        >
+          {hasChildren ? (
+            <button
+              type="button"
+              className={`mm-tree-toggle ${collapsed ? '' : 'open'}`}
+              aria-label={node.name}
+              onClick={event => { event.stopPropagation(); onToggle(node.key); }}
+            >
+              <span className={`tree-chevron ${collapsed ? '' : 'open'}`} />
+            </button>
+          ) : (
+            <span className="mm-tree-toggle mm-tree-toggle--leaf" aria-hidden />
+          )}
+          <span className={used ? 'mm-binding-name' : 'mm-tree-branch-name'} style={{ flex: '0 1 auto' }} title={node.path}>
+            {node.name}
+          </span>
+          {label && <span className="fmt-model-label" title={label}>{label}</span>}
+          <span className="fmt-model-head-spacer" />
+          {hasChildren && node.unmappedCount > 0 && (
+            <span
+              className="fmt-model-unmapped-badge"
+              title={cs ? `Bez vazby v mapování v této větvi: ${node.unmappedCount}` : `Without a mapping binding in this branch: ${node.unmappedCount}`}
+            >
+              {node.unmappedCount}
+            </span>
+          )}
+          <span
+            className="mm-group-count"
+            title={cs ? `Použití ve formátu: ${node.usageCount}` : `Uses in the format: ${node.usageCount}`}
+          >
+            {node.usageCount}
+          </span>
+          {used && node.mapping && (
+            // The row head toggles the branch; the drill-down must not.
+            <span style={{ display: 'contents' }} onClick={event => event.stopPropagation()}>
+              <DrillDownTrigger
+                expression={node.mapping.expressionAsString}
+                configIndex={mappingConfigIndex}
+                elementName={node.path}
+                className="mm-binding-drill"
+              >
+                <SearchRegular fontSize={14} />
+                <span>{cs ? 'Rozpad' : 'Drill-down'}</span>
+              </DrillDownTrigger>
+            </span>
+          )}
+        </div>
+
+        {used && (
+          <div className="fmt-model-body">
+            <span className="fmt-model-line-label">{cs ? 'Mapování' : 'Mapping'}</span>
+            {node.mapping ? (
+              <div className="mm-binding-expr">
+                <span className="mm-binding-arrow" aria-hidden>←</span>
+                <ClickablePath expression={node.mapping.expressionAsString} configIndex={mappingConfigIndex} mode="binding-expr" />
+              </div>
+            ) : node.unmapped ? (
+              <span
+                className="fmt-model-missing"
+                title={cs ? 'Mapování toto pole neplní, formát tu dostane prázdnou hodnotu.' : 'The mapping never fills this field, so the format gets an empty value here.'}
+              >
+                {cs ? 'Bez vazby v mapování' : 'No mapping binding'}
+              </span>
+            ) : !node.mappingLoaded ? (
+              <span className="fmt-model-muted">{cs ? 'Mapování není načtené' : 'Mapping not loaded'}</span>
+            ) : (
+              <span className="fmt-model-muted">{cs ? 'Záznam — vazby mají jeho pole' : 'Record — its fields carry the bindings'}</span>
+            )}
+
+            <span className="fmt-model-line-label">{cs ? 'Formát' : 'Format'}</span>
+            <div className="fmt-model-usages">
+              {usages.map((usage, i) => {
+                const property = usage.binding.bindingCategory === 'data'
+                  ? null
+                  : (showTechnicalDetails ? getFormatBindingDisplayLabel(usage.binding) : getConsultantBindingLabel(usage.binding));
+                return (
+                  <button
+                    key={`${usage.group.componentId}-${i}`}
+                    type="button"
+                    className={`fmt-model-usage fmt-bind-intent--${usage.intent}`}
+                    title={`${getBindingIntentItemLabel(usage.intent)}: ${usage.binding.expressionAsString}`}
+                    onClick={() => onOpenElement(usage.group.componentId)}
+                  >
+                    <span className="fmt-bind-intent-dot" aria-hidden="true" />
+                    <span>{usage.group.elementName}</span>
+                    {property && <span className="fmt-model-usage-prop">{property}</span>}
+                  </button>
+                );
+              })}
+              {node.usages.length > usages.length && (
+                <button type="button" className="fmt-model-summary-link fmt-model-usage-more" onClick={() => setShowAllUsages(true)}>
+                  {cs ? `+${node.usages.length - usages.length} dalších` : `+${node.usages.length - usages.length} more`}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {hasChildren && !collapsed && (
+        <div className="mm-tree-children" role="group">
+          {node.children.map(child => (
+            <ModelUsageTreeRows
+              key={child.key}
+              node={child}
+              depth={depth + 1}
+              mappingConfigIndex={mappingConfigIndex}
+              isCollapsed={isCollapsed}
+              onToggle={onToggle}
+              labelFor={labelFor}
+              showTechnicalDetails={showTechnicalDetails}
+              onOpenElement={onOpenElement}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BindingIntentBar({ layout, onLayoutChange, counts, active, onChange }: {
+  layout: 'format' | 'model';
+  onLayoutChange: (layout: 'format' | 'model') => void;
   counts: Record<BindingIntent, number>;
   active: readonly BindingIntent[];
   onChange: (next: readonly BindingIntent[]) => void;
 }) {
+  const cs = locale === 'cs';
+  const layouts: Array<{ id: 'format' | 'model'; label: string; title: string }> = [
+    {
+      id: 'format',
+      label: cs ? 'Podle formátu' : 'By format',
+      title: cs ? 'Vazby v pořadí, v jakém soubor vzniká' : 'Bindings in the order the file is built',
+    },
+    {
+      id: 'model',
+      label: cs ? 'Podle modelu' : 'By model',
+      title: cs ? 'Pole datového modelu, která formát čte, a co je plní v mapování' : 'Data model fields the format reads, and what fills them in the mapping',
+    },
+  ];
   return (
-    <div className="fmt-bind-intent-bar" role="toolbar" aria-label={locale === 'cs' ? 'Filtrovat vazby podle účelu' : 'Filter bindings by intent'}>
+    <div className="fmt-bind-intent-bar" role="toolbar" aria-label={cs ? 'Uspořádání a filtr vazeb' : 'Bindings layout and filter'}>
+      <div className="fmt-bind-layout" role="radiogroup" aria-label={cs ? 'Uspořádání vazeb' : 'Bindings layout'}>
+        {layouts.map(option => (
+          <button
+            key={option.id}
+            type="button"
+            role="radio"
+            aria-checked={layout === option.id}
+            className={layout === option.id ? 'active' : ''}
+            title={option.title}
+            onClick={() => onLayoutChange(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <span className="fmt-bind-bar-sep" aria-hidden="true" />
       {BINDING_INTENT_ORDER.map(intent => {
         const isActive = active.includes(intent);
         return (

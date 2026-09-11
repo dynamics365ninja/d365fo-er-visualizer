@@ -66,6 +66,21 @@ so neighbouring cells stay together. Chips above the list filter by intent:
 Each chip shows how many bindings it covers, so the ratio of plain values to logic is visible before
 you scroll.
 
+The **By model** switch turns the list around: instead of the file's elements it shows the data
+model fields the format reads, as a tree of model paths. Each field shows:
+
+- **Mapping** — the expression in the model mapping that fills the field, with the drill-down
+  down to the table or class behind it. The mapping used is the definition for the format's
+  `model` data source, taken from the loaded model mapping configuration.
+- **Format** — every element that reads the field, coloured by intent. Click one to select it in
+  the structure.
+
+Fields the format reads but the loaded mapping never binds are marked, and **Unmapped only** narrows
+the tree to them — the usual reason a format prints an empty value. `@.` paths are resolved against
+the record list of the range or element around them, and calculated fields the format hangs under
+a model node (`$Split_Note`) count as a use of that node. Load the data model as well to see field
+labels next to the paths.
+
 ### Excel template formats
 
 Formats built on an Excel template get an extra view: the workbook renders with its original
