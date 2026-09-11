@@ -3,6 +3,7 @@ import { useAppStore } from '../state/store';
 import { ClickablePath } from './ClickablePath';
 import { ERDirection, getFormatElementDataType, getFormatElementExcelRange } from '@er-visualizer/core';
 import { getEnumTypeLabel } from '../utils/enum-display';
+import { getConsultantBindingLabel, getConsultantDataTypeLabel, getNodeDisplayName } from '../utils/consultant-labels';
 import { resolveLabel, buildLabelPool, looksLikeLabelRef } from '../utils/label-resolver';
 import { useCoarsePointer } from '../utils/responsive';
 import { t } from '../i18n';
@@ -24,6 +25,7 @@ function getFormatDirectionLabel(direction: ERDirection | undefined): string {
 
 function LabelValue({ labelRef, configIndex }: { labelRef: string | null | undefined; configIndex: number }) {
   const configurations = useAppStore(s => s.configurations);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const labels = React.useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
   if (!labelRef) return <>–</>;
 
@@ -50,21 +52,28 @@ function LabelValue({ labelRef, configIndex }: { labelRef: string | null | undef
     );
   }
 
+  // The id (`@SYS1234`) is a footnote for the technical view; consultants
+  // still find it in the tooltip.
+  const showEnUs = Boolean(resolved.localized && resolved.enUs);
   return (
     <div className="label-value">
       <span className="label-value__primary" title={resolved.raw}>{primary}</span>
-      <div className="label-value__translations">
-        {resolved.localized && resolved.enUs && (
-          <div className="label-value__translation">
-            <span className="label-value__lang">en-us</span>
-            <span className="label-value__text">{resolved.enUs}</span>
-          </div>
-        )}
-        <div className="label-value__translation label-value__translation--id">
-          <span className="label-value__lang">id</span>
-          <span className="label-value__id" title={resolved.raw}>{resolved.raw}</span>
+      {(showEnUs || showTechnicalDetails) && (
+        <div className="label-value__translations">
+          {showEnUs && (
+            <div className="label-value__translation">
+              <span className="label-value__lang">en-us</span>
+              <span className="label-value__text">{resolved.enUs}</span>
+            </div>
+          )}
+          {showTechnicalDetails && (
+            <div className="label-value__translation label-value__translation--id">
+              <span className="label-value__lang">id</span>
+              <span className="label-value__id" title={resolved.raw}>{resolved.raw}</span>
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -194,6 +203,7 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
   const ownerConfig = configurations[configIndex];
   const ownerName = ownerConfig?.solutionVersion?.solution?.name;
   const whereUsedQuery = whereUsedQueryFor(node);
+  const displayName = getNodeDisplayName(node, showTechnicalDetails);
 
   return (
     <div className="property-inspector">
@@ -205,7 +215,7 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
           </span>
           {showTechnicalDetails && <span className="prop-head__type">{node.type}</span>}
         </div>
-        <h2 className="prop-head__name" title={node.name}>{node.name}</h2>
+        <h2 className="prop-head__name" title={displayName}>{displayName}</h2>
         {ownerName && node.type !== 'file' && (
           <p className="prop-head__owner" title={ownerName}>{ownerName}</p>
         )}
@@ -444,12 +454,15 @@ function TransformationValue({ transformationId, configIndex, showTechnicalDetai
 function FormatElementProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const excelRange = getFormatElementExcelRange(data);
   const labelRef = data.attributes?.['Label'];
-  const items: [string, React.ReactNode, string?][] = [
-    [t.propDataType, getFormatElementDataType(data)],
-    [t.propChildren, `${data.children?.length ?? 0}`],
-  ];
-  if (labelRef) items.unshift([t.propLabel, <LabelValue labelRef={labelRef} configIndex={configIndex} />]);
-  if (excelRange) items.splice(labelRef ? 2 : 1, 0, [t.propExcelRange, excelRange]);
+  const dataType = getFormatElementDataType(data);
+  // Consultants get "Text" / "Číslo" instead of `String` / `Real`, and no row
+  // at all for a structural `Void` element.
+  const dataTypeLabel = showTechnicalDetails ? dataType : getConsultantDataTypeLabel(dataType);
+  const items: [string, React.ReactNode, string?][] = [];
+  if (labelRef) items.push([t.propLabel, <LabelValue labelRef={labelRef} configIndex={configIndex} />]);
+  if (dataTypeLabel) items.push([t.propDataType, dataTypeLabel]);
+  if (excelRange) items.push([t.propExcelRange, excelRange]);
+  items.push([t.propChildren, `${data.children?.length ?? 0}`]);
   if (showTechnicalDetails) {
     items.unshift(['GUID', data.id, 'guid']);
     items.splice(1, 0, [t.propType, data.elementType]);
@@ -472,7 +485,7 @@ function FormatElementProps({ data, configIndex, showTechnicalDetails }: { data:
 function FormatBindingProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
   const items: [string, React.ReactNode, string?][] = [
     [t.expression, <ClickablePath expression={data.expressionAsString} configIndex={configIndex} mode="binding-expr" />],
-    [t.propProperty, data.propertyName ?? t.propValueDefault],
+    [t.propProperty, showTechnicalDetails ? (data.propertyName ?? t.propValueDefault) : getConsultantBindingLabel(data)],
   ];
   if (showTechnicalDetails) {
     items.unshift([t.propComponentGuid, data.componentId, 'guid']);

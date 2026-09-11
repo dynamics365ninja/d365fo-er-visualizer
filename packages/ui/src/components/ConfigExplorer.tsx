@@ -31,7 +31,8 @@ import { locale, t } from '../i18n';
 import { useAppStore, type TreeNode } from '../state/store';
 import { ERDirection } from '@er-visualizer/core';
 import type { ERConfiguration } from '@er-visualizer/core';
-import { buildExplorerModelGroups, getBestVersion, type ExplorerModelGroup } from '../utils/model-hierarchy';
+import { buildExplorerModelGroups, getDisplayVersion, type ExplorerModelGroup } from '../utils/model-hierarchy';
+import { getNodeDisplayName, isXmlNamespaceDeclaration } from '../utils/consultant-labels';
 import { getActiveFormatDescriptors, collectActiveScopeNodeIds } from '../utils/active-format-scope';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 import { buildLabelPool, labelDisplayText, looksLikeLabelRef } from '../utils/label-resolver';
@@ -790,7 +791,7 @@ export function ConfigExplorer() {
                           selectedId={selectedNodeId}
                           selectedPathIds={selectedPathIds}
                           showTechnicalDetails={showTechnicalDetails}
-                          version={getBestVersion(cfg)}
+                          version={getDisplayVersion(cfg, showTechnicalDetails)}
                           onSelect={selectNode}
                           onNavigate={navigateToTreeNode}
                           expandMode={expandMode}
@@ -832,7 +833,7 @@ export function ConfigExplorer() {
                       <div className="explorer-kind-group-empty">{t.noResults}</div>
                     ) : group.nodes.map(node => {
                       const cfg = node.configIndex != null ? configurations[node.configIndex] : undefined;
-                      const version = getBestVersion(cfg);
+                      const version = getDisplayVersion(cfg, showTechnicalDetails);
                       return (
                         <TreeNodeRow
                           key={node.id}
@@ -894,7 +895,11 @@ interface TreeNodeRowProps {
 
 function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDetails, version, onSelect, onNavigate, expandMode, expandVersion, onDoubleClick, onCloseConfiguration, inKindGroup }: TreeNodeRowProps) {
   const [expanded, setExpanded] = useState(depth === 0);
-  const hasChildren = node.children && node.children.length > 0;
+  const visibleChildren = showTechnicalDetails
+    ? node.children
+    : node.children?.filter(child => !(child.type === 'formatElement' && isXmlNamespaceDeclaration(child.data)));
+  const hasChildren = visibleChildren && visibleChildren.length > 0;
+  const displayName = getNodeDisplayName(node, showTechnicalDetails);
 
   React.useEffect(() => {
     if (expandMode === 'all') setExpanded(true);
@@ -982,8 +987,8 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
           <span className="tree-chevron-placeholder" aria-hidden="true" />
         )}
         <span className="icon">{getExplorerNodeIcon(node)}</span>
-        <span className="tree-node-label" title={resolvedLabel ? `${node.name} — ${resolvedLabel}` : node.name}>
-          <span className={`tree-node-name${isActiveMappingDefinition ? ' tree-node-name--active' : ''}`}>{node.name}</span>
+        <span className="tree-node-label" title={resolvedLabel ? `${displayName} — ${resolvedLabel}` : displayName}>
+          <span className={`tree-node-name${isActiveMappingDefinition ? ' tree-node-name--active' : ''}`}>{displayName}</span>
           {resolvedLabel && <span className="tree-node-sublabel">{resolvedLabel}</span>}
         </span>
         {isActiveMappingDefinition && (
@@ -1032,7 +1037,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
           </span>
         )}
       </div>
-      {expanded && hasChildren && node.children!.map(child => (
+      {expanded && hasChildren && visibleChildren!.map(child => (
         <TreeNodeRow
           key={child.id}
           node={child}
@@ -1145,7 +1150,7 @@ function ModelGroupSection({
       selectedId: selectedNodeId,
       selectedPathIds,
       showTechnicalDetails,
-      version: getBestVersion(cfg),
+      version: getDisplayVersion(cfg, showTechnicalDetails),
       onSelect,
       onNavigate,
       expandMode,

@@ -30,6 +30,16 @@ export function getBestVersion(cfg: ERConfiguration | undefined): string | undef
 }
 
 /**
+ * The version a row badge shows. The consultant view shows the public version
+ * only — the internal revision `getBestVersion` falls back to means nothing
+ * outside the configuration's own history.
+ */
+export function getDisplayVersion(cfg: ERConfiguration | undefined, showTechnicalDetails: boolean): string | undefined {
+  if (showTechnicalDetails) return getBestVersion(cfg);
+  return cfg?.solutionVersion.publicVersionNumber || undefined;
+}
+
+/**
  * Every DataModel GUID a format points at: the embedded ModelMappingVersion
  * (export bundles) and the `model` datasource's `ModelGuid` (the common case
  * for formats exported on their own).
