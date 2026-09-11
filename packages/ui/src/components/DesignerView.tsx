@@ -34,7 +34,7 @@ import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 import { FilterField } from './FilterField';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
-import { treeArrowAction } from '../utils/tree-keyboard';
+import { adjacentRow, treeArrowAction } from '../utils/tree-keyboard';
 import { getBindingCategoryLabel, getConsultantBindingLabel, getConsultantFormatTypeLabel, isXmlNamespaceDeclaration } from '../utils/consultant-labels';
 import { buildFormatBindingPresentation, groupFormatBindingsByCategory } from '../utils/format-binding-display';
 import { buildFormatTreeIndex, type FormatTreeIndex } from '../utils/format-tree-filter';
@@ -4133,13 +4133,13 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
   // Scroll into view when this element becomes selected (e.g. navigate from template preview)
   useEffect(() => {
     if (isSelected && rowRef.current) {
-      rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       // Arrow keys move the selection, so focus follows it — but only when
       // focus is already in this tree, never pulled in from the explorer or
-      // the search panel.
-      if (document.activeElement?.closest('.fmt-structure-list')) {
-        rowRef.current.focus({ preventScroll: true });
-      }
+      // the search panel. A keyboard step only nudges the row into view;
+      // re-centring on every ↓ made the list lurch.
+      const inTree = Boolean(document.activeElement?.closest('.fmt-structure-list'));
+      rowRef.current.scrollIntoView(inTree ? { block: 'nearest' } : { behavior: 'smooth', block: 'center' });
+      if (inTree) rowRef.current.focus({ preventScroll: true });
     }
   }, [isSelected]);
 
@@ -4187,6 +4187,12 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
       else setExpanded(open);
     } else if (action === 'parent') {
       onSelect(treeIndex.parentOf.get(element.id)!);
+    } else if (action === 'previous' || action === 'next') {
+      // Rendered rows in document order are exactly the visible ones.
+      const row = rowRef.current;
+      const rows = row ? [...(row.closest('.fmt-structure-list')?.querySelectorAll<HTMLElement>('.fmt-element-row') ?? [])] : [];
+      const targetId = row ? adjacentRow(rows, row, action)?.dataset.elementId : undefined;
+      if (targetId) onSelect(targetId);
     } else {
       // The first child that actually rendered: a filter, the binding filter
       // or the consultant view can hide the first one in the data.

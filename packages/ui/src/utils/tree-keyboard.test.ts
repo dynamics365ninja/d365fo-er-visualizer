@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { treeArrowAction, type TreeArrowRow } from './tree-keyboard';
+import { adjacentRow, treeArrowAction, type TreeArrowRow } from './tree-keyboard';
 
 const row = (partial: Partial<TreeArrowRow>): TreeArrowRow => ({
   hasChildren: true,
@@ -36,8 +36,31 @@ describe('treeArrowAction', () => {
     expect(treeArrowAction('ArrowLeft', row({ hasParent: false }))).toBeNull();
   });
 
+  it('↑ / ↓ move between rows whatever the row is', () => {
+    expect(treeArrowAction('ArrowUp', row({}))).toBe('previous');
+    expect(treeArrowAction('ArrowDown', row({ hasChildren: false, hasParent: false }))).toBe('next');
+  });
+
   it('ignores every other key', () => {
-    expect(treeArrowAction('ArrowDown', row({}))).toBeNull();
     expect(treeArrowAction('Enter', row({}))).toBeNull();
+    expect(treeArrowAction('Home', row({}))).toBeNull();
+  });
+});
+
+describe('adjacentRow', () => {
+  const rows = ['root', 'a', 'b'];
+
+  it('returns the neighbour in render order', () => {
+    expect(adjacentRow(rows, 'a', 'previous')).toBe('root');
+    expect(adjacentRow(rows, 'a', 'next')).toBe('b');
+  });
+
+  it('stays put at either end', () => {
+    expect(adjacentRow(rows, 'root', 'previous')).toBeUndefined();
+    expect(adjacentRow(rows, 'b', 'next')).toBeUndefined();
+  });
+
+  it('returns nothing for a row that is not in the list', () => {
+    expect(adjacentRow(rows, 'gone', 'next')).toBeUndefined();
   });
 });
