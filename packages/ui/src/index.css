@@ -2976,28 +2976,64 @@ body {
 /* Per-row drill-down: the format designer had this affordance, the mapping
    designer did not, so the workbench was two hops away from every binding.
    It sits inline in the row header and stays visible — hiding it until hover
-   made users believe drill-down was missing. */
-.mm-binding-drill {
-  margin-left: auto;
+   made users believe drill-down was missing — but as a quiet icon button, so
+   a column of rows no longer repeats the same labelled button. Compound
+   selectors: the generic `.dd-trigger-expr` rules come later in this file and
+   would otherwise reset the padding, margins and hover underline. */
+.dd-trigger-expr.mm-binding-drill {
+  margin: -3px 0 -3px auto;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border: 1px solid var(--er-border);
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
   border-radius: var(--er-radius-md);
-  background: var(--er-surface);
+  background: transparent;
   color: var(--er-text-muted);
-  font-family: inherit;
-  font-size: var(--er-text-xs);
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 
-.mm-binding-drill:hover {
-  background: var(--er-accent-soft);
-  border-color: var(--er-accent-border);
+.dd-trigger-expr.mm-binding-drill svg {
+  display: block;
+}
+
+/* The row under the pointer lifts its button out of the background. */
+.mm-tree-row:hover .dd-trigger-expr.mm-binding-drill,
+.mm-validation-expr:hover .dd-trigger-expr.mm-binding-drill {
+  color: var(--er-text);
+  border-color: var(--er-border);
+  background: var(--er-surface);
+}
+
+.dd-trigger-expr.mm-binding-drill:hover,
+.mm-tree-row:hover .dd-trigger-expr.mm-binding-drill:hover,
+.mm-validation-expr:hover .dd-trigger-expr.mm-binding-drill:hover {
   color: var(--er-accent);
+  border-color: var(--er-accent-border);
+  background: var(--er-accent-soft);
+  box-shadow: none;
+}
+
+.dd-trigger-expr.mm-binding-drill:active {
+  transform: scale(0.94);
+}
+
+.dd-trigger-expr.mm-binding-drill:focus-visible {
+  color: var(--er-accent);
+  background: var(--er-accent-soft);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+@media (pointer: coarse) {
+  .dd-trigger-expr.mm-binding-drill {
+    width: 36px;
+    height: 36px;
+    margin-block: -8px;
+  }
 }
 .mm-binding-arrow {
   flex-shrink: 0;
@@ -8005,6 +8041,163 @@ body {
 /* How many hits the related-only filter is holding back. */
 .search-reach-toggle__badge {
   font-variant-numeric: tabular-nums;
+}
+
+/* ─── Expression hover card ───
+   A raised surface like menus and popovers. It hangs off the hovered name, so
+   it never needs pointer events of its own. */
+div.path-tooltip-card {
+  --tip-accent: var(--er-accent);
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  min-width: 240px;
+  max-width: min(440px, calc(100vw - 16px));
+  overflow: hidden;
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-raised);
+  box-shadow: var(--er-shadow-3);
+  color: var(--er-text);
+  font-family: var(--er-font-sans);
+  font-size: var(--er-text-sm);
+  line-height: 1.45;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity var(--er-duration-fast) var(--er-ease), transform var(--er-duration-fast) var(--er-ease);
+}
+
+div.path-tooltip-card.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+div.path-tooltip-card--model-field {
+  --tip-accent: var(--er-model);
+}
+
+.path-tooltip-card__head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px 9px;
+}
+
+.path-tooltip-card__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.path-tooltip-card__dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tip-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tip-accent) 22%, transparent);
+}
+
+.path-tooltip-card__title {
+  color: var(--er-text);
+  font-family: var(--er-font-mono);
+  font-size: var(--er-text-md);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.path-tooltip-card__path {
+  color: var(--er-text-subtle);
+  font-family: var(--er-font-mono);
+  font-size: var(--er-text-xs);
+  overflow-wrap: anywhere;
+}
+
+.path-tooltip-card__path .is-active {
+  color: var(--tip-accent);
+  font-weight: 600;
+}
+
+.path-tooltip-card__path .is-after {
+  opacity: 0.55;
+}
+
+.path-tooltip-card__sep {
+  opacity: 0.6;
+}
+
+.path-tooltip-card__rows {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 5px 12px;
+  margin: 0;
+  padding: 9px 12px 10px;
+  border-top: 1px solid var(--er-border);
+}
+
+.path-tooltip-card__row {
+  display: contents;
+}
+
+.path-tooltip-card__row dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  white-space: nowrap;
+}
+
+.path-tooltip-card__row dt svg {
+  flex-shrink: 0;
+  color: var(--er-text-subtle);
+}
+
+.path-tooltip-card__row dd {
+  display: -webkit-box;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--er-text);
+  overflow-wrap: anywhere;
+}
+
+.path-tooltip-card__row dd.is-mono {
+  font-family: var(--er-font-mono);
+  font-size: var(--er-text-xs);
+}
+
+.path-tooltip-card__row.is-muted dd {
+  color: var(--er-text-muted);
+}
+
+.path-tooltip-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px 7px;
+  border-top: 1px solid var(--er-border);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+}
+
+.path-tooltip-card__foot svg {
+  color: var(--tip-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  div.path-tooltip-card {
+    transform: none;
+    transition: none;
+  }
 }
 
 /* ─── Elevation ───

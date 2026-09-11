@@ -1392,11 +1392,16 @@ const DRILL_DIALOG_SIZE_KEY = 'er-visualizer.drilldown.dialogSize';
  *     model.Invoice.Amount
  *   </DrillDownTrigger>
  */
-export function DrillDownTrigger({ expression, configIndex, elementName, className, children }: {
+export function DrillDownTrigger({ expression, configIndex, elementName, className, label, children }: {
   expression: string;
   configIndex: number;
   elementName?: string;
   className?: string;
+  /**
+   * Accessible name and tooltip lead for a trigger whose content says nothing
+   * on its own — an icon button. Without it the tooltip describes the click.
+   */
+  label?: string;
   children: React.ReactNode;
 }) {
   const trimmedExpr = expression?.trim() ?? '';
@@ -1485,7 +1490,10 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
             else setIsDialogOpen(true);
           }
         }}
-        title={coarse ? t.drillClickToToggle : `${t.drillClickToToggle} · ${t.drillOpenAsTab}`}
+        aria-label={label}
+        title={label
+          ? (coarse ? label : `${label} · ${locale === 'cs' ? 'dvojklik otevře záložku' : 'double-click opens a tab'}`)
+          : (coarse ? t.drillClickToToggle : `${t.drillClickToToggle} · ${t.drillOpenAsTab}`)}
       >
         {children}
       </span>
