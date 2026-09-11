@@ -34,6 +34,7 @@ import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 import { FilterField } from './FilterField';
 import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
+import { adjacentRow, treeArrowAction } from '../utils/tree-keyboard';
 import { getBindingCategoryLabel, getConsultantBindingLabel, getConsultantFormatTypeLabel, isXmlNamespaceDeclaration } from '../utils/consultant-labels';
 import { buildFormatBindingPresentation, groupFormatBindingsByCategory } from '../utils/format-binding-display';
 import { buildFormatTreeIndex, type FormatTreeIndex } from '../utils/format-tree-filter';
@@ -1991,7 +1992,7 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
         {/* Left: tree / list */}
         <div className="designer-list-pane">
           {view === 'structure' && (
-            <div className="fmt-structure-list">
+            <div className="fmt-structure-list" role="tree" aria-label={t.structure}>
               <FormatElementTree
                 element={rootElement}
                 depth={0}
@@ -4132,9 +4133,22 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
   // Scroll into view when this element becomes selected (e.g. navigate from template preview)
   useEffect(() => {
     if (isSelected && rowRef.current) {
-      rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Arrow keys move the selection, so focus follows it — but only when
+      // focus is already in this tree, never pulled in from the explorer or
+      // the search panel. A keyboard step only nudges the row into view;
+      // re-centring on every ↓ made the list lurch.
+      const inTree = Boolean(document.activeElement?.closest('.fmt-structure-list'));
+      rowRef.current.scrollIntoView(inTree ? { block: 'nearest' } : { behavior: 'smooth', block: 'center' });
+      if (inTree) rowRef.current.focus({ preventScroll: true });
     }
   }, [isSelected]);
+
+  // A row opened because the selection sat below it stays open once the
+  // selection moves up, as in the explorer — otherwise ← to the parent would
+  // fold the parent shut in the same keystroke.
+  useEffect(() => {
+    if (selectedIsDescendant) setExpanded(true);
+  }, [selectedIsDescendant]);
 
   if (filter && !showAll && !matchesFilter && !descendantMatches) return null;
 
@@ -4154,14 +4168,57 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
     }
   }
 
+  const handleRowKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    // Modified arrows are taken: Alt+← / Alt+→ walk the navigation history.
+    if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const action = treeArrowAction(event.key, {
+      hasChildren: Boolean(hasChildren),
+      expanded: isExpanded,
+      // While filtering, a row that leads to a match stays open — its chevron
+      // can't close it either.
+      collapsible: filter ? manuallyExpanded && !hasMatchingDescendant : true,
+      hasParent: treeIndex.parentOf.has(element.id),
+    });
+    if (!action) return;
+    event.preventDefault();
+    if (action === 'expand' || action === 'collapse') {
+      const open = action === 'expand';
+      if (filter) setManuallyExpanded(open);
+      else setExpanded(open);
+    } else if (action === 'parent') {
+      onSelect(treeIndex.parentOf.get(element.id)!);
+    } else if (action === 'previous' || action === 'next') {
+      // Rendered rows in document order are exactly the visible ones.
+      const row = rowRef.current;
+      const rows = row ? [...(row.closest('.fmt-structure-list')?.querySelectorAll<HTMLElement>('.fmt-element-row') ?? [])] : [];
+      const targetId = row ? adjacentRow(rows, row, action)?.dataset.elementId : undefined;
+      if (targetId) onSelect(targetId);
+    } else {
+      // The first child that actually rendered: a filter, the binding filter
+      // or the consultant view can hide the first one in the data.
+      const firstChild = rowRef.current?.parentElement?.querySelector<HTMLElement>(':scope > div > .fmt-element-row');
+      const childId = firstChild?.dataset.elementId;
+      if (childId) onSelect(childId);
+    }
+  };
+
   return (
     <div>
       {/* Element Row */}
       <div
         ref={rowRef}
+        role="treeitem"
+        aria-level={depth + 1}
+        aria-selected={isSelected}
+        aria-expanded={hasChildren ? isExpanded : undefined}
+        // One tab stop for the whole tree: the selected row, or the root
+        // before anything is selected.
+        tabIndex={isSelected || (!selectedId && depth === 0) ? 0 : -1}
+        data-element-id={element.id}
         className={`fmt-element-row ${isSelected ? 'selected' : ''} ${!mainBinding ? 'unbound' : ''} ${filter && matchesFilter ? 'search-match' : ''} ${navFlash ? 'nav-flash' : ''}`}
         style={{ paddingLeft: depth * 20 + 4 }}
         onClick={() => onSelect(element.id)}
+        onKeyDown={handleRowKeyDown}
       >
         {/* Expand/Collapse Toggle */}
         <span
