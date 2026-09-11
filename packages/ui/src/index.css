@@ -382,16 +382,6 @@ body {
   color: var(--er-text-muted);
 }
 
-.explorer-panel-count {
-  padding: 1px 7px;
-  border-radius: var(--er-radius-pill);
-  border: 1px solid var(--er-border);
-  background: var(--er-surface-2);
-  color: var(--er-text-muted);
-  font-size: var(--er-text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
 .explorer-panel-spacer {
   flex: 1;
 }
@@ -449,18 +439,6 @@ body {
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
-}
-
-.explorer-kind-group-count {
-  padding: 0 6px;
-  height: 16px;
-  line-height: 15px;
-  border-radius: var(--er-radius-pill);
-  background: var(--er-surface-2);
-  border: 1px solid var(--er-border);
-  color: var(--er-text-muted);
-  font-size: var(--er-text-2xs);
-  font-variant-numeric: tabular-nums;
 }
 
 .explorer-kind-group-body {
@@ -4007,20 +3985,6 @@ body {
 .explorer-kind-chip--mapping.active { border-color: color-mix(in srgb, var(--surface-success-border) 80%, transparent); }
 .explorer-kind-chip--format.active { border-color: color-mix(in srgb, var(--surface-warning-border) 80%, transparent); }
 
-.explorer-kind-chip-count {
-  min-width: 18px;
-  padding: 0 5px;
-  height: 16px;
-  line-height: 16px;
-  text-align: center;
-  border-radius: var(--er-radius-pill);
-  background: color-mix(in srgb, var(--bg-tertiary) 86%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
-  font-size: var(--er-text-xs);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
 .explorer-result-info {
   padding: 0 2px;
   font-size: var(--er-text-xs);
@@ -5752,10 +5716,6 @@ body {
   color: var(--text-primary);
 }
 
-.explorer-kind-chip-count {
-  color: var(--text-primary);
-}
-
 .explorer-kind-chip--model.active { background: var(--er-model-soft); }
 .explorer-kind-chip--mapping.active { background: var(--er-mapping-soft); }
 .explorer-kind-chip--format.active { background: var(--er-format-soft); }
@@ -5908,17 +5868,6 @@ body {
   color: var(--er-accent);
 }
 
-.explorer-panel-count {
-  padding: 0 6px;
-  min-width: 18px;
-  height: 16px;
-  line-height: 16px;
-  text-align: center;
-  font-size: var(--er-text-xs);
-  font-weight: 600;
-  color: var(--er-text);
-}
-
 .explorer-panel-header .fui-Button {
   min-width: 24px;
   height: 24px;
@@ -6018,19 +5967,6 @@ body {
   opacity: 0.4;
 }
 
-.explorer-kind-chip-count {
-  margin-left: auto;
-  min-width: 16px;
-  height: 15px;
-  line-height: 15px;
-  padding: 0 4px;
-  border-radius: var(--er-radius-pill);
-  border: 0;
-  background: color-mix(in srgb, var(--er-text) 8%, transparent);
-  color: var(--er-text);
-  font-size: var(--er-text-xs);
-}
-
 .explorer-result-info {
   font-size: var(--px-caption);
   color: var(--er-text-muted);
@@ -6113,21 +6049,6 @@ body {
   font-size: var(--er-text-md);
 }
 
-.explorer-kind-group-count {
-  margin-left: auto;
-  min-width: 18px;
-  height: 16px;
-  line-height: 16px;
-  padding: 0 6px;
-  text-align: center;
-  border-radius: var(--er-radius-pill);
-  background: color-mix(in srgb, var(--er-text) 8%, transparent);
-  color: var(--er-text);
-  font-size: var(--er-text-xs);
-  font-weight: 600;
-  letter-spacing: 0;
-  font-variant-numeric: tabular-nums;
-}
 
 .explorer-kind-group-body {
   padding: 2px 0 4px;
@@ -7139,7 +7060,6 @@ body {
 @container (max-width: 230px) {
   .explorer-kind-chip-label { display: none; }
   .explorer-kind-chip { justify-content: center; padding: 0 4px; }
-  .explorer-kind-chip-count { margin-left: 0; }
 }
 
 .explorer-tree-shell {
@@ -7950,5 +7870,28 @@ div.path-tooltip-card {
     max-width: calc(100vw - 24px) !important;
     height: calc(100dvh - 40px) !important;
     max-height: calc(100dvh - 40px) !important;
+  }
+}
+
+/* ── Activity bar: one box for every control ─────────────────────
+   The theme switch is shared with the site, where its border sets it apart
+   in a header. In the rail it sits among borderless buttons, so it drops the
+   border and follows their hover and touch size instead of standing out as
+   the one framed, smaller button. */
+.activity-bar .er-theme-switch {
+  border-color: transparent;
+}
+
+.activity-bar .er-theme-switch:hover {
+  border-color: transparent;
+  background: var(--er-surface-2);
+  color: var(--er-text);
+}
+
+@media (pointer: coarse) {
+  .app-shell .activity-bar .er-theme-switch {
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
   }
 }

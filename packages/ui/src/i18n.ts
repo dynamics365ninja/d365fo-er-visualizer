@@ -300,9 +300,6 @@ export interface Translations {
   formatDirectionUnknown: string;
   importLinkedMappingsLabel: string;
   importNoLinkedMappings: string;
-  // Status bar
-  statusConfigs: (n: number) => string;
-  statusConfigsWord: string;
   // Landing page – hero
   landingBadge: string;
   landingTitle: string;
@@ -845,10 +842,6 @@ const cs: Translations = {
   formatDirectionUnknown: 'Neznámý směr',
   importLinkedMappingsLabel: 'Mapování na model',
   importNoLinkedMappings: 'Žádné mapování na model nenačteno',
-
-  // Status bar
-  statusConfigs: (n: number) => `${n} konfigurace`,
-  statusConfigsWord: 'konfigurace',
 
   // Landing page
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',
@@ -1395,9 +1388,6 @@ const en: Translations = {
   formatDirectionUnknown: 'Unknown direction',
   importLinkedMappingsLabel: 'Model mappings',
   importNoLinkedMappings: 'No model mappings loaded',
-
-  statusConfigs: (n: number) => `${n} configuration${n === 1 ? '' : 's'}`,
-  statusConfigsWord: 'configurations',
 
   // Landing page
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',

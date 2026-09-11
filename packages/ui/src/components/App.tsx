@@ -802,8 +802,9 @@ function RightPanel({
 // ────────────────────────── StatusBar ──────────────────────────
 
 /**
- * Slim footer: what is loaded, what the active tab derives from, validator
- * state and the current view mode. Navigation (Home) and per-configuration
+ * Slim footer: download progress, what the active tab derives from, validator
+ * state and the current view mode. The number of loaded configurations is not
+ * repeated here — the Explorer already lists them. Navigation (Home) and per-configuration
  * actions live in the ActivityBar and the Explorer — the status bar used to
  * repeat both.
  */
@@ -840,13 +841,11 @@ function StatusBar({ warningsOpen, setWarningsOpen }: {
 
   return (
     <div className={mergeClasses(styles.root, 'app-statusbar')} role="status">
-      {fnoIngestStatus ? (
+      {fnoIngestStatus && (
         <span className={styles.chip} title={fnoIngestStatus}>
           <ArrowSyncRegular fontSize={12} style={{ animation: 'spin 1.2s linear infinite' }} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 320 }}>{fnoIngestStatus}</span>
         </span>
-      ) : (
-        <span className={styles.info}>{t.statusConfigs(configs.length)}</span>
       )}
 
       {activeRelationship && (
