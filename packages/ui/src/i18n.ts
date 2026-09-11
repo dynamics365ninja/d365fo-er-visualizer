@@ -468,6 +468,9 @@ export interface Translations {
   errorTitle: string;
   errorDescription: string;
   errorRetry: string;
+  errorChunkTitle: string;
+  errorChunkDescription: string;
+  errorReload: string;
 
   // Excel preview
   excelWorkbook: string;
@@ -1042,6 +1045,9 @@ const cs: Translations = {
   errorTitle: 'Něco se pokazilo.',
   errorDescription: 'Tato část aplikace narazila na neočekávanou chybu. Zbytek aplikace by měl fungovat dál.',
   errorRetry: 'Zkusit znovu',
+  errorChunkTitle: 'Část aplikace se nepodařilo stáhnout.',
+  errorChunkDescription: 'Server je nejspíš nedostupný, nebo byla aplikace mezitím aktualizována. Obnovte stránku.',
+  errorReload: 'Obnovit stránku',
 
   // Excel preview
   excelWorkbook: 'Excel sešit',
@@ -1635,6 +1641,9 @@ const en: Translations = {
   errorTitle: 'Something went wrong.',
   errorDescription: 'This part of the application encountered an unexpected error. The rest of the application should continue to work.',
   errorRetry: 'Try again',
+  errorChunkTitle: 'Part of the application could not be downloaded.',
+  errorChunkDescription: 'The server is probably unavailable, or the application was updated in the meantime. Reload the page.',
+  errorReload: 'Reload page',
 
   // Excel preview
   excelWorkbook: 'Excel Workbook',
