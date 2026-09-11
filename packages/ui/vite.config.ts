@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 
+const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   // Relative by default so the Electron shell can load the build over file://.
@@ -28,7 +30,10 @@ export default defineConfig({
     },
     watch: {
       // Watch sibling workspace packages so HMR fires when er-services.ts etc. change.
-      ignored: (p: string) => p.includes('node_modules') && !p.includes('@er-visualizer'),
+      // Test files are never part of the app, yet editing one reached the dev
+      // server and reloaded the page, dropping every loaded configuration.
+      // Vitest reads vitest.config.ts, so its own watch mode still sees them.
+      ignored: (p: string) => TEST_FILE.test(p) || (p.includes('node_modules') && !p.includes('@er-visualizer')),
     },
   },
   build: {
