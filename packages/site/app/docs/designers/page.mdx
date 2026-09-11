@@ -50,8 +50,21 @@ format designer renders it as a hierarchy rather than a flat graph.
 
 Each element carries a **binding status badge**, which is the fastest way to spot the two problems
 people usually go looking for: elements with no binding at all, and elements bound to something
-that cannot be resolved with the configurations currently loaded. Bindings are grouped by category
-so a large format stays readable.
+that cannot be resolved with the configurations currently loaded.
+
+The **Bindings** view lists the same bindings by what they are for, in the order the file is built.
+Each section is the part of the structure the bindings sit in — a sheet, a range, an XML element —
+so neighbouring cells stay together. Chips above the list filter by intent:
+
+- **Direct values** — a model or data source path taken over unchanged.
+- **Calculations** — expressions that compute or transform the value.
+- **Conditions** — when an element is generated (`Enabled`, `Visible`, …).
+- **Texts** — fixed strings and label references, typically column captions. Hidden at first,
+  because a format often carries as many captions as values.
+- **Properties** — element settings such as the file name, language or encoding.
+
+Each chip shows how many bindings it covers, so the ratio of plain values to logic is visible before
+you scroll.
 
 ### Excel template formats
 
