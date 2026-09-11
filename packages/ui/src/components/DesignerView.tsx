@@ -37,7 +37,18 @@ import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { adjacentRow, isTreeArrowKey, treeArrowAction } from '../utils/tree-keyboard';
 import { getBindingCategoryLabel, getConsultantBindingLabel, getConsultantFormatTypeLabel, isXmlNamespaceDeclaration } from '../utils/consultant-labels';
-import { buildFormatBindingPresentation, getFormatBindingCategoryLabel, getFormatBindingDisplayLabel, groupFormatBindingsByCategory } from '../utils/format-binding-display';
+import { buildFormatBindingPresentation, getFormatBindingCategoryLabel, getFormatBindingDisplayLabel, groupFormatBindingsByCategory, type NormalizedFormatBinding, type NormalizedFormatBindingGroup } from '../utils/format-binding-display';
+import {
+  BINDING_INTENT_ORDER,
+  DEFAULT_BINDING_INTENTS,
+  buildFormatBindingSections,
+  classifyBindingIntent,
+  countBindingIntents,
+  getBindingIntentHint,
+  getBindingIntentItemLabel,
+  getBindingIntentLabel,
+  type BindingIntent,
+} from '../utils/format-binding-sections';
 import { buildFormatTreeIndex, type FormatTreeIndex } from '../utils/format-tree-filter';
 import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../utils/filter-suggestions';
 import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/theme-colors';
@@ -565,16 +576,6 @@ function SlidingTabs<TId extends string>({ tabs, activeId, onChange }: {
 /** Enum name, with its source kind ("Ax Enum", …) only in the technical view. */
 function enumLabelFor(enumInfo: any, showTechnicalDetails: boolean): string {
   return showTechnicalDetails ? formatEnumDisplayName(enumInfo.enumName, enumInfo) : enumInfo.enumName;
-}
-
-/** "4 skupiny", "5 skupin", "1 group" — the word after the Bindings tab count. */
-function bindingGroupCountWord(count: number, showTechnicalDetails: boolean): string {
-  if (locale === 'cs') {
-    const [one, few, many] = showTechnicalDetails ? ['typ', 'typy', 'typů'] : ['skupina', 'skupiny', 'skupin'];
-    return count === 1 ? one : count >= 2 && count <= 4 ? few : many;
-  }
-  const word = showTechnicalDetails ? 'type' : 'group';
-  return count === 1 ? word : `${word}s`;
 }
 
 /** Element type as it should read in the current mode. */
@@ -1710,52 +1711,50 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
     return { totalElements, boundElements, unboundElements, structuralElements, typeCount, bindings: fmtMap.bindings.length, datasources: fmtMap.datasources.length, enums: fmt.enumDefinitions.length, transformations: fmt.transformations.length };
   }, [rootElement, bindingMap, fmtMap, fmt]);
 
-  // Grouped bindings view: entries grouped by format element type first, then by concrete element
-  const groupedBindings = useMemo(() => {
+  // Bindings view. Elements whose only bindings are trivial switches
+  // (`Enabled ← false`) stay out; the text filter narrows what is left, and the
+  // intent chips count what the text filter let through.
+  const filteredBindingGroups = useMemo(() => {
     const isTrivialExpr = (expr: string) => /^(false|true|0|1|""|'')$/i.test(expr.trim());
 
-    let rows = bindingPresentation.groups.filter(row => {
+    const rows = bindingPresentation.groups.filter(row => {
       if (row.dataBindings.length > 0) return true;
       return row.bindings.some(binding => !isTrivialExpr(binding.expressionAsString ?? ''));
     });
+    if (!filter) return rows;
 
-    if (filter) {
-      const lower = filter.toLowerCase();
-      rows = rows.filter(row =>
-        row.elementName.toLowerCase().includes(lower) ||
-        row.elementType.toLowerCase().includes(lower) ||
-        row.bindings.some(binding =>
-          binding.expressionAsString?.toLowerCase().includes(lower) ||
-          binding.bindingDisplayLabel.toLowerCase().includes(lower),
-        ),
-      );
-    }
-
-    rows.sort((a, b) => {
-      if (a.dataBindings.length > 0 && b.dataBindings.length === 0) return -1;
-      if (a.dataBindings.length === 0 && b.dataBindings.length > 0) return 1;
-      return a.elementName.localeCompare(b.elementName);
-    });
-
-    return rows;
+    const lower = filter.toLowerCase();
+    return rows.filter(row =>
+      row.elementName.toLowerCase().includes(lower) ||
+      row.elementType.toLowerCase().includes(lower) ||
+      row.bindings.some(binding =>
+        binding.expressionAsString?.toLowerCase().includes(lower) ||
+        binding.bindingDisplayLabel.toLowerCase().includes(lower),
+      ),
+    );
   }, [bindingPresentation.groups, filter]);
 
-  const groupedBindingsByType = useMemo(() => {
-    const groups = new Map<string, typeof groupedBindings>();
+  const [bindingIntents, setBindingIntents] = useTabState<readonly BindingIntent[]>(tabId, 'format.bindingIntents', DEFAULT_BINDING_INTENTS);
+  const bindingIntentCounts = useMemo(() => countBindingIntents(filteredBindingGroups), [filteredBindingGroups]);
 
-    for (const row of groupedBindings) {
-      const existing = groups.get(row.elementType) ?? [];
-      existing.push(row);
-      groups.set(row.elementType, existing);
-    }
+  // The element the user navigated to (explorer, search) keeps all of its
+  // bindings on screen even when their intent is filtered out — otherwise the
+  // jump would land on nothing.
+  const focusBindingElementId: string | undefined = focusNode?.type === 'formatBinding' ? focusNode.data?.componentId : undefined;
 
-    return Array.from(groups.entries())
-      .sort(([leftType], [rightType]) => leftType.localeCompare(rightType))
-      .map(([elementType, rows]) => ({
-        elementType,
-        rows: rows.sort((left, right) => left.elementName.localeCompare(right.elementName)),
-      }));
-  }, [groupedBindings]);
+  const bindingSections = useMemo(() => {
+    const active = new Set(bindingIntents);
+    return buildFormatBindingSections(
+      rootElement,
+      filteredBindingGroups,
+      binding => active.has(classifyBindingIntent(binding)) || binding.componentId === focusBindingElementId,
+    );
+  }, [rootElement, filteredBindingGroups, bindingIntents, focusBindingElementId]);
+
+  const shownBindingCount = useMemo(
+    () => bindingSections.reduce((sum, section) => sum + section.entries.reduce((n, entry) => n + entry.bindings.length, 0), 0),
+    [bindingSections],
+  );
 
   /* Filter terms for the three list views, each row carrying the view it
      belongs to so picking one also lands on the right tab. */
@@ -1771,34 +1770,75 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
     ...suggestionsFromCounts(countTerms(collectDatasourceTerms(fmtMap.datasources)), t.dataSources, 'datasources'),
   ], [rootElement, bindingPresentation.groups, fmtMap.datasources]);
 
-  const [collapsedBindingTypeGroups, setCollapsedBindingTypeGroups] = useState<Set<string>>(new Set());
+  /* Collapse state as a mode plus the sections toggled against it, not as a
+     list of collapsed keys: a section that only appears once another intent is
+     switched on then follows the mode instead of popping up open inside a
+     collapsed outline. */
+  const [bindingOutline, setBindingOutline] = useState(false);
+  const [toggledBindingSections, setToggledBindingSections] = useState<ReadonlySet<string>>(EMPTY_STRING_SET);
 
-  // Collapse the type groups once per format; a text filter suspends the
-  // collapse state so matches are always visible.
-  const bindingGroupsInitForRef = useRef<unknown>(null);
+  // A long list opens as an outline of its sections, a short one fully open.
+  // Decided once per format, so later filtering never re-collapses what the
+  // user opened.
+  const bindingOutlineInitForRef = useRef<unknown>(null);
   useEffect(() => {
-    if (bindingGroupsInitForRef.current === config) return;
-    if (groupedBindingsByType.length === 0 || filter) return;
-    bindingGroupsInitForRef.current = config;
-    setCollapsedBindingTypeGroups(new Set(groupedBindingsByType.map(group => group.elementType)));
-  }, [config, groupedBindingsByType, filter]);
-  const effectiveCollapsedBindingTypeGroups = filter ? EMPTY_STRING_SET : collapsedBindingTypeGroups;
+    if (bindingOutlineInitForRef.current === config) return;
+    if (bindingSections.length === 0 || filter) return;
+    bindingOutlineInitForRef.current = config;
+    setBindingOutline(shownBindingCount > BINDING_OUTLINE_THRESHOLD);
+    setToggledBindingSections(EMPTY_STRING_SET);
+  }, [config, bindingSections.length, shownBindingCount, filter]);
 
-  const toggleBindingTypeGroup = useCallback((elementType: string) => {
-    setCollapsedBindingTypeGroups(prev => {
+  // The section holding a navigated-to element is held open until the user
+  // folds it themselves.
+  const focusedBindingSectionKey = useMemo(
+    () => focusBindingElementId
+      ? bindingSections.find(section => section.entries.some(entry => entry.group.componentId === focusBindingElementId))?.key
+      : undefined,
+    [bindingSections, focusBindingElementId],
+  );
+  const [bindingFocusDismissedFor, setBindingFocusDismissedFor] = useState<unknown>(null);
+  const heldOpenBindingSectionKey = bindingFocusDismissedFor === focusNode ? undefined : focusedBindingSectionKey;
+
+  // A text filter suspends the collapse state so every match is visible.
+  const isBindingSectionCollapsed = (key: string) =>
+    !filter && key !== heldOpenBindingSectionKey && bindingOutline !== toggledBindingSections.has(key);
+
+  const toggleBindingSection = useCallback((key: string) => {
+    if (key === heldOpenBindingSectionKey) {
+      // Fold it: from here on the section follows the normal collapse state.
+      setBindingFocusDismissedFor(focusNode);
+      setToggledBindingSections(prev => {
+        const next = new Set(prev);
+        if (bindingOutline) next.delete(key); else next.add(key);
+        return next;
+      });
+      return;
+    }
+    setToggledBindingSections(prev => {
       const next = new Set(prev);
-      if (next.has(elementType)) next.delete(elementType); else next.add(elementType);
+      if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
+  }, [heldOpenBindingSectionKey, focusNode, bindingOutline]);
+
+  const expandAllBindingSections = useCallback(() => {
+    setBindingOutline(false);
+    setToggledBindingSections(EMPTY_STRING_SET);
   }, []);
 
-  const expandAllBindingTypeGroups = useCallback(() => {
-    setCollapsedBindingTypeGroups(new Set());
-  }, []);
+  const collapseAllBindingSections = useCallback(() => {
+    setBindingOutline(true);
+    setToggledBindingSections(EMPTY_STRING_SET);
+    setBindingFocusDismissedFor(focusNode);
+  }, [focusNode]);
 
-  const collapseAllBindingTypeGroups = useCallback(() => {
-    setCollapsedBindingTypeGroups(new Set(groupedBindingsByType.map(group => group.elementType)));
-  }, [groupedBindingsByType]);
+  const focusedBindingCardRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!focusBindingElementId) return;
+    const timer = setTimeout(() => focusedBindingCardRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
+    return () => clearTimeout(timer);
+  }, [focusNode]);
 
   // One pass over the element tree answers the filter / binding / ancestry
   // questions for every row; see FormatTreeIndex.
@@ -1857,8 +1897,6 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
   // The same two words as the model-mapping designer, in both view modes: the
   // consultant-mode aliases ("Links" / "Zdroje dat") named the very things F&O
   // itself calls bindings and data sources.
-  const groupCountLabel = bindingGroupCountWord(groupedBindingsByType.length, showTechnicalDetails);
-
   type FormatViewId = 'structure' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping';
   const formatTabs = useMemo<Array<{ id: FormatViewId; label: React.ReactNode; title: string }>>(() => {
     const tabs: Array<{ id: FormatViewId; label: React.ReactNode; title: string }> = [
@@ -1869,8 +1907,10 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
       },
       {
         id: 'bindings',
-        label: `${t.bindings} (${groupedBindingsByType.length} ${groupCountLabel})`,
-        title: locale === 'cs' ? 'Přehled všech vazeb výrazů — co z datového modelu se kam mapuje' : 'Overview of all expression bindings — what maps from data model to where',
+        label: `${t.bindings} (${shownBindingCount})`,
+        title: locale === 'cs'
+          ? 'Vazby podle účelu — přímé hodnoty, výpočty, podmínky, texty — v pořadí, v jakém soubor vzniká'
+          : 'Bindings by intent — direct values, calculations, conditions, texts — in the order the file is built',
       },
       {
         id: 'datasources',
@@ -1891,7 +1931,7 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
       });
     }
     return tabs;
-  }, [stats.totalElements, stats.datasources, groupCountLabel, groupedBindingsByType.length, fc.direction, fc.embeddedModelMappingVersions.length]);
+  }, [stats.totalElements, stats.datasources, shownBindingCount, fc.direction, fc.embeddedModelMappingVersions.length]);
 
   /* Expand/collapse. Rendered either in the toolbar next to the filter
      (desktop, unchanged) or up in the header — below ~900px the tabs, this and
@@ -1921,7 +1961,7 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
               setStructureExpandMode('all');
               setStructureExpandVersion(version => version + 1);
             } else if (view === 'bindings') {
-              expandAllBindingTypeGroups();
+              expandAllBindingSections();
             } else {
               dsListRef.current?.expandAll();
             }
@@ -1931,7 +1971,7 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
               setStructureExpandMode('none');
               setStructureExpandVersion(version => version + 1);
             } else if (view === 'bindings') {
-              collapseAllBindingTypeGroups();
+              collapseAllBindingSections();
             } else {
               dsListRef.current?.collapseAll();
             }
@@ -2013,6 +2053,11 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
         </div>
       </div>
 
+      {/* Intent filter: sits outside the scrolling list so it stays in reach. */}
+      {view === 'bindings' && (
+        <BindingIntentBar counts={bindingIntentCounts} active={bindingIntents} onChange={setBindingIntents} />
+      )}
+
       {/* ── Main Content ── */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left: tree / list */}
@@ -2072,24 +2117,58 @@ function FormatDesigner({ config, configIndex, focusNode, tabId }: { config: ERC
           )}
 
           {view === 'bindings' && (
-            <>
-              {groupedBindingsByType.length === 0
-                ? <div style={{ color: 'var(--text-secondary)', fontSize: 12, padding: 16 }}>
-                    {filter ? t.noResults : `${t.bindings}: 0`}
-                  </div>
-                : groupedBindingsByType.map(group => (
-                    <div key={group.elementType} className="mm-group">
-                      <div className="mm-group-header" onClick={() => toggleBindingTypeGroup(group.elementType)}>
-                        <span className={`tree-chevron ${!effectiveCollapsedBindingTypeGroups.has(group.elementType) ? 'open' : ''}`} />
-                        <span className="mm-group-name">{showTechnicalDetails ? group.elementType : getConsultantFormatTypeLabel(group.elementType)}</span>
-                        <span className="mm-group-count">{group.rows.length}</span>
+            bindingSections.length === 0
+              ? <BindingListEmpty filter={filter} counts={bindingIntentCounts} active={bindingIntents} onShowAll={() => setBindingIntents(BINDING_INTENT_ORDER)} />
+              : bindingSections.map(section => {
+                  const collapsed = isBindingSectionCollapsed(section.key);
+                  const count = section.entries.reduce((n, entry) => n + entry.bindings.length, 0);
+                  const unresolvedName = locale === 'cs' ? 'Prvky mimo strukturu formátu' : 'Elements outside the format structure';
+                  const toggle = () => toggleBindingSection(section.key);
+                  return (
+                    <div key={section.key} className="mm-group">
+                      <div
+                        className="mm-group-header"
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={!collapsed}
+                        onClick={toggle}
+                        onKeyDown={event => {
+                          if (event.key !== 'Enter' && event.key !== ' ') return;
+                          event.preventDefault();
+                          toggle();
+                        }}
+                      >
+                        <span className={`tree-chevron ${collapsed ? '' : 'open'}`} />
+                        <span className="mm-group-name fmt-bind-section-trail" title={section.unresolved ? unresolvedName : section.trail.join(' › ')}>
+                          {section.unresolved
+                            ? <span>{unresolvedName}</span>
+                            : section.trail.map((name, i) => (
+                                <React.Fragment key={i}>
+                                  {i > 0 && <span className="fmt-bind-section-sep" aria-hidden="true">›</span>}
+                                  <span>{name}</span>
+                                </React.Fragment>
+                              ))}
+                        </span>
+                        <span className="mm-group-count" title={t.bindingCount(count)}>{count}</span>
                       </div>
-                      {!effectiveCollapsedBindingTypeGroups.has(group.elementType) && group.rows.map(row => (
-                        <FormatElementBindingGroup key={row.componentId} row={row} configIndex={configIndex} onReveal={revealFormatElementInExplorer} showTechnicalDetails={showTechnicalDetails} />
-                      ))}
+                      {!collapsed && section.entries.map(entry => {
+                        const focused = entry.group.componentId === focusBindingElementId;
+                        return (
+                          <FormatElementBindingGroup
+                            key={entry.group.componentId}
+                            row={entry.group}
+                            bindings={entry.bindings}
+                            focused={focused}
+                            cardRef={focused ? focusedBindingCardRef : undefined}
+                            configIndex={configIndex}
+                            onReveal={revealFormatElementInExplorer}
+                            showTechnicalDetails={showTechnicalDetails}
+                          />
+                        );
+                      })}
                     </div>
-                  ))}
-            </>
+                  );
+                })
           )}
 
           {view === 'datasources' && (
@@ -4494,21 +4573,83 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
   );
 }
 
-// ── Binding Row (for Bindings tab) ──
+// ── Bindings tab ──
 
-// ── Grouped binding card: shows element header + all its bindings inline ──
+/** Above this many bindings the tab opens as an outline of its sections. */
+const BINDING_OUTLINE_THRESHOLD = 40;
 
-function FormatElementBindingGroup({ row, configIndex, onReveal, showTechnicalDetails }: {
-  row: any;
+function BindingIntentBar({ counts, active, onChange }: {
+  counts: Record<BindingIntent, number>;
+  active: readonly BindingIntent[];
+  onChange: (next: readonly BindingIntent[]) => void;
+}) {
+  return (
+    <div className="fmt-bind-intent-bar" role="toolbar" aria-label={locale === 'cs' ? 'Filtrovat vazby podle účelu' : 'Filter bindings by intent'}>
+      {BINDING_INTENT_ORDER.map(intent => {
+        const isActive = active.includes(intent);
+        return (
+          <button
+            key={intent}
+            type="button"
+            className={`fmt-bind-intent-chip fmt-bind-intent--${intent} ${isActive ? 'active' : ''}`}
+            aria-pressed={isActive}
+            // An intent with nothing in it can still be switched off, never on.
+            disabled={counts[intent] === 0 && !isActive}
+            title={getBindingIntentHint(intent)}
+            onClick={() => onChange(isActive
+              ? active.filter(other => other !== intent)
+              : BINDING_INTENT_ORDER.filter(other => other === intent || active.includes(other)))}
+          >
+            <span className="fmt-bind-intent-dot" aria-hidden="true" />
+            <span>{getBindingIntentLabel(intent)}</span>
+            <span className="fmt-bind-intent-count">{counts[intent]}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** An empty list says whether the chips are what hides the bindings, and offers to undo that. */
+function BindingListEmpty({ filter, counts, active, onShowAll }: {
+  filter: string;
+  counts: Record<BindingIntent, number>;
+  active: readonly BindingIntent[];
+  onShowAll: () => void;
+}) {
+  const hidden = BINDING_INTENT_ORDER.filter(intent => !active.includes(intent) && counts[intent] > 0);
+  if (hidden.length === 0) {
+    return <div className="fmt-bind-empty">{filter ? t.noResults : `${t.bindings}: 0`}</div>;
+  }
+  const hiddenList = hidden.map(intent => `${getBindingIntentLabel(intent)} (${counts[intent]})`).join(', ');
+  return (
+    <div className="fmt-bind-empty">
+      <span>{locale === 'cs' ? `Ve vybraných typech vazeb nic není. Skryté: ${hiddenList}.` : `Nothing in the selected binding types. Hidden: ${hiddenList}.`}</span>
+      <button type="button" className="fmt-bind-intent-chip" onClick={onShowAll}>
+        {locale === 'cs' ? 'Zobrazit vše' : 'Show all'}
+      </button>
+    </div>
+  );
+}
+
+// ── Binding card: an element and the bindings of it that pass the filter ──
+
+function FormatElementBindingGroup({ row, bindings, focused, cardRef, configIndex, onReveal, showTechnicalDetails }: {
+  row: NormalizedFormatBindingGroup;
+  bindings: NormalizedFormatBinding[];
+  focused?: boolean;
+  cardRef?: React.Ref<HTMLDivElement>;
   configIndex: number;
   onReveal?: (elementId: string) => void;
   showTechnicalDetails: boolean;
 }) {
-  const totalBindings = row.categories.reduce((count: number, category: any) => count + category.bindings.length, 0);
+  // Values first, then conditions and properties — the inspector's order.
+  const ordered = useMemo(() => groupFormatBindingsByCategory(bindings).flatMap(category => category.bindings), [bindings]);
+  const hiddenCount = row.bindings.length - bindings.length;
 
   return (
-    <div className="fmt-bind-card">
-      {/* Header: element type, name, count, reveal action */}
+    <div className={`fmt-bind-card ${focused ? 'is-focused' : ''}`} ref={cardRef}>
+      {/* Header: element type, name, bindings hidden by the filter, reveal action */}
       <div className="fmt-bind-card-head">
         {showTechnicalDetails && (
           <span
@@ -4523,9 +4664,14 @@ function FormatElementBindingGroup({ row, configIndex, onReveal, showTechnicalDe
           </span>
         )}
         <span className="fmt-bind-card-name" title={row.elementName}>{row.elementName}</span>
-        <span className="fmt-bind-card-count" title={t.bindingCount(totalBindings)}>
-          {totalBindings}
-        </span>
+        {hiddenCount > 0 && (
+          <span
+            className="fmt-bind-card-count"
+            title={locale === 'cs' ? `Další vazby prvku skryté filtrem: ${hiddenCount}` : `More bindings of this element hidden by the filter: ${hiddenCount}`}
+          >
+            +{hiddenCount}
+          </span>
+        )}
         {onReveal && (
           <button
             className="fmt-bind-card-reveal"
@@ -4542,13 +4688,22 @@ function FormatElementBindingGroup({ row, configIndex, onReveal, showTechnicalDe
         )}
       </div>
 
-      {/* Bindings: one row per binding, flat, no extra nesting */}
+      {/* Bindings: one row per binding, flat, no extra nesting. The badge's
+          colour is the binding's intent, the same as its filter chip. */}
       <div className="fmt-bind-card-body">
-        {row.categories.map((category: any) => (
-          category.bindings.map((binding: any, i: number) => (
-            <div key={`${category.key}-${i}`} className="fmt-bind-row">
-              <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'} fmt-bind-row-label`}>
-                {showTechnicalDetails ? getFormatBindingDisplayLabel(binding) : getConsultantBindingLabel(binding)}
+        {ordered.map((binding, i) => {
+          const intent = classifyBindingIntent(binding);
+          const label = showTechnicalDetails
+            ? getFormatBindingDisplayLabel(binding)
+            // A consultant reads what a value binding does; a switch keeps its on/off wording.
+            : binding.bindingCategory === 'data' ? getBindingIntentItemLabel(intent) : getConsultantBindingLabel(binding);
+          return (
+            <div key={`${binding.bindingCategory}-${i}`} className="fmt-bind-row">
+              <span
+                className={`badge fmt-bind-row-label fmt-bind-intent fmt-bind-intent--${intent}`}
+                title={`${getBindingIntentItemLabel(intent)} — ${getBindingIntentHint(intent)}`}
+              >
+                {label}
               </span>
               {showTechnicalDetails && binding.promotedFromChild && binding.rawElementType && (
                 <span className="fmt-binding-origin">{t.bindingVia} {binding.rawElementType}</span>
@@ -4564,8 +4719,8 @@ function FormatElementBindingGroup({ row, configIndex, onReveal, showTechnicalDe
                 </DrillDownTrigger>
               </span>
             </div>
-          ))
-        ))}
+          );
+        })}
       </div>
     </div>
   );
