@@ -13,6 +13,7 @@ import {
 import { useAppStore } from '../state/store';
 import { t } from '../i18n';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
+import { BrandWordmark } from './BrandWordmark';
 
 const useStyles = makeStyles({
   root: {
@@ -35,41 +36,14 @@ const useStyles = makeStyles({
     left: '50%',
     top: '50%',
     transform: 'translate(-50%, -50%)',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
+    display: 'flex',
     // Decoration, not a control: never take a click meant for the toolbar.
     pointerEvents: 'none',
     userSelect: 'none',
-    whiteSpace: 'nowrap',
     // Below this the load button claims the middle.
     '@media (max-width: 860px)': {
       display: 'none',
     },
-  },
-  brandVendor: {
-    fontSize: '9.5px',
-    fontWeight: 700,
-    letterSpacing: '0.16em',
-    textTransform: 'uppercase',
-    color: 'var(--er-text-subtle)',
-  },
-  brandRule: {
-    width: '1px',
-    height: '14px',
-    backgroundColor: 'var(--er-border-strong)',
-  },
-  brandName: {
-    fontFamily: 'var(--er-font-display)',
-    fontSize: '14px',
-    fontWeight: 700,
-    letterSpacing: '-0.01em',
-    // The three configuration hues the whole app is colour-coded by, read
-    // left to right the way a configuration flows: model → mapping → format.
-    backgroundImage: 'linear-gradient(100deg, var(--er-model), var(--er-mapping) 55%, var(--er-format))',
-    backgroundClip: 'text',
-    WebkitBackgroundClip: 'text',
-    color: 'transparent',
   },
   leftGroup: {
     display: 'flex',
@@ -177,9 +151,7 @@ export function Toolbar() {
       </div>
 
       <div className={styles.brand} aria-hidden="true">
-        <span className={styles.brandVendor}>D365FO</span>
-        <span className={styles.brandRule} />
-        <span className={styles.brandName}>{t.appName}</span>
+        <BrandWordmark />
       </div>
     </div>
   );

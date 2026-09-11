@@ -1,5 +1,6 @@
 import React from 'react';
 import { t } from '../i18n';
+import { isChunkLoadError } from '../utils/chunk-load-error';
 
 interface Props {
   children: React.ReactNode;
@@ -37,18 +38,29 @@ export class ErrorBoundary extends React.Component<Props, State> {
     if (!error) return this.props.children;
     if (this.props.fallback) return this.props.fallback(error, this.reset);
 
+    // A chunk that failed to download stays failed: React.lazy keeps the
+    // rejected import, and Vite never requests the same stylesheet twice, so a
+    // retry would at best render the view unstyled. Only a reload recovers.
+    const chunkFailed = isChunkLoadError(error);
+
     return (
       <div className="error-boundary">
         <div className="error-boundary__card" role="alert">
           <div className="error-boundary__eyebrow">{this.props.label ?? t.errorLabel}</div>
-          <h2 className="error-boundary__title">{t.errorTitle}</h2>
+          <h2 className="error-boundary__title">{chunkFailed ? t.errorChunkTitle : t.errorTitle}</h2>
           <p className="error-boundary__text">
-            {t.errorDescription}
+            {chunkFailed ? t.errorChunkDescription : t.errorDescription}
           </p>
           <pre className="error-boundary__details">{error.stack ?? error.message}</pre>
-          <button type="button" className="error-boundary__btn" onClick={this.reset}>
-            {t.errorRetry}
-          </button>
+          {chunkFailed ? (
+            <button type="button" className="error-boundary__btn" onClick={() => window.location.reload()}>
+              {t.errorReload}
+            </button>
+          ) : (
+            <button type="button" className="error-boundary__btn" onClick={this.reset}>
+              {t.errorRetry}
+            </button>
+          )}
         </div>
       </div>
     );

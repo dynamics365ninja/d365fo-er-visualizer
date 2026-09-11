@@ -18,6 +18,11 @@ export default defineConfig({
     },
   },
   server: {
+    // A launcher that assigns the port passes it as PORT; take exactly that one,
+    // since it probes the port it handed out. Without PORT, Vite keeps its 5173
+    // default, which is the redirect URI Entra has registered for F&O sign-in.
+    // An explicit `--port` (the Electron dev script) still wins over both.
+    ...(process.env.PORT ? { port: Number(process.env.PORT), strictPort: true } : {}),
     // The browser F&O transport posts to /api/fno, which is served by the Next
     // marketing site (packages/site/app/api/fno/route.ts). In `pnpm dev` forward
     // it there so the web F&O flow works locally — run `pnpm dev:site` alongside,

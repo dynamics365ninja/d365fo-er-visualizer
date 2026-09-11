@@ -28,7 +28,9 @@ async function main() {
   }
 
   const indexHtml = await readFile(path.join(source, 'index.html'), 'utf8');
-  if (!indexHtml.includes('/app/assets/')) {
+  // Match the opening quote too: Git Bash rewrites `APP_BASE=/app/` into
+  // `C:/Program Files/Git/app/`, whose asset URLs also contain `/app/assets/`.
+  if (!indexHtml.includes('"/app/assets/')) {
     console.error(
       'stage-app: the UI build does not reference /app/assets — it was built without APP_BASE=/app/.\n' +
         'Rebuild with:  APP_BASE=/app/ pnpm --filter @er-visualizer/ui build'
