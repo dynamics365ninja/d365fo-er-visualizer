@@ -401,6 +401,63 @@ describe('parseERConfiguration', () => {
     expect(custInvoiceJour?.children.map(child => child.name)).toEqual(['$InvoiceDate']);
   });
 
+  it('keeps datasources under parents the definition does not declare', () => {
+    const item = (name: string, handler: string, parentPath?: string) => `
+                  <ERModelItemDefinition${parentPath ? ` ParentPath="${parentPath}"` : ''}>
+                    <ValueDefinition>
+                      <ERModelItemValueDefinition Name="${name}">
+                        <ValueSource>${handler}</ValueSource>
+                      </ERModelItemValueDefinition>
+                    </ValueDefinition>
+                  </ERModelItemDefinition>`;
+    const calc = '<ERModelExpressionItem ExpressionAsString="&quot;x&quot;" />';
+    const xml = buildSolutionEnvelope(`
+      <ERModelMappingVersion ID.="{MAP},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERModelMapping ID.="{MAP}" Name="Mapping" DataContainerDescriptor="Root" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1">
+            <Datasource>
+              <ERModelDefinition>
+                <Contents.>
+                  ${item('$Split_Note', calc, 'model/InvoiceLines/LineBase')}
+                  ${item('model', '<ERModelDataSourceHandler DataContainerDescriptorName="SalesInvoice" />')}
+                  ${item('$Split_Note', calc, 'model/InvoiceBase')}
+                  ${item('$Rounded', calc, 'Totals/$Lines/Values')}
+                  ${item('$Lines', calc, 'Totals')}
+                </Contents.>
+              </ERModelDefinition>
+            </Datasource>
+          </ERModelMapping>
+        </Mapping>
+      </ERModelMappingVersion>
+    `, { contentRefId: '{MAP}' });
+
+    const config = parseERConfiguration(xml, 'mapping.xml');
+    if (config.content.kind !== 'ModelMapping') {
+      throw new Error('Expected model mapping content');
+    }
+
+    const datasources = config.content.version.mapping.datasources;
+    const summary = (ds: (typeof datasources)[number]): unknown => ({
+      name: ds.name,
+      ...(ds.implicit ? { implicit: true } : {}),
+      ...(ds.children.length > 0 ? { children: ds.children.map(summary) } : {}),
+    });
+    expect(datasources.map(summary)).toEqual([
+      {
+        name: 'model',
+        children: [
+          { name: 'InvoiceLines', implicit: true, children: [{ name: 'LineBase', implicit: true, children: [{ name: '$Split_Note' }] }] },
+          { name: 'InvoiceBase', implicit: true, children: [{ name: '$Split_Note' }] },
+        ],
+      },
+      { name: 'Totals', implicit: true, children: [{ name: '$Lines', children: [{ name: 'Values', implicit: true, children: [{ name: '$Rounded' }] }] }] },
+    ]);
+
+    const lineBase = datasources[0]?.children[0]?.children[0];
+    expect(lineBase?.parentPath).toBe('model/InvoiceLines');
+    expect(lineBase?.type).toBe('Container');
+  });
+
   it('decodes numeric Unicode entities beyond the BMP', () => {    const xml = buildSolutionEnvelope(`
       <ERDataModelVersion ID.="{MODEL},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
         <Model>
@@ -972,7 +1029,10 @@ describe('parseERConfiguration', () => {
       throw new Error('Expected model mapping content');
     }
 
-    const datasource = config.content.version.mapping.datasources[0];
+    // The fixture never declares `#Annex`, so it is an implicit parent.
+    const annex = config.content.version.mapping.datasources[0];
+    expect(annex?.implicit).toBe(true);
+    const datasource = annex?.children[0];
     expect(datasource?.groupByInfo?.listToGroup).toBe('#Annex/$TaxTransDetailsDirectFilterJoinSales');
     expect(datasource?.groupByInfo?.groupedFields).toEqual([
       { name: 'InvoiceDate', path: '#Annex/$TaxTransDetailsDirectFilterJoinSales/$TaxTransDetailsSales/InvoiceDate' },

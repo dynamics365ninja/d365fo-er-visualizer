@@ -1615,9 +1615,14 @@ function buildTreeNode(
   ctx.budget -= 1;
 
   const isModel = expression.toLowerCase().startsWith('model.') || expression.toLowerCase().startsWith('model\\');
+  // A format hangs calculated fields under the records of its data model
+  // (`model.InvoiceBase.'$Split_Note'`). That path ends in the format's own
+  // datasource, which no model mapping binds — it resolves as a datasource.
+  const formatDeep = isModel ? resolveDeepExpression(extractModelPath(expression), ctx.configurations, configIndex) : null;
+  const endsInFormatDatasource = Boolean(formatDeep?.nestedDs && formatDeep.rootDs?.type === 'DataModel');
 
   // ── Model path → resolve via ModelMapping ──────────────────────────────
-  if (isModel) {
+  if (isModel && !endsInFormatDatasource) {
     const cleanPath = extractModelPath(expression);
     const modelResult = ctx.resolveModelPath(cleanPath);
     if (!modelResult) {
@@ -1668,7 +1673,7 @@ function buildTreeNode(
   }
 
   // ── Direct DS reference ────────────────────────────────────────────────
-  const deep = resolveDeepExpression(expression, ctx.configurations, configIndex);
+  const deep = endsInFormatDatasource ? formatDeep : resolveDeepExpression(expression, ctx.configurations, configIndex);
   const resolvedDs = (deep?.nestedDs ?? deep?.rootDs) ?? null;
 
   if (!resolvedDs) {

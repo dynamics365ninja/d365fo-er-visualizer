@@ -11,6 +11,7 @@ import { parseERConfigurations, GUIDRegistry, getFormatElementExcelRange } from 
 import { locale } from '../i18n';
 import { buildFormatBindingPresentation } from '../utils/format-binding-display';
 import { dsPathToExpression } from '../utils/ds-path';
+import { countDeclaredDatasources } from '../utils/datasource-tree';
 import { useFnoSession } from './fno-session';
 import { onFnoDownloadEvent } from '../fno/session';
 import { formatReferencedModelIds, mappingDefinitionLabel } from '../utils/model-hierarchy';
@@ -1896,13 +1897,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         // Descend as far as the path actually matches; a partial match still
         // returns the deepest node reached, which beats returning nothing.
         let node = root;
+        let current = root;
         for (let i = 1; i < segments.length; i++) {
           const want = segments[i].toLowerCase();
-          const child = (node.children ?? []).find(
+          const child = (current.children ?? []).find(
             (c: any) => typeof c?.name === 'string' && c.name.replace(/['"]/g, '').toLowerCase() === want,
           );
           if (!child) break;
-          node = child;
+          current = child;
+          // `model.InvoiceLines.Amount` walks through the implicit record but
+          // names a model field — the datasource is still `model`.
+          if (!child.implicit) node = child;
         }
 
         const treeNodeId = get().findDatasourceNode(node.name, ci, node.parentPath);
@@ -1939,10 +1944,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     const rootNode = state.treeNodes[configIndex];
     if (!rootNode) return null;
     const normalizedLookupKey = buildDatasourceLookupKey(dsName, parentPath);
-    return findNodeByMatch(
+    const byPath = findNodeByMatch(
       rootNode,
       n => n.type === 'datasource'
         && buildDatasourceLookupKey(n.name, n.data?.parentPath) === normalizedLookupKey,
+    );
+    if (byPath || parentPath) return byPath?.id ?? null;
+    // Callers that only know a name (the drill-down graph) still have to land
+    // on a calculated field nested under a model record.
+    return findNodeByMatch(
+      rootNode,
+      n => n.type === 'datasource' && !n.data?.implicit && buildDatasourceLookupKey(n.name) === normalizedLookupKey,
     )?.id ?? null;
   },
 
@@ -2091,8 +2103,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     function collectMatchingDs(datasources: any[]): Array<{ ds: any; match: EntityMatchResult }> {
       const out: Array<{ ds: any; match: any }> = [];
       for (const ds of datasources) {
-        const r = getEntityMatch(ds, normalizedEntityName);
-        if (r.matched) out.push({ ds, match: r });
+        // Implicit path nodes only hold the path; what they read is below them.
+        const r = ds.implicit ? null : getEntityMatch(ds, normalizedEntityName);
+        if (r?.matched) out.push({ ds, match: r });
         if (ds.children?.length) {
           out.push(...collectMatchingDs(ds.children));
         }
@@ -2600,7 +2613,9 @@ function scanValidations(
 
 function findDatasourceByName(datasources: any[], name: string): any | null {
   for (const ds of datasources) {
-    if (ds.name === name) return ds;
+    // An implicit path node (`model/InvoiceLines`) is not something an
+    // expression can name; only what hangs below it is.
+    if (ds.name === name && !ds.implicit) return ds;
     if (ds.children) {
       const found = findDatasourceByName(ds.children, name);
       if (found) return found;
@@ -2960,15 +2975,22 @@ function navigateDatasourcePath(
   if (!rootDs) return { rootDs: null, leafDs: null, fieldPath: [] };
 
   let current = rootDs;
-  let i = 1;
-  for (; i < segments.length; i++) {
+  let leafDs = rootDs;
+  let consumed = 1;
+  for (let i = 1; i < segments.length; i++) {
     const child = findChildSegment(current, segments[i], pools, new Set(), 0);
     if (!child) break;
     current = child;
+    // An implicit record is part of the path, not a datasource: a path that
+    // stops inside one addresses model fields of the last real datasource.
+    if (!child.implicit) {
+      leafDs = child;
+      consumed = i + 1;
+    }
   }
 
-  // Whatever is left addresses fields on `current`, not datasources.
-  return { rootDs, leafDs: current, fieldPath: segments.slice(i) };
+  // Whatever is left addresses fields on `leafDs`, not datasources.
+  return { rootDs, leafDs, fieldPath: segments.slice(consumed) };
 }
 
 /**
@@ -3208,13 +3230,15 @@ const dsTypeIcons: Record<string, string> = {
   CalculatedField: '🧮',
   GroupBy: '📊',
   Container: '📦',
+  DataModel: '🧬',
   Unknown: '❓',
 };
 
-const dsGroupOrder = ['Table', 'CalculatedField', 'Class', 'Enum', 'ModelEnum', 'FormatEnum', 'ImportFormat', 'UserParameter', 'GroupBy', 'Container', 'Join', 'Object'];
+const dsGroupOrder = ['DataModel', 'Table', 'CalculatedField', 'Class', 'Enum', 'ModelEnum', 'FormatEnum', 'ImportFormat', 'UserParameter', 'GroupBy', 'Container', 'Join', 'Object'];
 function getDsGroupLabels(): Record<string, string> {
   return locale === 'cs'
     ? {
+        DataModel: 'Datový model',
         Table: 'Tabulky',
         CalculatedField: 'Výpočtová pole',
         Class: 'Třídy',
@@ -3229,6 +3253,7 @@ function getDsGroupLabels(): Record<string, string> {
         Object: 'Objekty',
       }
     : {
+        DataModel: 'Data model',
         Table: 'Tables',
         CalculatedField: 'Calculated Fields',
         Class: 'Classes',
@@ -3520,7 +3545,7 @@ function buildMappingTree(mapping: any, prefix: string, configIndex: number, ver
     configIndex,
     data: mapping,
     children: [
-      { id: `${prefix}-ds-section`, name: `${mappingSectionLabels.dataSources} (${dsNodes.length})`, icon: '📂', type: 'section', children: groupDatasourceNodes(dsNodes, prefix) },
+      { id: `${prefix}-ds-section`, name: `${mappingSectionLabels.dataSources} (${countDeclaredDatasources(mapping.datasources)})`, icon: '📂', type: 'section', children: groupDatasourceNodes(dsNodes, prefix) },
       { id: `${prefix}-bind-section`, name: `${mappingSectionLabels.bindings} (${bindingNodes.length})`, icon: '📂', type: 'section', children: groupedBindingNodes },
       { id: `${prefix}-val-section`, name: `${mappingSectionLabels.validations} (${validationNodes.length})`, icon: '📂', type: 'section', children: validationNodes },
     ],
@@ -3710,7 +3735,7 @@ function buildTreeForConfig(config: ERConfiguration, index: number, allConfigura
       ...(embeddedMappingNodes.length > 0 ? [{ id: `${prefix}-fmt-embedded-mappings`, name: `${formatSectionLabels.modelMappings} (${embeddedMappingNodes.length})`, icon: '📂', type: 'section' as const, children: embeddedMappingNodes }] : []),
       { id: `${prefix}-fmt-enums`, name: `${formatSectionLabels.enumerations} (${enumNodes.length})`, icon: '📂', type: 'section', children: enumNodes },
       { id: `${prefix}-fmt-trans`, name: `${formatSectionLabels.transformations} (${transNodes.length})`, icon: '📂', type: 'section', children: transNodes },
-      { id: `${prefix}-fmt-ds`, name: `${formatSectionLabels.dataSources} (${fmtDsNodes.length})`, icon: '📂', type: 'section', children: groupDatasourceNodes(fmtDsNodes, `${prefix}-fmt`) },
+      { id: `${prefix}-fmt-ds`, name: `${formatSectionLabels.dataSources} (${countDeclaredDatasources(fmtMap.formatMapping.datasources)})`, icon: '📂', type: 'section', children: groupDatasourceNodes(fmtDsNodes, `${prefix}-fmt`) },
       { id: `${prefix}-fmt-bindings`, name: `${formatSectionLabels.bindings} (${fmtBindNodes.length})`, icon: '📂', type: 'section', children: fmtBindNodes },
     );
   }
@@ -3839,7 +3864,7 @@ function buildDatasourceTree(ds: any, prefix: string, configIndex: number, allCo
   return {
     id: prefix,
     name: ds.name,
-    icon: dsTypeIcons[ds.type] ?? '❓',
+    icon: ds.implicit ? '🧩' : dsTypeIcons[ds.type] ?? '❓',
     type: 'datasource',
     data: ds,
     configIndex,

@@ -227,3 +227,59 @@ describe('drill-down into a model container without a binding of its own', () =>
     expect(flatten(tree).map(n => n.sublabel)).toContain('CustInvoiceJour.InvoiceDate');
   });
 });
+
+/**
+ * A format hangs calculated fields under records of its data model:
+ * `model.InvoiceLines.LineBase.'$Split_Note'` is the format's own datasource,
+ * which no model mapping binds. Drill-down sent every `model.` path to the
+ * mapping and came back with an empty node.
+ */
+const MODEL_NESTED_XML = `<?xml version="1.0" encoding="utf-8"?>
+<ERSolutionVersion>
+  <Solution>
+    <ERSolution ID.="{SOL}" Name="Sales invoice" />
+  </Solution>
+  <Contents.>
+    <ERModelMappingVersion ID.="{MAP},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+      <Mapping>
+        <ERModelMapping ID.="{MAP}" Name="Mapping" DataContainerDescriptor="Root" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1">
+          <Datasource>
+            <ERModelDefinition>
+              <Contents.>
+                ${mappingItem('model', '<ERModelDataSourceHandler DataContainerDescriptorName="SalesInvoice" />')}
+                ${mappingItem('Tables', container)}
+                ${mappingItem('CustInvoiceJour', '<ERTableDataSourceHandler Table="CustInvoiceJour" />', 'Tables')}
+                ${mappingItem('$Split_Note', calc('SPLIT(Tables.CustInvoiceJour.Note, CHAR(10))'), 'model/InvoiceBase')}
+                ${mappingItem('$Split_Note', calc('SPLIT(Tables.CustInvoiceJour.LineNote, CHAR(10))'), 'model/InvoiceLines/LineBase')}
+              </Contents.>
+            </ERModelDefinition>
+          </Datasource>
+        </ERModelMapping>
+      </Mapping>
+    </ERModelMappingVersion>
+  </Contents.>
+</ERSolutionVersion>`;
+
+describe('drill-down into a calculated field nested under the data model', () => {
+  it('opens the calculated field instead of looking for a model binding', () => {
+    const configurations = [parseERConfiguration(MODEL_NESTED_XML, 'format-datasources.xml')] as any[];
+    useAppStore.setState({ configurations } as any);
+    const store = useAppStore.getState();
+
+    const tree = buildExpressionTree({
+      expression: "model.InvoiceLines.LineBase.'$Split_Note'.Value",
+      configIndex: 0,
+      configurations,
+      resolveModelPath: store.resolveModelPath,
+      resolveDatasource: store.resolveDatasource,
+      findModelPathBindings: store.findModelPathBindings,
+    });
+
+    const nodes = flatten(tree);
+    const calcNode = nodes.find(n => n.label === '$Split_Note');
+    expect(calcNode?.badge).toBe('calc');
+    // The field under LineBase, not its namesake under InvoiceBase.
+    expect(calcNode?.sublabel).toContain('LineNote');
+    expect(nodes.map(n => n.label)).toContain('CustInvoiceJour');
+  });
+});

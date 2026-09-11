@@ -1,6 +1,7 @@
 import type { ERBinding, ERDataContainerDescriptor, ERDataContainerItem, ERDataModel, ERFormatElement } from '@er-visualizer/core';
 import { normalizeGuid, type NormalizedFormatBinding, type NormalizedFormatBindingGroup } from './format-binding-display';
 import { classifyBindingIntent, type BindingIntent } from './format-binding-sections';
+import { containerLookup } from './datasource-tree';
 
 /**
  * The Bindings tab seen from the data model: which model fields a format reads,
@@ -243,18 +244,11 @@ export function countModelUsageIntents(nodes: readonly ModelUsageNode[]): Record
 
 /** Field lookup by path below the descriptor's root container. */
 function indexDataModel(model: ERDataModel, descriptor: string): (segments: readonly string[]) => ERDataContainerItem | undefined {
-  const byId = new Map<string, ERDataContainerDescriptor>();
-  const byName = new Map<string, ERDataContainerDescriptor>();
-  for (const container of model.containers) {
-    byId.set(container.id.toLowerCase(), container);
-    if (!byName.has(container.name.toLowerCase())) byName.set(container.name.toLowerCase(), container);
-  }
-  // `typeDescriptor` names a container by id; ids and names coincide in practice.
-  const lookup = (ref: string) => byId.get(ref.toLowerCase()) ?? byName.get(ref.toLowerCase());
+  const lookup = containerLookup(model);
   const root = lookup(descriptor);
 
   return segments => {
-    let container = root;
+    let container: ERDataContainerDescriptor | undefined = root;
     let field: ERDataContainerItem | undefined;
     for (const segment of segments) {
       field = container?.items.find(item => item.name.toLowerCase() === segment.toLowerCase());
