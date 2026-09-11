@@ -540,7 +540,7 @@ export function App() {
   if (isLandingVisible) {
     return (
       <div className={mergeClasses('app-shell', styles.landingShell)}>
-        <ErrorBoundary label="Landing">
+        <ErrorBoundary label={t.errorAreaLanding}>
           <LandingPage onFilesLoaded={handleFilesLoaded} />
         </ErrorBoundary>
         <ToastHost />
@@ -584,7 +584,7 @@ export function App() {
                 <div className={mergeClasses(styles.center, (showLeft || showRight) && styles.narrowHidden)}>
                   <TabBar />
                   <div className={styles.panelContent}>
-                    <ErrorBoundary label="Designer">
+                    <ErrorBoundary label={t.errorAreaDesigner}>
                       <React.Suspense fallback={<PanelLoading />}>
                         <DesignerView />
                       </React.Suspense>
@@ -593,7 +593,7 @@ export function App() {
                 </div>
                 {showLeft && (
                   <div className={mergeClasses(styles.sidebar, styles.narrowPane)}>
-                    <ErrorBoundary label="Explorer">
+                    <ErrorBoundary label={t.explorer}>
                       <ConfigExplorer />
                     </ErrorBoundary>
                   </div>
@@ -619,7 +619,7 @@ export function App() {
                   <>
                     <Panel defaultSize={leftPaneSize} minSize={isCompact ? 28 : 15} maxSize={isCompact ? 60 : 40}>
                       <div className={styles.sidebar}>
-                        <ErrorBoundary label="Explorer">
+                        <ErrorBoundary label={t.explorer}>
                           <ConfigExplorer />
                         </ErrorBoundary>
                       </div>
@@ -632,7 +632,7 @@ export function App() {
                   <div className={styles.center}>
                     <TabBar />
                     <div className={styles.panelContent}>
-                      <ErrorBoundary label="Designer">
+                      <ErrorBoundary label={t.errorAreaDesigner}>
                         <React.Suspense fallback={<PanelLoading />}>
                           <DesignerView />
                         </React.Suspense>
@@ -782,7 +782,7 @@ function RightPanel({
       </div>
       {tab === 'search' || tab === 'where-used' ? (
         <div className={styles.searchPaneFill}>
-          <ErrorBoundary label="Search">
+          <ErrorBoundary label={t.search}>
             <React.Suspense fallback={<PanelLoading />}>
               <SearchPanel />
             </React.Suspense>
@@ -790,7 +790,7 @@ function RightPanel({
         </div>
       ) : (
         <div className={panelContentClass}>
-          <ErrorBoundary label="Inspector">
+          <ErrorBoundary label={t.properties}>
             <PropertyInspector />
           </ErrorBoundary>
         </div>

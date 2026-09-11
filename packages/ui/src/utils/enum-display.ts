@@ -1,3 +1,5 @@
+import { locale } from '../i18n';
+
 export type EnumSourceKind = 'Ax' | 'DataModel' | 'Format';
 
 export function getEnumSourceKind(enumInfo?: { sourceKind?: string; isModelEnum?: boolean } | null): EnumSourceKind {
@@ -8,15 +10,13 @@ export function getEnumSourceKind(enumInfo?: { sourceKind?: string; isModelEnum?
   return enumInfo?.isModelEnum ? 'DataModel' : 'Ax';
 }
 
+const enumTypeLabels: Record<'cs' | 'en', Record<EnumSourceKind, string>> = {
+  cs: { Ax: 'Výčet AX', DataModel: 'Výčet datového modelu', Format: 'Výčet formátu' },
+  en: { Ax: 'Ax Enum', DataModel: 'Data model Enum', Format: 'Format enum' },
+};
+
 export function getEnumTypeLabel(enumInfo?: { sourceKind?: string; isModelEnum?: boolean } | null): string {
-  switch (getEnumSourceKind(enumInfo)) {
-    case 'DataModel':
-      return 'Data model Enum';
-    case 'Format':
-      return 'Format enum';
-    default:
-      return 'Ax Enum';
-  }
+  return enumTypeLabels[locale === 'cs' ? 'cs' : 'en'][getEnumSourceKind(enumInfo)];
 }
 
 export function formatEnumDisplayName(
