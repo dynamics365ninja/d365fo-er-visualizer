@@ -4,7 +4,6 @@ import {
   Tooltip,
   Divider,
   makeStyles,
-  shorthands,
 } from '@fluentui/react-components';
 import {
   ArrowLeftRegular,
@@ -12,14 +11,14 @@ import {
   FolderOpenRegular,
 } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
-import { setLocale, t, useLocale } from '../i18n';
+import { t } from '../i18n';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 
 const useStyles = makeStyles({
   root: {
-    // The wordmark is centred on the bar itself, not on what is left between
-    // the two button groups — those change width with the locale and with
-    // whether the history buttons are live.
+    // The wordmark is centred on the bar itself, not on what is left beside
+    // the button group — that changes width with the locale and with whether
+    // the history buttons are live.
     position: 'relative',
     display: 'flex',
     alignItems: 'center',
@@ -43,7 +42,7 @@ const useStyles = makeStyles({
     pointerEvents: 'none',
     userSelect: 'none',
     whiteSpace: 'nowrap',
-    // Below this the load button and the language switch claim the middle.
+    // Below this the load button claims the middle.
     '@media (max-width: 860px)': {
       display: 'none',
     },
@@ -79,13 +78,6 @@ const useStyles = makeStyles({
     minWidth: 0,
     flexShrink: 1,
   },
-  rightGroup: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    marginLeft: 'auto',
-    flexShrink: 0,
-  },
   nav: {
     display: 'flex',
     alignItems: 'center',
@@ -98,33 +90,14 @@ const useStyles = makeStyles({
   hiddenInput: {
     display: 'none',
   },
-  langSwitch: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '2px',
-    padding: '2px',
-    borderRadius: 'var(--er-radius-md)',
-    backgroundColor: 'var(--er-surface-2)',
-    ...shorthands.border('1px', 'solid', 'var(--er-border)'),
-  },
-  langButton: {
-    minWidth: '32px',
-    height: '24px',
-    paddingLeft: '8px',
-    paddingRight: '8px',
-    fontSize: '11px',
-    fontWeight: 600,
-    letterSpacing: '0.03em',
-  },
 });
 
 /**
- * Slim top toolbar — file/history operations. View toggles and the theme live
- * on the left ActivityBar.
+ * Slim top toolbar — file/history operations. View toggles, the language and
+ * the theme live on the left ActivityBar.
  */
 export function Toolbar() {
   const styles = useStyles();
-  const currentLocale = useLocale();
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
   const canNavigateBack = useAppStore(s => s.canNavigateBack);
   const canNavigateForward = useAppStore(s => s.canNavigateForward);
@@ -207,33 +180,6 @@ export function Toolbar() {
         <span className={styles.brandVendor}>D365FO</span>
         <span className={styles.brandRule} />
         <span className={styles.brandName}>{t.appName}</span>
-      </div>
-
-      <div className={styles.rightGroup}>
-        <Tooltip content={t.language} relationship="label" withArrow>
-          <div className={styles.langSwitch} aria-label={t.language} role="group">
-            <Button
-              appearance={currentLocale === 'cs' ? 'primary' : 'subtle'}
-              size="small"
-              className={styles.langButton}
-              onClick={() => setLocale('cs')}
-              aria-pressed={currentLocale === 'cs'}
-              title={t.languageCzech}
-            >
-              CZ
-            </Button>
-            <Button
-              appearance={currentLocale === 'en' ? 'primary' : 'subtle'}
-              size="small"
-              className={styles.langButton}
-              onClick={() => setLocale('en')}
-              aria-pressed={currentLocale === 'en'}
-              title={t.languageEnglish}
-            >
-              EN
-            </Button>
-          </div>
-        </Tooltip>
       </div>
     </div>
   );

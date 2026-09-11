@@ -466,7 +466,7 @@ export function ConfigExplorer() {
   // row still has to open and highlight.
   const selectedPathIds = useMemo(() => collectAncestorIds(storeTreeNodes, selectedNodeId), [storeTreeNodes, selectedNodeId]);
 
-  // Counts across the full unfiltered set so the chip badges stay stable.
+  // Counts across the full unfiltered set, so filtering never disables a chip.
   const kindCounts = useMemo(() => {
     const counts: Record<ConfigKind, number> = { DataModel: 0, ModelMapping: 0, Format: 0 };
     for (const node of treeNodes) {
@@ -624,7 +624,6 @@ export function ConfigExplorer() {
           <FolderRegular fontSize={15} />
           {t.explorer}
         </span>
-        <span className="explorer-panel-count">{treeNodes.length}</span>
         <span className="explorer-panel-spacer" />
         <Button
           appearance="subtle"
@@ -711,21 +710,21 @@ export function ConfigExplorer() {
           <ExplorerKindChip
             kind="DataModel"
             active={kindFilter.has('DataModel')}
-            count={kindCounts.DataModel}
+            disabled={kindCounts.DataModel === 0}
             onToggle={() => toggleKind('DataModel')}
             icon={<DataBarVerticalFilled />}
           />
           <ExplorerKindChip
             kind="ModelMapping"
             active={kindFilter.has('ModelMapping')}
-            count={kindCounts.ModelMapping}
+            disabled={kindCounts.ModelMapping === 0}
             onToggle={() => toggleKind('ModelMapping')}
             icon={<LinkFilled />}
           />
           <ExplorerKindChip
             kind="Format"
             active={kindFilter.has('Format')}
-            count={kindCounts.Format}
+            disabled={kindCounts.Format === 0}
             onToggle={() => toggleKind('Format')}
             icon={<DocumentFilled />}
           />
@@ -826,7 +825,6 @@ export function ConfigExplorer() {
                     </span>
                     {getExplorerGroupLabel(group.kind)}
                   </span>
-                  <span className="explorer-kind-group-count">{group.nodes.length}</span>
                 </button>
                 {!isCollapsed && (
                   <div className="explorer-kind-group-body">
@@ -1057,11 +1055,12 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
 // ─── Kind filter chip ───
 
 function ExplorerKindChip({
-  kind, active, count, onToggle, icon,
+  kind, active, disabled, onToggle, icon,
 }: {
   kind: ConfigKind;
   active: boolean;
-  count: number;
+  /** Nothing of this kind is loaded, so there is nothing to filter. */
+  disabled: boolean;
   onToggle: () => void;
   icon: React.ReactNode;
 }) {
@@ -1073,13 +1072,12 @@ function ExplorerKindChip({
       className={`explorer-kind-chip explorer-kind-chip--${accent} ${active ? 'active' : ''}`}
       onClick={onToggle}
       aria-pressed={active}
-      disabled={count === 0}
+      disabled={disabled}
       title={label}
       aria-label={label}
     >
       <span className="explorer-kind-chip-icon" aria-hidden="true">{icon}</span>
       <span className="explorer-kind-chip-label">{getExplorerChipLabel(kind)}</span>
-      <span className="explorer-kind-chip-count">{count}</span>
     </button>
   );
 }
