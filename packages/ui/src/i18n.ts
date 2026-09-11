@@ -593,6 +593,45 @@ export interface Translations {
   closeTab: (label: string) => string;
   notificationsLabel: string;
   drillOpenAsTab: string;
+  // Model designer badges, text preview, error boundary areas
+  modelRootBadge: string;
+  modelEnumBadge: string;
+  previewRepeatingStart: (name: string) => string;
+  previewRepeatingEnd: (name: string) => string;
+  excelSheet: string;
+  excelRange: string;
+  excelCell: string;
+  formatTypeFile: string;
+  errorAreaLanding: string;
+  errorAreaDesigner: string;
+  validationActionBadge: (value: string) => string;
+  validationSeverityBadge: (value: string) => string;
+  // F&O connection panel
+  fnoRootNoSolutions: (root: string) => string;
+  fnoNoSolutionsFound: string;
+  fnoCustomRootHint: string;
+  fnoCustomRootPlaceholder: string;
+  fnoTypeMapping: string;
+  fnoTypeModel: string;
+  fnoUnreachableMapping: string;
+  fnoNoDownloadableContent: string;
+  fnoBranchNodeHint: string;
+  fnoViaParent: string;
+  fnoDrillInto: string;
+  fnoUnknownError: string;
+  fnoErrServiceNotFound: (url: string, serviceUrl: string, operation: string) => string;
+  fnoErrEndpointNotFound: (status: string) => string;
+  fnoErrForbidden: (status: string) => string;
+  fnoErrRedirectDesktop: string;
+  fnoErrRedirectWeb: (uri: string) => string;
+  fnoErrClientIdUnavailable: string;
+  fnoErrConsentRequired: string;
+  fnoErrScopeMismatch: string;
+  fnoErrWrongTenant: string;
+  fnoErrCodeUsed: (code: string) => string;
+  fnoErrMfaRequired: (code: string) => string;
+  fnoErrPublicClientFlows: string;
+  fnoErrRedirectIsSpa: string;
 }
 
 // ─── Translation dictionaries ─────────────────────────────────────────────
@@ -1146,6 +1185,54 @@ const cs: Translations = {
   closeTab: (label: string) => `Zavřít ${label}`,
   notificationsLabel: 'Oznámení',
   drillOpenAsTab: 'Otevřít jako záložku',
+  // Model designer badges, text preview, error boundary areas
+  modelRootBadge: 'KOŘEN',
+  modelEnumBadge: 'VÝČET',
+  previewRepeatingStart: (name: string) => `--- ${name} (opakuje se) ---`,
+  previewRepeatingEnd: (name: string) => `--- konec ${name} ---`,
+  excelSheet: 'List',
+  excelRange: 'Oblast',
+  excelCell: 'Buňka',
+  formatTypeFile: 'Soubor',
+  errorAreaLanding: 'Úvodní stránka',
+  errorAreaDesigner: 'Návrhář',
+  validationActionBadge: (value: string) => `Akce: ${value}`,
+  validationSeverityBadge: (value: string) => `Závažnost: ${value}`,
+  // F&O connection panel
+  fnoRootNoSolutions: (root: string) => `Kořen „${root}“ stále nevrátil žádná řešení. Buď je název vydavatele chybný, nebo prostředí nemá importované žádné ER konfigurace.`,
+  fnoNoSolutionsFound: 'Pod známými kořeny nebyla nalezena žádná řešení.',
+  fnoCustomRootHint: 'Pokud znáš konkrétní název vydavatele, zadej ho sem a zkus to znovu:',
+  fnoCustomRootPlaceholder: 'Název vydavatele / kořenového řešení',
+  fnoTypeMapping: 'Mapování',
+  fnoTypeModel: 'Model',
+  fnoUnreachableMapping: 'F&O pro toto mapování modelu nezveřejňuje ID služby. Jeho pravidla jsou součástí XML formátu.',
+  fnoNoDownloadableContent: 'Nic ke stažení — odvozená konfigurace, která jen dědí obsah.',
+  fnoBranchNodeHint: 'Větev — kliknutím zobrazíš podřízené konfigurace',
+  fnoViaParent: 'přes rodiče',
+  fnoDrillInto: 'Zobrazit podřízené',
+  fnoUnknownError: 'Neznámá chyba',
+  fnoErrServiceNotFound: (url: string, serviceUrl: string, operation: string) =>
+    `404 Not Found (${url}). Custom service nebo operace na tomto prostředí neexistuje. ` +
+    `Otevři v prohlížeči ${serviceUrl} ` +
+    `a zkontroluj, že operace "${operation}" je v seznamu <Operations>. Pokud má jiný název, uprav ER_SERVICE_OPS v packages/fno-client/src/er-services.ts`,
+  fnoErrEndpointNotFound: (status: string) => `${status}. Endpoint na prostředí neexistuje. Ověř přesnou URL prostředí (bez /namespace) a že jsou ER služby nainstalovány`,
+  fnoErrForbidden: (status: string) => `${status}. Uživatel v F&O nemá oprávnění na ER služby. Přidej uživatele / roli "Electronic reporting developer" nebo "Electronic reporting functional consultant"`,
+  fnoErrRedirectDesktop: 'AADSTS50011: Redirect URI nesedí. V App registration → Authentication → Mobile and desktop applications přidej „http://localhost".',
+  fnoErrRedirectWeb: (uri: string) =>
+    `AADSTS50011: Redirect URI nesedí. Aplikace posílá přesně:\n` +
+    `    ${uri}\n` +
+    `Zaregistruj tuto hodnotu v Entra → App registrations → Authentication → Add a platform → ` +
+    `Single-page application (ne „Web", ne „Mobile and desktop applications").\n` +
+    `Musí sedět znak po znaku — bez lomítka na konci a bez cesty.\n` +
+    `Pozor: každé preview nasazení má vlastní hostname a potřebuje vlastní záznam.`,
+  fnoErrClientIdUnavailable: 'AADSTS700016: Application (client) ID zabudované v tomto buildu není v tomto tenantu dostupné. Pokud si nástroj hostuješ sám, nastav VITE_FNO_CLIENT_ID (resp. FNO_CLIENT_ID u desktopu) na vlastní víceklientskou registraci.',
+  fnoErrConsentRequired: 'AADSTS65001: Přihlášení nebylo schváleno. Správce tenantu musí aplikaci jednorázově schválit (Entra → Enterprise applications → Admin consent requests) pro delegované oprávnění Dynamics ERP CustomService.FullAccess.',
+  fnoErrScopeMismatch: 'AADSTS500011: Scope (envUrl) neodpovídá žádnému service principálu. Ověř přesnou URL prostředí (bez lomítka na konci) a že v daném tenantu je Dynamics 365 F&O nainstalován.',
+  fnoErrWrongTenant: 'AADSTS50020: Přihlášený účet není v tenantu, kde F&O prostředí běží. Přihlas se pracovním účtem daného tenantu, případně guest účtem, který v něm byl přijat.',
+  fnoErrCodeUsed: (code: string) => `AADSTS${code}: Autorizační kód byl již použit nebo je neplatný. Zkus se přihlásit znovu.`,
+  fnoErrMfaRequired: (code: string) => `AADSTS${code}: Je vyžadováno MFA. Projdi výzvou v prohlížeči a zkus to znovu.`,
+  fnoErrPublicClientFlows: 'AADSTS7000218: App registration nemá povolené public client flows. V Entra → App registrations → Authentication zapni „Allow public client flows" = Yes.',
+  fnoErrRedirectIsSpa: 'AADSTS9002326: Redirect URI je u App registration zařazené jako „Single-page application". Přesuň ho pod „Mobile and desktop applications" (http://localhost).',
 };
 
 const en: Translations = {
@@ -1692,6 +1779,54 @@ const en: Translations = {
   closeTab: (label: string) => `Close ${label}`,
   notificationsLabel: 'Notifications',
   drillOpenAsTab: 'Open as tab',
+  // Model designer badges, text preview, error boundary areas
+  modelRootBadge: 'ROOT',
+  modelEnumBadge: 'ENUM',
+  previewRepeatingStart: (name: string) => `--- ${name} (repeating) ---`,
+  previewRepeatingEnd: (name: string) => `--- end ${name} ---`,
+  excelSheet: 'Sheet',
+  excelRange: 'Range',
+  excelCell: 'Cell',
+  formatTypeFile: 'File',
+  errorAreaLanding: 'Landing page',
+  errorAreaDesigner: 'Designer',
+  validationActionBadge: (value: string) => `Action: ${value}`,
+  validationSeverityBadge: (value: string) => `Severity: ${value}`,
+  // F&O connection panel
+  fnoRootNoSolutions: (root: string) => `Root "${root}" still returned no solutions. Either the publisher name is wrong, or the environment has no ER configurations imported.`,
+  fnoNoSolutionsFound: 'No solutions found under the known roots.',
+  fnoCustomRootHint: 'If you know a specific publisher name, type it here and retry:',
+  fnoCustomRootPlaceholder: 'Publisher / root solution name',
+  fnoTypeMapping: 'Mapping',
+  fnoTypeModel: 'Model',
+  fnoUnreachableMapping: 'F&O does not expose a service ID for this ModelMapping. Its rules are bundled into the Format XML.',
+  fnoNoDownloadableContent: 'No downloadable content — pure-inheritance derived configuration.',
+  fnoBranchNodeHint: 'Branch node — click to drill into children',
+  fnoViaParent: 'via parent',
+  fnoDrillInto: 'Drill into children',
+  fnoUnknownError: 'Unknown error',
+  fnoErrServiceNotFound: (url: string, serviceUrl: string, operation: string) =>
+    `404 Not Found (${url}). The custom service or operation does not exist on this environment. ` +
+    `Open ${serviceUrl} in a browser ` +
+    `and check that the operation "${operation}" is listed under <Operations>. If it has a different name, update ER_SERVICE_OPS in packages/fno-client/src/er-services.ts`,
+  fnoErrEndpointNotFound: (status: string) => `${status}. The endpoint does not exist on this environment. Check the exact environment URL (without /namespace) and that the ER services are installed`,
+  fnoErrForbidden: (status: string) => `${status}. The F&O user has no access to the ER services. Assign the "Electronic reporting developer" or "Electronic reporting functional consultant" role`,
+  fnoErrRedirectDesktop: 'AADSTS50011: Redirect URI mismatch. Under App registration → Authentication → Mobile and desktop applications, add "http://localhost".',
+  fnoErrRedirectWeb: (uri: string) =>
+    `AADSTS50011: Redirect URI mismatch. The app sends exactly:\n` +
+    `    ${uri}\n` +
+    `Register this value under Entra → App registrations → Authentication → Add a platform → ` +
+    `Single-page application (not "Web", not "Mobile and desktop applications").\n` +
+    `It must match character for character — no trailing slash and no path.\n` +
+    `Note: every preview deployment has its own hostname and needs its own entry.`,
+  fnoErrClientIdUnavailable: 'AADSTS700016: The application (client) ID built into this build is not available in this tenant. If you host the tool yourself, set VITE_FNO_CLIENT_ID (FNO_CLIENT_ID for the desktop app) to your own multi-tenant registration.',
+  fnoErrConsentRequired: 'AADSTS65001: Sign-in was not consented. A tenant admin has to approve the app once (Entra → Enterprise applications → Admin consent requests) for the delegated permission Dynamics ERP CustomService.FullAccess.',
+  fnoErrScopeMismatch: 'AADSTS500011: The scope (envUrl) matches no service principal. Check the exact environment URL (no trailing slash) and that Dynamics 365 F&O is installed in this tenant.',
+  fnoErrWrongTenant: 'AADSTS50020: The signed-in account is not in the tenant the F&O environment runs in. Sign in with a work account from that tenant, or a guest account that has been accepted there.',
+  fnoErrCodeUsed: (code: string) => `AADSTS${code}: The authorization code has already been used or is invalid. Try signing in again.`,
+  fnoErrMfaRequired: (code: string) => `AADSTS${code}: MFA is required. Complete the prompt in the browser and try again.`,
+  fnoErrPublicClientFlows: 'AADSTS7000218: The app registration does not allow public client flows. In Entra → App registrations → Authentication, set "Allow public client flows" to Yes.',
+  fnoErrRedirectIsSpa: 'AADSTS9002326: The redirect URI is registered as a "Single-page application". Move it under "Mobile and desktop applications" (http://localhost).',
 };
 
 export let t: Translations = locale === 'cs' ? cs : en;

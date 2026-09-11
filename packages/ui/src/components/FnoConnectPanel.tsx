@@ -678,7 +678,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       if (list.length === 0) {
         pushToast({
           kind: 'warning',
-          message: `Root "${root}" still returned no solutions. Either the publisher name is wrong, or the environment has no ER configurations imported.`,
+          message: t.fnoRootNoSolutions(root),
         });
       }
     } catch (err) {
@@ -3094,10 +3094,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       type === 'ModelMapping' ? 'success' :
       type === 'Format' ? 'informative' :
       type === 'DataModel' ? 'important' : 'subtle';
-    const label =
-      type === 'ModelMapping' ? 'Mapping' :
-      type === 'Format' ? 'Format' :
-      type === 'DataModel' ? 'Model' : type;
+    const label = fnoComponentTypeLabel(type);
     return (
       <Badge appearance="tint" color={color} size="small" className={styles.typeBadge}>
         {label}
@@ -3516,14 +3513,14 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 {!loadingSolutions && solutionTree.length === 0 && !solutionFilter && (
                   <div className={styles.emptyState}>
                     <TableSimpleRegular fontSize={32} style={{ opacity: 0.3 }} />
-                    <Caption1>No solutions found under the known roots.</Caption1>
+                    <Caption1>{t.fnoNoSolutionsFound}</Caption1>
                     <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-                      If you know a specific publisher name, type it here and retry:
+                      {t.fnoCustomRootHint}
                     </Caption1>
                     <div className={styles.emptyStateRow}>
                       <Input
                         size="small"
-                        placeholder="Publisher / root solution name"
+                        placeholder={t.fnoCustomRootPlaceholder}
                         value={customRoot}
                         onChange={(_, d) => setCustomRoot(d.value)}
                         style={{ flex: 1, minWidth: 0 }}
@@ -3582,13 +3579,13 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                   {loadingComponents && <Spinner size="tiny" />}
                   <Dropdown
                     size="small"
-                    value={componentTypeFilter === 'All' ? t.fnoAllTypes : componentTypeFilter}
+                    value={componentTypeFilter === 'All' ? t.fnoAllTypes : fnoComponentTypeLabel(componentTypeFilter)}
                     selectedOptions={[componentTypeFilter]}
                     onOptionSelect={(_, d) => setComponentTypeFilter(d.optionValue as ErComponentType | 'All')}
                   >
                     <Option value="All">{t.fnoAllTypes}</Option>
-                    <Option value="ModelMapping">Mapping</Option>
-                    <Option value="Format">Format</Option>
+                    <Option value="ModelMapping">{fnoComponentTypeLabel('ModelMapping')}</Option>
+                    <Option value="Format">{fnoComponentTypeLabel('Format')}</Option>
                   </Dropdown>
                   <Tooltip content={t.fnoSelectAll} relationship="label">
                     <Button
@@ -3633,10 +3630,10 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                   const isUnreachableMapping =
                     !isDownloadable && comp.componentType === 'ModelMapping';
                   const disabledTitle = isUnreachableMapping
-                    ? 'F\u0026O does not expose a service ID for this ModelMapping. Its rules are bundled into the Format XML.'
+                    ? t.fnoUnreachableMapping
                     : isDead
-                      ? 'No downloadable content — pure-inheritance derived configuration.'
-                      : 'Branch node — click to drill into children';
+                      ? t.fnoNoDownloadableContent
+                      : t.fnoBranchNodeHint;
 
                   return (
                     <div
@@ -3672,7 +3669,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                           )}
                           {canResolveMappingViaParent && !hasGuid && (
                             <Badge appearance="outline" color="success" size="small" style={{ fontSize: '10px' }}>
-                              via parent
+                              {t.fnoViaParent}
                             </Badge>
                           )}
 
@@ -3687,7 +3684,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
 
                       {/* Drill icon */}
                       {hasChildren ? (
-                        <Tooltip content="Drill into children" relationship="label">
+                        <Tooltip content={t.fnoDrillInto} relationship="label">
                           <ChevronRightRegular
                             fontSize={16}
                             style={{ color: tokens.colorBrandForeground1, flexShrink: 0, cursor: 'pointer' }}
@@ -3992,6 +3989,14 @@ function annotateWithParentDataModel(
   });
 }
 
+/** Short label for an ER component type in the F&O configuration browser. */
+function fnoComponentTypeLabel(type: string): string {
+  if (type === 'ModelMapping') return t.fnoTypeMapping;
+  if (type === 'Format') return t.kindFormat;
+  if (type === 'DataModel') return t.fnoTypeModel;
+  return type;
+}
+
 function describeHttpError(err: unknown): string {
   if (err instanceof FnoHttpError) {
     const bodyHint = (err.body ?? '').trim().split(/\r?\n/)[0]?.slice(0, 200);
@@ -4006,14 +4011,13 @@ function describeHttpError(err: unknown): string {
       if (isCustomService) {
         const opMatch = err.url.match(/\/api\/services\/([^/]+)\/([^/]+)\/([^/?#]+)/);
         const [, group, service, op] = opMatch ?? [];
-        return `404 Not Found (${err.url}). Custom service nebo operace na tomto prostředí neexistuje. ` +
-          `Otevři v prohlížeči ${err.url.split('/api/services/')[0]}/api/services/${group ?? '<group>'}/${service ?? '<service>'} ` +
-          `a zkontroluj, že operace "${op ?? ''}" je v seznamu <Operations>. Pokud má jiný název, uprav ER_SERVICE_OPS v packages/fno-client/src/er-services.ts${suffix}`;
+        const serviceUrl = `${err.url.split('/api/services/')[0]}/api/services/${group ?? '<group>'}/${service ?? '<service>'}`;
+        return `${t.fnoErrServiceNotFound(err.url, serviceUrl, op ?? '')}${suffix}`;
       }
-      return `${err.status} ${err.message} (${err.url}). Endpoint na prostředí neexistuje. Ověř přesnou URL prostředí (bez /namespace) a že jsou ER služby nainstalovány${suffix}`;
+      return `${t.fnoErrEndpointNotFound(`${err.status} ${err.message} (${err.url})`)}${suffix}`;
     }
     if (err.status === 401 || err.status === 403) {
-      return `${err.status} ${err.message}. Uživatel v F&O nemá oprávnění na ER služby. Přidej uživatele / roli "Electronic reporting developer" nebo "Electronic reporting functional consultant"${suffix}`;
+      return `${t.fnoErrForbidden(`${err.status} ${err.message}`)}${suffix}`;
     }
     return `${err.status} ${err.message} (${err.url})${suffix}`;
   }
@@ -4031,17 +4035,7 @@ function buildRedirectMismatchMessage(raw: string): string {
   const fromServer = raw.match(/redirect URI '([^']+)'/i)?.[1];
   const uri = fromServer || computeRedirectUri();
   const isWeb = /^https?:/i.test(uri);
-  if (!isWeb) {
-    return 'AADSTS50011: Redirect URI nesedí. V App registration → Authentication → Mobile and desktop applications přidej „http://localhost".';
-  }
-  return (
-    `AADSTS50011: Redirect URI nesedí. Aplikace posílá přesně:\n` +
-    `    ${uri}\n` +
-    `Zaregistruj tuto hodnotu v Entra → App registrations → Authentication → Add a platform → ` +
-    `Single-page application (ne „Web", ne „Mobile and desktop applications").\n` +
-    `Musí sedět znak po znaku — bez lomítka na konci a bez cesty.\n` +
-    `Pozor: každé preview nasazení má vlastní hostname a potřebuje vlastní záznam.`
-  );
+  return isWeb ? t.fnoErrRedirectWeb(uri) : t.fnoErrRedirectDesktop;
 }
 
 function explainAuthError(err: unknown): string {
@@ -4060,28 +4054,28 @@ function explainAuthError(err: unknown): string {
   const cleaned = chain
     .map(m => m.replace(/^Error invoking remote method '[^']*':\s*Error:\s*/i, ''))
     .filter(Boolean);
-  const raw = cleaned.join(' — ') || (err instanceof Error ? err.message : String(err)) || 'Unknown error';
+  const raw = cleaned.join(' — ') || (err instanceof Error ? err.message : String(err)) || t.fnoUnknownError;
 
   const code = raw.match(/AADSTS(\d{4,6})/)?.[1];
   switch (code) {
     case '700016':
-      return 'AADSTS700016: Application (client) ID zabudované v tomto buildu není v tomto tenantu dostupné. Pokud si nástroj hostuješ sám, nastav VITE_FNO_CLIENT_ID (resp. FNO_CLIENT_ID u desktopu) na vlastní víceklientskou registraci.';
+      return t.fnoErrClientIdUnavailable;
     case '65001':
-      return 'AADSTS65001: Přihlášení nebylo schváleno. Správce tenantu musí aplikaci jednorázově schválit (Entra → Enterprise applications → Admin consent requests) pro delegované oprávnění Dynamics ERP CustomService.FullAccess.';
+      return t.fnoErrConsentRequired;
     case '500011':
-      return 'AADSTS500011: Scope (envUrl) neodpovídá žádnému service principálu. Ověř přesnou URL prostředí (bez lomítka na konci) a že v daném tenantu je Dynamics 365 F&O nainstalován.';
+      return t.fnoErrScopeMismatch;
     case '50020':
-      return 'AADSTS50020: Přihlášený účet není v tenantu, kde F&O prostředí běží. Přihlas se pracovním účtem daného tenantu, případně guest účtem, který v něm byl přijat.';
+      return t.fnoErrWrongTenant;
     case '54005':
     case '9002313':
-      return `AADSTS${code}: Autorizační kód byl již použit nebo je neplatný. Zkus se přihlásit znovu.`;
+      return t.fnoErrCodeUsed(code);
     case '50076':
     case '50079':
-      return `AADSTS${code}: Je vyžadováno MFA. Projdi výzvou v prohlížeči a zkus to znovu.`;
+      return t.fnoErrMfaRequired(code);
     case '7000218':
-      return 'AADSTS7000218: App registration nemá povolené public client flows. V Entra → App registrations → Authentication zapni „Allow public client flows" = Yes.';
+      return t.fnoErrPublicClientFlows;
     case '9002326':
-      return 'AADSTS9002326: Redirect URI je u App registration zařazené jako „Single-page application". Přesuň ho pod „Mobile and desktop applications" (http://localhost).';
+      return t.fnoErrRedirectIsSpa;
     case '50011':
       return buildRedirectMismatchMessage(raw);
     default:

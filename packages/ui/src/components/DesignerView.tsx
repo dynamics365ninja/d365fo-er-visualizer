@@ -37,7 +37,7 @@ import { locale, t } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { adjacentRow, isTreeArrowKey, treeArrowAction } from '../utils/tree-keyboard';
 import { getBindingCategoryLabel, getConsultantBindingLabel, getConsultantFormatTypeLabel, isXmlNamespaceDeclaration } from '../utils/consultant-labels';
-import { buildFormatBindingPresentation, groupFormatBindingsByCategory } from '../utils/format-binding-display';
+import { buildFormatBindingPresentation, getFormatBindingCategoryLabel, getFormatBindingDisplayLabel, groupFormatBindingsByCategory } from '../utils/format-binding-display';
 import { buildFormatTreeIndex, type FormatTreeIndex } from '../utils/format-tree-filter';
 import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../utils/filter-suggestions';
 import { getFormatTypeBadgeSurface, getFormatTypeThemeColor } from '../utils/theme-colors';
@@ -300,13 +300,13 @@ function FormatElementFocusTab({ node, configIndex }: { node: any; configIndex: 
               <div key={category.key}>
                 {categories.length > 1 && (
                   <div className="fmt-detail-subsection-title">
-                    {showTechnicalDetails ? category.label : getBindingCategoryLabel(category.key)} ({category.bindings.length})
+                    {showTechnicalDetails ? getFormatBindingCategoryLabel(category.key) : getBindingCategoryLabel(category.key)} ({category.bindings.length})
                   </div>
                 )}
                 {category.bindings.map((b: any, i: number) => (
                   <div key={`${category.key}-${i}`} className="fmt-detail-binding">
                     <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'}`} style={{ marginRight: 6 }}>
-                      {showTechnicalDetails ? b.bindingDisplayLabel : getConsultantBindingLabel(b)}
+                      {showTechnicalDetails ? getFormatBindingDisplayLabel(b) : getConsultantBindingLabel(b)}
                     </span>
                     {showTechnicalDetails && b.promotedFromChild && b.rawElementType && (
                       <span className="fmt-binding-origin">{t.bindingVia} {b.rawElementType}</span>
@@ -584,7 +584,7 @@ function formatTypeLabelFor(type: string, showTechnicalDetails: boolean | undefi
 
 function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): string {
   if (showTechnicalDetails) {
-    return dsGroupLabels[type] ?? type;
+    return dsGroupLabels[locale === 'cs' ? 'cs' : 'en'][type] ?? type;
   }
 
   const csLabels: Record<string, string> = {
@@ -802,7 +802,7 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
                     borderRadius: 3,
                     color: 'var(--surface-info-fg)',
                     fontWeight: 600,
-                  }}>ROOT</span>
+                  }}>{t.modelRootBadge}</span>
                 )}
                 {container.isEnum && (
                   <span style={{
@@ -814,7 +814,7 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
                     borderRadius: 3,
                     color: 'var(--surface-warning-fg)',
                     fontWeight: 600,
-                  }}>ENUM</span>
+                  }}>{t.modelEnumBadge}</span>
                 )}
                 <span style={{
                   marginLeft: container.isRoot || container.isEnum ? 0 : 'auto',
@@ -938,7 +938,7 @@ function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNo
         <DesignerHint text={t.modelHierarchyHint} />
       </div>
       <div style={{ flex: 1 }}>
-        <ReactFlow nodes={nodes} edges={edges} fitView nodesConnectable={false} nodesDraggable>
+        <ReactFlow nodes={nodes} edges={edges} fitView nodesConnectable={false} nodesDraggable proOptions={{ hideAttribution: true }}>
           <Background color="var(--er-border)" gap={20} variant={'dots' as any} />
           <Controls />
           <MiniMap
@@ -1429,8 +1429,10 @@ function ValidationRow({ validation, configIndex, focused, focusRef, onSelect, o
         <div key={rule.id ?? ri} className="mm-validation-rule">
           <div className="mm-validation-rule-head">
             <span className="mm-validation-rule-title">{t.propRule(ri + 1)}</span>
-            {rule.severity && <span className="mm-validation-badge">{rule.severity}</span>}
-            {rule.action && <span className="mm-validation-badge">{rule.action}</span>}
+            {/* The XML stores these as bare codes (Action="1"), so the badge
+                says which attribute the value belongs to. */}
+            {rule.severity && <span className="mm-validation-badge">{t.validationSeverityBadge(rule.severity)}</span>}
+            {rule.action && <span className="mm-validation-badge">{t.validationActionBadge(rule.action)}</span>}
           </div>
           <ValidationExpression
             label={t.propCondition}
@@ -3919,9 +3921,9 @@ function generateTextPreview(root: ERFormatElement, bm: BindingMap, options: Pre
         lines.push(previewValue(el, bm, options));
       }
     } else if (el.elementType === 'TextSequence') {
-      lines.push(`--- ${el.name} (repeating) ---`);
+      lines.push(t.previewRepeatingStart(el.name));
       for (const child of el.children) walk(child);
-      lines.push(`--- end ${el.name} ---`);
+      lines.push(t.previewRepeatingEnd(el.name));
     } else if (el.elementType === 'File' || el.elementType === 'XMLSequence') {
       for (const child of el.children) walk(child);
     } else if (el.children.length > 0) {
@@ -3943,14 +3945,14 @@ function generateExcelPreview(root: ERFormatElement, bm: BindingMap, options: Pr
       lines.push(`📊 ${t.excelWorkbook}`);
       for (const child of el.children) walk(child, depth + 1);
     } else if (el.elementType === 'ExcelSheet') {
-      lines.push(`${indent}📃 Sheet: "${el.name}"`);
+      lines.push(`${indent}📃 ${t.excelSheet}: "${el.name}"`);
       for (const child of el.children) walk(child, depth + 1);
     } else if (el.elementType === 'ExcelRange' || el.elementType === 'ExcelHeader' || el.elementType === 'ExcelFooter') {
-      const sectionLabel = el.elementType === 'ExcelHeader' ? `🔼 ${t.excelHeader}` : el.elementType === 'ExcelFooter' ? `🔽 ${t.excelFooter}` : '📐 Range';
+      const sectionLabel = el.elementType === 'ExcelHeader' ? `🔼 ${t.excelHeader}` : el.elementType === 'ExcelFooter' ? `🔽 ${t.excelFooter}` : `📐 ${t.excelRange}`;
       lines.push(`${indent}${sectionLabel}: ${el.name}`);
       for (const child of el.children) walk(child, depth + 1);
     } else if (el.elementType === 'ExcelCell') {
-      lines.push(`${indent}📎 Cell: ${el.name} = ${previewValue(el, bm, options)}`);
+      lines.push(`${indent}📎 ${t.excelCell}: ${el.name} = ${previewValue(el, bm, options)}`);
     } else {
       lines.push(`${indent}${formatTypeLabelFor(el.elementType, options.showTechnicalDetails)}: ${el.name}`);
       for (const child of el.children) walk(child, depth + 1);
@@ -4005,7 +4007,7 @@ function detectFormatType(rootElement: any): FormatTypeInfo {
   if (et === 'TextSequence' || et === 'TextLine') {
     return { label: 'Text', icon: '📃', color: 'var(--surface-success-fg)', bg: 'var(--surface-success-bg)' };
   }
-  return { label: et || 'File', icon: '📁', color: 'var(--surface-success-fg)', bg: 'var(--surface-success-bg)' };
+  return { label: et || t.formatTypeFile, icon: '📁', color: 'var(--surface-success-fg)', bg: 'var(--surface-success-bg)' };
 }
 
 function FormatTypeBadge({ rootElement }: { rootElement: any }) {
@@ -4388,7 +4390,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
 
         {/* Conditional Bindings indicators */}
         {conditionalBindings.length > 0 && conditionalBindings.map((cb: any, i: number) => {
-          const label = showTechnicalDetails ? cb.bindingDisplayLabel : getConsultantBindingLabel(cb);
+          const label = showTechnicalDetails ? getFormatBindingDisplayLabel(cb) : getConsultantBindingLabel(cb);
           return (
             <span key={i} className="fmt-cond-badge" title={`${label}: ${cb.expressionAsString}`}>
               {label}
@@ -4417,7 +4419,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
         <div className="fmt-match-reason" style={{ paddingLeft: depth * 20 + 30 }}>
           <span className="fmt-match-reason__prop">
             {showTechnicalDetails
-              ? (matchedBinding.bindingDisplayLabel || matchedBinding.propertyName || t.bindings)
+              ? getFormatBindingDisplayLabel(matchedBinding)
               : getConsultantBindingLabel(matchedBinding)}
           </span>
           <ExpressionDetailLink
@@ -4437,12 +4439,12 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
           {bindingCategories.map(category => (
             <div key={category.key}>
               <div className="fmt-binding-category-title">
-                {showTechnicalDetails ? category.label : getBindingCategoryLabel(category.key)} ({category.bindings.length})
+                {showTechnicalDetails ? getFormatBindingCategoryLabel(category.key) : getBindingCategoryLabel(category.key)} ({category.bindings.length})
               </div>
               {category.bindings.map((b: any, i: number) => (
                 <div key={`${category.key}-${i}`} className="fmt-binding-detail-row">
                   <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'}`}>
-                    {showTechnicalDetails ? b.bindingDisplayLabel : getConsultantBindingLabel(b)}
+                    {showTechnicalDetails ? getFormatBindingDisplayLabel(b) : getConsultantBindingLabel(b)}
                   </span>
                   {showTechnicalDetails && b.promotedFromChild && b.rawElementType && (
                     <span className="fmt-binding-origin">{t.bindingVia} {b.rawElementType}</span>
@@ -4546,7 +4548,7 @@ function FormatElementBindingGroup({ row, configIndex, onReveal, showTechnicalDe
           category.bindings.map((binding: any, i: number) => (
             <div key={`${category.key}-${i}`} className="fmt-bind-row">
               <span className={`badge ${category.key === 'data' ? 'badge-success' : 'badge-prop'} fmt-bind-row-label`}>
-                {showTechnicalDetails ? binding.bindingDisplayLabel : getConsultantBindingLabel(binding)}
+                {showTechnicalDetails ? getFormatBindingDisplayLabel(binding) : getConsultantBindingLabel(binding)}
               </span>
               {showTechnicalDetails && binding.promotedFromChild && binding.rawElementType && (
                 <span className="fmt-binding-origin">{t.bindingVia} {binding.rawElementType}</span>
@@ -4998,17 +5000,38 @@ function FormatDatasourceRow({ ds, configIndex, navigateToTreeNode, focusDsName 
 // ── Grouped Datasource List ──
 
 const dsGroupOrder = ['Table', 'CalculatedField', 'Class', 'Object', 'Enum', 'ModelEnum', 'FormatEnum', 'Values', 'UserParameter', 'GroupBy', 'Container', 'Join', 'DataModel', 'Other'];
-const dsGroupLabels: Record<string, string> = {
-  Table: 'Tables',
-  CalculatedField: 'Calculated Fields',
-  Class: 'Classes',
-  Object: 'Objects',
-  Enum: 'Ax Enums',
-  ModelEnum: 'Data model Enums',
-  FormatEnum: 'Format enums',
-  UserParameter: 'User Parameters',
-  GroupBy: 'Group By',
-  Container: 'Containers',
+/** Group titles in the technical view, one per raw datasource type. */
+const dsGroupLabels: Record<'cs' | 'en', Record<string, string>> = {
+  cs: {
+    Table: 'Tabulky',
+    CalculatedField: 'Vypočtená pole',
+    Class: 'Třídy',
+    Object: 'Objekty',
+    Enum: 'Výčty AX',
+    ModelEnum: 'Výčty datového modelu',
+    FormatEnum: 'Výčty formátu',
+    ImportFormat: 'Importní formáty',
+    UserParameter: 'Uživatelské parametry',
+    GroupBy: 'Seskupení',
+    Container: 'Kontejnery',
+    Join: 'Spojení',
+    DataModel: 'Datový model',
+  },
+  en: {
+    Table: 'Tables',
+    CalculatedField: 'Calculated Fields',
+    Class: 'Classes',
+    Object: 'Objects',
+    Enum: 'Ax Enums',
+    ModelEnum: 'Data model Enums',
+    FormatEnum: 'Format enums',
+    ImportFormat: 'Import formats',
+    UserParameter: 'User Parameters',
+    GroupBy: 'Group By',
+    Container: 'Containers',
+    Join: 'Joins',
+    DataModel: 'Data model',
+  },
 };
 
 export interface GroupedDatasourceListHandle {
