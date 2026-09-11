@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore, resolveDeepExpression } from '../state/store';
-import { formatEnumDisplayName } from '../utils/enum-display';
-import { PathTooltipCard, type PathTooltipData, type PathTooltipRow } from './PathTooltipCard';
-import { t } from '../i18n';
+import { PathTooltipCard } from './PathTooltipCard';
+import { buildPathTooltip, parseExpressionSegments, type PathSegment, type PathTooltipData } from '../utils/path-tooltip';
 
 interface ClickablePathProps {
   /** The expression or path string, e.g. "model.CompanyInfo.Name" or "CompanyInfo.'name()'" */
@@ -17,147 +16,24 @@ interface ClickablePathProps {
   highlight?: string;
 }
 
+/** Sweeping the pointer across a formula should not flash a card per name. */
+const SHOW_DELAY_MS = 220;
+
 /**
  * Renders an expression string with clickable segments.
  * Datasource names and model paths are resolved on hover.
  * If a reference resolves, it becomes clickable with a tooltip.
  */
 export function ClickablePath({ expression, configIndex, mode = 'auto', style, interactive = true, highlight }: ClickablePathProps) {
-  const resolveDatasource = useAppStore(s => s.resolveDatasource);
-  const resolveBinding = useAppStore(s => s.resolveBinding);
-  const resolveModelPath = useAppStore(s => s.resolveModelPath);
-  const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
-  const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
-
-  // Parse into segments for coloring, but resolve lazily on hover
-  const segments = useMemo(() => parseSegments(expression, mode), [expression, mode]);
+  const segments = useMemo(() => parseExpressionSegments(expression, mode), [expression, mode]);
 
   return (
     <span style={{ fontFamily: 'monospace', fontSize: 11, ...style }}>
       {segments.map((seg, i) => (
-        <SmartSegment
-          key={i}
-          segment={seg}
-          configIndex={configIndex}
-          interactive={interactive}
-          highlight={highlight}
-          resolveDatasource={resolveDatasource}
-          resolveBinding={resolveBinding}
-          resolveModelPath={resolveModelPath}
-          findDatasourceNode={findDatasourceNode}
-          navigateToTreeNode={navigateToTreeNode}
-        />
+        <SmartSegment key={i} segment={seg} configIndex={configIndex} interactive={interactive} highlight={highlight} />
       ))}
     </span>
   );
-}
-
-interface Segment {
-  text: string;
-  kind: 'identifier' | 'model-path' | 'operator' | 'literal' | 'separator';
-  fullPath?: string;
-  lookupText?: string;
-  isFirstIdent?: boolean; // first identifier in an expression — likely a datasource name
-}
-
-function looksLikeDatasourceReference(value: string | undefined): boolean {
-  if (!value) return false;
-  return /^[$#A-Za-z_]/.test(value);
-}
-
-function parseSegments(expr: string, mode: string): Segment[] {
-  if (!expr) return [{ text: '', kind: 'literal' }];
-
-  const segments: Segment[] = [];
-  // Tokenize: split on dots, commas, parens, quoted strings
-  const tokens = expr.match(/("[^"]*"|'[^']*'|[.(),]|\s+|[^."'(),\s]+)/g) ?? [expr];
-
-  let pathParts: string[] = [];
-  let isFirstIdent = true;
-
-  const previousMeaningfulToken = (index: number) => {
-    for (let i = index - 1; i >= 0; i--) {
-      if (!/^\s+$/.test(tokens[i])) return tokens[i];
-    }
-    return undefined;
-  };
-
-  const nextMeaningfulToken = (index: number) => {
-    for (let i = index + 1; i < tokens.length; i++) {
-      if (!/^\s+$/.test(tokens[i])) return tokens[i];
-    }
-    return undefined;
-  };
-
-  for (let index = 0; index < tokens.length; index++) {
-    const token = tokens[index];
-    if (token === '.') {
-      segments.push({ text: '.', kind: 'separator' });
-      continue;
-    }
-    if (token === '(' || token === ')' || token === ',') {
-      segments.push({ text: token, kind: 'operator' });
-      // After a paren/comma, next identifier is a new context
-      isFirstIdent = true;
-      pathParts = [];
-      continue;
-    }
-    if (/^\s+$/.test(token)) {
-      segments.push({ text: token, kind: 'literal' });
-      continue;
-    }
-    if (token.startsWith('"') || token.startsWith("'")) {
-      const lookupText = token.slice(1, -1);
-      const prev = previousMeaningfulToken(index);
-      const next = nextMeaningfulToken(index);
-      const isPathSegment = Boolean(lookupText) && (prev === '.' || next === '.');
-
-      if (isPathSegment) {
-        pathParts.push(lookupText);
-        const fullPath = pathParts.join('.');
-        segments.push({
-          text: token,
-          kind: mode === 'model-path' ? 'model-path' : 'identifier',
-          lookupText,
-          fullPath,
-          isFirstIdent,
-        });
-        isFirstIdent = false;
-      } else {
-        segments.push({
-          text: token,
-          kind: 'literal',
-          lookupText: looksLikeDatasourceReference(lookupText) ? lookupText : undefined,
-          fullPath: looksLikeDatasourceReference(lookupText) ? lookupText : undefined,
-          isFirstIdent,
-        });
-        pathParts = [];
-        isFirstIdent = true;
-      }
-      continue;
-    }
-
-    // It's an identifier
-    pathParts.push(token);
-    const fullPath = pathParts.join('.');
-
-    if (mode === 'model-path') {
-      segments.push({ text: token, kind: 'model-path', lookupText: token, fullPath });
-    } else {
-      // For binding-expr or auto: first ident is likely datasource, rest are field paths
-      segments.push({
-        text: token,
-        kind: 'identifier',
-        lookupText: token,
-        fullPath,
-        isFirstIdent,
-      });
-    }
-
-    isFirstIdent = false;
-  }
-
-  return segments;
 }
 
 /** Wraps every occurrence of `query` in `text` so a filtered list can show
@@ -175,220 +51,101 @@ function highlightSegmentText(text: string, query: string | undefined): React.Re
   );
 }
 
-interface SmartSegmentProps {
-  segment: Segment;
+const SEGMENT_COLORS: Record<PathSegment['kind'], string> = {
+  identifier: 'var(--syn-identifier)',
+  'model-path': 'var(--syn-path)',
+  operator: 'var(--syn-operator)',
+  literal: 'var(--syn-literal)',
+  separator: 'var(--syn-separator)',
+};
+
+function SmartSegment({ segment, configIndex, interactive, highlight }: {
+  segment: PathSegment;
   configIndex: number;
   interactive: boolean;
   highlight?: string;
-  resolveDatasource: (name: string, ci: number) => any;
-  resolveBinding: (path: string, ci: number) => any;
-  resolveModelPath: (modelDotPath: string) => any;
-  findDatasourceNode: (name: string, ci: number, parentPath?: string) => string | null;
-  navigateToTreeNode: (nodeId: string) => void;
-}
-
-function SmartSegment({ segment, configIndex, interactive, highlight, resolveDatasource, resolveBinding, resolveModelPath, findDatasourceNode, navigateToTreeNode }: SmartSegmentProps) {
-  const [tooltip, setTooltip] = useState<PathTooltipData | null>(null);
-  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
-  const [resolved, setResolved] = useState<{ treeNodeId: string | null; type: string } | null>(null);
-  const resolvedRef = useRef<{ treeNodeId: string | null; type: string } | null>(null);
-  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+}) {
+  const resolveDatasource = useAppStore(s => s.resolveDatasource);
+  const resolveModelPath = useAppStore(s => s.resolveModelPath);
+  const findModelPathBindings = useAppStore(s => s.findModelPathBindings);
+  const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
+  const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const configurations = useAppStore(s => s.configurations);
 
+  const [tooltip, setTooltip] = useState<{ data: PathTooltipData; anchor: DOMRect } | null>(null);
+  const [treeNodeId, setTreeNodeId] = useState<string | null>(null);
+  const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => () => {
-    if (leaveTimer.current) clearTimeout(leaveTimer.current);
+    if (showTimer.current) clearTimeout(showTimer.current);
+    if (clearTimer.current) clearTimeout(clearTimer.current);
   }, []);
 
-  const canResolve = interactive && (segment.kind === 'identifier'
-    || segment.kind === 'model-path'
-    || (segment.kind === 'literal' && !!segment.lookupText));
+  // The card is anchored to where the name was; once the list scrolls, it
+  // would point at something else.
+  useEffect(() => {
+    if (!tooltip) return;
+    const hide = () => setTooltip(null);
+    window.addEventListener('scroll', hide, true);
+    return () => window.removeEventListener('scroll', hide, true);
+  }, [tooltip]);
 
-  const doResolve = useCallback((): PathTooltipData | null => {
-    if (segment.kind === 'identifier' || (segment.kind === 'literal' && segment.lookupText)) {
-      const referencePath = segment.fullPath ?? segment.lookupText ?? segment.text;
-      const deepResult = resolveDeepExpression(referencePath, configurations, configIndex);
-      const rootSegment = referencePath.split('.')[0] ?? referencePath;
+  const canResolve = interactive && Boolean(segment.chain);
 
-      const dsResult = resolveDatasource(rootSegment, configIndex);
-      const resolvedDatasource = deepResult?.nestedDs ?? deepResult?.rootDs ?? dsResult?.datasource;
-      const datasourceConfigIndex = deepResult?.rootDsConfigIndex ?? dsResult?.configIndex ?? configIndex;
+  const resolve = useCallback(() => buildPathTooltip(segment, {
+    deep: path => resolveDeepExpression(path, configurations, configIndex),
+    datasource: name => resolveDatasource(name, configIndex),
+    modelPath: path => resolveModelPath(path),
+    datasourceNode: (ds, ci) => findDatasourceNode(ds.name, ci, ds.parentPath),
+    bindingsBelow: path => findModelPathBindings(path).length,
+  }), [segment, configurations, configIndex, resolveDatasource, resolveModelPath, findModelPathBindings, findDatasourceNode]);
 
-      if (resolvedDatasource) {
-        const ds = resolvedDatasource;
-        const rows: PathTooltipRow[] = [];
-
-        if (ds.tableInfo) {
-          rows.push({ icon: 'table', label: t.pathTable, value: ds.tableInfo.tableName, mono: true });
-        } else if (ds.enumInfo) {
-          rows.push({ icon: 'enum', label: t.pathEnum, value: formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo), mono: true });
-        } else if (ds.classInfo) {
-          rows.push({ icon: 'class', label: t.pathClass, value: ds.classInfo.className, mono: true });
-        } else if (ds.calculatedField) {
-          rows.push({ icon: 'calc', label: t.expression, value: ds.calculatedField.expressionAsString ?? '', mono: true });
-        } else if (ds.userParamInfo) {
-          rows.push({ label: t.propEdt, value: ds.userParamInfo.extendedDataTypeName ?? ds.name });
-        } else {
-          rows.push({ label: t.propType, value: String(ds.type), muted: true });
-        }
-
-        if (deepResult?.nestedDs && deepResult.rootDs && deepResult.nestedDs !== deepResult.rootDs) {
-          rows.push({ icon: 'branch', label: t.pathCalcField, value: deepResult.rootDs.name, mono: true });
-        }
-        if (deepResult) {
-          const tables = deepResult.involvedDatasources.filter(d => d.tableName);
-          const classes = deepResult.involvedDatasources.filter(d => d.className);
-          const enums = deepResult.involvedDatasources.filter(d => d.enumName);
-          if (tables.length > 1) rows.push({ icon: 'table', value: tables.map(t => t.tableName).join(', '), mono: true, muted: true });
-          if (classes.length > 1) rows.push({ icon: 'class', value: classes.map(c => c.className).join(', '), mono: true, muted: true });
-          if (enums.length > 1) rows.push({ icon: 'enum', value: enums.map(e => formatEnumDisplayName(e.enumName!, e)).join(', '), mono: true, muted: true });
-          if (deepResult.calculatedFieldChain.length > 0) {
-            rows.push({ icon: 'calc', value: `${deepResult.calculatedFieldChain.length} ${t.pathCalcField}`, muted: true });
-          }
-        }
-
-        const treeNodeId = findDatasourceNode(ds.name, datasourceConfigIndex, ds.parentPath)
-          ?? dsResult?.treeNodeId
-          ?? null;
-
-        const r = { treeNodeId, type: 'datasource' };
-        resolvedRef.current = r;
-        setResolved(r);
-
-        return {
-          kind: 'datasource',
-          title: ds.name,
-          subtitle: t.pathDatasource,
-          rows,
-          canNavigate: !!treeNodeId,
-        };
-      }
-
-      resolvedRef.current = null;
-      setResolved(null);
-      return null;
-    }
-
-    if (segment.kind === 'model-path' && segment.fullPath) {
-      const mapResult = resolveModelPath(segment.fullPath);
-      if (mapResult) {
-        const rows: PathTooltipRow[] = [];
-        rows.push({ label: t.expression, value: mapResult.binding.expressionAsString ?? '', mono: true });
-        if (mapResult.datasource) {
-          const ds = mapResult.datasource;
-          if (ds.tableInfo) rows.push({ icon: 'table', label: t.pathTable, value: ds.tableInfo.tableName, mono: true });
-          else if (ds.enumInfo) rows.push({ icon: 'enum', label: t.pathEnum, value: formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo), mono: true });
-          else if (ds.classInfo) rows.push({ icon: 'class', label: t.pathClass, value: ds.classInfo.className, mono: true });
-          else if (ds.calculatedField) rows.push({ icon: 'calc', label: t.pathCalcField, value: ds.calculatedField.expressionAsString ?? '', mono: true });
-          else rows.push({ label: t.pathSegmentDatasource, value: `${ds.name} (${ds.type})` });
-        }
-        const navId = mapResult.bindingTreeNodeId ?? mapResult.datasourceTreeNodeId;
-        const r = { treeNodeId: navId, type: 'model-mapping' };
-        resolvedRef.current = r;
-        setResolved(r);
-        return {
-          kind: 'model-mapping',
-          title: mapResult.modelPath,
-          subtitle: t.propModel,
-          rows,
-          canNavigate: !!navId,
-        };
-      }
-
-      const bindResult = resolveBinding(segment.fullPath, configIndex);
-      if (bindResult) {
-        const rows: PathTooltipRow[] = [];
-        rows.push({ label: t.expression, value: bindResult.binding.expressionAsString ?? '', mono: true });
-        const dsName = bindResult.binding.expressionAsString?.split('.')[0]?.split('(')[0]?.replace(/['"]/g, '').trim();
-        if (dsName) {
-          const dsResult = resolveDatasource(dsName, bindResult.configIndex);
-          if (dsResult?.datasource) {
-            const ds = dsResult.datasource;
-            if (ds.tableInfo) rows.push({ icon: 'table', label: t.pathTable, value: ds.tableInfo.tableName, mono: true });
-            else if (ds.enumInfo) rows.push({ icon: 'enum', label: t.pathEnum, value: formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo), mono: true });
-            else if (ds.classInfo) rows.push({ icon: 'class', label: t.pathClass, value: ds.classInfo.className, mono: true });
-            else if (ds.calculatedField) rows.push({ icon: 'calc', label: t.pathCalcField, value: ds.calculatedField.expressionAsString ?? '', mono: true });
-          }
-        }
-        const r = { treeNodeId: bindResult.treeNodeId, type: 'binding' };
-        resolvedRef.current = r;
-        setResolved(r);
-        return {
-          kind: 'binding',
-          title: bindResult.binding.path,
-          subtitle: t.propBindings,
-          rows,
-          canNavigate: !!bindResult.treeNodeId,
-        };
-      }
-      resolvedRef.current = null;
-      setResolved(null);
-    }
-    return null;
-  }, [segment, configIndex, configurations, findDatasourceNode, resolveDatasource, resolveBinding, resolveModelPath]);
-
-  const handleMouseEnter = useCallback((e: React.MouseEvent) => {
-    if (!canResolve) return;
-    if (leaveTimer.current) { clearTimeout(leaveTimer.current); leaveTimer.current = null; }
-    setMousePos({ x: e.clientX, y: e.clientY });
-    const tip = doResolve();
-    setTooltip(tip);
-  }, [canResolve, doResolve]);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!canResolve || !tooltip) return;
-    setMousePos({ x: e.clientX, y: e.clientY });
-  }, [canResolve, tooltip]);
+  const handleMouseEnter = useCallback((event: React.MouseEvent<HTMLSpanElement>) => {
+    if (clearTimer.current) { clearTimeout(clearTimer.current); clearTimer.current = null; }
+    const anchor = event.currentTarget.getBoundingClientRect();
+    const data = resolve();
+    setTreeNodeId(data?.navigation?.treeNodeId ?? null);
+    if (!data) return;
+    if (showTimer.current) clearTimeout(showTimer.current);
+    showTimer.current = setTimeout(() => setTooltip({ data, anchor }), SHOW_DELAY_MS);
+  }, [resolve]);
 
   const handleMouseLeave = useCallback(() => {
+    if (showTimer.current) { clearTimeout(showTimer.current); showTimer.current = null; }
     setTooltip(null);
-    setMousePos(null);
-    leaveTimer.current = setTimeout(() => {
-      resolvedRef.current = null;
-      setResolved(null);
-    }, 300);
+    // Kept briefly so a click that lands just as the pointer leaves still navigates.
+    clearTimer.current = setTimeout(() => setTreeNodeId(null), 300);
   }, []);
 
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    // Stop propagation to prevent parent row from handling the click
-    e.stopPropagation();
+  const handleClick = useCallback((event: React.MouseEvent) => {
+    // The row around the expression has its own click behaviour.
+    event.stopPropagation();
+    if (!treeNodeId) return;
+    setTooltip(null);
+    navigateToTreeNode(treeNodeId);
+  }, [treeNodeId, navigateToTreeNode]);
 
-    // Use ref for immediate access (survives mouseLeave race); the handler is
-    // only attached once the segment has resolved to a tree node.
-    const r = resolvedRef.current;
-    if (r?.treeNodeId) navigateToTreeNode(r.treeNodeId);
-  }, [navigateToTreeNode]);
-
-  const colorMap: Record<string, string> = {
-    identifier: 'var(--syn-identifier)',
-    'model-path': 'var(--syn-path)',
-    operator: 'var(--syn-operator)',
-    literal: 'var(--syn-literal)',
-    separator: 'var(--syn-separator)',
-  };
-
-  const isResolved = resolved?.treeNodeId != null;
+  const isResolved = treeNodeId != null;
 
   return (
     <>
       <span
         className={isResolved ? 'clickable-path-segment' : canResolve ? 'clickable-path-can-resolve' : undefined}
         style={{
-          color: isResolved ? 'var(--syn-resolved)' : (colorMap[segment.kind] ?? 'var(--text-secondary)'),
+          color: isResolved ? 'var(--syn-resolved)' : SEGMENT_COLORS[segment.kind],
           cursor: canResolve ? 'pointer' : undefined,
           textDecoration: isResolved ? 'underline' : undefined,
-          textDecorationStyle: isResolved ? 'dotted' as const : undefined,
+          textDecorationStyle: isResolved ? 'dotted' : undefined,
           textUnderlineOffset: '3px',
         }}
         onMouseEnter={canResolve ? handleMouseEnter : undefined}
-        onMouseMove={canResolve ? handleMouseMove : undefined}
         onMouseLeave={canResolve ? handleMouseLeave : undefined}
         onClick={isResolved ? handleClick : undefined}
       >
         {highlightSegmentText(segment.text, highlight)}
       </span>
-      {tooltip && mousePos && (
-        <PathTooltipCard data={tooltip} mouse={mousePos} />
-      )}
+      {tooltip && <PathTooltipCard data={tooltip.data} anchor={tooltip.anchor} />}
     </>
   );
 }

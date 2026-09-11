@@ -21,7 +21,7 @@ import {
   ArrowSyncRegular,
   ArrowUploadRegular,
   ArrowDownloadRegular,
-  SearchRegular,
+  TextBulletListTreeRegular,
   InfoRegular,
   MoreVerticalRegular,
 } from '@fluentui/react-icons';
@@ -1474,9 +1474,9 @@ function ValidationExpression({ label, expression, configIndex, elementName }: {
         configIndex={configIndex}
         elementName={elementName}
         className="mm-binding-drill"
+        label={t.drillCollapsibleLabel}
       >
-        <SearchRegular fontSize={14} />
-        <span>{locale === 'cs' ? 'Rozpad' : 'Drill-down'}</span>
+        <TextBulletListTreeRegular fontSize={16} aria-hidden="true" />
       </DrillDownTrigger>
     </div>
   );
@@ -1554,9 +1554,9 @@ function BindingTreeRows({
               configIndex={configIndex}
               elementName={node.name}
               className="mm-binding-drill"
+              label={t.drillCollapsibleLabel}
             >
-              <SearchRegular fontSize={14} />
-              <span>{locale === 'cs' ? 'Rozpad' : 'Drill-down'}</span>
+              <TextBulletListTreeRegular fontSize={16} aria-hidden="true" />
             </DrillDownTrigger>
           )}
           {binding && onRevealBinding && <RevealInExplorerMenu onReveal={() => onRevealBinding(node.key)} />}
@@ -4882,9 +4882,9 @@ function ModelUsageTreeRows({ node, depth, mappingConfigIndex, isCollapsed, onTo
                 configIndex={mappingConfigIndex}
                 elementName={node.path}
                 className="mm-binding-drill"
+                label={t.drillCollapsibleLabel}
               >
-                <SearchRegular fontSize={14} />
-                <span>{cs ? 'Rozpad' : 'Drill-down'}</span>
+                <TextBulletListTreeRegular fontSize={16} aria-hidden="true" />
               </DrillDownTrigger>
             </span>
           )}
