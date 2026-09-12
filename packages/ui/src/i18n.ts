@@ -390,7 +390,6 @@ export interface Translations {
   fnoNoProfiles: string;
   fnoNoProfilesHint: string;
   fnoRemoveProfile: string;
-  fnoActiveProfile: string;
   fnoSolutions: string;
   fnoConfigurations: string;
   fnoLoading: string;
@@ -972,7 +971,6 @@ const cs: Translations = {
   fnoNoProfiles: 'Zatím tu není žádné prostředí.',
   fnoNoProfilesHint: 'Přidej profil s názvem a URL adresou F&O prostředí a přihlas se účtem Microsoft.',
   fnoRemoveProfile: 'Odebrat profil',
-  fnoActiveProfile: 'Vybráno',
   fnoSolutions: 'ER řešení',
   fnoConfigurations: 'Konfigurace',
   fnoLoading: 'Načítám…',
@@ -1572,7 +1570,6 @@ const en: Translations = {
   fnoNoProfiles: 'No environment here yet.',
   fnoNoProfilesHint: 'Add a profile with a name and the F&O environment URL, then sign in with your Microsoft account.',
   fnoRemoveProfile: 'Remove profile',
-  fnoActiveProfile: 'Selected',
   fnoSolutions: 'ER solutions',
   fnoConfigurations: 'Configurations',
   fnoLoading: 'Loading…',

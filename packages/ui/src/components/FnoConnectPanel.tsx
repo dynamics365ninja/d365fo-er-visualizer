@@ -192,6 +192,12 @@ const useStyles = makeStyles({
     ':hover': {
       backgroundColor: tokens.colorNeutralBackground1Hover,
     },
+    // Narrow windows: Connect + edit + delete would squeeze the name and URL
+    // down to a couple of characters, so the buttons drop to their own line.
+    '@media (max-width: 560px)': {
+      gridTemplateColumns: 'auto minmax(0, 1fr)',
+      rowGap: tokens.spacingVerticalXS,
+    },
   },
   profileRowActive: {
     ...shorthands.borderColor(tokens.colorBrandStroke1),
@@ -232,6 +238,10 @@ const useStyles = makeStyles({
     alignItems: 'center',
     gap: '2px',
     flexShrink: 0,
+    '@media (max-width: 560px)': {
+      gridColumn: '1 / -1',
+      justifyContent: 'flex-end',
+    },
   },
   profileEmptyState: {
     display: 'flex',
@@ -245,36 +255,38 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground2,
   },
 
-  // ── Connection status bar ─────────────────────────────────────
-  connBar: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalM,
-    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground2,
-    flexWrap: 'wrap',
-  },
+  // ── Connection status (inside the selected environment row) ───
+  // It used to be a separate bar under the list, which repeated the selected
+  // environment's name, URL and a Connect button verbatim. Hanging the status
+  // off the row it describes means an environment is named exactly once.
   connStatusDot: {
-    width: '10px',
-    height: '10px',
+    width: '8px',
+    height: '8px',
     borderRadius: '50%',
     flexShrink: 0,
+    // Centre the dot on the cap height of the caption line beside it.
+    marginTop: '4px',
   },
   connStatusDotConnected: { backgroundColor: tokens.colorPaletteGreenForeground1 },
   connStatusDotConnecting: { backgroundColor: tokens.colorPaletteYellowForeground1 },
   connStatusDotDisconnected: { backgroundColor: tokens.colorNeutralForeground3 },
   connStatusDotError: { backgroundColor: tokens.colorPaletteRedForeground1 },
-  connBarInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  connBarActions: {
+  // Top-aligned: a wrapped sign-in error must keep its dot next to the first
+  // line, not floating in the middle of the paragraph.
+  profileStatusRow: {
     display: 'flex',
-    gap: tokens.spacingHorizontalS,
-    alignItems: 'center',
-    flexShrink: 0,
+    alignItems: 'flex-start',
+    gap: tokens.spacingHorizontalXS,
+    marginTop: '3px',
+  },
+  // Sign-in errors are whole sentences — they wrap instead of being clipped
+  // on one line like the name and URL above them.
+  profileStatusText: {
+    minWidth: 0,
+    overflowWrap: 'break-word',
+  },
+  profileConnectBtn: {
+    marginRight: tokens.spacingHorizontalXXS,
   },
 
   // ── Browser (two-column) ──────────────────────────────────────
@@ -3238,6 +3250,17 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     connState.kind === 'connecting' ? styles.connStatusDotConnecting :
     connState.kind === 'error' ? styles.connStatusDotError :
     styles.connStatusDotDisconnected;
+  // `null` while disconnected: the row's own Connect button already says that,
+  // and an extra "not connected" line would only add noise.
+  const connStatusLabel =
+    connState.kind === 'connected' ? t.fnoConnected(connState.account) :
+    connState.kind === 'connecting' ? t.fnoConnecting :
+    connState.kind === 'error' ? connState.message :
+    null;
+  const connStatusColor =
+    connState.kind === 'connected' ? tokens.colorPaletteGreenForeground1 :
+    connState.kind === 'error' ? tokens.colorPaletteRedForeground1 :
+    tokens.colorNeutralForeground2;
 
   return (
     <div className={styles.root}>
@@ -3320,15 +3343,19 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           <div className={styles.profileList}>
             {profiles.map(p => {
               const isActive = activeProfileId === p.id;
+              // Re-selecting the row that is already selected would drop a live
+              // connection (setActiveProfileId resets the session) without ever
+              // signing out — clicking the selected row is a no-op instead.
+              const select = () => { if (!isActive) setActiveProfileId(p.id); };
               return (
                 <div
                   key={p.id}
                   className={mergeClasses(styles.profileRow, isActive ? styles.profileRowActive : '')}
-                  onClick={() => setActiveProfileId(p.id)}
+                  onClick={select}
                   role="button"
                   aria-pressed={isActive}
                   tabIndex={0}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setActiveProfileId(p.id); }}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') select(); }}
                 >
                   <div className={mergeClasses(styles.profileAvatar, isActive ? styles.profileAvatarActive : '')}>
                     {initials(p.displayName || p.envUrl)}
@@ -3338,13 +3365,43 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                     <Caption1 className={styles.profileLine} style={{ color: tokens.colorNeutralForeground3 }}>
                       {p.envUrl}
                     </Caption1>
+                    {isActive && connStatusLabel && (
+                      <div className={styles.profileStatusRow}>
+                        <span className={mergeClasses(styles.connStatusDot, connDotClass)} aria-hidden="true" />
+                        <Caption1
+                          className={styles.profileStatusText}
+                          style={{ color: connStatusColor, fontStyle: connState.kind === 'connecting' ? 'italic' : undefined }}
+                          role={connState.kind === 'error' ? 'alert' : 'status'}
+                        >
+                          {connStatusLabel}
+                        </Caption1>
+                      </div>
+                    )}
                   </div>
                   <div className={styles.profileActions}>
-                    {isActive && (
-                      <Badge appearance="tint" color="brand" size="small" style={{ marginRight: tokens.spacingHorizontalXS }}>
-                        {t.fnoActiveProfile}
-                      </Badge>
-                    )}
+                    {/* Connect acts on the selected environment, so it sits on that
+                        row instead of in a second card repeating the same name. */}
+                    {isActive && (connState.kind === 'connected' ? (
+                      <Button
+                        size="small"
+                        className={styles.profileConnectBtn}
+                        icon={<PlugDisconnectedRegular />}
+                        onClick={e => { e.stopPropagation(); void handleDisconnect(); }}
+                      >
+                        {t.fnoDisconnect}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="small"
+                        appearance="primary"
+                        className={styles.profileConnectBtn}
+                        icon={connState.kind === 'connecting' ? <Spinner size="tiny" /> : <PlugConnectedRegular />}
+                        disabled={connState.kind === 'connecting'}
+                        onClick={e => { e.stopPropagation(); void handleConnect(); }}
+                      >
+                        {connState.kind === 'connecting' ? t.fnoConnecting : t.fnoConnect}
+                      </Button>
+                    ))}
                     <Tooltip content={t.fnoEditProfile} relationship="label">
                       <Button
                         appearance="subtle"
@@ -3415,56 +3472,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           </DialogBody>
         </DialogSurface>
       </Dialog>
-
-      {/* ── Connection status bar ────────────────────────────────────────── */}
-      {activeProfile && (
-        <div className={styles.connBar}>
-          <div className={mergeClasses(styles.connStatusDot, connDotClass)} />
-          <div className={styles.connBarInfo}>
-            {connState.kind === 'connected' ? (
-              <>
-                <Body1Strong style={{ color: tokens.colorPaletteGreenForeground1 }}>
-                  {t.fnoConnected(connState.account)}
-                </Body1Strong>
-                <div>
-                  <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{activeProfile.envUrl}</Caption1>
-                </div>
-              </>
-            ) : connState.kind === 'connecting' ? (
-              <Body1Strong style={{ fontStyle: 'italic', color: tokens.colorNeutralForeground2 }}>
-                {t.fnoConnecting}
-              </Body1Strong>
-            ) : connState.kind === 'error' ? (
-              <Body1Strong style={{ color: tokens.colorPaletteRedForeground1 }}>
-                {connState.message}
-              </Body1Strong>
-            ) : (
-              <>
-                <Body1Strong>{activeProfile.displayName}</Body1Strong>
-                <div>
-                  <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{activeProfile.envUrl}</Caption1>
-                </div>
-              </>
-            )}
-          </div>
-          <div className={styles.connBarActions}>
-            {connState.kind === 'connected' ? (
-              <Button icon={<PlugDisconnectedRegular />} onClick={handleDisconnect}>
-                {t.fnoDisconnect}
-              </Button>
-            ) : (
-              <Button
-                appearance="primary"
-                icon={connState.kind === 'connecting' ? <Spinner size="tiny" /> : <PlugConnectedRegular />}
-                onClick={handleConnect}
-                disabled={connState.kind === 'connecting'}
-              >
-                {connState.kind === 'connecting' ? t.fnoConnecting : t.fnoConnect}
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* ── Browser ──────────────────────────────────────────────────────── */}
       {connState.kind === 'connected' && (
