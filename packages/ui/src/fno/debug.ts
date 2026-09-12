@@ -74,6 +74,76 @@ export function dumpFnoDebug(label: string): void {
   );
 }
 
+/**
+ * Console handle, installed on every start — `window.__erFnoDebug`.
+ *
+ * Installed even while recording is off, on purpose: typing `__erFnoDebug` in
+ * the console then answers the first question of any "I see no output" report.
+ * `undefined` means the running build predates the recorder (or is being
+ * served from somewhere else); an object means the build has it and the switch
+ * is simply off. Turning it on from here also writes the flag to the origin
+ * the app actually runs on, which a hand-typed `localStorage.setItem` in the
+ * wrong tab does not.
+ */
+export interface FnoDebugHandle {
+  /** Whether entries are being recorded right now. */
+  readonly enabled: boolean;
+  /** Current switch value: '1', a name filter, or '' when off. */
+  readonly filter: string;
+  /** Turn recording on (optionally for names containing `filter`). */
+  enable(filter?: string): string;
+  disable(): string;
+  /** Everything recorded so far, without consuming it. */
+  entries(): unknown[];
+  /** Print and consume what has been recorded. */
+  dump(label?: string): void;
+  clear(): void;
+}
+
+export function installFnoDebugHandle(): void {
+  if (typeof window === 'undefined') return;
+  const handle: FnoDebugHandle = {
+    get enabled() {
+      return fnoDebugEnabled();
+    },
+    get filter() {
+      return debugSetting();
+    },
+    enable(filter?: string) {
+      const value = filter && filter.trim() ? filter.trim() : '1';
+      try {
+        window.localStorage.setItem(STORAGE_KEY, value);
+      } catch {
+        return 'could not write localStorage (private mode?)';
+      }
+      return `[er-fno-debug] recording ${value === '1' ? 'everything' : `names containing "${value}"`}. ` +
+        'Reproduce the problem; the JSON blob prints when the download finishes.';
+    },
+    disable() {
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        // nothing to do — the switch simply stays as it was
+      }
+      entries = [];
+      return '[er-fno-debug] recording off';
+    },
+    entries: () => entries.slice(),
+    dump: (label = 'on demand') => dumpFnoDebug(label),
+    clear: () => {
+      entries = [];
+    },
+  };
+  Object.defineProperty(window, '__erFnoDebug', { value: handle, configurable: true });
+  if (fnoDebugEnabled()) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[er-fno-debug] recording is on (${debugSetting()}). ` +
+        'The JSON blob prints when a download finishes — or call __erFnoDebug.dump().',
+    );
+  }
+}
+
 /** Maps / Sets would serialise as `{}`; unfold them instead. */
 function jsonSafe(_key: string, value: unknown): unknown {
   if (value instanceof Map) return Object.fromEntries(value);

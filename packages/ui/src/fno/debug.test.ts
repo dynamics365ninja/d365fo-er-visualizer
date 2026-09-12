@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { dumpFnoDebug, fnoDebugEnabled, fnoDebugMatches, recordFnoDebug } from './debug';
+import {
+  dumpFnoDebug,
+  fnoDebugEnabled,
+  fnoDebugMatches,
+  installFnoDebugHandle,
+  recordFnoDebug,
+  type FnoDebugHandle,
+} from './debug';
 
 /** The recorder reads `window.localStorage`; the UI tests run in node. */
 function setSwitch(value: string | null): void {
@@ -56,6 +63,35 @@ describe('fno debug recorder', () => {
     const printed = log.mock.calls[0][0] as string;
     expect(printed).toContain('"a": 1');
     expect(printed).toContain('"g1"');
+  });
+
+  it('installs the console handle even while recording is off', () => {
+    const store = new Map<string, string>();
+    (globalThis as { window?: unknown }).window = {
+      localStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value),
+        removeItem: (key: string) => void store.delete(key),
+      },
+    };
+    installFnoDebugHandle();
+    // `undefined` here is what tells someone their build predates the recorder,
+    // so the handle must exist regardless of the switch.
+    const handle = (globalThis as { window?: { __erFnoDebug?: FnoDebugHandle } }).window?.__erFnoDebug;
+    expect(handle).toBeDefined();
+    expect(handle!.enabled).toBe(false);
+
+    expect(handle!.enable('sales invoice')).toContain('sales invoice');
+    expect(handle!.enabled).toBe(true);
+    expect(handle!.filter).toBe('sales invoice');
+    expect(fnoDebugMatches('Asl Sales invoice (Excel)')).toBe(true);
+
+    recordFnoDebug('download', { asked: 'x' });
+    expect(handle!.entries()).toHaveLength(1);
+
+    handle!.disable();
+    expect(handle!.enabled).toBe(false);
+    expect(handle!.entries()).toHaveLength(0);
   });
 
   it('records nothing while the switch is off', () => {
