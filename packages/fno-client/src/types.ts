@@ -84,6 +84,15 @@ export interface ErConfigSummary {
   revisionGuid?: string;
   /** Optional GUID of the configuration itself (different from the revision). */
   configurationGuid?: string;
+  /**
+   * Every other GUID the listing row carried for this configuration, in
+   * probe order. `getFormatSolutionsSubHierarchy` puts the id a download
+   * needs in a different place depending on the F&O build and on whether the
+   * row is a base or a derived configuration — `FormatMappingGUID` on some,
+   * a per-version GUID inside `Versions[]` on others. The downloader tries
+   * them all before concluding a configuration has no content of its own.
+   */
+  guidCandidates?: string[];
   /** Country / region code if exposed. */
   countryRegion?: string;
   /** Whether the component has downstream XML content available. */
