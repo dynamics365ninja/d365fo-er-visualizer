@@ -911,6 +911,18 @@ export async function downloadConfigXml(
     // showing a red toast.
     const allEmpty = tried.length > 0 && tried.every(t => t.status === 200);
     if (allEmpty) {
+      // A draft-only configuration is the common, explainable case: the
+      // storage service serves the effective (completed) version, so there is
+      // nothing to hand out until someone completes it in F&O.
+      if (component.draftOnly) {
+        throw new FnoEmptyContentError(
+          `"${component.configurationName}" (${component.componentType}) has no completed version — ` +
+            `the listing reports only a draft, and F&O serves the effective (completed) version, ` +
+            `so all ${tried.length} probe(s) returned HTTP 200 with an empty body. ` +
+            `Complete the version in F&O (Reporting configurations → Versions → Complete) to download it. ` +
+            `Probed: ${probedIds || '(none)'}.`,
+        );
+      }
       throw new FnoEmptyContentError(
         `"${component.configurationName}" (${component.componentType}) has no own XML content — ` +
           `F&O returned HTTP 200 with an empty body for all ${tried.length} probe(s). ` +
@@ -970,7 +982,17 @@ export async function downloadConfigXml(
   // the synthetic ERSolution (custom services strip the envelope): the
   // component's own ERSolution GUID and its inheritance parent (`Base=`).
   const baseHint = extractBaseHint(xml);
-  const finalXml = injectNameHint(xml, component.configurationName, finalVersion, {
+  // Trust the payload over the summary we asked with — but only for the two
+  // types that get *synthesised* summaries. A DataModel probed by GUID and a
+  // mapping resolved from (model, descriptor) carry a guessed name, often the
+  // base configuration's, which is what made a correctly downloaded derived
+  // configuration look like its base. A Format is always asked with the
+  // listing row the user picked, so its name stays as the user saw it.
+  const actualName =
+    component.componentType === 'DataModel' || component.componentType === 'ModelMapping'
+      ? extractComponentNameFromXml(xml, component.componentType)
+      : undefined;
+  const finalXml = injectNameHint(xml, actualName || component.configurationName, finalVersion, {
     solutionId: component.configurationGuid,
     base: baseHint,
   });
@@ -980,11 +1002,15 @@ export async function downloadConfigXml(
     syntheticPath: buildFnoPath({
       envUrl: conn.envUrl,
       solutionName: component.solutionName,
-      configurationName: component.configurationName,
+      configurationName: actualName || component.configurationName,
       version: finalVersion,
       componentType: component.componentType,
     }),
-    source: component,
+    source: actualName && actualName !== component.configurationName
+      // Keep the identity F&O reported, so the workspace, the ingest log and
+      // the debug dump all name the same thing.
+      ? { ...component, configurationName: actualName }
+      : component,
     resolvedWith: { operation, body: successBody ?? {} },
     referencedDataModelGuids: referencedDataModelGuids.length > 0 ? referencedDataModelGuids : undefined,
     referencedDataModelRevisions: Object.keys(referencedDataModelRevisions).length > 0
@@ -1192,6 +1218,49 @@ function escapeXmlAttr(value: string): string {
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+/**
+ * The name F&O put on the configuration it actually returned.
+ *
+ * Several download paths ask with a *synthesised* summary — a DataModel
+ * probed by GUID, a mapping resolved from (model, descriptor) — whose name is
+ * a guess, frequently the base configuration's name. The payload knows
+ * better: `<ERDataModel Name="Asl Invoice model">` is the derived model even
+ * when we asked for "Invoice model". Labelling the bundle with the guess is
+ * what made a correctly downloaded derived configuration look like its base.
+ *
+ * The element is matched per component type: a mapping bundle opens with the
+ * model half (`parmModel`), so a blanket "first Name attribute" would label
+ * every mapping after its DataModel.
+ */
+export function extractComponentNameFromXml(
+  xml: string,
+  componentType: ErComponentType,
+): string | undefined {
+  const elements =
+    componentType === 'DataModel' ? ['ERDataModel'] :
+    componentType === 'ModelMapping' ? ['ERModelMapping'] :
+    componentType === 'Format' ? ['ERTextFormat', 'ERFormat', 'ERFormatMapping'] :
+    [];
+  for (const element of elements) {
+    // Attribute order is not guaranteed; scan the opening tag only.
+    const tag = new RegExp(`<\\s*${element}\\b[^>]*>`, 'i').exec(xml);
+    if (!tag) continue;
+    const name = /\bName\s*=\s*"([^"]*)"/i.exec(tag[0])?.[1];
+    if (name && name.trim()) return decodeXmlAttr(name.trim());
+  }
+  return undefined;
+}
+
+/** Reverse of `escapeXmlAttr` for the handful of entities it produces. */
+function decodeXmlAttr(value: string): string {
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
 }
 
 function injectNameHint(
@@ -1638,6 +1707,13 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
         .sort((a, b) => b - a)
     : undefined;
 
+  // No completed version to hand out: the listing knows versions, yet none of
+  // them is completed (a lone version 1 is the never-completed draft, since
+  // D365FO numbers a draft as lastCompleted + 1).
+  const displayVersion = pickDisplayVersion(r.Versions);
+  const draftOnly =
+    Array.isArray(r.Versions) && r.Versions.length > 0 && displayVersion === undefined;
+
   return {
     solutionName: r.SolutionName ?? solutionName,
     configurationName: name,
@@ -1645,7 +1721,8 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
     // pickDisplayVersion prefers highest Completed (Status=2).
     // String fallbacks r.ConfigurationVersion / r.Version have no Status
     // info and may carry a draft number — omit for display field.
-    version: pickDisplayVersion(r.Versions),
+    version: displayVersion,
+    draftOnly: draftOnly || undefined,
     revisionGuid,
     configurationGuid,
     guidCandidates: collectRowGuids(r),

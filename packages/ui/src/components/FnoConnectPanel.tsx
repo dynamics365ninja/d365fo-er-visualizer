@@ -1503,11 +1503,15 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               configurationName: component.configurationName,
               componentType: component.componentType,
               solutionName: component.solutionName,
+              draftOnly: component.draftOnly ?? false,
               detail: err.message,
             });
             pushToast({
               kind: 'info',
-              message: t.fnoSkippedDerived(component.configurationName),
+              // A draft has a fix the user can act on; "no own XML" does not.
+              message: component.draftOnly
+                ? t.fnoSkippedDraft(component.configurationName)
+                : t.fnoSkippedDerived(component.configurationName),
             });
           } else {
             console.info('[fno-ui] auto-included root has no own XML, skipping', component.configurationName);
@@ -3972,6 +3976,15 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                             <Badge appearance="outline" color="success" size="small" style={{ fontSize: '10px' }}>
                               {t.fnoViaParent}
                             </Badge>
+                          )}
+                          {/* No completed version: F&O will answer empty, so say
+                              it before the download rather than after. */}
+                          {comp.draftOnly && (
+                            <Tooltip content={t.fnoDraftOnlyHint} relationship="description">
+                              <Badge appearance="outline" color="warning" size="small" style={{ fontSize: '10px' }}>
+                                {t.fnoDraftOnly}
+                              </Badge>
+                            </Tooltip>
                           )}
 
                         </div>

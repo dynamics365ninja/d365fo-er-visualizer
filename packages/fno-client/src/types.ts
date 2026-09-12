@@ -85,6 +85,15 @@ export interface ErConfigSummary {
   /** Optional GUID of the configuration itself (different from the revision). */
   configurationGuid?: string;
   /**
+   * True when the listing shows no completed version for this configuration —
+   * its only version is the draft. F&O's storage service hands out the
+   * *effective* (completed) version, so such a configuration has nothing to
+   * download: every probe answers HTTP 200 with an empty body. Recognising it
+   * up front is the difference between "F&O will not export a draft" and the
+   * useless "this configuration has no XML of its own".
+   */
+  draftOnly?: boolean;
+  /**
    * Every other GUID the listing row carried for this configuration, in
    * probe order. `getFormatSolutionsSubHierarchy` puts the id a download
    * needs in a different place depending on the F&O build and on whether the

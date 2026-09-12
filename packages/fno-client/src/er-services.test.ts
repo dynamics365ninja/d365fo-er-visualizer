@@ -14,6 +14,8 @@ import {
   buildDownloadAttempts,
   findGuidInVersions,
   collectRowGuids,
+  extractComponentNameFromXml,
+  listComponents as listComponentsFn,
   extractVersionFromXml,
   extractReferencedDataModelGuids,
   pickDisplayVersion,
@@ -764,6 +766,123 @@ describe('findGuidInVersions', () => {
     } as any;
     const result = findGuidInVersions(row);
     expect(result).toBe('dddddddd-4444-4444-4444-444444444444');
+  });
+});
+
+describe('draft-only detection', () => {
+  const row = (name: string, versions: unknown[]) => ({
+    Name: name,
+    ComponentType: 'Format',
+    FormatMappingGUID: '11111111-1111-1111-1111-111111111111',
+    Versions: versions,
+  });
+
+  async function map(rows: unknown[]) {
+    const op = 'getFormatSolutionsSubHierarchy';
+    const { transport } = makeTransport({ post: () => ({ [`${op}Result`]: rows }) });
+    return listComponentsFn(transport, conn, 'tok', 'Invoice model');
+  }
+
+  it('flags a configuration whose only version is the never-completed draft', async () => {
+    // D365FO numbers a draft as lastCompleted + 1, so a lone version 1 has
+    // never been completed — the storage service has nothing to hand out.
+    const [only] = await map([row('Asl Sales invoice (Excel)', [{ VersionNumber: 1, Status: 1 }])]);
+    expect(only.draftOnly).toBe(true);
+    expect(only.version).toBeUndefined();
+  });
+
+  it('does not flag a configuration with a completed version', async () => {
+    const [only] = await map([
+      row('Asl Free text invoice (Excel)', [
+        { VersionNumber: 4, Status: 1 },
+        { VersionNumber: 3, Status: 2 },
+      ]),
+    ]);
+    expect(only.draftOnly).toBeUndefined();
+    expect(only.version).toBe('3');
+  });
+
+  it('does not flag a row the listing gave no versions for', async () => {
+    const [only] = await map([row('Unknown versions', [])]);
+    expect(only.draftOnly).toBeUndefined();
+  });
+
+  it('explains the empty answer as a missing completed version', async () => {
+    const op = 'GetEffectiveFormatMappingByID';
+    const { transport } = makeTransport({ post: () => ({ [`${op}Result`]: '' }) });
+    await expect(downloadConfigXml(transport, conn, 'tok', {
+      solutionName: 'Invoice model',
+      configurationName: 'Asl Sales invoice (Excel)',
+      componentType: 'Format',
+      configurationGuid: 'afed2936-3761-4042-b8ac-f41850b15672',
+      draftOnly: true,
+      hasContent: true,
+    })).rejects.toThrow(/no completed version[\s\S]*Versions → Complete/);
+  });
+});
+
+describe('extractComponentNameFromXml', () => {
+  it('reads the DataModel name F&O actually returned', () => {
+    const xml = '<ERDataModel ID.="{E153}" Description="@GER_LABEL:Invoice" Name="Asl Invoice model" Root="X"/>';
+    expect(extractComponentNameFromXml(xml, 'DataModel')).toBe('Asl Invoice model');
+  });
+
+  it('does not label a mapping after the model half of its bundle', () => {
+    // GetModelMappingByID answers with parmModel first; naming the mapping
+    // after it would rename every mapping to its DataModel.
+    const xml =
+      '<ERDataModel Name="Asl Invoice model"><Contents./></ERDataModel>' +
+      '<ERModelMapping Name="Asl Invoice model mapping" />';
+    expect(extractComponentNameFromXml(xml, 'ModelMapping')).toBe('Asl Invoice model mapping');
+  });
+
+  it('ignores the ERModelMappingVersion wrapper', () => {
+    expect(extractComponentNameFromXml('<ERModelMappingVersion Number="5"/>', 'ModelMapping'))
+      .toBeUndefined();
+  });
+
+  it('decodes escaped attribute values', () => {
+    expect(extractComponentNameFromXml('<ERDataModel Name="A &amp; B"/>', 'DataModel')).toBe('A & B');
+  });
+
+  it('returns undefined when the payload carries no name', () => {
+    expect(extractComponentNameFromXml('<ERDataModel ID.="{X}"/>', 'DataModel')).toBeUndefined();
+  });
+});
+
+describe('download naming', () => {
+  it('labels a synthesised DataModel with the name from the payload', async () => {
+    const op = 'GetDataModelByIDAndRevision';
+    const xml = '<ERDataModel ID.="{E153}" Name="Asl Invoice model" Root="X"/>';
+    const { transport } = makeTransport({ post: () => ({ [`${op}Result`]: xml }) });
+    const download = await downloadConfigXml(transport, conn, 'tok', {
+      // What the GUID probe guessed — the base model's name.
+      solutionName: 'Invoice model',
+      configurationName: 'Invoice model',
+      componentType: 'DataModel',
+      configurationGuid: 'e1534820-3b67-4266-ace3-663d9ef0eb09',
+      versionNumbers: [2],
+      hasContent: true,
+    });
+    expect(download.xml).toContain('<ErFnoBundle Name="Asl Invoice model"');
+    expect(download.source.configurationName).toBe('Asl Invoice model');
+    expect(download.syntheticPath).toContain('Asl-Invoice-model');
+  });
+
+  it('keeps the listing name of a Format the user picked', async () => {
+    const op = 'GetEffectiveFormatMappingByID';
+    // The payload names the base format; the row the user clicked must win.
+    const xml = '<ERTextFormat Name="Free text invoice (Excel)"/>';
+    const { transport } = makeTransport({ post: () => ({ [`${op}Result`]: xml }) });
+    const download = await downloadConfigXml(transport, conn, 'tok', {
+      solutionName: 'Invoice model',
+      configurationName: 'Asl Free text invoice (Excel)',
+      componentType: 'Format',
+      configurationGuid: '6f193956-a620-43ca-9fdc-526d4dad6b12',
+      hasContent: true,
+    });
+    expect(download.xml).toContain('<ErFnoBundle Name="Asl Free text invoice (Excel)"');
+    expect(download.source.configurationName).toBe('Asl Free text invoice (Excel)');
   });
 });
 
