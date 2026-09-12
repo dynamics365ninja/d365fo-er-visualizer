@@ -1533,12 +1533,22 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         // the DataModel GUID via sibling format scouts from the listing cache.
         for (const fmt of Array.from(selected.values())) {
           if (fmt.componentType !== 'Format') continue;
-          // Is the parent DataModel already in finalToLoad?
-          const parentDmName = fmt.solutionName ?? '';
+          // Two different names, and mixing them up is what labelled a derived
+          // model after its base:
+          //  • `solutionName` is the ROOT of the listing query — the key the
+          //    component cache is filled under, so scout lookup needs it.
+          //  • `ownerDataModelName` is the nearest DataModel ANCESTOR in the ER
+          //    tree, i.e. the model this format actually belongs to. For a format
+          //    under a derived model ("Asl Payment model") the root is still the
+          //    base ("Payment model"), so naming the synthetic DataModel after the
+          //    root put the base's name on the derived model — in the download
+          //    dialog, on the tab, and on every mapping synthesized from it.
+          const listingRootName = fmt.solutionName ?? '';
+          const parentDmName = fmt.ownerDataModelName || listingRootName;
           if (dmNamesInLoad.has(parentDmName)) continue;
           if (!parentDmName) continue;
 
-          // Collect Format siblings from the cached tree rooted at parentDmName.
+          // Collect Format siblings from the cached tree rooted at listingRootName.
           // Only include siblings that belong to the SAME derived-solution scope as the
           // target format (same ownerDataModelName). Base-solution formats reference the
           // BASE DataModel GUID — using them as scouts would cause a wrong synthDm
@@ -1549,7 +1559,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           const targetOwnerDm = fmt.ownerDataModelName;
           const siblings: ErConfigSummary[] = [];
           for (const [cacheKey, rootComponents] of rootComponentCacheRef.current) {
-            if (cacheKey !== parentDmName) continue;
+            if (cacheKey !== listingRootName) continue;
             for (const c of rootComponents) {
               if (c.componentType === 'Format' && c.configurationGuid
                 && c.configurationName !== fmt.configurationName
@@ -1611,7 +1621,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             // returns both the ModelMapping XML and the DataModel XML via parmModel.
             const mmSiblings: ErConfigSummary[] = [];
             for (const [cacheKey, rootComponents] of rootComponentCacheRef.current) {
-              if (cacheKey !== parentDmName) continue;
+              if (cacheKey !== listingRootName) continue;
               for (const c of rootComponents) {
                 if (
                   c.componentType === 'ModelMapping' &&
