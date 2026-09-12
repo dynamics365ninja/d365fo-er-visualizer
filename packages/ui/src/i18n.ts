@@ -390,7 +390,6 @@ export interface Translations {
   fnoNoProfiles: string;
   fnoNoProfilesHint: string;
   fnoRemoveProfile: string;
-  fnoActiveProfile: string;
   fnoSolutions: string;
   fnoConfigurations: string;
   fnoLoading: string;
@@ -541,6 +540,18 @@ export interface Translations {
   fnoPickModelHint: string;
   fnoNoConfigurationsHint: string;
   fnoFilterModels: string;
+  fnoFilterConfigurations: string;
+  fnoSearchEverywhere: string;
+  fnoSearchEverywhereHint: string;
+  fnoSearchResults: (query: string) => string;
+  fnoSearchProgress: (done: number, total: number) => string;
+  fnoSearchHits: (n: number) => string;
+  fnoSearchNoHits: (query: string) => string;
+  fnoSearchClear: string;
+  fnoNoModelMatch: (query: string) => string;
+  fnoNoModelMatchHint: string;
+  fnoSearchOpenModel: (model: string) => string;
+  fnoSearchFailed: (n: number) => string;
   fnoBack: string;
   fnoRetry: string;
   fnoNoChildren: (name: string) => string;
@@ -972,7 +983,6 @@ const cs: Translations = {
   fnoNoProfiles: 'Zatím tu není žádné prostředí.',
   fnoNoProfilesHint: 'Přidej profil s názvem a URL adresou F&O prostředí a přihlas se účtem Microsoft.',
   fnoRemoveProfile: 'Odebrat profil',
-  fnoActiveProfile: 'Vybráno',
   fnoSolutions: 'ER řešení',
   fnoConfigurations: 'Konfigurace',
   fnoLoading: 'Načítám…',
@@ -1122,6 +1132,18 @@ const cs: Translations = {
   fnoPickModelHint: 'Vyber vlevo datový model a projdi jeho konfigurace.',
   fnoNoConfigurationsHint: 'V tomto prostředí nebyly nalezeny žádné ER konfigurace. Přihlas se do F&O a v Organization administration → Electronic reporting → Configuration providers → Microsoft (Active) → Repositories → LCS → Open → Import naimportuj konfigurace z Lifecycle Services. Poté se připoj znovu. (Detaily: DevTools → Console → filtr „[fno-client]“.)',
   fnoFilterModels: 'Filtrovat modely…',
+  fnoFilterConfigurations: 'Filtrovat konfigurace…',
+  fnoSearchEverywhere: 'Hledat i ve formátech',
+  fnoSearchEverywhereHint: 'Prochází všechny modely a hledá shodu i mezi formáty a mapováními pod nimi. Ke každému modelu si stáhne seznam konfigurací — u velkého prostředí to chvíli trvá.',
+  fnoSearchResults: (query: string) => `Výsledky hledání: „${query}“`,
+  fnoSearchProgress: (done: number, total: number) => `Procházím modely — ${done}/${total}`,
+  fnoSearchHits: (n: number) => `${n} nalezeno`,
+  fnoSearchNoHits: (query: string) => `Pro „${query}“ se mezi formáty a mapováními nic nenašlo.`,
+  fnoSearchClear: 'Zrušit hledání',
+  fnoNoModelMatch: (query: string) => `Žádný model neodpovídá „${query}“.`,
+  fnoNoModelMatchHint: 'Formáty a mapování leží až pod modely — najde je tlačítko Hledat i ve formátech.',
+  fnoSearchOpenModel: (model: string) => `Otevřít model ${model}`,
+  fnoSearchFailed: (n: number) => `${n} modelů se nepodařilo prohledat — výsledky nemusí být úplné.`,
   fnoBack: '← Zpět',
   fnoRetry: 'Zkusit znovu',
   fnoNoChildren: (name: string) => `Pod „${name}" nejsou žádné potomky.`,
@@ -1572,7 +1594,6 @@ const en: Translations = {
   fnoNoProfiles: 'No environment here yet.',
   fnoNoProfilesHint: 'Add a profile with a name and the F&O environment URL, then sign in with your Microsoft account.',
   fnoRemoveProfile: 'Remove profile',
-  fnoActiveProfile: 'Selected',
   fnoSolutions: 'ER solutions',
   fnoConfigurations: 'Configurations',
   fnoLoading: 'Loading…',
@@ -1722,6 +1743,18 @@ const en: Translations = {
   fnoPickModelHint: 'Select a Data Model on the left to browse its configurations.',
   fnoNoConfigurationsHint: 'No ER configurations found in this environment. Sign in to F&O and go to Organization administration → Electronic reporting → Configuration providers → Microsoft (Active) → Repositories → LCS → Open → Import to pull configurations from Lifecycle Services. Then reconnect here. (Details: DevTools → Console → filter "[fno-client]".)',
   fnoFilterModels: 'Filter models…',
+  fnoFilterConfigurations: 'Filter configurations…',
+  fnoSearchEverywhere: 'Search formats too',
+  fnoSearchEverywhereHint: 'Walks every model and matches the formats and mappings underneath them as well. It downloads the configuration list of each model, so a large environment takes a while.',
+  fnoSearchResults: (query: string) => `Search results: "${query}"`,
+  fnoSearchProgress: (done: number, total: number) => `Scanning models — ${done}/${total}`,
+  fnoSearchHits: (n: number) => `${n} found`,
+  fnoSearchNoHits: (query: string) => `No format or mapping matches "${query}".`,
+  fnoSearchClear: 'Clear search',
+  fnoNoModelMatch: (query: string) => `No model matches "${query}".`,
+  fnoNoModelMatchHint: 'Formats and mappings live below the models — the Search formats too button finds those.',
+  fnoSearchOpenModel: (model: string) => `Open model ${model}`,
+  fnoSearchFailed: (n: number) => `${n} model(s) could not be scanned — results may be incomplete.`,
   fnoBack: '← Back',
   fnoRetry: 'Retry',
   fnoNoChildren: (name: string) => `No children under "${name}".`,

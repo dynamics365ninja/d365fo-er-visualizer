@@ -38,11 +38,14 @@ export interface FnoSessionStore {
   components: ErConfigSummary[];
   loadingComponents: boolean;
   componentTypeFilter: ErComponentType | 'All';
+  /** Free-text filter over the listed configurations (name / model / country). */
+  componentFilter: string;
   setActiveSolution: (name: string | null) => void;
   setSolutionPath: (path: string[]) => void;
   setComponents: (list: ErConfigSummary[]) => void;
   setLoadingComponents: (v: boolean) => void;
   setComponentTypeFilter: (v: ErComponentType | 'All') => void;
+  setComponentFilter: (v: string) => void;
 
   // ── Selection & download state ──
   selected: Map<string, ErConfigSummary>;
@@ -80,6 +83,7 @@ export const useFnoSession = create<FnoSessionStore>((set, get) => ({
       dataModelChain: [],
       solutionPath: [],
       solutionFilter: '',
+      componentFilter: '',
     });
   },
   setConnState: (state) => set({ connState: state }),
@@ -98,11 +102,13 @@ export const useFnoSession = create<FnoSessionStore>((set, get) => ({
   components: [],
   loadingComponents: false,
   componentTypeFilter: 'All',
+  componentFilter: '',
   setActiveSolution: (name) => set({ activeSolution: name }),
   setSolutionPath: (path) => set({ solutionPath: path }),
   setComponents: (list) => set({ components: list }),
   setLoadingComponents: (v) => set({ loadingComponents: v }),
   setComponentTypeFilter: (v) => set({ componentTypeFilter: v }),
+  setComponentFilter: (v) => set({ componentFilter: v }),
 
   // Selection
   selected: new Map(),
@@ -136,6 +142,7 @@ export const useFnoSession = create<FnoSessionStore>((set, get) => ({
     components: [],
     loadingComponents: false,
     componentTypeFilter: 'All',
+    componentFilter: '',
     selected: new Map(),
     rootDataModelByPath: new Map(),
     allDataModelsSeen: new Map(),
