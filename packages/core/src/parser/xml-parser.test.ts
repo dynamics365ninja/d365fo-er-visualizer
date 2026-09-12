@@ -87,6 +87,57 @@ describe('parseERConfiguration', () => {
     expect(config.solutionVersion.solution.name).toBe('Invoice format');
   });
 
+  it('names a derived configuration after the listing hint, not the inherited base name', () => {
+    // A DERIVED ER configuration inherits the base's content verbatim, so
+    // `GetEffectiveFormatMappingByID` answers with the *effective* payload —
+    // whose `ERTextFormat.Name` / `ERFormatMapping.Name` is still the BASE
+    // configuration's name. Only the listing hint knows which configuration
+    // was actually downloaded, so the tab used to be labelled after the base.
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<ErFnoBundle Name="Invoice format (CZ)" Version="3" Base="{22222222-2222-2222-2222-222222222222},5">
+  <ERTextFormat ID.="{FORMAT}" Name="Invoice format">
+    <Root>
+      <ERTextFormatFileComponent ID.="{ROOT}" Name="Root" />
+    </Root>
+  </ERTextFormat>
+  <ERFormatMapping ID.="{FORMAT-MAP}" Format="{FORMAT}" FormatVersion="{FORMAT},1" Name="Invoice format" />
+</ErFnoBundle>`;
+    const config = parseERConfiguration(xml, 'derived-format.xml');
+    expect(config.solutionVersion.solution.name).toBe('Invoice format (CZ)');
+  });
+
+  it('names a derived data model after the listing hint, not the inherited model name', () => {
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<ErFnoBundle Name="Tax declaration model (CZ)" Version="4">
+  <ERDataModel ID.="{MODEL}" Name="TaxDeclarationModel">
+    <Contents.>
+      <ERDataContainerDescriptor ID.="{CONT}" Name="Reports" IsRoot="1" />
+    </Contents.>
+  </ERDataModel>
+</ErFnoBundle>`;
+    const config = parseERConfiguration(xml, 'derived-datamodel.xml');
+    expect(config.solutionVersion.solution.name).toBe('Tax declaration model (CZ)');
+    if (config.content.kind !== 'DataModel') throw new Error('Expected data model');
+    // The model definition itself keeps its own (inherited) name.
+    expect(config.content.version.model.name).toBe('TaxDeclarationModel');
+  });
+
+  it('keeps the element name when the hint is a synthetic "<kind> {guid}" placeholder', () => {
+    // The F&O browser mints these for ancestors it pulls without a listing
+    // row; the content root's own Name is the better label.
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<ErFnoBundle Name="Format {33333333-3333-3333-3333-333333333333}">
+  <ERTextFormat ID.="{FORMAT}" Name="Base invoice format">
+    <Root>
+      <ERTextFormatFileComponent ID.="{ROOT}" Name="Root" />
+    </Root>
+  </ERTextFormat>
+  <ERFormatMapping ID.="{FORMAT-MAP}" Format="{FORMAT}" FormatVersion="{FORMAT},1" Name="Base invoice format" />
+</ErFnoBundle>`;
+    const config = parseERConfiguration(xml, 'synthetic-hint.xml');
+    expect(config.solutionVersion.solution.name).toBe('Base invoice format');
+  });
+
   it('preserves real ERFormatMapping bindings when bundled alongside bare ERTextFormat (F&O GetEffectiveFormatMappingByID shape)', () => {
     // Regression: F&O's GetEffectiveFormatMappingByID returns the
     // format grammar and the format mapping as two separate XML

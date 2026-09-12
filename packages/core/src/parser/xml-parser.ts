@@ -184,6 +184,18 @@ function emptyFormatMappingVersion(): Record<string, unknown> {
 }
 
 /**
+ * True when an `@_Name` hint is a placeholder the F&O browser minted for a
+ * component it pulled without a listing row (`DataModel {guid}`,
+ * `Format {guid}`, `… (default mapping)`), rather than a real configuration
+ * name. Placeholders must not outrank the content root's own `Name`.
+ */
+function isSyntheticNameHint(hint: string | undefined): boolean {
+  if (!hint) return true;
+  if (hint.includes('(default mapping)')) return true;
+  return /^(DataModel|ModelMapping|Format|Unknown)\s+\{?[0-9a-fA-F-]{36}\}?$/.test(hint.trim());
+}
+
+/**
  * Wrap a bare content node in a synthetic `ERSolutionVersion` envelope
  * so `parseSolutionVersion` + `detectComponentKind` can run unchanged.
  * Attribute names mirror F&O's exported XML.
@@ -288,35 +300,29 @@ function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> 
   // pick the name from whichever fragment is present.
   //
   // Order matters:
-  //  • `ERTextFormat`, `ERFormatMapping`, `ERModelDefinition` come
-  //    first because they are the canonical source for their component
-  //    type.
   //  • The transport-injected `@_Name` hint (= component.configurationName
-  //    from the listing, e.g. "Invoice model mapping") is promoted ABOVE
-  //    `ERModelMapping.@_Name` and `ERDataModel.@_Name` when it looks like
-  //    a real human-readable name.  This matters for `GetModelMappingByID`
-  //    responses, which embed `ERModelMapping.Name` (the descriptor name,
-  //    e.g. "Customer invoice") inside an `ERModelMappingVersion` wrapper
-  //    — `doc['ERModelMapping']` is then undefined at top level, so
-  //    `ERDataModel.Name` would otherwise win and show the DataModel name
-  //    instead of the configuration name.
-  //  • Synthetic `@_Name` placeholders ("DataModel {guid}",
-  //    "… (default mapping)") are filtered out so that real element names
-  //    remain as the fallback.
+  //    from the F&O listing, e.g. "Invoice format (CZ)") wins whenever it
+  //    looks like a real listing name. It is the only source that knows
+  //    WHICH configuration was downloaded. A DERIVED configuration inherits
+  //    the base's content verbatim — `GetEffectiveFormatMappingByID` /
+  //    `GetDataModelByIDAndRevision` return the *effective* payload, whose
+  //    `ERTextFormat.Name` / `ERModelDefinition.Name` is still the BASE
+  //    configuration's name — so trusting the element name labelled a
+  //    derived configuration after its parent.
+  //  • The content roots follow as the fallback for payloads that carry no
+  //    hint at all (a bare fragment loaded from disk).
+  //  • Synthetic `@_Name` placeholders ("DataModel {guid}", "Format {guid}",
+  //    "… (default mapping)") are NOT promoted — the UI mints those when a
+  //    dependency is pulled without a listing row, so the element's own name
+  //    is the better answer there.
   const rawNameHint = doc['@_Name'] as string | undefined;
   // Only promote the hint when it looks like a real listing name.
-  const realNameHint =
-    rawNameHint &&
-    !rawNameHint.startsWith('DataModel ') &&
-    !rawNameHint.includes('(default mapping)')
-      ? rawNameHint
-      : undefined;
+  const realNameHint = isSyntheticNameHint(rawNameHint) ? undefined : rawNameHint || undefined;
   const nameHintSources: (string | undefined)[] = [
+    realNameHint,
     (doc['ERTextFormat'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
     (doc['ERFormatMapping'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
     (doc['ERModelDefinition'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
-    // Promoted: real listing name beats descriptor- and DataModel-level names.
-    realNameHint,
     (doc['ERModelMapping'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
     (doc['ERDataModel'] as Record<string, unknown> | undefined)?.['@_Name'] as string | undefined,
     // Absolute last resort: any @_Name hint (including synthetic placeholders).
