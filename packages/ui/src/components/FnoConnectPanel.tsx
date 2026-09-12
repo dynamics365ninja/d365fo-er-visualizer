@@ -1489,6 +1489,15 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           skippedEmpty += 1;
           const wasExplicit = explicitKeys.has(componentKey(component));
           if (wasExplicit) {
+            // The toast has to stay short, but a configuration the user picked
+            // by hand and did not get deserves the full story somewhere: the
+            // error names every id that was probed.
+            console.info('[fno-ui] selected component returned no XML', {
+              configurationName: component.configurationName,
+              componentType: component.componentType,
+              solutionName: component.solutionName,
+              detail: err.message,
+            });
             pushToast({
               kind: 'info',
               message: t.fnoSkippedDerived(component.configurationName),

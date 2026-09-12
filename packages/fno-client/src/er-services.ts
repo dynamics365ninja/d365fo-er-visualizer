@@ -678,9 +678,27 @@ export function buildDownloadAttempts(
   const ops = ER_STORAGE_OPS_BY_TYPE[component.componentType] ?? ER_STORAGE_OPS_BY_TYPE.Unknown;
   const attempts: { operation: string; body: Record<string, unknown> }[] = [];
 
+  /** Distinct, non-empty ids in the order given (brace/case-insensitive). */
+  const distinct = (ids: (string | undefined)[]): string[] => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const id of ids) {
+      if (!id) continue;
+      const key = id.replace(/^\{|\}$/g, '').toLowerCase();
+      if (!key || key === ZERO_GUID || seen.has(key)) continue;
+      seen.add(key);
+      out.push(id);
+    }
+    return out;
+  };
+
   for (const op of ops) {
     if (op === 'GetEffectiveFormatMappingByID') {
-      for (const id of [cfgId, revId].filter(Boolean)) {
+      // Probe every id the listing gave us, not just the first two: a derived
+      // format's own `FormatMappingGUID` is often absent, and the id that
+      // resolves sits on one of its `Versions[]` rows. Stopping at two made
+      // such a format look like it had no XML at all.
+      for (const id of distinct([cfgId, revId, ...(component.guidCandidates ?? [])])) {
         attempts.push({ operation: op, body: { _formatMappingGuid: id } });
       }
     } else if (op === 'GetModelMappingByID') {
@@ -883,6 +901,10 @@ export async function downloadConfigXml(
     const summary = tried
       .map(t => `${t.operation}(${Object.keys(t.body).join(',')}) → ${t.status ?? '?'}${t.body2 ? ': ' + t.body2 : ''}`)
       .join(' | ');
+    // Distinct ids actually sent, for the diagnostics below.
+    const probedIds = Array.from(new Set(
+      tried.flatMap(t => Object.values(t.body).filter((v): v is string => typeof v === 'string' && GUID_LIKE_RE.test(v))),
+    )).join(', ');
     // If every attempt was HTTP 200 with an empty body, the component
     // simply has no own XML (typical for derived DataModels). Surface
     // as a distinct error so UI code can skip silently instead of
@@ -892,7 +914,10 @@ export async function downloadConfigXml(
       throw new FnoEmptyContentError(
         `"${component.configurationName}" (${component.componentType}) has no own XML content — ` +
           `F&O returned HTTP 200 with an empty body for all ${tried.length} probe(s). ` +
-          `This is expected for pure-inheritance derived configurations; the base model carries the definition.`,
+          `This is expected for pure-inheritance derived configurations; the base model carries the definition. ` +
+          // The ids matter when it is *not* expected: they say whether the
+          // listing row ever gave us the id this configuration is stored under.
+          `Probed: ${probedIds || '(none)'}.`,
       );
     }
     // For components that had no GUID and were probed via legacy name-based
@@ -1469,15 +1494,10 @@ function findAnyGuid(r: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-/** Search Versions array entries for any GUID-shaped string (for rows that don't carry a top-level GUID field). */
-export function findGuidInVersions(r: RawErComponentRow): string | undefined {
-  if (!Array.isArray(r.Versions)) return undefined;
-  // Iterate versions in reverse (highest VersionNumber last in the array
-  // = latest completed revision) so we pick the newest version's GUID.
-  // Prefer completed (Status=2) or shared (Status=3) over draft (Status=1).
-  const versions = [...r.Versions];
-  // Sort: completed/shared first (descending by VersionNumber), draft last.
-  versions.sort((a, b) => {
+/** Versions newest-first, completed/shared ahead of drafts. */
+function versionsByRelevance(r: RawErComponentRow): RawErVersion[] {
+  if (!Array.isArray(r.Versions)) return [];
+  return [...r.Versions].sort((a, b) => {
     const statusA = a?.Status ?? a?.VersionStatus ?? a?.State ?? 0;
     const statusB = b?.Status ?? b?.VersionStatus ?? b?.State ?? 0;
     const isCompletedA = statusA === 2 || statusA === 3 ? 1 : 0;
@@ -1487,17 +1507,70 @@ export function findGuidInVersions(r: RawErComponentRow): string | undefined {
     const numB = b?.VersionNumber ?? b?.Number ?? 0;
     return (numB as number) - (numA as number); // highest first
   });
-  for (const v of versions) {
-    if (typeof v !== 'object' || v === null) continue;
-    for (const value of Object.values(v as Record<string, unknown>)) {
-      if (typeof value !== 'string') continue;
-      const clean = value.replace(/,\d+$/, '').replace(/^\{|\}$/g, '');
-      if (!GUID_LIKE_RE.test(clean)) continue;
-      if (clean.toLowerCase() === ZERO_GUID) continue;
-      return clean;
-    }
+}
+
+/** GUID-shaped strings on a single `Versions[]` row, braces and `,rev` stripped. */
+function guidsInVersion(v: RawErVersion): string[] {
+  if (typeof v !== 'object' || v === null) return [];
+  const out: string[] = [];
+  for (const value of Object.values(v as Record<string, unknown>)) {
+    if (typeof value !== 'string') continue;
+    const clean = value.replace(/,\d+$/, '').replace(/^\{|\}$/g, '');
+    if (!GUID_LIKE_RE.test(clean)) continue;
+    if (clean.toLowerCase() === ZERO_GUID) continue;
+    out.push(clean);
+  }
+  return out;
+}
+
+/** Search Versions array entries for any GUID-shaped string (for rows that don't carry a top-level GUID field). */
+export function findGuidInVersions(r: RawErComponentRow): string | undefined {
+  // Newest completed version first, so we pick the id of the revision the
+  // user is actually looking at rather than an old draft.
+  for (const v of versionsByRelevance(r)) {
+    const [first] = guidsInVersion(v);
+    if (first) return first;
   }
   return undefined;
+}
+
+/**
+ * Every GUID on a listing row that could identify this configuration, in
+ * probe order: the explicit id fields first, then the ids carried by its
+ * versions (newest completed first).
+ *
+ * `Base` / `ModelID` are left out on purpose — they point at the DataModel
+ * the configuration references, not at the configuration itself.
+ */
+export function collectRowGuids(r: RawErComponentRow): string[] {
+  const rec = r as Record<string, unknown>;
+  const ownGuidKeys = /^(base|modelid)$/i;
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (value: unknown) => {
+    if (typeof value !== 'string') return;
+    const clean = value.replace(/,\d+$/, '').replace(/^\{|\}$/g, '');
+    if (!GUID_LIKE_RE.test(clean)) return;
+    const key = clean.toLowerCase();
+    if (key === ZERO_GUID || seen.has(key)) return;
+    seen.add(key);
+    out.push(clean);
+  };
+
+  push(r.FormatMappingGUID);
+  push(r.ModelMappingGuid);
+  push(r.ConfigurationGuid);
+  push(r.Guid);
+  push(r.ConfigurationRevisionGuid);
+  push(r.RevisionGuid);
+  for (const [key, value] of Object.entries(rec)) {
+    if (ownGuidKeys.test(key)) continue;
+    push(value);
+  }
+  for (const v of versionsByRelevance(r)) {
+    for (const guid of guidsInVersion(v)) push(guid);
+  }
+  return out;
 }
 
 function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSummary {
@@ -1574,6 +1647,7 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
     version: pickDisplayVersion(r.Versions),
     revisionGuid,
     configurationGuid,
+    guidCandidates: collectRowGuids(r),
     countryRegion: r.CountryRegion ?? r.CountryRegionCodes,
     hasContent: Boolean(revisionGuid || configurationGuid),
     hasChildren,

@@ -13,6 +13,7 @@ import {
   decodeXmlPayload,
   buildDownloadAttempts,
   findGuidInVersions,
+  collectRowGuids,
   extractVersionFromXml,
   extractReferencedDataModelGuids,
   pickDisplayVersion,
@@ -664,6 +665,47 @@ describe('downloadConfigXml', () => {
   });
 });
 
+describe('downloadConfigXml — derived format ids', () => {
+  it('keeps probing until a candidate id returns XML', async () => {
+    const op = 'GetEffectiveFormatMappingByID';
+    const xml = '<DerivedFormat/>';
+    const goodId = 'cccccccc-0000-0000-0000-000000000003';
+    const { transport, posts } = makeTransport({
+      // F&O answers 200-with-empty-body for the ids this configuration is
+      // not stored under — exactly how a derived format used to look like
+      // it had no content at all.
+      post: (_url: string, body: unknown) =>
+        (body as Record<string, unknown>)._formatMappingGuid === goodId
+          ? { [`${op}Result`]: xml }
+          : { [`${op}Result`]: '' },
+    });
+    const download = await downloadConfigXml(transport, conn, 'tok', {
+      solutionName: 'Sales invoice (Excel)',
+      configurationName: 'Asl Sales invoice (Excel)',
+      componentType: 'Format',
+      configurationGuid: 'aaaaaaaa-0000-0000-0000-000000000001',
+      revisionGuid: 'bbbbbbbb-0000-0000-0000-000000000002',
+      guidCandidates: [goodId],
+      hasContent: true,
+    });
+    expect(download.xml).toContain(xml);
+    expect(posts).toHaveLength(3);
+  });
+
+  it('names the probed ids when every candidate came back empty', async () => {
+    const op = 'GetEffectiveFormatMappingByID';
+    const { transport } = makeTransport({ post: () => ({ [`${op}Result`]: '' }) });
+    await expect(downloadConfigXml(transport, conn, 'tok', {
+      solutionName: 'S',
+      configurationName: 'Asl Sales invoice (Excel)',
+      componentType: 'Format',
+      configurationGuid: 'aaaaaaaa-0000-0000-0000-000000000001',
+      guidCandidates: ['cccccccc-0000-0000-0000-000000000003'],
+      hasContent: true,
+    })).rejects.toThrow(/Probed: aaaaaaaa-0000-0000-0000-000000000001, cccccccc-0000-0000-0000-000000000003/);
+  });
+});
+
 describe('findGuidInVersions', () => {
   it('returns GUID from the highest completed version (not the first in array)', () => {
     const row = {
@@ -725,6 +767,37 @@ describe('findGuidInVersions', () => {
   });
 });
 
+describe('collectRowGuids', () => {
+  it('lists the explicit id fields before the ids carried by versions', () => {
+    const row = {
+      Name: 'Sales invoice (Excel)',
+      FormatMappingGUID: '{11111111-1111-1111-1111-111111111111}',
+      ConfigurationRevisionGuid: '22222222-2222-2222-2222-222222222222',
+      Versions: [
+        { VersionNumber: 1, Status: 2, RevisionGuid: '{33333333-3333-3333-3333-333333333333}' },
+        { VersionNumber: 2, Status: 2, RevisionGuid: '{44444444-4444-4444-4444-444444444444}' },
+      ],
+    } as any;
+    expect(collectRowGuids(row)).toEqual([
+      '11111111-1111-1111-1111-111111111111',
+      '22222222-2222-2222-2222-222222222222',
+      '44444444-4444-4444-4444-444444444444',
+      '33333333-3333-3333-3333-333333333333',
+    ]);
+  });
+
+  it('skips zero GUIDs and the DataModel pointers in Base / ModelID', () => {
+    const row = {
+      Name: 'Asl Sales invoice (Excel)',
+      FormatMappingGUID: '00000000-0000-0000-0000-000000000000',
+      Base: '{99999999-9999-9999-9999-999999999999},4',
+      ModelID: '{88888888-8888-8888-8888-888888888888}',
+      Versions: [{ VersionNumber: 3, Status: 2, Guid: '{55555555-5555-5555-5555-555555555555}' }],
+    } as any;
+    expect(collectRowGuids(row)).toEqual(['55555555-5555-5555-5555-555555555555']);
+  });
+});
+
 describe('buildDownloadAttempts', () => {
   describe('DataModel — version probing', () => {
     it('probes versionNumbers in descending order when provided', () => {
@@ -781,6 +854,47 @@ describe('buildDownloadAttempts', () => {
       const revisions = dmAttempts.map(a => a.body._revisionNumber);
       // displayRev '8' should be first
       expect(revisions[0]).toBe('8');
+    });
+  });
+
+  describe('Format — format mapping id probing', () => {
+    it('probes every candidate id the listing row carried', () => {
+      const component: ErConfigSummary = {
+        componentType: 'Format',
+        solutionName: 'Sales invoice (Excel)',
+        configurationName: 'Asl Sales invoice (Excel)',
+        configurationGuid: 'aaaaaaaa-0000-0000-0000-000000000001',
+        revisionGuid: 'bbbbbbbb-0000-0000-0000-000000000002',
+        guidCandidates: [
+          'aaaaaaaa-0000-0000-0000-000000000001',
+          'cccccccc-0000-0000-0000-000000000003',
+        ],
+        hasContent: true,
+      };
+      const ids = buildDownloadAttempts(component)
+        .filter(a => a.operation === 'GetEffectiveFormatMappingByID')
+        .map(a => a.body._formatMappingGuid);
+      // configurationGuid, revisionGuid, then the leftover candidate — each once.
+      expect(ids).toEqual([
+        'aaaaaaaa-0000-0000-0000-000000000001',
+        'bbbbbbbb-0000-0000-0000-000000000002',
+        'cccccccc-0000-0000-0000-000000000003',
+      ]);
+    });
+
+    it('ignores zero GUIDs among the candidates', () => {
+      const component: ErConfigSummary = {
+        componentType: 'Format',
+        solutionName: 'S',
+        configurationName: 'C',
+        configurationGuid: '00000000-0000-0000-0000-000000000000',
+        guidCandidates: ['{dddddddd-0000-0000-0000-000000000004}'],
+        hasContent: true,
+      };
+      const ids = buildDownloadAttempts(component)
+        .filter(a => a.operation === 'GetEffectiveFormatMappingByID')
+        .map(a => a.body._formatMappingGuid);
+      expect(ids).toEqual(['{dddddddd-0000-0000-0000-000000000004}']);
     });
   });
 
