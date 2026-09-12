@@ -29,6 +29,7 @@ import { ThemeSwitch } from './ThemeSwitch';
 import { BrandWordmark } from './BrandWordmark';
 import { setLocale, t, useLocale } from '../i18n';
 import { FnoConnectPanel } from './FnoConnectPanel';
+import { useFnoSession } from '../state/fno-session';
 import { peekRedirectPending } from '../fno/redirect-state';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 
@@ -118,9 +119,19 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '28px',
+    transitionProperty: 'max-width, padding-top',
+    transitionDuration: 'var(--er-duration)',
     '@media (max-width: 600px)': {
       padding: '32px 16px 48px',
     },
+  },
+  // Connected to an environment, the card stops being a launcher and becomes a
+  // two-pane browser over hundreds of configurations — so it gets the window.
+  mainWide: {
+    maxWidth: '1680px',
+    paddingTop: '28px',
+    paddingBottom: '32px',
+    gap: '20px',
   },
   badge: {
     display: 'inline-flex',
@@ -424,6 +435,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const loadCachedFile = useAppStore(s => s.loadCachedFile);
   const cachedPaths = useAppStore(s => s.cachedPaths);
   const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
+  const fnoConnected = useFnoSession(s => s.connState.kind === 'connected');
   const [isDragging, setIsDragging] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -480,6 +492,9 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
     setIsDragging(false);
   }, []);
 
+  // Browsing a live environment needs the width; the launcher does not.
+  const wideLayout = sourceTab === 'remote' && fnoConnected;
+
   return (
     <div
       className={styles.root}
@@ -528,7 +543,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
         </div>
       </header>
 
-      <main className={styles.main}>
+      <main className={mergeClasses(styles.main, wideLayout && styles.mainWide)}>
         <span className={styles.badge}>
           <span className={styles.badgeDot} aria-hidden="true" />
           {t.landingBadge}

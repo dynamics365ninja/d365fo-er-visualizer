@@ -41,6 +41,8 @@ import {
   CloudArrowDownRegular,
   ArrowSyncRegular,
   SearchRegular,
+  DocumentSearchRegular,
+  DismissRegular,
   ChevronRightRegular,
   ChevronDownRegular,
   AddRegular,
@@ -78,7 +80,7 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     gap: tokens.spacingVerticalL,
     width: '100%',
-    maxWidth: '1400px',
+    maxWidth: '1680px',
     marginLeft: 'auto',
     marginRight: 'auto',
     ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
@@ -292,7 +294,7 @@ const useStyles = makeStyles({
   // ── Browser (two-column) ──────────────────────────────────────
   columns: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(260px, 340px) minmax(0, 1fr)',
+    gridTemplateColumns: 'minmax(280px, 380px) minmax(0, 1fr)',
     gap: tokens.spacingHorizontalL,
     minHeight: '480px',
     width: '100%',
@@ -300,6 +302,8 @@ const useStyles = makeStyles({
       gridTemplateColumns: '1fr',
     },
   },
+  // Browsing an environment means scrolling long lists, so the boxes grow with
+  // the window instead of stopping at a fixed 660px on a tall screen.
   listBox: {
     display: 'flex',
     flexDirection: 'column',
@@ -308,7 +312,7 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground1,
     overflow: 'hidden',
     minHeight: '480px',
-    maxHeight: '660px',
+    maxHeight: 'max(480px, calc(100vh - 260px))',
   },
   listHeader: {
     display: 'flex',
@@ -331,6 +335,53 @@ const useStyles = makeStyles({
     ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalM),
     borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
     flexShrink: 0,
+  },
+  // Input above, cross-model search button below: side by side the button
+  // would squeeze the box to a few characters in the narrow left column.
+  listSearchRow: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalXS,
+  },
+  // Progress / result count of a cross-model search, under the search box.
+  searchNote: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalXS,
+    marginTop: tokens.spacingVerticalXS,
+    minWidth: 0,
+  },
+  searchNoteText: {
+    color: tokens.colorNeutralForeground3,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  // Owning model of a search hit — the row alone would not say where it lives.
+  resultOwner: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    marginTop: '2px',
+    color: tokens.colorNeutralForeground3,
+    backgroundColor: 'transparent',
+    ...shorthands.border('0'),
+    ...shorthands.padding('0'),
+    font: 'inherit',
+    fontSize: tokens.fontSizeBase200,
+    cursor: 'pointer',
+    maxWidth: '100%',
+    minWidth: 0,
+    textAlign: 'left',
+    ':hover': {
+      color: tokens.colorBrandForeground1,
+      textDecorationLine: 'underline',
+    },
+  },
+  resultOwnerName: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   listScroll: {
     flex: 1,
@@ -488,6 +539,42 @@ function solNodeMatchesFilter(node: SolutionNode, q: string): boolean {
   );
 }
 
+/** Shortest query worth walking every model for. */
+const MIN_SEARCH_CHARS = 2;
+/** Parallel `listComponents` calls while searching across models. */
+const SEARCH_CONCURRENCY = 4;
+
+/** Matches a listed configuration against a lower-cased search query. */
+function componentMatchesQuery(c: ErConfigSummary, q: string): boolean {
+  return (
+    (c.configurationName ?? '').toLowerCase().includes(q) ||
+    (c.solutionName ?? '').toLowerCase().includes(q) ||
+    (c.ownerDataModelName ?? '').toLowerCase().includes(q) ||
+    (c.countryRegion ?? '').toLowerCase().includes(q)
+  );
+}
+
+/** Search hits grouped by the model they live under, then by name. */
+function sortSearchHits(hits: Map<string, ErConfigSummary>): ErConfigSummary[] {
+  const owner = (c: ErConfigSummary) => c.ownerDataModelName ?? c.solutionName ?? '';
+  const cmp = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+  return Array.from(hits.values()).sort(
+    (a, b) => cmp(owner(a), owner(b)) || cmp(a.configurationName ?? '', b.configurationName ?? ''),
+  );
+}
+
+/** State of a cross-model search over formats and mappings. */
+interface DeepSearchState {
+  query: string;
+  results: ErConfigSummary[];
+  /** Root models already walked / to walk. */
+  scanned: number;
+  total: number;
+  /** Roots whose configuration list could not be fetched. */
+  failed: number;
+  running: boolean;
+}
+
 interface FnoConnectPanelProps {
   onFilesLoaded?: () => void;
 }
@@ -503,8 +590,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     activeProfileId, connState, setActiveProfileId, setConnState,
     solutions, loadingSolutions, solutionFilter,
     setSolutions, setLoadingSolutions, setSolutionFilter,
-    activeSolution, solutionPath, components, loadingComponents, componentTypeFilter,
+    activeSolution, solutionPath, components, loadingComponents, componentTypeFilter, componentFilter,
     setActiveSolution, setSolutionPath, setComponents, setLoadingComponents, setComponentTypeFilter,
+    setComponentFilter,
     selected, setSelected, clearSelection, toggleSelected,
     allDataModelsSeen, dataModelChain,
     setRootDataModelByPath, setAllDataModelsSeen, setDataModelChain,
@@ -536,6 +624,23 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   // Monotonic id of the latest listing request. A slower, older response must
   // not overwrite the components of a newer click (pick / drill / back).
   const listRequestSeqRef = useRef(0);
+
+  // ── Cross-model search ───────────────────────────────────────────────────
+  // The left-hand filter only ever saw model names, because formats and
+  // mappings live one API call *below* a model. Finding one by name therefore
+  // means walking every root model's configuration list — reusing the per-root
+  // cache, a few in parallel, and cancellable, since a real environment has
+  // dozens of roots. Results take over the right-hand panel.
+  const [search, setSearch] = useState<DeepSearchState | null>(null);
+  const searchSeqRef = useRef(0);
+  const searchActive = search !== null;
+
+  /** Drop search results (and abandon a running scan). */
+  const clearSearch = useCallback(() => {
+    searchSeqRef.current++;
+    setSearch(null);
+  }, []);
+
   const setFnoIngestStatus = useAppStore(s => s.setFnoIngestStatus);
   const beginFnoIngest = useAppStore(s => s.beginFnoIngest);
   const addInheritedLabels = useAppStore(s => s.addInheritedLabels);
@@ -701,6 +806,73 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     }
   }, [activeProfile, customRoot, pushToast, upsert]);
 
+  const runSearch = useCallback(async () => {
+    if (!activeProfile) return;
+    const query = solutionFilter.trim();
+    if (query.length < MIN_SEARCH_CHARS) return;
+    const q = query.toLowerCase();
+    // One fetch per *root* model: `listComponents` answers with the whole
+    // sub-tree, so derived models add nothing but duplicate calls.
+    const roots = Array.from(new Set(
+      solutions
+        .filter(sol => sol.componentType === 'DataModel' || sol.componentType === 'Unknown')
+        .map(sol => sol.rootSolutionName ?? sol.solutionName)
+        .filter((name): name is string => Boolean(name)),
+    ));
+    const seq = ++searchSeqRef.current;
+    setSearch({ query, results: [], scanned: 0, total: roots.length, failed: 0, running: roots.length > 0 });
+    if (roots.length === 0) return;
+
+    const hits = new Map<string, ErConfigSummary>();
+    let scanned = 0;
+    let failed = 0;
+    let cursor = 0;
+    const walkNextRoot = async (): Promise<void> => {
+      for (;;) {
+        if (seq !== searchSeqRef.current) return;
+        const index = cursor++;
+        if (index >= roots.length) return;
+        const rootName = roots[index];
+        let list = rootComponentCacheRef.current.get(rootName);
+        if (!list) {
+          try {
+            list = await fnoSession.listComponents(activeProfile, rootName);
+            rootComponentCacheRef.current.set(rootName, list);
+          } catch (err) {
+            // One unreachable model must not sink the whole search; the count
+            // is reported at the end so the user knows the list is partial.
+            console.warn('[fno-ui] search: listComponents failed', { rootName, err });
+            failed++;
+            list = [];
+          }
+        }
+        if (seq !== searchSeqRef.current) return;
+        // Remember every model we touch — handleLoadSelected resolves a hit's
+        // ancestors out of this map when downloading.
+        const fetched = list;
+        setAllDataModelsSeen(prev => rememberDataModels(prev, fetched));
+        for (const comp of fetched) {
+          if (comp.componentType === 'DataModel') continue;
+          if (!componentMatchesQuery(comp, q)) continue;
+          hits.set(componentKey(comp), comp);
+        }
+        scanned++;
+        const snapshot = sortSearchHits(hits);
+        setSearch(prev => (prev && seq === searchSeqRef.current
+          ? { ...prev, scanned, failed, results: snapshot }
+          : prev));
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(SEARCH_CONCURRENCY, roots.length) }, () => walkNextRoot()),
+    );
+    if (seq !== searchSeqRef.current) return;
+    const final = sortSearchHits(hits);
+    setSearch(prev => (prev ? { ...prev, scanned, failed, results: final, running: false } : prev));
+    if (failed > 0) pushToast({ kind: 'warning', message: t.fnoSearchFailed(failed) });
+  }, [activeProfile, solutionFilter, solutions, pushToast]);
+
   const handleDisconnect = useCallback(async () => {
     if (!activeProfile) return;
     try {
@@ -722,6 +894,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
 
   const handlePickSolution = useCallback(async (solutionName: string) => {
     if (!activeProfile) return;
+    // Opening a model leaves search mode: the right panel now belongs to it.
+    clearSearch();
     const requestSeq = ++listRequestSeqRef.current;
     setActiveSolution(solutionName);
     setSolutionPath([solutionName]);
@@ -796,13 +970,14 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // A newer request owns the spinner now.
       if (requestSeq === listRequestSeqRef.current) setLoadingComponents(false);
     }
-  }, [activeProfile, solutions, pushToast]);
+  }, [activeProfile, solutions, pushToast, clearSearch]);
 
   /** Drill one level deeper: treat the clicked component as a sub-solution
    *  and list its children. Works because the ER tree in F&O is a single
    *  `ERSolutionTable` hierarchy — every node can be a parent. */
   const handleDrillInto = useCallback(async (comp: ErConfigSummary) => {
     if (!activeProfile) return;
+    clearSearch();
     const requestSeq = ++listRequestSeqRef.current;
     const name = comp.configurationName;
     setSolutionPath([...solutionPath, name]);
@@ -837,11 +1012,12 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // A newer request owns the spinner now.
       if (requestSeq === listRequestSeqRef.current) setLoadingComponents(false);
     }
-  }, [activeProfile, solutions, pushToast, dataModelChain, solutionPath]);
+  }, [activeProfile, solutions, pushToast, dataModelChain, solutionPath, clearSearch]);
 
   /** Pop back one level in the solution breadcrumb. */
   const handleBack = useCallback(async () => {
     if (!activeProfile) return;
+    clearSearch();
     const requestSeq = ++listRequestSeqRef.current;
     if (solutionPath.length <= 1) {
       // Back to the root list — clear the component list but keep the
@@ -900,15 +1076,22 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // A newer request owns the spinner now.
       if (requestSeq === listRequestSeqRef.current) setLoadingComponents(false);
     }
-  }, [activeProfile, solutions, solutionPath, dataModelChain, pushToast]);
+  }, [activeProfile, solutions, solutionPath, dataModelChain, pushToast, clearSearch]);
+
+  // Search results take over the right panel while a search is active; the
+  // type dropdown and the text filter then narrow the hits instead of the
+  // opened model's listing.
+  const listedComponents = search ? search.results : components;
 
   const filteredComponents = useMemo(() => {
     // DataModel nodes are navigation-only (left panel) — exclude them from
     // the right detail/download panel entirely.
-    const base = components.filter(c => c.componentType !== 'DataModel');
-    if (componentTypeFilter === 'All') return base;
-    return base.filter(c => c.componentType === componentTypeFilter);
-  }, [components, componentTypeFilter]);
+    let base = listedComponents.filter(c => c.componentType !== 'DataModel');
+    if (componentTypeFilter !== 'All') base = base.filter(c => c.componentType === componentTypeFilter);
+    const q = componentFilter.trim().toLowerCase();
+    if (q) base = base.filter(c => componentMatchesQuery(c, q));
+    return base;
+  }, [listedComponents, componentTypeFilter, componentFilter]);
 
   const isComponentDownloadable = useCallback((comp: ErConfigSummary): boolean => {
     if (isUsableGuid(comp.revisionGuid) || isUsableGuid(comp.configurationGuid)) return true;
@@ -3159,6 +3342,14 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     return roots;
   }, [solutions]);
 
+  // Roots left after the text filter — also tells the panel when a query
+  // matched no model at all, which is the moment to point at the deep search.
+  const visibleSolutionTree = useMemo(() => {
+    const q = solutionFilter.trim().toLowerCase();
+    if (!q) return solutionTree;
+    return solutionTree.filter(node => solNodeMatchesFilter(node, q));
+  }, [solutionTree, solutionFilter]);
+
   const toggleExpanded = useCallback((name: string) => {
     setExpandedSolutions(prev => {
       const next = new Set(prev);
@@ -3492,14 +3683,49 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 {loadingSolutions && <Spinner size="tiny" />}
               </div>
               <div className={styles.listSearchBar}>
-                <Input
-                  size="small"
-                  placeholder={t.fnoFilterModels}
-                  value={solutionFilter}
-                  onChange={(_, d) => setSolutionFilter(d.value)}
-                  contentBefore={<SearchRegular />}
-                  style={{ width: '100%' }}
-                />
+                <div className={styles.listSearchRow}>
+                  <Input
+                    size="small"
+                    placeholder={t.fnoFilterModels}
+                    value={solutionFilter}
+                    onChange={(_, d) => setSolutionFilter(d.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') void runSearch(); }}
+                    contentBefore={<SearchRegular />}
+                    style={{ width: '100%' }}
+                  />
+                  {/* The text box filters model names instantly; this walks the
+                      models' contents, which costs one API call per root. */}
+                  <Tooltip content={t.fnoSearchEverywhereHint} relationship="label">
+                    <Button
+                      size="small"
+                      appearance={searchActive ? 'primary' : 'outline'}
+                      icon={search?.running ? <Spinner size="tiny" /> : <DocumentSearchRegular />}
+                      disabled={solutionFilter.trim().length < MIN_SEARCH_CHARS || loadingSolutions || search?.running}
+                      aria-label={t.fnoSearchEverywhere}
+                      onClick={() => void runSearch()}
+                      style={{ width: '100%' }}
+                    >
+                      {t.fnoSearchEverywhere}
+                    </Button>
+                  </Tooltip>
+                </div>
+                {search && (
+                  <div className={styles.searchNote}>
+                    <Caption2 className={styles.searchNoteText}>
+                      {search.running
+                        ? t.fnoSearchProgress(search.scanned, search.total)
+                        : t.fnoSearchHits(search.results.length)}
+                    </Caption2>
+                    <Button
+                      size="small"
+                      appearance="subtle"
+                      icon={<DismissRegular />}
+                      aria-label={t.fnoSearchClear}
+                      title={t.fnoSearchClear}
+                      onClick={clearSearch}
+                    />
+                  </div>
+                )}
               </div>
               <div className={styles.listScroll}>
                 {/* Skeleton while loading */}
@@ -3513,9 +3739,19 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                   </>
                 )}
 
-                {!loadingSolutions && solutionTree
-                  .filter(node => !solutionFilter || solNodeMatchesFilter(node, solutionFilter.toLowerCase()))
-                  .map(node => renderSolNode(node, 0))}
+                {!loadingSolutions && visibleSolutionTree.map(node => renderSolNode(node, 0))}
+
+                {/* A query that hits no model name is exactly the case the
+                    cross-model search exists for — say so instead of a blank. */}
+                {!loadingSolutions && solutionTree.length > 0 && visibleSolutionTree.length === 0 && (
+                  <div className={styles.emptyState}>
+                    <DocumentSearchRegular fontSize={28} style={{ opacity: 0.3 }} />
+                    <Caption1>{t.fnoNoModelMatch(solutionFilter.trim())}</Caption1>
+                    <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                      {t.fnoNoModelMatchHint}
+                    </Caption1>
+                  </div>
+                )}
 
                 {!loadingSolutions && solutionTree.length === 0 && !solutionFilter && (
                   <div className={styles.emptyState}>
@@ -3551,7 +3787,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               <div className={styles.listHeader}>
                 {/* Breadcrumb */}
                 <div className={styles.listHeaderLeft} style={{ minWidth: 0, flex: 1 }}>
-                  {solutionPath.length > 0 && (
+                  {solutionPath.length > 0 && !searchActive && (
                     <Tooltip content={t.fnoBack} relationship="label">
                       <Button
                         size="small"
@@ -3563,7 +3799,14 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                     </Tooltip>
                   )}
                   <div className={styles.breadcrumb}>
-                    {solutionPath.length === 0 ? (
+                    {searchActive ? (
+                      <>
+                        <DocumentSearchRegular fontSize={14} style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }} />
+                        <Body1Strong className={styles.breadcrumbItem} title={search.query}>
+                          {t.fnoSearchResults(search.query)}
+                        </Body1Strong>
+                      </>
+                    ) : solutionPath.length === 0 ? (
                       <Body1Strong className={styles.breadcrumbItem}>{t.fnoConfigurations}</Body1Strong>
                     ) : (
                       solutionPath.map((seg, i) => (
@@ -3583,7 +3826,18 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 </div>
                 {/* Controls */}
                 <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, alignItems: 'center', flexShrink: 0 }}>
-                  {loadingComponents && <Spinner size="tiny" />}
+                  {(loadingComponents || search?.running) && <Spinner size="tiny" />}
+                  {searchActive && (
+                    <Tooltip content={t.fnoSearchClear} relationship="label">
+                      <Button
+                        size="small"
+                        appearance="subtle"
+                        icon={<DismissRegular />}
+                        aria-label={t.fnoSearchClear}
+                        onClick={clearSearch}
+                      />
+                    </Tooltip>
+                  )}
                   <Dropdown
                     size="small"
                     value={componentTypeFilter === 'All' ? t.fnoAllTypes : fnoComponentTypeLabel(componentTypeFilter)}
@@ -3615,9 +3869,31 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 </div>
               </div>
 
+              {/* Narrows whatever the panel is showing: an opened model's
+                  configurations, or the hits of a cross-model search. */}
+              <div className={styles.listSearchBar}>
+                <Input
+                  size="small"
+                  placeholder={t.fnoFilterConfigurations}
+                  value={componentFilter}
+                  onChange={(_, d) => setComponentFilter(d.value)}
+                  contentBefore={<SearchRegular />}
+                  contentAfter={componentFilter ? (
+                    <DismissRegular
+                      fontSize={12}
+                      style={{ cursor: 'pointer' }}
+                      role="button"
+                      aria-label={t.dismiss}
+                      onClick={() => setComponentFilter('')}
+                    />
+                  ) : undefined}
+                  style={{ width: '100%' }}
+                />
+              </div>
+
               <div className={styles.listScroll}>
                 {/* Skeleton while loading components */}
-                {loadingComponents && (
+                {(loadingComponents || (search?.running && filteredComponents.length === 0)) && (
                   <>
                     <SkeletonListItem wide delay={0} />
                     <SkeletonListItem delay={60} />
@@ -3627,6 +3903,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
 
                 {!loadingComponents && filteredComponents.map(comp => {
                   const key = componentKey(comp);
+                  const ownerModel = comp.ownerDataModelName ?? comp.solutionName ?? '';
                   const hasGuid = isUsableGuid(comp.revisionGuid) || isUsableGuid(comp.configurationGuid);
                   const hasChildren = Boolean(comp.hasChildren);
                   const canResolveMappingViaParent =
@@ -3687,6 +3964,19 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                         {comp.version && (
                           <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>v{comp.version}</Caption1>
                         )}
+                        {/* A hit pulled out of some other model is meaningless
+                            without its owner — and clicking it opens that model. */}
+                        {searchActive && ownerModel && (
+                          <button
+                            type="button"
+                            className={styles.resultOwner}
+                            title={t.fnoSearchOpenModel(ownerModel)}
+                            onClick={e => { e.stopPropagation(); void handlePickSolution(ownerModel); }}
+                          >
+                            <TableSimpleRegular fontSize={12} style={{ flexShrink: 0 }} />
+                            <span className={styles.resultOwnerName}>{ownerModel}</span>
+                          </button>
+                        )}
                       </div>
 
                       {/* Drill icon */}
@@ -3707,13 +3997,23 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                   );
                 })}
 
-                {!loadingComponents && filteredComponents.length === 0 && solutionPath.length > 0 && (
+                {searchActive && !search.running && filteredComponents.length === 0 && (
                   <div className={styles.emptyState}>
-                    <DocumentTableRegular fontSize={32} style={{ opacity: 0.3 }} />
-                    <Caption1>{t.fnoNoChildren(solutionPath[solutionPath.length - 1])}</Caption1>
+                    <DocumentSearchRegular fontSize={32} style={{ opacity: 0.3 }} />
+                    <Caption1>{t.fnoSearchNoHits(componentFilter.trim() || search.query)}</Caption1>
                   </div>
                 )}
-                {!loadingComponents && filteredComponents.length === 0 && solutionPath.length === 0 && !loadingSolutions && (
+                {!searchActive && !loadingComponents && filteredComponents.length === 0 && solutionPath.length > 0 && (
+                  <div className={styles.emptyState}>
+                    <DocumentTableRegular fontSize={32} style={{ opacity: 0.3 }} />
+                    <Caption1>
+                      {componentFilter.trim()
+                        ? t.fnoSearchNoHits(componentFilter.trim())
+                        : t.fnoNoChildren(solutionPath[solutionPath.length - 1])}
+                    </Caption1>
+                  </div>
+                )}
+                {!searchActive && !loadingComponents && filteredComponents.length === 0 && solutionPath.length === 0 && !loadingSolutions && (
                   <div className={styles.emptyState}>
                     <ChevronDownRegular fontSize={32} style={{ opacity: 0.3 }} />
                     <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
