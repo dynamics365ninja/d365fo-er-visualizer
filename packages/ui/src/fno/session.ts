@@ -25,6 +25,7 @@ import {
 } from '@er-visualizer/fno-client';
 import { parseERConfigurations } from '@er-visualizer/core';
 import { getAuthProvider } from './auth-factory';
+import { describeSummary, fnoDebugMatches, recordFnoDebug } from './debug';
 import { registerHarvestedLabels } from '../utils/label-resolver';
 import { createFnoTransport } from './transport';
 
@@ -134,6 +135,12 @@ export const fnoSession = {
   ): Promise<ErConfigSummary[]> {
     const auth = await ensureToken(conn, opts?.signal);
     const all = await listComponents(transport(), conn, auth.accessToken, solutionName, opts?.signal);
+    recordFnoDebug('listComponents', {
+      solutionName,
+      count: all.length,
+      rows: all.filter(c => fnoDebugMatches(c.configurationName) || fnoDebugMatches(c.solutionName))
+        .map(describeSummary),
+    });
     return opts?.componentType ? all.filter((c: ErConfigSummary) => c.componentType === opts.componentType) : all;
   },
 
@@ -150,10 +157,22 @@ export const fnoSession = {
     try {
       const auth = await ensureToken(conn, signal);
       const download = await downloadConfigXml(transport(), conn, auth.accessToken, component, signal);
+      recordFnoDebug('download', {
+        asked: describeSummary(component),
+        silent: opts?.silent ?? false,
+        resolvedWith: download.resolvedWith,
+        // The first line of the payload names the configuration F&O actually
+        // returned — the one place that tells a derived config from its base.
+        xmlHead: download.xml.slice(0, 400),
+      });
       harvestLabels(component, download.xml);
       emit({ type: 'done', component, download });
       return download;
     } catch (error) {
+      recordFnoDebug('download-failed', {
+        asked: describeSummary(component),
+        error: error instanceof Error ? error.message : String(error),
+      });
       emit({ type: 'error', component, error });
       throw error;
     }
