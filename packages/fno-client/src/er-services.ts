@@ -678,27 +678,9 @@ export function buildDownloadAttempts(
   const ops = ER_STORAGE_OPS_BY_TYPE[component.componentType] ?? ER_STORAGE_OPS_BY_TYPE.Unknown;
   const attempts: { operation: string; body: Record<string, unknown> }[] = [];
 
-  /** Distinct, non-empty ids in the order given (brace/case-insensitive). */
-  const distinct = (ids: (string | undefined)[]): string[] => {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const id of ids) {
-      if (!id) continue;
-      const key = id.replace(/^\{|\}$/g, '').toLowerCase();
-      if (!key || key === ZERO_GUID || seen.has(key)) continue;
-      seen.add(key);
-      out.push(id);
-    }
-    return out;
-  };
-
   for (const op of ops) {
     if (op === 'GetEffectiveFormatMappingByID') {
-      // Probe every id the listing gave us, not just the first two: a derived
-      // format's own `FormatMappingGUID` is often absent, and the id that
-      // resolves sits on one of its `Versions[]` rows. Stopping at two made
-      // such a format look like it had no XML at all.
-      for (const id of distinct([cfgId, revId, ...(component.guidCandidates ?? [])])) {
+      for (const id of [cfgId, revId].filter(Boolean)) {
         attempts.push({ operation: op, body: { _formatMappingGuid: id } });
       }
     } else if (op === 'GetModelMappingByID') {
@@ -911,6 +893,18 @@ export async function downloadConfigXml(
     // showing a red toast.
     const allEmpty = tried.length > 0 && tried.every(t => t.status === 200);
     if (allEmpty) {
+      // A draft-only configuration is the common, explainable case: the
+      // storage service serves the effective (completed) version, so there is
+      // nothing to hand out until someone completes it in F&O.
+      if (component.draftOnly) {
+        throw new FnoEmptyContentError(
+          `"${component.configurationName}" (${component.componentType}) has no completed version — ` +
+            `the listing reports only a draft, and F&O serves the effective (completed) version, ` +
+            `so all ${tried.length} probe(s) returned HTTP 200 with an empty body. ` +
+            `Complete the version in F&O (Reporting configurations → Versions → Complete) to download it. ` +
+            `Probed: ${probedIds || '(none)'}.`,
+        );
+      }
       throw new FnoEmptyContentError(
         `"${component.configurationName}" (${component.componentType}) has no own XML content — ` +
           `F&O returned HTTP 200 with an empty body for all ${tried.length} probe(s). ` +
@@ -1535,45 +1529,6 @@ export function findGuidInVersions(r: RawErComponentRow): string | undefined {
   return undefined;
 }
 
-/**
- * Every GUID on a listing row that could identify this configuration, in
- * probe order: the explicit id fields first, then the ids carried by its
- * versions (newest completed first).
- *
- * `Base` / `ModelID` are left out on purpose — they point at the DataModel
- * the configuration references, not at the configuration itself.
- */
-export function collectRowGuids(r: RawErComponentRow): string[] {
-  const rec = r as Record<string, unknown>;
-  const ownGuidKeys = /^(base|modelid)$/i;
-  const out: string[] = [];
-  const seen = new Set<string>();
-  const push = (value: unknown) => {
-    if (typeof value !== 'string') return;
-    const clean = value.replace(/,\d+$/, '').replace(/^\{|\}$/g, '');
-    if (!GUID_LIKE_RE.test(clean)) return;
-    const key = clean.toLowerCase();
-    if (key === ZERO_GUID || seen.has(key)) return;
-    seen.add(key);
-    out.push(clean);
-  };
-
-  push(r.FormatMappingGUID);
-  push(r.ModelMappingGuid);
-  push(r.ConfigurationGuid);
-  push(r.Guid);
-  push(r.ConfigurationRevisionGuid);
-  push(r.RevisionGuid);
-  for (const [key, value] of Object.entries(rec)) {
-    if (ownGuidKeys.test(key)) continue;
-    push(value);
-  }
-  for (const v of versionsByRelevance(r)) {
-    for (const guid of guidsInVersion(v)) push(guid);
-  }
-  return out;
-}
-
 function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSummary {
   const rec = r as Record<string, unknown>;
   const name = r.ConfigurationName ?? r.Name ?? '';
@@ -1638,6 +1593,13 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
         .sort((a, b) => b - a)
     : undefined;
 
+  // No completed version to hand out: the listing knows versions, yet none of
+  // them is completed (a lone version 1 is the never-completed draft, since
+  // D365FO numbers a draft as lastCompleted + 1).
+  const displayVersion = pickDisplayVersion(r.Versions);
+  const draftOnly =
+    Array.isArray(r.Versions) && r.Versions.length > 0 && displayVersion === undefined;
+
   return {
     solutionName: r.SolutionName ?? solutionName,
     configurationName: name,
@@ -1645,10 +1607,10 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
     // pickDisplayVersion prefers highest Completed (Status=2).
     // String fallbacks r.ConfigurationVersion / r.Version have no Status
     // info and may carry a draft number — omit for display field.
-    version: pickDisplayVersion(r.Versions),
+    version: displayVersion,
+    draftOnly: draftOnly || undefined,
     revisionGuid,
     configurationGuid,
-    guidCandidates: collectRowGuids(r),
     countryRegion: r.CountryRegion ?? r.CountryRegionCodes,
     hasContent: Boolean(revisionGuid || configurationGuid),
     hasChildren,

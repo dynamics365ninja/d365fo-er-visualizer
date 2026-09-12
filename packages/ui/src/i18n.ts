@@ -533,6 +533,9 @@ export interface Translations {
   fnoStatusDownloadingMMCount: (n: number) => string;
   fnoStatusLateDM: string;
   fnoSkippedDerived: (name: string) => string;
+  fnoSkippedDraft: (name: string) => string;
+  fnoDraftOnly: string;
+  fnoDraftOnlyHint: string;
   fnoSelectedCount: (n: number) => string;
   fnoSelectedCountLabel: string;
   treeCollapseNode: string;
@@ -1125,6 +1128,9 @@ const cs: Translations = {
   fnoStatusDownloadingMMCount: (n: number) => `Stahuji Model Mappings (${n})…`,
   fnoStatusLateDM: 'Řeším DataModely z křížových odkazů mapování…',
   fnoSkippedDerived: (name: string) => `„${name}" nemá vlastní XML (odvozená konfigurace) — přeskočeno.`,
+  fnoSkippedDraft: (name: string) => `„${name}" má jen rozpracovanou verzi — F&O vydává jen dokončené verze, takže není co stáhnout. Dokonči verzi v F&O (Reporting configurations → Versions → Complete).`,
+  fnoDraftOnly: 'Koncept',
+  fnoDraftOnlyHint: 'Nelze stáhnout: konfigurace nemá žádnou dokončenou verzi. F&O vydává jen dokončenou (effective) verzi — dokonči ji v F&O (Reporting configurations → Versions → Complete) a pak ji tu bude možné vybrat.',
   fnoSelectedCount: (n: number) => `${n} vybráno (napříč úrovněmi)`,
   fnoSelectedCountLabel: 'vybráno (napříč úrovněmi)',
   treeCollapseNode: 'Sbalit',
@@ -1736,6 +1742,9 @@ const en: Translations = {
   fnoStatusDownloadingMMCount: (n: number) => `Downloading Model Mappings (${n})…`,
   fnoStatusLateDM: 'Resolving DataModels from mapping cross-references…',
   fnoSkippedDerived: (name: string) => `"${name}" has no own XML (derived configuration) — skipped.`,
+  fnoSkippedDraft: (name: string) => `"${name}" has only a draft version — F&O serves completed versions only, so there is nothing to download. Complete the version in F&O (Reporting configurations → Versions → Complete).`,
+  fnoDraftOnly: 'Draft',
+  fnoDraftOnlyHint: 'Cannot be downloaded: this configuration has no completed version. F&O only serves the completed (effective) version — complete it in F&O (Reporting configurations → Versions → Complete) and it becomes selectable here.',
   fnoSelectedCount: (n: number) => `${n} selected (across levels)`,
   fnoSelectedCountLabel: 'selected (across levels)',
   treeCollapseNode: 'Collapse',

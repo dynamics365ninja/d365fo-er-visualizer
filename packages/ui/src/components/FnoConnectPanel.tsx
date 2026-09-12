@@ -72,6 +72,7 @@ import { useFnoSession } from '../state/fno-session';
 import { fnoSession } from '../fno/session';
 import { clearRedirectPending, computeRedirectUri, peekRedirectPending } from '../fno/redirect-state';
 import { hasBuiltInClientId } from '../fno/built-in-client';
+import { fnoUndownloadableReason } from '../utils/fno-downloadable';
 import { describeSummary, dumpFnoDebug, recordFnoDebug } from '../fno/debug';
 import { DependencyPromptDialog, type DependencyPromptRequest } from './DependencyPromptDialog';
 
@@ -1094,21 +1095,13 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     return base;
   }, [listedComponents, componentTypeFilter, componentFilter]);
 
-  const isComponentDownloadable = useCallback((comp: ErConfigSummary): boolean => {
-    if (isUsableGuid(comp.revisionGuid) || isUsableGuid(comp.configurationGuid)) return true;
-    // ModelMapping rows from `getFormatSolutionsSubHierarchy` are
-    // missing their own GUID but can still be resolved via
-    // `getModelMappingByID(_dataModelGuid, _dataContainerDescriptorName)`
-    // when we know the parent DataModel GUID. See the matching
-    // fallback path in `buildDownloadAttempts` (fno-client/er-services.ts).
-    if (
-      comp.componentType === 'ModelMapping' &&
-      (comp.parentDataModelGuid || comp.parentDataModelRevisionGuid)
-    ) {
-      return true;
-    }
-    return false;
-  }, []);
+  // The rule lives in utils/fno-downloadable so it can be unit-tested: a
+  // draft-only configuration has a perfectly good id, so every id-based test
+  // says "downloadable" while F&O answers empty.
+  const isComponentDownloadable = useCallback(
+    (comp: ErConfigSummary): boolean => fnoUndownloadableReason(comp) === null,
+    [],
+  );
 
   const toggleSelect = useCallback((comp: ErConfigSummary) => {
     if (!isComponentDownloadable(comp)) return;
@@ -1503,11 +1496,15 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               configurationName: component.configurationName,
               componentType: component.componentType,
               solutionName: component.solutionName,
+              draftOnly: component.draftOnly ?? false,
               detail: err.message,
             });
             pushToast({
               kind: 'info',
-              message: t.fnoSkippedDerived(component.configurationName),
+              // A draft has a fix the user can act on; "no own XML" does not.
+              message: component.draftOnly
+                ? t.fnoSkippedDraft(component.configurationName)
+                : t.fnoSkippedDerived(component.configurationName),
             });
           } else {
             console.info('[fno-ui] auto-included root has no own XML, skipping', component.configurationName);
@@ -3926,15 +3923,17 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                   const canResolveMappingViaParent =
                     comp.componentType === 'ModelMapping' &&
                     Boolean(comp.parentDataModelGuid || comp.parentDataModelRevisionGuid);
-                  const isDownloadable = hasGuid || canResolveMappingViaParent;
+                  const undownloadable = fnoUndownloadableReason(comp);
+                  const isDownloadable = undownloadable === null;
                   const isDead = !isDownloadable && !hasChildren;
-                  const isUnreachableMapping =
-                    !isDownloadable && comp.componentType === 'ModelMapping';
-                  const disabledTitle = isUnreachableMapping
-                    ? t.fnoUnreachableMapping
-                    : isDead
-                      ? t.fnoNoDownloadableContent
-                      : t.fnoBranchNodeHint;
+                  const isUnreachableMapping = undownloadable === 'unreachable-mapping';
+                  // The draft reason comes first: it is the one the user can
+                  // act on, by completing the version in F&O.
+                  const disabledTitle =
+                    undownloadable === 'draft-only' ? t.fnoDraftOnlyHint :
+                    isUnreachableMapping ? t.fnoUnreachableMapping :
+                    isDead ? t.fnoNoDownloadableContent :
+                    t.fnoBranchNodeHint;
 
                   return (
                     <div
@@ -3972,6 +3971,15 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                             <Badge appearance="outline" color="success" size="small" style={{ fontSize: '10px' }}>
                               {t.fnoViaParent}
                             </Badge>
+                          )}
+                          {/* No completed version: F&O will answer empty, so say
+                              it before the download rather than after. */}
+                          {comp.draftOnly && (
+                            <Tooltip content={t.fnoDraftOnlyHint} relationship="description">
+                              <Badge appearance="outline" color="warning" size="small" style={{ fontSize: '10px' }}>
+                                {t.fnoDraftOnly}
+                              </Badge>
+                            </Tooltip>
                           )}
 
                         </div>

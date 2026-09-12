@@ -159,7 +159,7 @@ export function describeSummary(c: {
   version?: string;
   configurationGuid?: string;
   revisionGuid?: string;
-  guidCandidates?: string[];
+  draftOnly?: boolean;
   parentDataModelGuid?: string;
   referencedModelGuid?: string;
   ownerDataModelName?: string;
@@ -175,7 +175,7 @@ export function describeSummary(c: {
     version: c.version,
     cfgGuid: c.configurationGuid,
     revGuid: c.revisionGuid,
-    candidates: c.guidCandidates,
+    draftOnly: c.draftOnly,
     parentDmGuid: c.parentDataModelGuid,
     referencedModelGuid: c.referencedModelGuid,
     owner: c.ownerDataModelName,

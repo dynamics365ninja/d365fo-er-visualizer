@@ -85,14 +85,14 @@ export interface ErConfigSummary {
   /** Optional GUID of the configuration itself (different from the revision). */
   configurationGuid?: string;
   /**
-   * Every other GUID the listing row carried for this configuration, in
-   * probe order. `getFormatSolutionsSubHierarchy` puts the id a download
-   * needs in a different place depending on the F&O build and on whether the
-   * row is a base or a derived configuration — `FormatMappingGUID` on some,
-   * a per-version GUID inside `Versions[]` on others. The downloader tries
-   * them all before concluding a configuration has no content of its own.
+   * True when the listing shows no completed version for this configuration —
+   * its only version is the draft. F&O's storage service hands out the
+   * *effective* (completed) version, so such a configuration has nothing to
+   * download: every probe answers HTTP 200 with an empty body. Recognising it
+   * up front is the difference between "F&O will not export a draft" and the
+   * useless "this configuration has no XML of its own".
    */
-  guidCandidates?: string[];
+  draftOnly?: boolean;
   /** Country / region code if exposed. */
   countryRegion?: string;
   /** Whether the component has downstream XML content available. */
@@ -204,10 +204,9 @@ export interface ErConfigDownload {
   source: ErConfigSummary;
   /**
    * The attempt that actually returned the XML — operation name and the body
-   * it was called with. Several ids and parameter shapes are probed per
-   * component, so without this there is no way to tell afterwards whether a
-   * configuration came back from its own id or from a fallback that resolves
-   * to the base configuration.
+   * it was called with. Several parameter shapes are probed per component, so
+   * without this there is no way to tell afterwards whether a configuration
+   * came back from its own id or from a fallback that resolves to the base.
    */
   resolvedWith?: { operation: string; body: Record<string, unknown> };
   /**
