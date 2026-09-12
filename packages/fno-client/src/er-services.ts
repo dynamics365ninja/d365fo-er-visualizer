@@ -985,6 +985,7 @@ export async function downloadConfigXml(
       componentType: component.componentType,
     }),
     source: component,
+    resolvedWith: { operation, body: successBody ?? {} },
     referencedDataModelGuids: referencedDataModelGuids.length > 0 ? referencedDataModelGuids : undefined,
     referencedDataModelRevisions: Object.keys(referencedDataModelRevisions).length > 0
       ? referencedDataModelRevisions

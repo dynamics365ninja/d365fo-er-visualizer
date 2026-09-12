@@ -203,6 +203,14 @@ export interface ErConfigDownload {
   /** The source config metadata for UI feedback. */
   source: ErConfigSummary;
   /**
+   * The attempt that actually returned the XML — operation name and the body
+   * it was called with. Several ids and parameter shapes are probed per
+   * component, so without this there is no way to tell afterwards whether a
+   * configuration came back from its own id or from a fallback that resolves
+   * to the base configuration.
+   */
+  resolvedWith?: { operation: string; body: Record<string, unknown> };
+  /**
    * GUIDs of any DataModel(s) referenced from inside the downloaded
    * XML — e.g. `ERFormatMapping.Model` or `ERModelMapping.Model`
    * attribute. When `getFormatSolutionsSubHierarchy` didn't expose a

@@ -72,6 +72,7 @@ import { useFnoSession } from '../state/fno-session';
 import { fnoSession } from '../fno/session';
 import { clearRedirectPending, computeRedirectUri, peekRedirectPending } from '../fno/redirect-state';
 import { hasBuiltInClientId } from '../fno/built-in-client';
+import { describeSummary, dumpFnoDebug, recordFnoDebug } from '../fno/debug';
 import { DependencyPromptDialog, type DependencyPromptRequest } from './DependencyPromptDialog';
 
 const useStyles = makeStyles({
@@ -1374,6 +1375,12 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       }
     }
     setIngesting(true);
+    // What the user picked vs. what the pipeline decided to fetch for them —
+    // the two differ whenever an ancestor or a mapping is auto-included.
+    recordFnoDebug('load-plan', {
+      selected: toLoad.map(describeSummary),
+      queued: Array.from(augmented.values()).map(describeSummary),
+    });
     beginFnoIngest(
       Array.from(augmented.values()).map(c => ({
         key: componentKey(c),
@@ -3282,6 +3289,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       setIngesting(false);
       setIngestStatus('');
       endFnoIngest();
+      dumpFnoDebug('load selected');
     }
     if (ok > 0) {
       // Clear the queue when the entire batch resolved (success or
