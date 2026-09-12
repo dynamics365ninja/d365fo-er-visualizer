@@ -1,10 +1,15 @@
 import './index.css';
 import { applyResolvedTheme, readThemeMode, resolveThemeMode } from './theme';
+import { installFnoDebugHandle } from './fno/debug';
 
 /* Before anything else: the store chunk is fetched asynchronously below, and
    until `data-theme` is on <html> the CSS falls back to dark. Resolve it here
    so a light OS never flashes the dark shell on the way in. */
 applyResolvedTheme(resolveThemeMode(readThemeMode()));
+
+/* `window.__erFnoDebug` from the very first paint: it is how anyone checks
+   whether the build they are looking at can record F&O diagnostics at all. */
+installFnoDebugHandle();
 
 function formatRuntimeError(value: unknown): string {
   if (value instanceof Error) {
