@@ -678,27 +678,9 @@ export function buildDownloadAttempts(
   const ops = ER_STORAGE_OPS_BY_TYPE[component.componentType] ?? ER_STORAGE_OPS_BY_TYPE.Unknown;
   const attempts: { operation: string; body: Record<string, unknown> }[] = [];
 
-  /** Distinct, non-empty ids in the order given (brace/case-insensitive). */
-  const distinct = (ids: (string | undefined)[]): string[] => {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const id of ids) {
-      if (!id) continue;
-      const key = id.replace(/^\{|\}$/g, '').toLowerCase();
-      if (!key || key === ZERO_GUID || seen.has(key)) continue;
-      seen.add(key);
-      out.push(id);
-    }
-    return out;
-  };
-
   for (const op of ops) {
     if (op === 'GetEffectiveFormatMappingByID') {
-      // Probe every id the listing gave us, not just the first two: a derived
-      // format's own `FormatMappingGUID` is often absent, and the id that
-      // resolves sits on one of its `Versions[]` rows. Stopping at two made
-      // such a format look like it had no XML at all.
-      for (const id of distinct([cfgId, revId, ...(component.guidCandidates ?? [])])) {
+      for (const id of [cfgId, revId].filter(Boolean)) {
         attempts.push({ operation: op, body: { _formatMappingGuid: id } });
       }
     } else if (op === 'GetModelMappingByID') {
@@ -982,17 +964,7 @@ export async function downloadConfigXml(
   // the synthetic ERSolution (custom services strip the envelope): the
   // component's own ERSolution GUID and its inheritance parent (`Base=`).
   const baseHint = extractBaseHint(xml);
-  // Trust the payload over the summary we asked with — but only for the two
-  // types that get *synthesised* summaries. A DataModel probed by GUID and a
-  // mapping resolved from (model, descriptor) carry a guessed name, often the
-  // base configuration's, which is what made a correctly downloaded derived
-  // configuration look like its base. A Format is always asked with the
-  // listing row the user picked, so its name stays as the user saw it.
-  const actualName =
-    component.componentType === 'DataModel' || component.componentType === 'ModelMapping'
-      ? extractComponentNameFromXml(xml, component.componentType)
-      : undefined;
-  const finalXml = injectNameHint(xml, actualName || component.configurationName, finalVersion, {
+  const finalXml = injectNameHint(xml, component.configurationName, finalVersion, {
     solutionId: component.configurationGuid,
     base: baseHint,
   });
@@ -1002,15 +974,11 @@ export async function downloadConfigXml(
     syntheticPath: buildFnoPath({
       envUrl: conn.envUrl,
       solutionName: component.solutionName,
-      configurationName: actualName || component.configurationName,
+      configurationName: component.configurationName,
       version: finalVersion,
       componentType: component.componentType,
     }),
-    source: actualName && actualName !== component.configurationName
-      // Keep the identity F&O reported, so the workspace, the ingest log and
-      // the debug dump all name the same thing.
-      ? { ...component, configurationName: actualName }
-      : component,
+    source: component,
     resolvedWith: { operation, body: successBody ?? {} },
     referencedDataModelGuids: referencedDataModelGuids.length > 0 ? referencedDataModelGuids : undefined,
     referencedDataModelRevisions: Object.keys(referencedDataModelRevisions).length > 0
@@ -1218,49 +1186,6 @@ function escapeXmlAttr(value: string): string {
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
-}
-
-/**
- * The name F&O put on the configuration it actually returned.
- *
- * Several download paths ask with a *synthesised* summary — a DataModel
- * probed by GUID, a mapping resolved from (model, descriptor) — whose name is
- * a guess, frequently the base configuration's name. The payload knows
- * better: `<ERDataModel Name="Asl Invoice model">` is the derived model even
- * when we asked for "Invoice model". Labelling the bundle with the guess is
- * what made a correctly downloaded derived configuration look like its base.
- *
- * The element is matched per component type: a mapping bundle opens with the
- * model half (`parmModel`), so a blanket "first Name attribute" would label
- * every mapping after its DataModel.
- */
-export function extractComponentNameFromXml(
-  xml: string,
-  componentType: ErComponentType,
-): string | undefined {
-  const elements =
-    componentType === 'DataModel' ? ['ERDataModel'] :
-    componentType === 'ModelMapping' ? ['ERModelMapping'] :
-    componentType === 'Format' ? ['ERTextFormat', 'ERFormat', 'ERFormatMapping'] :
-    [];
-  for (const element of elements) {
-    // Attribute order is not guaranteed; scan the opening tag only.
-    const tag = new RegExp(`<\\s*${element}\\b[^>]*>`, 'i').exec(xml);
-    if (!tag) continue;
-    const name = /\bName\s*=\s*"([^"]*)"/i.exec(tag[0])?.[1];
-    if (name && name.trim()) return decodeXmlAttr(name.trim());
-  }
-  return undefined;
-}
-
-/** Reverse of `escapeXmlAttr` for the handful of entities it produces. */
-function decodeXmlAttr(value: string): string {
-  return value
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, '&');
 }
 
 function injectNameHint(
@@ -1604,45 +1529,6 @@ export function findGuidInVersions(r: RawErComponentRow): string | undefined {
   return undefined;
 }
 
-/**
- * Every GUID on a listing row that could identify this configuration, in
- * probe order: the explicit id fields first, then the ids carried by its
- * versions (newest completed first).
- *
- * `Base` / `ModelID` are left out on purpose — they point at the DataModel
- * the configuration references, not at the configuration itself.
- */
-export function collectRowGuids(r: RawErComponentRow): string[] {
-  const rec = r as Record<string, unknown>;
-  const ownGuidKeys = /^(base|modelid)$/i;
-  const out: string[] = [];
-  const seen = new Set<string>();
-  const push = (value: unknown) => {
-    if (typeof value !== 'string') return;
-    const clean = value.replace(/,\d+$/, '').replace(/^\{|\}$/g, '');
-    if (!GUID_LIKE_RE.test(clean)) return;
-    const key = clean.toLowerCase();
-    if (key === ZERO_GUID || seen.has(key)) return;
-    seen.add(key);
-    out.push(clean);
-  };
-
-  push(r.FormatMappingGUID);
-  push(r.ModelMappingGuid);
-  push(r.ConfigurationGuid);
-  push(r.Guid);
-  push(r.ConfigurationRevisionGuid);
-  push(r.RevisionGuid);
-  for (const [key, value] of Object.entries(rec)) {
-    if (ownGuidKeys.test(key)) continue;
-    push(value);
-  }
-  for (const v of versionsByRelevance(r)) {
-    for (const guid of guidsInVersion(v)) push(guid);
-  }
-  return out;
-}
-
 function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSummary {
   const rec = r as Record<string, unknown>;
   const name = r.ConfigurationName ?? r.Name ?? '';
@@ -1725,7 +1611,6 @@ function mapComponentRow(r: RawErComponentRow, solutionName: string): ErConfigSu
     draftOnly: draftOnly || undefined,
     revisionGuid,
     configurationGuid,
-    guidCandidates: collectRowGuids(r),
     countryRegion: r.CountryRegion ?? r.CountryRegionCodes,
     hasContent: Boolean(revisionGuid || configurationGuid),
     hasChildren,
