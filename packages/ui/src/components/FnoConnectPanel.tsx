@@ -1530,147 +1530,53 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         pushToast({ kind: 'error', message: t.fnoDownloadFailed(component.configurationName, message) });
       };
 
-      // ── Phase 0: GUID discovery for no-GUID DataModels ──
-      // F&O listing API returns no GUIDs for DataModel/ModelMapping rows on modern builds.
-      // For Formats whose parent DataModel has no GUID, we use sibling Formats from the
-      // listing cache as scouts: export-format siblings embed Model="{dm-guid}" in XML.
-      // For import formats (no Model= in XML), we auto-include ModelMapping siblings —
-      // GetModelMappingByID(mappingGuid) returns DataModel XML for free via parmModel.
+      // ── Phase 0: mappings that can hand us the model for free ──
+      // F&O's listing API returns no GUIDs for DataModel/ModelMapping rows on
+      // modern builds. Where a ModelMapping row does carry one,
+      // `GetModelMappingByID(mappingGuid)` answers with the DataModel XML too
+      // (via parmModel), so including a couple of the model's mappings is a
+      // discovery route that costs nothing extra — the mappings are wanted
+      // anyway.
+      //
+      // Downloading sibling *formats* as scouts used to sit here and is gone: a
+      // model is in practice either an export model or an import one, and a
+      // hybrid is rare. An export format names its model in its own XML, so it
+      // never needed a scout; an import format's XML names nothing and neither
+      // does any of its siblings'. The scouts therefore paid hundreds of
+      // kilobytes each — measured at 12 of a 17-second load — to learn nothing.
       {
-        // Build a set of DataModel solution/config names already covered in finalToLoad.
         const dmNamesInLoad = new Set(
           finalToLoad
             .filter(c => c.componentType === 'DataModel')
             .flatMap(c => [c.configurationName, c.solutionName].filter(Boolean)),
         );
 
-        // For each selected Format whose DataModel isn't already covered, try to discover
-        // the DataModel GUID via sibling format scouts from the listing cache.
         for (const fmt of Array.from(selected.values())) {
           if (fmt.componentType !== 'Format') continue;
-          // Two different names, and mixing them up is what labelled a derived
-          // model after its base:
-          //  • `solutionName` is the ROOT of the listing query — the key the
-          //    component cache is filled under, so scout lookup needs it.
-          //  • `ownerDataModelName` is the nearest DataModel ANCESTOR in the ER
-          //    tree, i.e. the model this format actually belongs to. For a format
-          //    under a derived model the root is still the
-          //    base ("Payment model"), so naming the synthetic DataModel after the
-          //    root put the base's name on the derived model — in the download
-          //    dialog, on the tab, and on every mapping synthesized from it.
+          // `solutionName` is the ROOT of the listing query — the key the
+          // component cache is filled under. `ownerDataModelName` is the nearest
+          // DataModel ANCESTOR, i.e. the model this format actually belongs to.
           const listingRootName = fmt.solutionName ?? '';
           const parentDmName = fmt.ownerDataModelName || listingRootName;
-          if (dmNamesInLoad.has(parentDmName)) continue;
-          if (!parentDmName) continue;
+          if (!parentDmName || dmNamesInLoad.has(parentDmName)) continue;
 
-          // Collect Format siblings from the cached tree rooted at listingRootName.
-          // Only include siblings that belong to the SAME derived-solution scope as the
-          // target format (same ownerDataModelName). Base-solution formats reference the
-          // BASE DataModel GUID — using them as scouts would cause a wrong synthDm
-          // (base DM GUID instead of derived) which then triggers a base mapping download.
-          // When no derived-scope scouts are found, Phase 0 is skipped for this format:
-          // harvestRefs inside downloadSelectedTask will extract the correct DM GUID
-          // from the target format's own XML and enqueue it via pendingModelFollowUps.
-          const targetOwnerDm = fmt.ownerDataModelName;
-          const siblings: ErConfigSummary[] = [];
+          const mmSiblings: ErConfigSummary[] = [];
           for (const [cacheKey, rootComponents] of rootComponentCacheRef.current) {
             if (cacheKey !== listingRootName) continue;
             for (const c of rootComponents) {
-              // Only siblings listed directly under the model are worth a
-              // scout request. A derived format's payload can carry nothing its
-              // base does not: its one distinctive reference is `Base=`, which
-              // names the base FORMAT and is rejected, and an own `Model=` would
-              // be inherited from that base — which is in this very list. Each
-              // of these payloads is hundreds of kilobytes, so scouting the
-              // derived variants only spends the user's time.
-              if (c.componentType === 'Format' && c.configurationGuid
-                && c.configurationName !== fmt.configurationName
-                && inheritsFromOwnDataModel(c)
-                && (!targetOwnerDm || c.ownerDataModelName === targetOwnerDm)) {
-                siblings.push(c);
+              if (
+                c.componentType === 'ModelMapping' &&
+                c.configurationGuid &&
+                !finalToLoad.some(existing => componentKey(existing) === componentKey(c))
+              ) {
+                mmSiblings.push(c);
               }
             }
           }
-
-          // Deduplicate by configurationGuid.
-          const seenGuids = new Set<string>();
-          const scouts: ErConfigSummary[] = [];
-          for (const c of siblings) {
-            if (seenGuids.has(c.configurationGuid!)) continue;
-            seenGuids.add(c.configurationGuid!);
-            scouts.push(c);
-            if (scouts.length >= 4) break;
-          }
-
-          let discoveredGuid: string | undefined;
-          for (const scout of scouts) {
-            try {
-              const scoutDownload = await fnoSession.downloadConfiguration(activeProfile, scout, undefined, { silent: true });
-
-              // Only a reference that really names a data model counts. A
-              // format derived from another format carries `Base=<base format>`,
-              // and taking that as the model put a FORMAT id on the synthetic
-              // DataModel — F&O then answered empty for the model and for every
-              // mapping probe that inherited the id.
-              const dmGuid = scoutedDataModelGuid(
-                scout,
-                scoutDownload.referencedDataModelGuids,
-                scoutDownload.referencedBaseOnlyGuids,
-              );
-              if (dmGuid) {
-                const revisions = scoutDownload.referencedDataModelRevisions ?? {};
-                const rev = revisions[dmGuid];
-                discoveredGuid = dmGuid;
-                const synthDm: ErConfigSummary = {
-                  solutionName: parentDmName,
-                  configurationName: parentDmName,
-                  componentType: 'DataModel',
-                  configurationGuid: dmGuid,
-                  hasContent: true,
-                  // Probe high→low so we always get the latest version.
-                  // If the format XML references a specific revision, try it first.
-                  versionNumbers: [
-                    ...(typeof rev === 'number' ? [rev] : []),
-                    50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
-                  ],
-                  version: typeof rev === 'number' ? String(rev) : undefined,
-                };
-                const key = componentKey(synthDm);
-                if (!finalToLoad.some(c => componentKey(c) === key)) {
-                  finalToLoad.unshift(synthDm); // DataModel first
-                  dmNamesInLoad.add(parentDmName);
-                }
-                break;
-              }
-            } catch {
-              // scout download failed — try next
-            }
-          }
-
-          if (!discoveredGuid) {
-            // Fallback: include ModelMapping siblings — GetModelMappingByID(mappingGuid)
-            // returns both the ModelMapping XML and the DataModel XML via parmModel.
-            const mmSiblings: ErConfigSummary[] = [];
-            for (const [cacheKey, rootComponents] of rootComponentCacheRef.current) {
-              if (cacheKey !== listingRootName) continue;
-              for (const c of rootComponents) {
-                if (
-                  c.componentType === 'ModelMapping' &&
-                  c.configurationGuid &&
-                  !finalToLoad.some(existing => componentKey(existing) === componentKey(c))
-                ) {
-                  mmSiblings.push(c);
-                }
-              }
-            }
-            if (mmSiblings.length > 0) {
-              // Add at most 2 — their download will return the DataModel XML too.
-              for (const mm of mmSiblings.slice(0, 2)) {
-                finalToLoad.push(mm);
-              }
-              dmNamesInLoad.add(parentDmName);
-
-            }
+          if (mmSiblings.length > 0) {
+            // At most 2 — their download returns the DataModel XML as well.
+            for (const mm of mmSiblings.slice(0, 2)) finalToLoad.push(mm);
+            dmNamesInLoad.add(parentDmName);
           }
         }
       }
