@@ -47,6 +47,7 @@ const SearchPanel = React.lazy(() =>
 import { LandingPage } from './LandingPage';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ToastHost } from './ToastHost';
+import { FnoIngestOverlay } from './FnoIngestPanel';
 import { ActivityBar } from './ActivityBar';
 import { TouchTitleTooltip } from './TouchTitleTooltip';
 import { useCompactLayout, useStackedLayout } from '../utils/responsive';
@@ -544,6 +545,7 @@ export function App() {
           <LandingPage onFilesLoaded={handleFilesLoaded} />
         </ErrorBoundary>
         <ToastHost />
+        <FnoIngestOverlay />
         <TouchTitleTooltip />
       </div>
     );
@@ -668,6 +670,7 @@ export function App() {
           />
       </div>
       <ToastHost />
+      <FnoIngestOverlay />
       <TouchTitleTooltip />
     </div>
   );

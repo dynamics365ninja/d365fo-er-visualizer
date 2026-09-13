@@ -23,7 +23,6 @@ import {
   OpenRegular,
   DeleteRegular,
 } from '@fluentui/react-icons';
-import { FnoIngestPanel } from './FnoIngestPanel';
 import { useAppStore } from '../state/store';
 import { ThemeSwitch } from './ThemeSwitch';
 import { BrandWordmark } from './BrandWordmark';
@@ -502,8 +501,6 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
-      {fnoIngestStatus && <FnoIngestPanel variant="overlay" />}
-
       <header className={styles.topbar}>
         <a
           className={styles.brand}

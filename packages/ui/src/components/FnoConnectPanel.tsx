@@ -1576,8 +1576,16 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           for (const [cacheKey, rootComponents] of rootComponentCacheRef.current) {
             if (cacheKey !== listingRootName) continue;
             for (const c of rootComponents) {
+              // Only siblings listed directly under the model are worth a
+              // scout request. A derived format's payload can carry nothing its
+              // base does not: its one distinctive reference is `Base=`, which
+              // names the base FORMAT and is rejected, and an own `Model=` would
+              // be inherited from that base — which is in this very list. Each
+              // of these payloads is hundreds of kilobytes, so scouting the
+              // derived variants only spends the user's time.
               if (c.componentType === 'Format' && c.configurationGuid
                 && c.configurationName !== fmt.configurationName
+                && inheritsFromOwnDataModel(c)
                 && (!targetOwnerDm || c.ownerDataModelName === targetOwnerDm)) {
                 siblings.push(c);
               }
@@ -3418,6 +3426,17 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       setIngesting(false);
       setIngestStatus('');
       endFnoIngest();
+      // The download log the user actually sees, in the dump: a row that says
+      // "skipped — no id from F&O" is the connector reporting an API gap, while
+      // a missing row would mean the report itself is broken. Recorded after
+      // endFnoIngest so the statuses are final.
+      recordFnoDebug('ingest-rows', useAppStore.getState().fnoIngestProgress.items.map(i => ({
+        name: i.name,
+        kind: i.kind,
+        status: i.status,
+        explicit: i.explicit,
+        message: i.message,
+      })));
       dumpFnoDebug('load selected');
     }
     if (ok > 0) {
