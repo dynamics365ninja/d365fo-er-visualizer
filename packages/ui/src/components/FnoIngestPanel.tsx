@@ -133,7 +133,13 @@ export function FnoIngestPanel({ variant = 'overlay' }: { variant?: 'overlay' | 
               <span className={`fno-ingest-row__origin ${item.explicit ? '' : 'fno-ingest-row__origin--auto'}`}>
                 {item.explicit ? t.fnoIngestExplicit : t.fnoIngestAuto}
               </span>
-              <span className="fno-ingest-row__state">{item.status === 'failed' && item.message ? item.message : statusLabel(item.status)}</span>
+              {/* A skipped row carries the reason it was skipped — showing it
+                  beats "Skipped" for a configuration the listing clearly found. */}
+              <span className="fno-ingest-row__state">
+                {item.message && (item.status === 'failed' || item.status === 'skipped')
+                  ? item.message
+                  : statusLabel(item.status)}
+              </span>
             </li>
           ))}
         </ul>

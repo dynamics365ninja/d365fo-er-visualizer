@@ -7,7 +7,7 @@ const ZERO = '00000000-0000-0000-0000-000000000000';
 function format(extra: Partial<ErConfigSummary> = {}): ErConfigSummary {
   return {
     solutionName: 'Invoice model',
-    configurationName: 'Asl Sales invoice (Excel)',
+    configurationName: 'Contoso Sales invoice (Excel)',
     componentType: 'Format',
     configurationGuid: 'afed2936-3761-4042-b8ac-f41850b15672',
     hasContent: true,
@@ -48,7 +48,7 @@ describe('fnoUndownloadableReason', () => {
   it('accepts a mapping without its own id when the parent model can resolve it', () => {
     const mapping = format({
       componentType: 'ModelMapping',
-      configurationName: 'Asl Invoice model mapping',
+      configurationName: 'Contoso Invoice model mapping',
       configurationGuid: undefined,
       parentDataModelGuid: 'e1534820-3b67-4266-ace3-663d9ef0eb09',
     });

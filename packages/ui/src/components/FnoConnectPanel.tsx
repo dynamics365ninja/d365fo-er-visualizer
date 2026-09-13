@@ -73,6 +73,8 @@ import { fnoSession } from '../fno/session';
 import { clearRedirectPending, computeRedirectUri, peekRedirectPending } from '../fno/redirect-state';
 import { hasBuiltInClientId } from '../fno/built-in-client';
 import { fnoUndownloadableReason } from '../utils/fno-downloadable';
+import { inheritsFromOwnDataModel, normalizeGuid, scoutedDataModelGuid } from '../utils/fno-model-guid';
+import { importMappingLink, loadedFormatIdentity, mappingSettlesWalk, type ImportMappingLink } from '../utils/fno-import-mapping-link';
 import { describeSummary, dumpFnoDebug, recordFnoDebug } from '../fno/debug';
 import { DependencyPromptDialog, type DependencyPromptRequest } from './DependencyPromptDialog';
 
@@ -647,6 +649,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   const beginFnoIngest = useAppStore(s => s.beginFnoIngest);
   const addInheritedLabels = useAppStore(s => s.addInheritedLabels);
   const endFnoIngest = useAppStore(s => s.endFnoIngest);
+  const updateFnoIngestItem = useAppStore(s => s.updateFnoIngestItem);
   const [depPrompt, setDepPrompt] = useState<(DependencyPromptRequest & { candidates: Array<{ key: string; kind: 'DataModel' | 'ModelMapping' | 'Format'; name: string; meta?: string; comp: ErConfigSummary }> }) | null>(null);
   const setIngestStatus = useCallback((status: string) => {
     setFnoIngestStatus(status);
@@ -1456,9 +1459,18 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               }
             }
             // Import format XML carries no Base= or Model= → extractReferencedDataModelGuids
-            // finds 0 GUIDs. Use listing API's referencedModelGuid (= ERSolution.Base) as
-            // fallback so the synth pass can try GetDataModelByIDAndRevision.
-            if (refs.length === 0 && !alreadyLoadedGuids.has(solGuid)) {
+            // finds 0 GUIDs. That is by design, not an omission: an export format keeps
+            // the model among its own datasources (`ERFormatMapping … Model=`), while an
+            // import format is parsed INTO the model by a *separate* ModelMapping
+            // configuration that holds the format as its datasource
+            // (`ERImportFormatDatasource FormatGUID=`). The pointer runs mapping → format,
+            // so no format payload will ever name the model.
+            // Use listing API's referencedModelGuid (= ERSolution.Base) as
+            // fallback so the synth pass can try GetDataModelByIDAndRevision — but only
+            // for a format listed directly under its model, since for a derived format
+            // `Base` is the base FORMAT and no data model lives under that id.
+            if (refs.length === 0 && !alreadyLoadedGuids.has(solGuid)
+              && inheritsFromOwnDataModel(download.source)) {
               if (!pendingModelFollowUps.has(solGuid)) {
                 pendingModelFollowUps.set(solGuid, { guid: solGuid, rev: undefined });
               }
@@ -1469,13 +1481,16 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         // inheritance parents and must NOT be downloaded as separate DataModels.
         const ownRefs = refs.filter(g => !baseOnly?.has(g.toLowerCase()));
         const hasOwnModelRefs = ownRefs.length > 0;
+        const baseNamesTheModel = inheritsFromOwnDataModel(download.source);
         for (const guid of refs) {
           const lower = guid.toLowerCase();
           if (alreadyLoadedGuids.has(lower)) continue;
           // Skip Base=-only GUIDs when the XML already has own Model= references.
           // Base= points to the inheritance parent (base DataModel), which must not
-          // be downloaded when we only selected the derived variant.
-          if (baseOnly?.has(lower) && hasOwnModelRefs) continue;
+          // be downloaded when we only selected the derived variant. Skip them as
+          // well when the parent is not the data model at all — a format derived
+          // from another format inherits from that FORMAT, not from a model.
+          if (baseOnly?.has(lower) && (hasOwnModelRefs || !baseNamesTheModel)) continue;
           const existing = pendingModelFollowUps.get(lower);
           const rev = refRevs[lower];
           if (!existing || (typeof rev === 'number' && (existing.rev ?? -1) < rev)) {
@@ -1539,7 +1554,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           //    component cache is filled under, so scout lookup needs it.
           //  • `ownerDataModelName` is the nearest DataModel ANCESTOR in the ER
           //    tree, i.e. the model this format actually belongs to. For a format
-          //    under a derived model ("Asl Payment model") the root is still the
+          //    under a derived model the root is still the
           //    base ("Payment model"), so naming the synthetic DataModel after the
           //    root put the base's name on the derived model — in the download
           //    dialog, on the tab, and on every mapping synthesized from it.
@@ -1584,9 +1599,17 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             try {
               const scoutDownload = await fnoSession.downloadConfiguration(activeProfile, scout, undefined, { silent: true });
 
-              const refs = scoutDownload.referencedDataModelGuids ?? [];
-              if (refs.length > 0) {
-                const dmGuid = refs[0].toLowerCase();
+              // Only a reference that really names a data model counts. A
+              // format derived from another format carries `Base=<base format>`,
+              // and taking that as the model put a FORMAT id on the synthetic
+              // DataModel — F&O then answered empty for the model and for every
+              // mapping probe that inherited the id.
+              const dmGuid = scoutedDataModelGuid(
+                scout,
+                scoutDownload.referencedDataModelGuids,
+                scoutDownload.referencedBaseOnlyGuids,
+              );
+              if (dmGuid) {
                 const revisions = scoutDownload.referencedDataModelRevisions ?? {};
                 const rev = revisions[dmGuid];
                 discoveredGuid = dmGuid;
@@ -1961,8 +1984,10 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         if (discoveredDmGuidsByName.has(scoutDmName)) continue;
 
         // Phase 1 — listing row already carries referencedModelGuid (r.Base / r.ModelID).
-        if (scoutFormat.referencedModelGuid) {
-          const lower = scoutFormat.referencedModelGuid.replace(/^\{|\}$/g, '').toLowerCase();
+        // `Base` names the model only for a format listed directly under it; for a
+        // format derived from another format it is that base format's id.
+        if (scoutFormat.referencedModelGuid && inheritsFromOwnDataModel(scoutFormat)) {
+          const lower = normalizeGuid(scoutFormat.referencedModelGuid);
           if (lower && lower !== ZERO_GUID_LOWER) {
             discoveredDmGuidsByName.set(scoutDmName, lower);
             continue;
@@ -1974,13 +1999,12 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           const dl = await fnoSession.downloadConfiguration(activeProfile, scoutFormat, undefined, { silent: true });
 
           // Phase 2: standard model-attribute extraction.
-          const refs = dl.referencedDataModelGuids ?? [];
-          for (const refGuid of refs) {
-            const lower = refGuid.replace(/^\{|\}$/g, '').toLowerCase();
-            if (!lower || lower === ZERO_GUID_LOWER) continue;
-            discoveredDmGuidsByName.set(scoutDmName, lower);
-            break;
-          }
+          const scoutedGuid = scoutedDataModelGuid(
+            scoutFormat,
+            dl.referencedDataModelGuids,
+            dl.referencedBaseOnlyGuids,
+          );
+          if (scoutedGuid) discoveredDmGuidsByName.set(scoutDmName, scoutedGuid);
 
           if (!discoveredDmGuidsByName.has(scoutDmName)) {
             // Phase 3: probe each GUID from the format XML as a potential ERDataModelTable GUID
@@ -2264,9 +2288,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         solutionGuid?: string;
       }
       const dmGuidIndex = new Map<string, DmSynthCandidate>();
-      /** Lowercase, brace-stripped GUID for stable map keys. */
-      const normalizeGuid = (g: string | undefined): string =>
-        (g ?? '').replace(/^\{|\}$/g, '').toLowerCase();
       const recordDm = (
         guid: string | undefined,
         name: string,
@@ -2843,6 +2864,49 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         allMappingDownloads.push({ synth: mapping, label: mapping.configurationName });
       }
 
+      /**
+       * Successful mapping downloads, counted independently of
+       * `downloadedMappingDmGuids`: entries coming from `mappingsToLoad` carry
+       * no `dmGuid`, so the GUID set stays empty even when a mapping *did*
+       * load. Gating the retry pass and the "no mapping" warning on the GUID
+       * set alone re-ran the whole retry pass and warned about mappings that
+       * were already in the workspace.
+       *
+       * Declared out here because the report below has to run even when not a
+       * single probe could be built — the case where the listing found the
+       * mappings but exposed no id to ask for them with.
+       */
+      let mappingSuccessCount = 0;
+      // ── Which mapping can be *ours* (matters for import formats) ──
+      // Descriptor-name probing is a search, not a lookup: a model can carry a
+      // mapping per bank plus an export-side one, and F&O answers whichever
+      // descriptor matched. The payload's shape settles it:
+      //  • `format-to-model` names its format in `ERImportFormatDatasource`, so a
+      //    candidate naming another format cannot be ours and must not end the walk;
+      //  • `to-model` (model definition filled from datasources) is the export
+      //    side — only useful when an export format is in the load too;
+      //  • `from-model` (model definition empty) is where an import format ends:
+      //    it writes the filled model into D365FO datasources and names no format
+      //    at all, so only the model and the descriptor tie it to ours. Demanding
+      //    a format link here would report the right mapping as missing.
+      const formatIdentity = loadedFormatIdentity(useAppStore.getState().configurations);
+      /** Set once a mapping that can be ours arrives — gates the retry pass. */
+      let usableMappingFound = false;
+      /**
+       * Whether a downloaded mapping may stop the walk for its DataModel.
+       * Also reports what it decided so the attempt log says why a mapping that
+       * downloaded fine did not settle the question.
+       */
+      const judgeMapping = (xml: string): { settles: boolean; link: ImportMappingLink | null } => {
+        if (!formatIdentity.hasImportFormat) {
+          usableMappingFound = true;
+          return { settles: true, link: null };
+        }
+        const link = importMappingLink(xml, formatIdentity.importGuids);
+        const settles = mappingSettlesWalk(link, formatIdentity);
+        if (settles) usableMappingFound = true;
+        return { settles, link };
+      };
       if (allMappingDownloads.length > 0) {
         setIngestStatus(t.fnoStatusDownloadingMMCount(allMappingDownloads.length));
         // Track DM GUIDs for which a mapping was *successfully* downloaded.
@@ -2854,15 +2918,6 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         // NOTE: no within-batch DM-GUID dedup — concurrent requests for the
         // same DM are fine because the store deduplicates by solution GUID.
         const downloadedMappingDmGuids = new Set<string>();
-        /**
-         * Successful mapping downloads, counted independently of
-         * `downloadedMappingDmGuids`: entries coming from `mappingsToLoad` carry
-         * no `dmGuid`, so the GUID set stays empty even when a mapping *did*
-         * load. Gating the retry pass and the "no mapping" warning on the GUID
-         * set alone re-ran the whole retry pass and warned about mappings that
-         * were already in the workspace.
-         */
-        let mappingSuccessCount = 0;
         /** Per-attempt outcome, logged as one table when the phase ends. */
         const mappingAttemptLog: Array<{
           label: string;
@@ -2910,10 +2965,13 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
               ok += 1;
               mappingSuccessCount += 1;
-              recordAttempt(item, 'ok');
-              // Mark DM as resolved so subsequent branches for the same DM are skipped.
+              const verdict = judgeMapping(result.value.download.xml);
+              recordAttempt(item, 'ok', verdict.link ?? undefined);
+              // Mark DM as resolved so subsequent branches for the same DM are
+              // skipped — unless this mapping belongs to a different format, in
+              // which case ours may still be behind one of the remaining probes.
               const resolvedDmGuid = result.value.item.dmGuid ?? result.value.item.recordDmGuid;
-              if (resolvedDmGuid) downloadedMappingDmGuids.add(resolvedDmGuid);
+              if (resolvedDmGuid && verdict.settles) downloadedMappingDmGuids.add(resolvedDmGuid);
               collectLateRefs(result.value.download);
             } else {
               const reason = result.reason;
@@ -2933,7 +2991,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         // registered in F&O under a different GUID than the one we discovered via GUID-scout.
         // For export formats the initial pass usually SUCCEEDS → no retry needed.
         // For import-only formats the initial pass returns empty → retry fires here.
-        if (mappingSuccessCount === 0) {
+        // Retry also when mappings *did* arrive but every one of them belongs to
+        // another format — that is the case the walk exists for.
+        if (mappingSuccessCount === 0 || !usableMappingFound) {
           const retryDownloads: { synth: ErConfigSummary; label: string; dmGuid: string }[] = [];
           for (const [dmName, branches] of pendingMappingBranchesByDmName) {
             if (branches.length === 0) continue;
@@ -3195,8 +3255,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                   loadXmlFile(result.value.dl.xml, result.value.dl.syntheticPath);
                   ok += 1;
                   mappingSuccessCount += 1;
-                  recordAttempt(item, 'ok');
-                  downloadedMappingDmGuids.add(result.value.item.dmGuid);
+                  const verdict = judgeMapping(result.value.dl.xml);
+                  recordAttempt(item, 'ok', verdict.link ?? undefined);
+                  if (verdict.settles) downloadedMappingDmGuids.add(result.value.item.dmGuid);
                   collectLateRefs(result.value.dl);
                 } else {
                   const reason = result.reason;
@@ -3219,18 +3280,79 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           `[fno-ui] model-mapping phase: ${mappingSuccessCount}/${mappingAttemptLog.length} attempt(s) returned XML`,
         );
         if (mappingAttemptLog.length > 0) console.table(mappingAttemptLog);
+      }
+
+      // ── Report what the listing found but nothing could reach ──
+      // Some F&O environments return no id at all for DataModel and
+      // ModelMapping rows (import-only models are the common case), and an
+      // import format's XML cannot supply one either — its
+      // model lives in the separate mapping configuration that references the
+      // format, never the other way round. There is then nothing to ask
+      // `GetDataModelByIDAndRevision` / `GetModelMappingByID` with, so not a
+      // single probe is even built. The
+      // configurations were plainly *found* — leaving them off the download log
+      // reads as if the connector forgot them, so name them and say why.
+      // A load where every mapping that came back belongs to another format is a
+      // failure too, even though downloads succeeded.
+      const noUsableMapping = mappingSuccessCount > 0 && !usableMappingFound;
+      if (mappingSuccessCount === 0 || noUsableMapping) {
+        const unreachable: ErConfigSummary[] = [];
+        for (const [dmName, branches] of pendingMappingBranchesByDmName) {
+          // The model resolved: the mappings failed for some other reason and
+          // their own rows already carry it.
+          if (dmByName.has(dmName)) continue;
+          unreachable.push({
+            solutionName: dmName,
+            configurationName: dmName,
+            componentType: 'DataModel',
+            hasContent: false,
+          });
+          for (const branch of branches) {
+            if (!branch.mappingName) continue;
+            unreachable.push({
+              solutionName: branch.mappingSolutionName,
+              configurationName: branch.mappingName,
+              componentType: 'ModelMapping',
+              version: branch.mappingVersion,
+              hasContent: false,
+            });
+          }
+        }
+        // A configuration that did arrive keeps its row: the same name can be
+        // both a pending branch and an explicitly selected download.
+        const loadedRowKeys = new Set(
+          useAppStore.getState().fnoIngestProgress.items
+            .filter(i => i.status === 'done' || i.status === 'downloading')
+            .map(i => i.key),
+        );
+        for (const comp of unreachable) {
+          const key = componentKey(comp);
+          if (loadedRowKeys.has(key)) continue;
+          updateFnoIngestItem({
+            key,
+            name: comp.configurationName,
+            kind: comp.componentType,
+            status: 'skipped',
+            message: t.fnoIngestNoId,
+          });
+        }
 
         // Warn whenever nothing came back, regardless of how the mappings were
         // discovered. The old condition required `pendingMappingBranchesByDmName`
         // to be non-empty — but the listing service cannot enumerate mappings, so
         // selecting only a Format left that map empty and the failure silent.
-        if (mappingSuccessCount === 0) {
-          const failedNames = pendingMappingBranchesByDmName.size > 0
-            ? [...pendingMappingBranchesByDmName.keys()]
-            : [...new Set(allMappingDownloads.map(m => m.synth.solutionName || m.synth.configurationName))];
-          if (failedNames.length > 0) {
-            pushToast({ kind: 'warning', message: t.fnoMappingNotAvailable(failedNames) });
-          }
+        const failedNames = pendingMappingBranchesByDmName.size > 0
+          ? [...pendingMappingBranchesByDmName.keys()]
+          : [...new Set(allMappingDownloads.map(m => m.synth.solutionName || m.synth.configurationName))];
+        if (failedNames.length > 0) {
+          pushToast({
+            kind: 'warning',
+            message: unreachable.length > 0
+              ? t.fnoModelIdNotExposed(failedNames)
+              : noUsableMapping
+                ? t.fnoImportMappingNotFound(failedNames)
+                : t.fnoMappingNotAvailable(failedNames),
+          });
         }
       }
 
@@ -3305,7 +3427,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       pushToast({ kind: 'success', message: t.fnoLoadedCount(ok) });
       onFilesLoaded?.();
     }
-  }, [activeProfile, selected, allDataModelsSeen, solutions, solutionPath, loadXmlFile, pushToast, beginFnoIngest, endFnoIngest, resolveInheritedLabels]);
+  }, [activeProfile, selected, allDataModelsSeen, solutions, solutionPath, loadXmlFile, pushToast, beginFnoIngest, endFnoIngest, updateFnoIngestItem, resolveInheritedLabels]);
 
   // ── Helper: type badge ──────────────────────────────────────────────────
   const TypeBadge = ({ type }: { type: ErComponentType }) => {

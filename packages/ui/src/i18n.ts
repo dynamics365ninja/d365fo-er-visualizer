@@ -177,6 +177,7 @@ export interface Translations {
   fnoIngestStatusEmpty: string;
   fnoIngestStatusSkipped: string;
   fnoIngestStatusFailed: string;
+  fnoIngestNoId: string;
   fnoIngestHint: string;
   fnoIngestClose: string;
   fnoIngestOpenWorkspace: string;
@@ -411,6 +412,8 @@ export interface Translations {
   statusGuidCount: (n: number) => string;
   fnoMappingNotAvailable: (names: string[]) => string;
   fnoMappingNoDataModel: string;
+  fnoModelIdNotExposed: (names: string[]) => string;
+  fnoImportMappingNotFound: (names: string[]) => string;
 
   // Property inspector labels
   propDescription: string;
@@ -776,6 +779,7 @@ const cs: Translations = {
   fnoIngestStatusEmpty: 'Bez vlastního XML',
   fnoIngestStatusSkipped: 'Přeskočeno',
   fnoIngestStatusFailed: 'Selhalo',
+  fnoIngestNoId: 'F&O nevrací ID',
   fnoIngestHint: 'Datové modely a mapování se doplňují automaticky podle vazeb ve staženém XML.',
   fnoIngestClose: 'Zavřít',
   fnoIngestOpenWorkspace: 'Otevřít pracovní plochu',
@@ -1006,6 +1010,8 @@ const cs: Translations = {
   statusDerivedFromModelTitle: (kind, parentName) => `Aktivní konfigurace je ${kind === 'Format' ? 'formát' : 'mapování'} odvozený z modelu „${parentName}“`,
   statusGuidCount: (n) => `GUIDů: ${n}`,
   fnoMappingNotAvailable: (names: string[]) => `ModelMapping nelze stáhnout pro: ${names.join(', ')}. Vazby formátových elementů jsou i přesto dostupné přes FormatMapping.`,
+  fnoModelIdNotExposed: (names: string[]) => `F&O nevrací pro tyto modely a jejich mapování žádné ID: ${names.join(', ')}. Není tedy podle čeho je stáhnout — v seznamu jsou proto označené jako přeskočené. U importních formátů to nejde obejít: model je uvedený až v jejich samostatném mapování, samotný formát na model neodkazuje. Stáhl se tedy jen formát; vazby jeho elementů jsou dostupné přes FormatMapping.`,
+  fnoImportMappingNotFound: (names: string[]) => `Mapování patřící vybranému importnímu formátu se nenašlo (model: ${names.join(', ')}). F&O vrátilo jen mapování jiných formátů, případně exportní mapování téhož modelu — ta jsou načtená, ale k tomuto formátu nepatří (žádné neuvádí náš formát v ERImportFormatDatasource a žádné nemá prázdnou definici modelu).`,
   fnoMappingNoDataModel: 'ModelMapping se nestahoval — ve staženém formátu nebyl nalezen žádný GUID datového modelu, takže není podle čeho mapování dohledat. Vyber navíc příslušný datový model (nebo jeho mapování) ve stromu.',
 
   // Property inspector labels
@@ -1393,6 +1399,7 @@ const en: Translations = {
   fnoIngestStatusEmpty: 'No own XML',
   fnoIngestStatusSkipped: 'Skipped',
   fnoIngestStatusFailed: 'Failed',
+  fnoIngestNoId: 'No id from F&O',
   fnoIngestHint: 'Data models and mappings are resolved automatically from references in the downloaded XML.',
   fnoIngestClose: 'Close',
   fnoIngestOpenWorkspace: 'Open workspace',
@@ -1620,6 +1627,8 @@ const en: Translations = {
   statusDerivedFromModelTitle: (kind, parentName) => `Active config is a ${kind === 'Format' ? 'format' : 'mapping'} derived from model "${parentName}"`,
   statusGuidCount: (n) => `GUIDs: ${n}`,
   fnoMappingNotAvailable: (names: string[]) => `ModelMapping could not be downloaded for: ${names.join(', ')}. Format element bindings are still available via FormatMapping.`,
+  fnoModelIdNotExposed: (names: string[]) => `F&O exposes no id for these models and their mappings: ${names.join(', ')}. There is nothing to request them with, so they are listed as skipped. For an import format there is no way around it: the model is named only in its separate mapping — the format itself does not reference the model. Only the format was downloaded; its element bindings are still available via FormatMapping.`,
+  fnoImportMappingNotFound: (names: string[]) => `The mapping that belongs to the selected import format was not found (model: ${names.join(', ')}). F&O returned other formats' mappings, or the export-side mapping of the same model — they are loaded, but none belongs to this format (none names it in ERImportFormatDatasource, and none has the empty model definition of a destination mapping).`,
   fnoMappingNoDataModel: 'No ModelMapping was attempted — the downloaded format carries no data model GUID, so there is nothing to resolve a mapping against. Select the data model (or its mapping) in the tree as well.',
 
   // Property inspector labels
