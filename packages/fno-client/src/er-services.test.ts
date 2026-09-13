@@ -485,6 +485,83 @@ describe('listComponents', () => {
       hasContent: true,
     });
   });
+
+  it('takes Base as the parent DataModel only for a row listed under the model itself', async () => {
+    const op = ER_SERVICE_OPS.listComponents[0];
+    const DM_SOLUTION = '11111111-1111-4111-8111-111111111111';
+    const BASE_FORMAT = 'b0a5e000-2222-4222-8222-222222222222';
+    const DERIVED_FORMAT = 'f0000002-4444-4444-8444-444444444444';
+    const { transport } = makeTransport({
+      post: () => ({
+        [`${op}Result`]: [
+          {
+            ConfigurationName: 'Statement import format',
+            ComponentType: 'Format',
+            FormatMappingGUID: BASE_FORMAT,
+            // Listed directly under the model → Base IS the model's solution id.
+            Base: `{${DM_SOLUTION}},1`,
+            DerivedSolutions: [
+              {
+                ConfigurationName: 'Statement import format (derived)',
+                ComponentType: 'Format',
+                FormatMappingGUID: DERIVED_FORMAT,
+                // Derived from the format above → Base is that FORMAT's id.
+                Base: `{${BASE_FORMAT}},1`,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+    const rows = await listComponents(
+      transport, conn, 'tok', 'Bank statement model',
+    );
+    expect(rows[0]).toMatchObject({
+      configurationName: 'Statement import format',
+      parentDataModelGuid: DM_SOLUTION,
+    });
+    // The bug: the base FORMAT's id used to land here, and every
+    // GetModelMappingByID / GetDataModelByIDAndRevision call built from it
+    // came back HTTP 200 with an empty body.
+    expect(rows[1].configurationName).toBe('Statement import format (derived)');
+    expect(rows[1].parentDataModelGuid).toBeUndefined();
+  });
+
+  it('falls back to the nearest DataModel ancestor for a format derived from a format', async () => {
+    const op = ER_SERVICE_OPS.listComponents[0];
+    const DM_GUID = '22222222-2222-4222-8222-222222222222';
+    const BASE_FORMAT = '33333333-3333-4333-8333-333333333333';
+    const { transport } = makeTransport({
+      post: () => ({
+        [`${op}Result`]: [
+          {
+            ConfigurationName: 'Derived bank statement model',
+            ComponentType: 'DataModel',
+            Guid: DM_GUID,
+            DerivedSolutions: [
+              {
+                ConfigurationName: 'Payment export format',
+                ComponentType: 'Format',
+                FormatMappingGUID: BASE_FORMAT,
+                DerivedSolutions: [
+                  {
+                    ConfigurationName: 'Payment export format (derived)',
+                    ComponentType: 'Format',
+                    FormatMappingGUID: '44444444-4444-4444-8444-444444444444',
+                    Base: `{${BASE_FORMAT}},2`,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+    });
+    const rows = await listComponents(transport, conn, 'tok', 'Derived bank statement model');
+    const derived = rows.find(r => r.configurationName === 'Payment export format (derived)');
+    expect(derived?.parentDataModelGuid).toBe(DM_GUID);
+    expect(derived?.ownerDataModelName).toBe('Derived bank statement model');
+  });
 });
 
 describe('downloadConfigXml', () => {
@@ -743,14 +820,14 @@ describe('draft-only detection', () => {
   it('flags a configuration whose only version is the never-completed draft', async () => {
     // D365FO numbers a draft as lastCompleted + 1, so a lone version 1 has
     // never been completed — the storage service has nothing to hand out.
-    const [only] = await map([row('Asl Sales invoice (Excel)', [{ VersionNumber: 1, Status: 1 }])]);
+    const [only] = await map([row('Contoso Sales invoice (Excel)', [{ VersionNumber: 1, Status: 1 }])]);
     expect(only.draftOnly).toBe(true);
     expect(only.version).toBeUndefined();
   });
 
   it('does not flag a configuration with a completed version', async () => {
     const [only] = await map([
-      row('Asl Free text invoice (Excel)', [
+      row('Contoso Free text invoice (Excel)', [
         { VersionNumber: 4, Status: 1 },
         { VersionNumber: 3, Status: 2 },
       ]),
@@ -769,7 +846,7 @@ describe('draft-only detection', () => {
     const { transport } = makeTransport({ post: () => ({ [`${op}Result`]: '' }) });
     await expect(downloadConfigXml(transport, conn, 'tok', {
       solutionName: 'Invoice model',
-      configurationName: 'Asl Sales invoice (Excel)',
+      configurationName: 'Contoso Sales invoice (Excel)',
       componentType: 'Format',
       configurationGuid: 'afed2936-3761-4042-b8ac-f41850b15672',
       draftOnly: true,

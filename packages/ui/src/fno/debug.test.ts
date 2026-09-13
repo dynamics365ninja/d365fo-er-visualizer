@@ -38,7 +38,7 @@ describe('fno debug recorder', () => {
 
   it('treats any other value as a case-insensitive name filter', () => {
     setSwitch('sales invoice');
-    expect(fnoDebugMatches('Asl Sales Invoice (Excel)')).toBe(true);
+    expect(fnoDebugMatches('Contoso Sales Invoice (Excel)')).toBe(true);
     expect(fnoDebugMatches('Intrastat')).toBe(false);
     expect(fnoDebugMatches(undefined)).toBe(false);
   });
@@ -84,7 +84,7 @@ describe('fno debug recorder', () => {
     expect(handle!.enable('sales invoice')).toContain('sales invoice');
     expect(handle!.enabled).toBe(true);
     expect(handle!.filter).toBe('sales invoice');
-    expect(fnoDebugMatches('Asl Sales invoice (Excel)')).toBe(true);
+    expect(fnoDebugMatches('Contoso Sales invoice (Excel)')).toBe(true);
 
     recordFnoDebug('download', { asked: 'x' });
     expect(handle!.entries()).toHaveLength(1);

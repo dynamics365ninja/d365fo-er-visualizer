@@ -25,7 +25,7 @@ import {
 } from '@er-visualizer/fno-client';
 import { parseERConfigurations } from '@er-visualizer/core';
 import { getAuthProvider } from './auth-factory';
-import { describeSummary, fnoDebugMatches, recordFnoDebug } from './debug';
+import { describeSummary, fnoDebugEnabled, fnoDebugMatches, recordFnoDebug } from './debug';
 import { registerHarvestedLabels } from '../utils/label-resolver';
 import { createFnoTransport } from './transport';
 
@@ -80,6 +80,23 @@ function harvestLabels(component: ErConfigSummary, xml: string): void {
   } catch (err) {
     console.info('[fno-ui] labels: response not parseable for harvesting', { component: component.configurationName, err });
   }
+}
+
+/** Structural fingerprint of a downloaded payload, for the debug recorder. */
+function describePayload(xml: string): Record<string, unknown> {
+  const directions = new Set<string>();
+  for (const m of xml.matchAll(/([A-Za-z]*Direction)\s*=\s*"([^"]{0,80})"/g)) {
+    directions.add(`${m[1]}=${m[2]}`);
+    if (directions.size >= 4) break;
+  }
+  const datasources = (xml.match(/<Datasource[\s>][\s\S]*?<\/Datasource>/gi) ?? []).join('');
+  return {
+    length: xml.length,
+    hasModelMapping: /<ERModelMapping[\s>]/i.test(xml),
+    hasImportFormatDatasource: /<ERImportFormatDatasource[\s>]/i.test(xml),
+    modelDefinitionFilled: /<ValueSource[\s>]/i.test(datasources),
+    directions: [...directions],
+  };
 }
 
 const tokenCache = new Map<string, AuthResult>();
@@ -164,6 +181,13 @@ export const fnoSession = {
         // The first line of the payload names the configuration F&O actually
         // returned — the one place that tells a derived config from its base.
         xmlHead: download.xml.slice(0, 400),
+        // What the payload actually contains. An import format always has a
+        // model mapping on itself (the format parses the file straight into the
+        // model), and that mapping is the only artefact carrying the model's
+        // GUID — so whether F&O includes it here decides whether the model and
+        // its mappings are reachable at all. `directions` reports the attribute
+        // verbatim instead of guessing how the enum is serialised.
+        payload: fnoDebugEnabled() ? describePayload(download.xml) : undefined,
       });
       harvestLabels(component, download.xml);
       emit({ type: 'done', component, download });

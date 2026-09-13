@@ -629,11 +629,18 @@ function flattenComponentsWithParent(
     const ownerDmName = nearestDmName ?? solutionName;
     // Stamp the nearest DataModel, ERSolutionTable parent, and
     // derivation depth onto every node.
-    const dmGuidForNode = (c.referencedModelGuid ?? nextDmGuid) || undefined;
-    const dmRevForNode = c.referencedModelGuid ? undefined : nextDmRev;
+    const parentName = parentConfigName ?? solutionName;
+    // `Base` (→ referencedModelGuid) is the configuration this row inherits
+    // from, which is the owning DataModel only when the row sits directly
+    // under it. A format derived from another format inherits from that base
+    // FORMAT — using its id as `_dataModelGuid` makes F&O answer empty, so
+    // fall back to the nearest DataModel ancestor instead.
+    const ownModelRef = parentName === ownerDmName ? c.referencedModelGuid : undefined;
+    const dmGuidForNode = (ownModelRef ?? nextDmGuid) || undefined;
+    const dmRevForNode = ownModelRef ? undefined : nextDmRev;
     const base = {
       ...c,
-      parentConfigName: parentConfigName ?? solutionName,
+      parentConfigName: parentName,
       derivationDepth,
       ownerDataModelName: ownerDmName,
     };
