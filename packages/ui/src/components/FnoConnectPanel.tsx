@@ -3426,6 +3426,17 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       setIngesting(false);
       setIngestStatus('');
       endFnoIngest();
+      // The download log the user actually sees, in the dump: a row that says
+      // "skipped — no id from F&O" is the connector reporting an API gap, while
+      // a missing row would mean the report itself is broken. Recorded after
+      // endFnoIngest so the statuses are final.
+      recordFnoDebug('ingest-rows', useAppStore.getState().fnoIngestProgress.items.map(i => ({
+        name: i.name,
+        kind: i.kind,
+        status: i.status,
+        explicit: i.explicit,
+        message: i.message,
+      })));
       dumpFnoDebug('load selected');
     }
     if (ok > 0) {

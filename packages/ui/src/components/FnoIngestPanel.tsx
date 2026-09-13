@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Button } from '@fluentui/react-components';
 import {
   ArrowSyncRegular,
   CheckmarkCircleFilled,
@@ -7,7 +8,7 @@ import {
   SubtractCircleRegular,
 } from '@fluentui/react-icons';
 import { t, useLocale } from '../i18n';
-import { useAppStore, type FnoIngestItem } from '../state/store';
+import { useAppStore, type FnoIngestItem, type FnoIngestProgress } from '../state/store';
 import { DependencyKindIcon, dependencyKindLabel } from './DependencyPromptDialog';
 
 const INGEST_STEPS = [
@@ -66,7 +67,11 @@ function useElapsedSeconds(startedAt: number | null, finishedAt: number | null):
  * Rendered as a modal overlay on the landing page and as a compact card in
  * the explorer while the workspace is still empty.
  */
-export function FnoIngestPanel({ variant = 'overlay' }: { variant?: 'overlay' | 'card' }) {
+export function FnoIngestPanel({ variant = 'overlay', onClose }: {
+  variant?: 'overlay' | 'card';
+  /** Rendered as a Close button once the batch has finished. */
+  onClose?: () => void;
+}) {
   const loc = useLocale();
   const status = useAppStore(s => s.fnoIngestStatus);
   const progress = useAppStore(s => s.fnoIngestProgress);
@@ -148,6 +153,9 @@ export function FnoIngestPanel({ variant = 'overlay' }: { variant?: 'overlay' | 
       {isOverlay && (
         <div className="fno-ingest__foot">
           <span className="fno-ingest__hint">{t.fnoIngestHint}</span>
+          {onClose && !active && (
+            <Button appearance="primary" size="small" onClick={onClose}>{t.fnoIngestClose}</Button>
+          )}
         </div>
       )}
     </div>
@@ -155,4 +163,42 @@ export function FnoIngestPanel({ variant = 'overlay' }: { variant?: 'overlay' | 
 
   if (!isOverlay) return body;
   return <div className="fno-ingest-backdrop">{body}</div>;
+}
+
+/**
+ * The overlay, mounted once for the whole app.
+ *
+ * It has to outlive the landing page: the first configuration that arrives
+ * switches the app over to the workspace, which used to unmount the dialog
+ * mid-run. Rows added at the end of a batch — a model or a mapping the listing
+ * found but nothing could address — therefore reached the store and were never
+ * drawn, leaving the toast as the only trace. So the log also stays up after the
+ * batch ends whenever something did not arrive, until the user closes it.
+ */
+export function shouldKeepIngestLogOpen(
+  progress: Pick<FnoIngestProgress, 'items' | 'startedAt' | 'finishedAt'>,
+  closedAt: number,
+): boolean {
+  if (progress.finishedAt === null) return false;
+  const somethingMissing = progress.items.some(
+    i => i.status === 'failed' || i.status === 'empty' || i.status === 'skipped',
+  );
+  if (!somethingMissing) return false;
+  // A newer batch beats an earlier dismissal, so the next Load shows its log.
+  return (progress.startedAt ?? 0) > closedAt;
+}
+
+export function FnoIngestOverlay() {
+  const status = useAppStore(s => s.fnoIngestStatus);
+  const progress = useAppStore(s => s.fnoIngestProgress);
+  const [closedAt, setClosedAt] = useState(0);
+
+  const keepOpenAfterFinish = shouldKeepIngestLogOpen(progress, closedAt);
+  if (!status && !keepOpenAfterFinish) return null;
+  return (
+    <FnoIngestPanel
+      variant="overlay"
+      onClose={status ? undefined : () => setClosedAt(Date.now())}
+    />
+  );
 }
