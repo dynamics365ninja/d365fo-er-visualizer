@@ -709,6 +709,42 @@ describe('downloadConfigXml', () => {
     expect(result.xml.indexOf('{MM-PROJ}')).toBeLessThan(result.xml.indexOf('{MM-CUST}'));
   });
 
+  it('collects siblings even when the download is pinned to one exact descriptor', async () => {
+    // The UI downloads the mapping a format binds to as a per-descriptor
+    // component (`descriptorNamesExclusive`), so there are no other attempts to
+    // reuse — the sibling definitions have to be probed from the explicit list.
+    const op = 'GetModelMappingByID';
+    const byDescriptor: Record<string, string> = {
+      SalesInvoice: '<ERModelMapping ID.="{MM-SALES}" Name="Sales invoice"></ERModelMapping>',
+      InvoiceCustomer: '<ERModelMapping ID.="{MM-CUST}" Name="Customer Invoice"></ERModelMapping>',
+      InvoiceProject: '<ERModelMapping ID.="{MM-PROJ}" Name="Project Invoice"></ERModelMapping>',
+    };
+    const { transport, posts } = makeTransport({
+      post: (_url, body) => {
+        const b = body as Record<string, unknown>;
+        return { [`${op}Result`]: byDescriptor[String(b._dataContainerDescriptorName ?? '')] ?? '' };
+      },
+    });
+    const result = await downloadConfigXml(transport, conn, 'tok', {
+      ...baseComponent,
+      configurationGuid: undefined,
+      componentType: 'ModelMapping',
+      parentDataModelGuid: 'dm-1',
+      descriptorNameCandidates: ['SalesInvoice'],
+      descriptorNamesExclusive: true,
+      siblingDescriptorNames: ['SalesInvoice', 'InvoiceCustomer', 'InvoiceProject'],
+    });
+    expect(result.xml).toContain('{MM-SALES}');
+    expect(result.xml).toContain('{MM-CUST}');
+    expect(result.xml).toContain('{MM-PROJ}');
+    // The pinned descriptor stays the resolved one, and is not probed twice.
+    expect(result.xml.indexOf('{MM-SALES}')).toBeGreaterThan(result.xml.indexOf('{MM-CUST}'));
+    const salesProbes = posts.filter(
+      p => (p.body as Record<string, unknown>)._dataContainerDescriptorName === 'SalesInvoice',
+    );
+    expect(salesProbes).toHaveLength(1);
+  });
+
   it('does not duplicate a definition another descriptor resolves to', async () => {
     const op = 'GetModelMappingByID';
     const same = '<ERModelMapping ID.="{MM-ONE}" Name="Only"></ERModelMapping>';

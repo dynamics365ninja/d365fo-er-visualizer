@@ -3069,6 +3069,56 @@ async function main(): Promise<void> {
       definitions16.length > 1 || distinct16.size > 1,
       `merged=${definitions16.length} distinct-per-descriptor=${distinct16.size}`,
     );
+
+    // ── 16d. Exactly what the UI builds: one pinned descriptor + siblings ──
+    // The app downloads the mapping a format binds to as a per-descriptor
+    // component, so this is the path that must surface every definition.
+    const pinned16 = [...perDescriptor16.keys()][0];
+    if (pinned16) {
+      const pinnedDl16 = await downloadConfigXml(transport, conn, token, {
+        solutionName: targetFmt16.solutionName,
+        configurationName: `${targetFmt16.solutionName} mapping (${pinned16})`,
+        componentType: 'ModelMapping',
+        parentDataModelGuid: dmGuid16,
+        descriptorNameCandidates: [pinned16],
+        descriptorNamesExclusive: true,
+        siblingDescriptorNames: descriptors16,
+        hasContent: true,
+      });
+      const pinnedParsed16 = parseERConfiguration(pinnedDl16.xml, 'step16-pinned.xml');
+      const pinnedDefs16 = pinnedParsed16.content.kind === ERComponentKind.ModelMapping
+        ? (pinnedParsed16.content.version.mappings ?? [pinnedParsed16.content.version.mapping])
+        : [];
+      console.log(`  16d. pinned "${pinned16}" surfaces (${pinnedDefs16.length}): ` +
+        `${pinnedDefs16.map(d => `${d.name}/${d.dataContainerDescriptor}`).slice(0, 20).join(' | ') || '(none)'}`);
+      check(
+        'Step 16d: a per-descriptor component still carries its sibling definitions',
+        pinnedDefs16.length > 1,
+        `parsed=${pinnedDefs16.length} reachable=${distinct16.size}`,
+      );
+      // The payload carries no DataContainerDescriptor attribute, so identity is
+      // checked against what the pinned descriptor resolves to on its own.
+      const soloDl16 = await downloadConfigXml(transport, conn, token, {
+        solutionName: targetFmt16.solutionName,
+        configurationName: `${targetFmt16.solutionName} mapping (${pinned16})`,
+        componentType: 'ModelMapping',
+        parentDataModelGuid: dmGuid16,
+        descriptorNameCandidates: [pinned16],
+        descriptorNamesExclusive: true,
+        hasContent: true,
+      });
+      const soloParsed16 = parseERConfiguration(soloDl16.xml, 'step16-solo.xml');
+      const soloId16 = soloParsed16.content.kind === ERComponentKind.ModelMapping
+        ? soloParsed16.content.version.mapping.id : undefined;
+      const pinnedPrimary16 = pinnedParsed16.content.kind === ERComponentKind.ModelMapping
+        ? pinnedParsed16.content.version.mapping : undefined;
+      check(
+        'Step 16d: the pinned descriptor stays the primary definition',
+        !!soloId16 && pinnedPrimary16?.id === soloId16,
+        `solo=${soloParsed16.content.kind === ERComponentKind.ModelMapping
+          ? soloParsed16.content.version.mapping.name : '(n/a)'} primary=${pinnedPrimary16?.name ?? '(none)'}`,
+      );
+    }
   } catch (err16) {
     console.log(`  ⚠ Step 16 failed: ${err16 instanceof Error ? err16.message.slice(0, 200) : err16}`);
   }
