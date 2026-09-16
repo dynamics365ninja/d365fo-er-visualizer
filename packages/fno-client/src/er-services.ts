@@ -1027,8 +1027,19 @@ export async function downloadConfigXml(
   };
 }
 
-/** Max extra `GetModelMappingByID` probes issued to collect sibling mapping definitions. */
-const MAX_EXTRA_MAPPING_PROBES = 8;
+/**
+ * Max extra `GetModelMappingByID` probes issued to collect sibling mapping definitions.
+ *
+ * A data model with many root containers answers only for the handful of
+ * descriptors that actually carry a mapping — the rest reply HTTP 200 with an
+ * empty body. The cap therefore has to cover *all* root containers, not just
+ * the first few: on the standard Invoice model the two real definitions sit at
+ * descriptor #11 and #12, behind ten empty ones.
+ */
+const MAX_EXTRA_MAPPING_PROBES = 64;
+
+/** Parallel in-flight extra probes. Keeps a 64-descriptor sweep to a few round trips. */
+const EXTRA_MAPPING_PROBE_CONCURRENCY = 6;
 
 /** True for the `"DataModel {guid}"` placeholders the UI mints for GUID-only dependencies. */
 export function isSyntheticComponentName(name: string | undefined): boolean {
@@ -1123,10 +1134,12 @@ async function collectExtraMappingDefinitions(
   const successDescriptor = attempts[successIndex]?.body?._dataContainerDescriptorName;
   if (typeof successDescriptor === 'string') seenDescriptors.add(successDescriptor);
 
-  const blocks: string[] = [];
-  let probes = 0;
-  for (let i = 0; i < attempts.length && probes < MAX_EXTRA_MAPPING_PROBES; i += 1) {
-    if (i === successIndex || signal?.aborted) continue;
+  // Collect the descriptor variants worth probing before issuing any request,
+  // so the cap counts distinct descriptors rather than positions in `attempts`
+  // (which lists every descriptor once per data model GUID variant).
+  const probeList: { descriptor: string; body: Record<string, unknown>; operation: string }[] = [];
+  for (let i = 0; i < attempts.length && probeList.length < MAX_EXTRA_MAPPING_PROBES; i += 1) {
+    if (i === successIndex) continue;
     const att = attempts[i];
     if (att.operation !== 'GetModelMappingByID') continue;
     if (att.body._mappingGuid !== ZERO_GUID) continue;
@@ -1136,23 +1149,41 @@ async function collectExtraMappingDefinitions(
     if (typeof descriptor !== 'string' || descriptor.length === 0) continue;
     if (seenDescriptors.has(descriptor)) continue;
     seenDescriptors.add(descriptor);
-    probes += 1;
-    try {
-      const raw = await callErService<unknown>(
-        transport, conn, token, ER_SERVICES.configurationStorage, att.operation, att.body, signal,
-      );
-      const candidate = extractXmlFromServiceResult(raw, att.operation);
-      if (!candidate) continue;
-      const ids = mappingDefinitionIds(candidate);
-      if (ids.size > 0 && Array.from(ids).every(id => knownIds.has(id))) continue;
-      for (const id of ids) knownIds.add(id);
-      blocks.push(...extractMappingDefinitionBlocks(candidate));
-    } catch (err) {
-      console.info('[fno-client] extra mapping definition probe failed', {
-        descriptor,
-        err: err instanceof Error ? err.message : String(err),
-      });
-    }
+    probeList.push({ descriptor, body: att.body, operation: att.operation });
+  }
+
+  const payloads: string[] = [];
+  for (let i = 0; i < probeList.length; i += EXTRA_MAPPING_PROBE_CONCURRENCY) {
+    if (signal?.aborted) break;
+    const slice = probeList.slice(i, i + EXTRA_MAPPING_PROBE_CONCURRENCY);
+    const results = await Promise.allSettled(
+      slice.map(async ({ operation, body }) => {
+        const raw = await callErService<unknown>(
+          transport, conn, token, ER_SERVICES.configurationStorage, operation, body, signal,
+        );
+        return extractXmlFromServiceResult(raw, operation);
+      }),
+    );
+    results.forEach((result, idx) => {
+      if (result.status === 'fulfilled') {
+        if (result.value) payloads.push(result.value);
+      } else {
+        console.info('[fno-client] extra mapping definition probe failed', {
+          descriptor: slice[idx].descriptor,
+          err: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+      }
+    });
+  }
+
+  const blocks: string[] = [];
+  for (const candidate of payloads) {
+    const ids = mappingDefinitionIds(candidate);
+    // Descriptors without their own mapping fall back to a definition we already
+    // have; only genuinely new ones are merged in.
+    if (ids.size > 0 && Array.from(ids).every(id => knownIds.has(id))) continue;
+    for (const id of ids) knownIds.add(id);
+    blocks.push(...extractMappingDefinitionBlocks(candidate));
   }
   return blocks;
 }

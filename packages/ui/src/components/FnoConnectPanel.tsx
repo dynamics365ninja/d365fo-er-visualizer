@@ -535,6 +535,27 @@ function isUsableGuid(guid: string | undefined): boolean {
   return guid.replace(/^\{|\}$/g, '').toLowerCase() !== ZERO_GUID_LOWER;
 }
 
+/**
+ * Descriptor candidates for `GetModelMappingByID`, root containers first.
+ *
+ * Every `ERDataModel.containers[].name` is a legal `_dataContainerDescriptorName`,
+ * but only *root* containers can carry a mapping definition. A large model has
+ * a few dozen roots among a couple of hundred containers, so ordering them
+ * first is what keeps the sibling-definition probes inside their budget.
+ */
+function descriptorNamesFromContainers(
+  containers: { name?: string; isRoot?: boolean }[] | undefined,
+): string[] {
+  const roots: string[] = [];
+  const rest: string[] = [];
+  for (const c of containers ?? []) {
+    const name = (c?.name ?? '').trim();
+    if (!name) continue;
+    (c?.isRoot ? roots : rest).push(name);
+  }
+  return Array.from(new Set([...roots, ...rest]));
+}
+
 // ── Solution tree node (N-level recursive) ───────────────────────────────────
 interface SolutionNode {
   sol: ErSolutionSummary;
@@ -672,11 +693,13 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
    * Push a download into the workspace, upgrading placeholder names first.
    *
    * Dependencies resolved by bare GUID are requested under a synthetic
-   * `"DataModel {guid}"` name because the listing had no matching row, which
-   * left the workspace showing the payload's internal model name ("Invoice")
-   * and an unreadable path (`DataModel-fe2349e2-…@224.xml`). The listing row is
-   * still findable by name: an ER data model called "Invoice" lives in the
-   * configuration "Invoice model".
+   * `"DataModel {guid}"` name when nothing could name them, which leaves the
+   * workspace showing the payload's internal model name ("Invoice") and an
+   * unreadable path (`DataModel-fe2349e2-…@224.xml`). Only an *exact* listing
+   * match is accepted here: matching by prefix looks tempting ("Invoice" →
+   * "Invoice model") but happily picks unrelated siblings such as
+   * "Invoice model EMCO - TEST". The reliable naming happens earlier, from the
+   * referencing row's `ownerDataModelName`.
    */
   const loadDownload = useCallback((download: ErConfigDownload) => {
     let final = download;
@@ -684,16 +707,12 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       const payloadName = extractNameFromPayload(download.xml);
       if (payloadName) {
         const lower = payloadName.toLowerCase();
-        const rows = Array.from(allDataModelsSeen.values());
-        const listingMatch =
-          rows.find(m => (m.configurationName ?? '').toLowerCase() === lower) ??
-          rows
-            .filter(m => (m.configurationName ?? '').toLowerCase().startsWith(`${lower} `))
-            .sort((a, b) => (a.configurationName ?? '').length - (b.configurationName ?? '').length)[0];
+        const listingMatch = Array.from(allDataModelsSeen.values())
+          .find(m => (m.configurationName ?? '').toLowerCase() === lower);
         final = relabelDownload(download, {
           envUrl: activeProfile.envUrl,
           configurationName: listingMatch?.configurationName ?? payloadName,
-          solutionName: listingMatch?.solutionName ?? listingMatch?.configurationName ?? payloadName,
+          solutionName: listingMatch?.solutionName ?? payloadName,
         });
       }
     }
@@ -1466,6 +1485,13 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // Harvesting it here lets us download the root DataModel even when passes
       // 1 and 2 couldn't find its GUID.
       const lateModelFollowUps = new Map<string, { guid: string; rev?: number }>();
+      // DataModel GUID → real configuration name, harvested from the listing row
+      // of the component that referenced it (`ownerDataModelName` is the nearest
+      // DataModel ancestor in F&O's hierarchy). The listing exposes no GUIDs for
+      // DataModel rows, so this is the only way to name a GUID-only dependency —
+      // without it the workspace falls back to the payload's internal model name
+      // ("Invoice" instead of the configuration "Invoice model").
+      const dmNameHints = new Map<string, { name: string; solutionName: string }>();
       const alreadyLoadedGuids = new Set<string>();
       for (const c of finalToLoad) {
         if (c.componentType === 'DataModel' && c.configurationGuid) {
@@ -1520,6 +1546,20 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         // inheritance parents and must NOT be downloaded as separate DataModels.
         const ownRefs = refs.filter(g => !baseOnly?.has(g.toLowerCase()));
         const hasOwnModelRefs = ownRefs.length > 0;
+        // A component that references exactly one own model can lend that model
+        // its listing name: `ownerDataModelName` is the DataModel configuration
+        // the row lives under, which is precisely the config behind that GUID.
+        // With more than one reference the assignment would be ambiguous, so the
+        // hint is skipped and the synthetic placeholder stays.
+        if (ownRefs.length === 1) {
+          const ownerName = download.source.ownerDataModelName?.trim();
+          if (ownerName) {
+            dmNameHints.set(ownRefs[0].toLowerCase(), {
+              name: ownerName,
+              solutionName: download.source.solutionName || ownerName,
+            });
+          }
+        }
         const baseNamesTheModel = inheritsFromOwnDataModel(download.source);
         for (const guid of refs) {
           const lower = guid.toLowerCase();
@@ -1715,8 +1755,12 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                   m => (m.configurationGuid ?? '').replace(/^\{|\}$/g, '').toLowerCase() === guid ||
                        (m.revisionGuid ?? '').replace(/^\{|\}$/g, '').toLowerCase() === guid,
                 );
-                const dmName = listingDm?.configurationName ?? `DataModel ${guid}`;
-                const dmSolution = listingDm?.solutionName ?? dmName;
+                const dmName = listingDm?.configurationName
+                  ?? dmNameHints.get(guid.toLowerCase())?.name
+                  ?? `DataModel ${guid}`;
+                const dmSolution = listingDm?.solutionName
+                  ?? dmNameHints.get(guid.toLowerCase())?.solutionName
+                  ?? dmName;
                 const synth: ErConfigSummary = {
                   solutionName: dmSolution,
                   configurationName: dmName,
@@ -2296,7 +2340,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // for `getModelMappingByID`.
       type ParsedDmContent = {
         version?: {
-          model?: { id?: string; name?: string; containers?: { name?: string }[] };
+          model?: { id?: string; name?: string; containers?: { name?: string; isRoot?: boolean }[] };
         };
       };
       const refreshedConfigs = useAppStore.getState().configurations;
@@ -2304,9 +2348,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       for (const cfg of refreshedConfigs) {
         if (cfg.kind !== 'DataModel') continue;
         const dm = (cfg.content as ParsedDmContent | undefined)?.version?.model;
-        const containerNames = (dm?.containers ?? [])
-          .map(c => (c?.name ?? '').trim())
-          .filter(s => s.length > 0);
+        const containerNames = descriptorNamesFromContainers(dm?.containers);
         console.debug('[fno-ui] synth-pass recordDm', {
           dmName: dm?.name,
           dmId: dm?.id,
@@ -2438,9 +2480,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             );
             const dm = (parsedDm?.content as ParsedDmContent | undefined)?.version?.model;
             if (dm?.id) {
-              const containerNames = (dm.containers ?? [])
-                .map(c => (c?.name ?? '').trim())
-                .filter(s => s.length > 0);
+              const containerNames = descriptorNamesFromContainers(dm.containers);
               recordDm(dm.id, dm.name ?? dmName, parsedDm?.solutionVersion?.solution?.name, containerNames);
               // Also populate dmByName so the branch-resolution pass below finds it.
               const lower = dm.id.replace(/^\{|\}$/g, '').toLowerCase();
@@ -3042,9 +3082,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               );
               const dm = (parsedDm?.content as ParsedDmContent | undefined)?.version?.model;
               if (dm?.id) {
-                const containerNames = (dm.containers ?? [])
-                  .map(c => (c?.name ?? '').trim())
-                  .filter(s => s.length > 0);
+                const containerNames = descriptorNamesFromContainers(dm.containers);
                 recordDm(dm.id, dm.name ?? dmName, parsedDm?.solutionVersion?.solution?.name, containerNames);
                 const lower = dm.id.replace(/^\{|\}$/g, '').toLowerCase();
                 const candidate = dmGuidIndex.get(lower);
@@ -3143,9 +3181,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 if (parsedModel?.id) {
                   const lower = parsedModel.id.replace(/^\{|\}$/g, '').toLowerCase();
                   if (lower && lower !== ZERO_GUID_LOWER) {
-                    const containers = (parsedModel.containers ?? [])
-                      .map(c => (c?.name ?? '').trim())
-                      .filter(s => s.length > 0);
+                    const containers = descriptorNamesFromContainers(parsedModel.containers);
                     recordDm(parsedModel.id, parsedModel.name ?? dmNameC, parsed?.solutionVersion?.solution?.name, containers);
                     let cand = dmGuidIndex.get(lower);
                     if (!cand) {
@@ -3323,9 +3359,10 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               const versionNumbers = typeof rev === 'number'
                 ? [rev]
                 : [1, 2, 3, 0];
+              const lateHint = dmNameHints.get(guid.toLowerCase());
               const synthDm: ErConfigSummary = {
-                solutionName: '<late-referenced>',
-                configurationName: `DataModel ${guid}`,
+                solutionName: lateHint?.solutionName ?? '<late-referenced>',
+                configurationName: lateHint?.name ?? `DataModel ${guid}`,
                 componentType: 'DataModel',
                 configurationGuid: guid,
                 hasContent: true,
