@@ -964,7 +964,7 @@ export async function downloadConfigXml(
   const extraDefinitions =
     component.componentType === 'ModelMapping' && operation === 'GetModelMappingByID'
       ? await collectExtraMappingDefinitions(
-          transport, conn, token, attempts, successIndex, primaryXml, signal,
+          transport, conn, token, component, attempts, successIndex, primaryXml, signal,
         )
       : [];
   const xml = extraDefinitions.length > 0
@@ -1124,6 +1124,7 @@ async function collectExtraMappingDefinitions(
   transport: FnoTransport,
   conn: FnoConnection,
   token: string,
+  component: ErConfigSummary,
   attempts: { operation: string; body: Record<string, unknown> }[],
   successIndex: number,
   primaryXml: string,
@@ -1131,7 +1132,8 @@ async function collectExtraMappingDefinitions(
 ): Promise<string[]> {
   const knownIds = mappingDefinitionIds(primaryXml);
   const seenDescriptors = new Set<string>();
-  const successDescriptor = attempts[successIndex]?.body?._dataContainerDescriptorName;
+  const successBody = attempts[successIndex]?.body ?? {};
+  const successDescriptor = successBody._dataContainerDescriptorName;
   if (typeof successDescriptor === 'string') seenDescriptors.add(successDescriptor);
 
   // Collect the descriptor variants worth probing before issuing any request,
@@ -1150,6 +1152,26 @@ async function collectExtraMappingDefinitions(
     if (seenDescriptors.has(descriptor)) continue;
     seenDescriptors.add(descriptor);
     probeList.push({ descriptor, body: att.body, operation: att.operation });
+  }
+
+  // Callers that pinned the download to one exact descriptor have no other
+  // attempts to reuse — their siblings are listed separately, so the resolved
+  // definition stays the one they asked for while the rest is still collected.
+  const dmGuid = successBody._dataModelGuid
+    ?? component.parentDataModelGuid
+    ?? component.parentDataModelRevisionGuid;
+  if (dmGuid) {
+    for (const descriptor of component.siblingDescriptorNames ?? []) {
+      if (probeList.length >= MAX_EXTRA_MAPPING_PROBES) break;
+      const name = descriptor.trim();
+      if (!name || seenDescriptors.has(name)) continue;
+      seenDescriptors.add(name);
+      probeList.push({
+        descriptor: name,
+        operation: 'GetModelMappingByID',
+        body: { _mappingGuid: ZERO_GUID, _dataModelGuid: dmGuid, _dataContainerDescriptorName: name },
+      });
+    }
   }
 
   const payloads: string[] = [];

@@ -2833,6 +2833,10 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               parentDataModelRevisionGuid: dm.solutionGuid,
               descriptorNameCandidates: [descriptor],
               descriptorNamesExclusive: true,
+              // Resolve exactly this descriptor, but still collect the model's
+              // other definitions — a mapping configuration holds one per root
+              // container and the workspace should show all of them.
+              siblingDescriptorNames: dm.descriptorNames,
               hasContent: true,
             },
             recordDmGuid: dm.guid,
