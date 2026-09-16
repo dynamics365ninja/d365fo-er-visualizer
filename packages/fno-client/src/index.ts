@@ -18,6 +18,9 @@ export {
   decodeXmlPayload,
   extractVersionFromXml,
   extractReferencedDataModelGuids,
+  extractNameFromPayload,
+  isSyntheticComponentName,
+  relabelDownload,
   pickDisplayVersion,
 } from './er-services';
 export { DEFAULT_SEED_MODELS } from './seed-models';
