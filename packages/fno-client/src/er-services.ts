@@ -1207,6 +1207,14 @@ function mergeMappingDefinitions(xml: string, blocks: string[]): string {
         `ID.="${ZERO_GUID},0"><Mapping>${block}</Mapping></ERModelMappingVersion>`,
     )
     .join('');
+  // A response that shipped several fragments (mapping + data model) is already
+  // wrapped in an `ErFnoBundle`. The extra definitions have to go *inside* it:
+  // prefixing them would leave the bundle as a sibling, and `injectNameHint`
+  // would then wrap the whole thing a second time — the nested bundle is opaque
+  // to the parser, so every fragment inside it (including the definition F&O
+  // resolved) silently disappears from the workspace.
+  const openTag = /^<\s*ErFnoBundle\b[^>]*>/i.exec(trimmed)?.[0];
+  if (openTag) return `${openTag}${wrapped}${trimmed.slice(openTag.length)}`;
   return `${wrapped}${trimmed}`;
 }
 

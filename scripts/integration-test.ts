@@ -28,6 +28,7 @@
 
 import * as http from 'node:http';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { exec } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -3016,6 +3017,29 @@ async function main(): Promise<void> {
     });
     const definitions16 = [...mappingDl16.xml.matchAll(/<ERModelMapping\b[^>]*?\sName="([^"]*)"/g)].map(m => m[1]);
     console.log(`       merged download definitions (${definitions16.length}): ${definitions16.join(' | ') || '(none)'}`);
+
+    // Keep the payload for offline analysis — the merge/parse interplay is
+    // impossible to reason about without the real thing.
+    const dumpPath16 = path.join(os.tmpdir(), 'fno-step16-mapping.xml');
+    fs.writeFileSync(dumpPath16, mappingDl16.xml, 'utf8');
+    console.log(`       payload dumped to ${dumpPath16} (${mappingDl16.xml.length} chars)`);
+    const versionNodes16 = (mappingDl16.xml.match(/<ERModelMappingVersion\b/g) ?? []).length;
+    const ids16 = [...mappingDl16.xml.matchAll(/<ERModelMapping\b[^>]*?\sID\.="([^"]*)"/g)].map(m => m[1]);
+    console.log(`       version nodes: ${versionNodes16} | definition ids: ${new Set(ids16).size} distinct of ${ids16.length}`);
+
+    // What the workspace actually shows — the XML can carry every definition
+    // and still surface one if the parser drops the payload's bare root.
+    const parsedMapping16 = parseERConfiguration(mappingDl16.xml, 'step16-mapping.xml');
+    const parsedDefs16 = parsedMapping16.content.kind === ERComponentKind.ModelMapping
+      ? (parsedMapping16.content.version.mappings ?? [parsedMapping16.content.version.mapping])
+      : [];
+    console.log(`       parser surfaces (${parsedDefs16.length}): ` +
+      `${parsedDefs16.map(d => `${d.name}/${d.dataContainerDescriptor}`).slice(0, 20).join(' | ') || '(none)'}`);
+    check(
+      'Step 16c: the parser surfaces every merged mapping definition',
+      parsedDefs16.length === definitions16.length && parsedDefs16.length > 1,
+      `xml=${definitions16.length} parsed=${parsedDefs16.length}`,
+    );
 
     // Per-descriptor probe — shows which descriptors F&O actually answers for.
     console.log('       per-descriptor probe:');
