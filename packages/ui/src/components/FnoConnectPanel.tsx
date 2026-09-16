@@ -59,11 +59,18 @@ import {
 } from '@fluentui/react-icons';
 import type {
   ErComponentType,
+  ErConfigDownload,
   ErConfigSummary,
    ErSolutionSummary,
   FnoConnection,
 } from '@er-visualizer/fno-client';
-import { FnoHttpError, FnoEmptyContentError } from '@er-visualizer/fno-client';
+import {
+  FnoHttpError,
+  FnoEmptyContentError,
+  extractNameFromPayload,
+  isSyntheticComponentName,
+  relabelDownload,
+} from '@er-visualizer/fno-client';
 import { parseERConfigurations } from '@er-visualizer/core';
 import { t } from '../i18n';
 import { useAppStore } from '../state/store';
@@ -660,6 +667,38 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     () => profiles.find(p => p.id === activeProfileId) ?? null,
     [profiles, activeProfileId],
   );
+
+  /**
+   * Push a download into the workspace, upgrading placeholder names first.
+   *
+   * Dependencies resolved by bare GUID are requested under a synthetic
+   * `"DataModel {guid}"` name because the listing had no matching row, which
+   * left the workspace showing the payload's internal model name ("Invoice")
+   * and an unreadable path (`DataModel-fe2349e2-…@224.xml`). The listing row is
+   * still findable by name: an ER data model called "Invoice" lives in the
+   * configuration "Invoice model".
+   */
+  const loadDownload = useCallback((download: ErConfigDownload) => {
+    let final = download;
+    if (activeProfile && isSyntheticComponentName(download.source?.configurationName)) {
+      const payloadName = extractNameFromPayload(download.xml);
+      if (payloadName) {
+        const lower = payloadName.toLowerCase();
+        const rows = Array.from(allDataModelsSeen.values());
+        const listingMatch =
+          rows.find(m => (m.configurationName ?? '').toLowerCase() === lower) ??
+          rows
+            .filter(m => (m.configurationName ?? '').toLowerCase().startsWith(`${lower} `))
+            .sort((a, b) => (a.configurationName ?? '').length - (b.configurationName ?? '').length)[0];
+        final = relabelDownload(download, {
+          envUrl: activeProfile.envUrl,
+          configurationName: listingMatch?.configurationName ?? payloadName,
+          solutionName: listingMatch?.solutionName ?? listingMatch?.configurationName ?? payloadName,
+        });
+      }
+    }
+    loadXmlFile(final.xml, final.syntheticPath);
+  }, [activeProfile, allDataModelsSeen, loadXmlFile]);
 
   // Profile being edited (null while creating a new one).
   const editorTarget = useMemo(
@@ -1598,7 +1637,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         );
         for (const result of results) {
           if (result.status === 'fulfilled') {
-            loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
+            loadDownload(result.value.download);
             ok += 1;
             harvestRefs(result.value.download);
           } else {
@@ -1645,7 +1684,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           );
           for (const result of results) {
             if (result.status === 'fulfilled') {
-              loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
+              loadDownload(result.value.download);
               ok += 1;
               harvestRefs(result.value.download);
             } else {
@@ -1693,7 +1732,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             );
             for (const result of followUpResults) {
               if (result.status === 'fulfilled') {
-                loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
+                loadDownload(result.value.download);
                 ok += 1;
                 alreadyLoadedGuids.add(result.value.guid.toLowerCase());
               } else {
@@ -2389,7 +2428,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           };
           try {
             const download = await fnoSession.downloadConfiguration(activeProfile, synthDm);
-            loadXmlFile(download.xml, download.syntheticPath);
+            loadDownload(download);
             ok += 1;
             const newestConfigs = useAppStore.getState().configurations;
             const parsedDm = newestConfigs.find(
@@ -2876,7 +2915,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           results.forEach((result, i) => {
             const item = pending[i];
             if (result.status === 'fulfilled') {
-              loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
+              loadDownload(result.value.download);
               ok += 1;
               mappingSuccessCount += 1;
               const verdict = judgeMapping(result.value.download.xml);
@@ -2993,7 +3032,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             let resolvedGuid: string | undefined;
             try {
               const dmDownload = await fnoSession.downloadConfiguration(activeProfile, probeSpec);
-              loadXmlFile(dmDownload.xml, dmDownload.syntheticPath);
+              loadDownload(dmDownload);
               ok += 1;
               const newestConfigs = useAppStore.getState().configurations;
               const parsedDm = newestConfigs.find(
@@ -3092,7 +3131,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               };
               try {
                 const dmDl = await fnoSession.downloadConfiguration(activeProfile, probeSpecC);
-                loadXmlFile(dmDl.xml, dmDl.syntheticPath);
+                loadDownload(dmDl);
                 ok += 1;
                 const newest = useAppStore.getState().configurations;
                 const parsed = newest.find(
@@ -3166,7 +3205,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               results.forEach((result, i) => {
                 const item = pending[i];
                 if (result.status === 'fulfilled') {
-                  loadXmlFile(result.value.dl.xml, result.value.dl.syntheticPath);
+                  loadDownload(result.value.dl);
                   ok += 1;
                   mappingSuccessCount += 1;
                   const verdict = judgeMapping(result.value.dl.xml);
@@ -3299,7 +3338,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           );
           for (const result of lateResults) {
             if (result.status === 'fulfilled') {
-              loadXmlFile(result.value.download.xml, result.value.download.syntheticPath);
+              loadDownload(result.value.download);
               ok += 1;
               alreadyLoadedGuids.add(result.value.guid.toLowerCase());
             } else {
@@ -3352,7 +3391,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       pushToast({ kind: 'success', message: t.fnoLoadedCount(ok) });
       onFilesLoaded?.();
     }
-  }, [activeProfile, selected, allDataModelsSeen, solutions, solutionPath, loadXmlFile, pushToast, beginFnoIngest, endFnoIngest, updateFnoIngestItem, resolveInheritedLabels]);
+  }, [activeProfile, selected, allDataModelsSeen, solutions, solutionPath, loadXmlFile, loadDownload, pushToast, beginFnoIngest, endFnoIngest, updateFnoIngestItem, resolveInheritedLabels]);
 
   // ── Helper: type badge ──────────────────────────────────────────────────
   const TypeBadge = ({ type }: { type: ErComponentType }) => {

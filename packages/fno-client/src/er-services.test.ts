@@ -16,6 +16,8 @@ import {
   listComponents as listComponentsFn,
   extractVersionFromXml,
   extractReferencedDataModelGuids,
+  isSyntheticComponentName,
+  relabelDownload,
   pickDisplayVersion,
 } from './er-services';
 import { DEFAULT_SEED_MODELS } from './seed-models';
@@ -605,6 +607,75 @@ describe('downloadConfigXml', () => {
     expect((posts[0].body as Record<string, unknown>)._mappingGuid).toBe('cfg-1');
   });
 
+  it('collects every mapping definition, not just the one the GUID resolved to', async () => {
+    // F&O answers `GetModelMappingByID` with a single ERModelMapping — the one
+    // the mapping GUID / descriptor resolves to. Sibling definitions of the same
+    // configuration are only reachable via their own descriptor name.
+    const op = 'GetModelMappingByID';
+    const byDescriptor: Record<string, string> = {
+      SalesInvoice: '<ERModelMapping ID.="{MM-SALES}" Name="Sales"></ERModelMapping>',
+      ProjInvoice: '<ERModelMapping ID.="{MM-PROJ}" Name="Proj"></ERModelMapping>',
+    };
+    const { transport } = makeTransport({
+      post: (_url, body) => {
+        const b = body as Record<string, unknown>;
+        if (b._mappingGuid !== '00000000-0000-0000-0000-000000000000') {
+          return { [`${op}Result`]: byDescriptor.SalesInvoice };
+        }
+        const descriptor = String(b._dataContainerDescriptorName ?? '');
+        return { [`${op}Result`]: byDescriptor[descriptor] ?? '' };
+      },
+    });
+    const result = await downloadConfigXml(transport, conn, 'tok', {
+      ...baseComponent,
+      componentType: 'ModelMapping',
+      parentDataModelGuid: 'dm-1',
+      descriptorNameCandidates: ['SalesInvoice', 'ProjInvoice'],
+      descriptorNamesExclusive: true,
+    });
+    expect(result.xml).toContain('{MM-SALES}');
+    expect(result.xml).toContain('{MM-PROJ}');
+    // The definition F&O actually resolved stays last — `selectVersionNode`
+    // treats the last version node as the primary one.
+    expect(result.xml.indexOf('{MM-PROJ}')).toBeLessThan(result.xml.indexOf('{MM-SALES}'));
+  });
+
+  it('does not duplicate a definition another descriptor resolves to', async () => {
+    const op = 'GetModelMappingByID';
+    const same = '<ERModelMapping ID.="{MM-ONE}" Name="Only"></ERModelMapping>';
+    const { transport } = makeTransport({ post: () => ({ [`${op}Result`]: same }) });
+    const result = await downloadConfigXml(transport, conn, 'tok', {
+      ...baseComponent,
+      componentType: 'ModelMapping',
+      parentDataModelGuid: 'dm-1',
+      descriptorNameCandidates: ['A', 'B'],
+      descriptorNamesExclusive: true,
+    });
+    expect(result.xml.match(/\{MM-ONE\}/g)).toHaveLength(1);
+  });
+
+  it('names a GUID-only dependency after the payload instead of the placeholder', async () => {
+    // Dependencies pulled by bare GUID have no listing row, so the UI asks for
+    // them under a synthetic "DataModel {guid}" name — which used to end up in
+    // the file path as `DataModel-fe2349e2-…@224.xml`.
+    const op = 'GetDataModelByIDAndRevision';
+    const guid = 'fe2349e2-85fd-45e3-a3d5-6d10b409e830';
+    const xml = '<ERModelDefinition ID.="{DM}" Name="Invoice" />';
+    const { transport } = makeTransport({ post: () => ({ [`${op}Result`]: xml }) });
+    const result = await downloadConfigXml(transport, conn, 'tok', {
+      solutionName: `DataModel ${guid}`,
+      configurationName: `DataModel ${guid}`,
+      componentType: 'DataModel',
+      configurationGuid: guid,
+      version: '224',
+      hasContent: true,
+    });
+    expect(result.syntheticPath).toBe(
+      'fno://org1.sandbox.operations.dynamics.com/Invoice/Invoice@224.xml',
+    );
+    expect(result.xml).toContain('Name="Invoice"');
+  });
+
   it('dispatches DataModel components to GetDataModelByIDAndRevision with _dataModelGuid + _revisionNumber', async () => {
     const op = 'GetDataModelByIDAndRevision';
     const xml = '<Model/>';
@@ -975,6 +1046,43 @@ describe('buildDownloadAttempts', () => {
         .map(a => a.body._dataContainerDescriptorName);
       expect(descriptors).toEqual(['SalesInvoice']);
     });
+  });
+});
+
+describe('relabelDownload', () => {
+  const download = {
+    xml: '<ErFnoBundle Name="DataModel fe2349e2-85fd-45e3-a3d5-6d10b409e830" Version="224"><ERModelDefinition Name="Invoice" /></ErFnoBundle>',
+    syntheticPath: 'fno://org1.sandbox.operations.dynamics.com/Invoice/Invoice@224.xml',
+    source: {
+      solutionName: 'Invoice',
+      configurationName: 'DataModel fe2349e2-85fd-45e3-a3d5-6d10b409e830',
+      componentType: 'DataModel',
+      hasContent: true,
+    } as ErConfigSummary,
+  };
+
+  it('rewrites both the name hint and the synthetic path', () => {
+    const next = relabelDownload(download, {
+      envUrl: conn.envUrl,
+      configurationName: 'Invoice model',
+    });
+    expect(next.xml).toContain('Name="Invoice model"');
+    expect(next.xml).toContain('<ERModelDefinition Name="Invoice" />');
+    expect(next.syntheticPath).toBe(
+      'fno://org1.sandbox.operations.dynamics.com/Invoice-model/Invoice-model@224.xml',
+    );
+  });
+
+  it('leaves the download untouched for an empty name', () => {
+    expect(relabelDownload(download, { envUrl: conn.envUrl, configurationName: '  ' })).toBe(download);
+  });
+});
+
+describe('isSyntheticComponentName', () => {
+  it('recognises the GUID placeholders minted for listing-less dependencies', () => {
+    expect(isSyntheticComponentName('DataModel fe2349e2-85fd-45e3-a3d5-6d10b409e830')).toBe(true);
+    expect(isSyntheticComponentName('Invoice model')).toBe(false);
+    expect(isSyntheticComponentName(undefined)).toBe(false);
   });
 });
 

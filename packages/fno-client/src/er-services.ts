@@ -831,7 +831,10 @@ export async function downloadConfigXml(
   let lastErr: FnoHttpError | null = null;
   let successBody: Record<string, unknown> | null = null;
 
-  for (const att of attempts) {
+  let successIndex = -1;
+
+  for (let attIndex = 0; attIndex < attempts.length; attIndex += 1) {
+    const att = attempts[attIndex];
     if (available && !available.has(att.operation)) continue;
     try {
       const attRaw = await callErService<unknown>(
@@ -864,6 +867,7 @@ export async function downloadConfigXml(
       operation = att.operation;
       extractedXml = candidateXml;
       successBody = att.body;
+      successIndex = attIndex;
       success = true;
       break;
     } catch (err) {
@@ -949,7 +953,23 @@ export async function downloadConfigXml(
 
   // `success` is only set together with a non-null `extractedXml` above, so
   // reaching this point guarantees we have XML.
-  const xml = extractedXml as string;
+  const primaryXml = extractedXml as string;
+
+  // A ModelMapping configuration holds one ERModelMapping *definition* per
+  // DataContainerDescriptor, but `GetModelMappingByID` only ever answers with
+  // the single definition the requested GUID / descriptor resolves to. Probe
+  // the remaining descriptor candidates and merge whatever comes back, so the
+  // workspace shows every definition instead of just the one the selected
+  // format happened to bind to.
+  const extraDefinitions =
+    component.componentType === 'ModelMapping' && operation === 'GetModelMappingByID'
+      ? await collectExtraMappingDefinitions(
+          transport, conn, token, attempts, successIndex, primaryXml, signal,
+        )
+      : [];
+  const xml = extraDefinitions.length > 0
+    ? mergeMappingDefinitions(primaryXml, extraDefinitions)
+    : primaryXml;
 
   // For `GetModelMappingByID` the XML payload wraps the inner content in
   // `<ERModelMappingVersion Number="N">` where N is the *descriptor-level*
@@ -957,10 +977,10 @@ export async function downloadConfigXml(
   // Skip `extractVersionFromXml` for that operation so the listing version
   // from `component.version` takes priority, then fall back to the XML value
   // only when no listing version is available.
-  const xmlVersion = operation === 'GetModelMappingByID' ? undefined : extractVersionFromXml(xml);
+  const xmlVersion = operation === 'GetModelMappingByID' ? undefined : extractVersionFromXml(primaryXml);
   const finalVersion = xmlVersion
     ?? component.version
-    ?? extractVersionFromXml(xml)
+    ?? extractVersionFromXml(primaryXml)
     ?? (successBody?._revisionNumber != null ? String(successBody._revisionNumber) : undefined);
   const {
     guids: referencedDataModelGuids,
@@ -970,8 +990,18 @@ export async function downloadConfigXml(
   // Carry the solution identity into the bundle so the parser can populate
   // the synthetic ERSolution (custom services strip the envelope): the
   // component's own ERSolution GUID and its inheritance parent (`Base=`).
-  const baseHint = extractBaseHint(xml);
-  const finalXml = injectNameHint(xml, component.configurationName, finalVersion, {
+  const baseHint = extractBaseHint(primaryXml);
+  // Dependencies pulled by bare GUID carry a placeholder name ("DataModel
+  // {guid}") because the listing had no row for them. Falling back to the
+  // payload's own element name keeps the synthetic file path readable
+  // (`Invoice@224.xml` instead of `DataModel-fe2349e2-…@224.xml`).
+  const displayName = isSyntheticComponentName(component.configurationName)
+    ? extractNameFromPayload(primaryXml) ?? component.configurationName
+    : component.configurationName;
+  const displaySolutionName = isSyntheticComponentName(component.solutionName)
+    ? displayName
+    : component.solutionName;
+  const finalXml = injectNameHint(xml, displayName, finalVersion, {
     solutionId: component.configurationGuid,
     base: baseHint,
   });
@@ -980,8 +1010,8 @@ export async function downloadConfigXml(
     xml: finalXml,
     syntheticPath: buildFnoPath({
       envUrl: conn.envUrl,
-      solutionName: component.solutionName,
-      configurationName: component.configurationName,
+      solutionName: displaySolutionName,
+      configurationName: displayName,
       version: finalVersion,
       componentType: component.componentType,
     }),
@@ -995,6 +1025,158 @@ export async function downloadConfigXml(
      *  downloads when the derived DataModel's own Model= GUID is already known. */
     referencedBaseOnlyGuids: referencedBaseOnlyGuids.size > 0 ? referencedBaseOnlyGuids : undefined,
   };
+}
+
+/** Max extra `GetModelMappingByID` probes issued to collect sibling mapping definitions. */
+const MAX_EXTRA_MAPPING_PROBES = 8;
+
+/** True for the `"DataModel {guid}"` placeholders the UI mints for GUID-only dependencies. */
+export function isSyntheticComponentName(name: string | undefined): boolean {
+  if (!name) return false;
+  return /^(DataModel|ModelMapping|Format|Unknown)\s+\{?[0-9a-fA-F-]{36}\}?$/.test(name.trim());
+}
+
+/** The payload's own component name — used when the listing gave us no real name. */
+export function extractNameFromPayload(xml: string): string | undefined {
+  const match = xml.match(
+    /<(?:ERModelDefinition|ERDataModel|ERTextFormat|ERFormatMapping|ERModelMapping)\b[^>]*\sName="([^"]*)"/i,
+  );
+  const name = match?.[1]?.trim();
+  return name && name.length > 0 ? name : undefined;
+}
+
+/**
+ * Re-label an already downloaded configuration.
+ *
+ * Callers that can resolve a better name *after* the download (e.g. by matching
+ * the payload's model name against the F&O listing) use this to fix both the
+ * injected name hint and the synthetic file path, so the workspace shows
+ * "Invoice model" instead of "Invoice" / "DataModel-fe2349e2-…@224.xml".
+ */
+export function relabelDownload(
+  download: ErConfigDownload,
+  opts: { envUrl: string; configurationName: string; solutionName?: string },
+): ErConfigDownload {
+  const name = opts.configurationName.trim();
+  if (!name) return download;
+  const version = extractVersionFromXml(download.xml);
+  const trimmed = download.xml.replace(/^\uFEFF/, '').replace(/^\s*<\?xml[^?]*\?>\s*/i, '');
+  let xml = download.xml;
+  if (/^<\s*ErFnoBundle[\s>]/i.test(trimmed)) {
+    const tagEnd = trimmed.indexOf('>');
+    const openTag = trimmed.slice(0, tagEnd + 1);
+    const attr = ` Name="${escapeXmlAttr(name)}"`;
+    xml =
+      (/\sName="[^"]*"/i.test(openTag)
+        ? openTag.replace(/\sName="[^"]*"/i, attr)
+        : openTag.replace(/^<\s*ErFnoBundle/i, `<ErFnoBundle${attr}`)) + trimmed.slice(tagEnd + 1);
+  } else {
+    xml = injectNameHint(trimmed, name, version);
+  }
+  return {
+    ...download,
+    xml,
+    syntheticPath: buildFnoPath({
+      envUrl: opts.envUrl,
+      solutionName: opts.solutionName || name,
+      configurationName: name,
+      version,
+      componentType: download.source?.componentType,
+    }),
+  };
+}
+
+/** Every `<ERModelMapping …>…</ERModelMapping>` block, regardless of the wrapper around it. */
+function extractMappingDefinitionBlocks(xml: string): string[] {
+  // `\b` after "ERModelMapping" cannot match "ERModelMappingVersion" (g→V is
+  // word-to-word), so version wrappers are skipped automatically.
+  return xml.match(/<ERModelMapping\b[\s\S]*?<\/ERModelMapping>/gi) ?? [];
+}
+
+/** `ID.` attributes of the mapping definitions contained in `xml`. */
+function mappingDefinitionIds(xml: string): Set<string> {
+  const ids = new Set<string>();
+  const re = /<ERModelMapping\b[^>]*\sID\.="([^"]+)"/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(xml)) !== null) ids.add(m[1].trim().toUpperCase());
+  return ids;
+}
+
+/**
+ * Re-run the untried descriptor variants of `GetModelMappingByID` and return the
+ * mapping definitions the primary answer didn't already contain.
+ *
+ * Failures are swallowed: the extra definitions are a bonus, never a reason to
+ * fail a download that already succeeded.
+ */
+async function collectExtraMappingDefinitions(
+  transport: FnoTransport,
+  conn: FnoConnection,
+  token: string,
+  attempts: { operation: string; body: Record<string, unknown> }[],
+  successIndex: number,
+  primaryXml: string,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const knownIds = mappingDefinitionIds(primaryXml);
+  const seenDescriptors = new Set<string>();
+  const successDescriptor = attempts[successIndex]?.body?._dataContainerDescriptorName;
+  if (typeof successDescriptor === 'string') seenDescriptors.add(successDescriptor);
+
+  const blocks: string[] = [];
+  let probes = 0;
+  for (let i = 0; i < attempts.length && probes < MAX_EXTRA_MAPPING_PROBES; i += 1) {
+    if (i === successIndex || signal?.aborted) continue;
+    const att = attempts[i];
+    if (att.operation !== 'GetModelMappingByID') continue;
+    if (att.body._mappingGuid !== ZERO_GUID) continue;
+    const descriptor = att.body._dataContainerDescriptorName;
+    // The empty descriptor resolves to the model's default mapping, which is
+    // what the primary answer already is in the overwhelming majority of cases.
+    if (typeof descriptor !== 'string' || descriptor.length === 0) continue;
+    if (seenDescriptors.has(descriptor)) continue;
+    seenDescriptors.add(descriptor);
+    probes += 1;
+    try {
+      const raw = await callErService<unknown>(
+        transport, conn, token, ER_SERVICES.configurationStorage, att.operation, att.body, signal,
+      );
+      const candidate = extractXmlFromServiceResult(raw, att.operation);
+      if (!candidate) continue;
+      const ids = mappingDefinitionIds(candidate);
+      if (ids.size > 0 && Array.from(ids).every(id => knownIds.has(id))) continue;
+      for (const id of ids) knownIds.add(id);
+      blocks.push(...extractMappingDefinitionBlocks(candidate));
+    } catch (err) {
+      console.info('[fno-client] extra mapping definition probe failed', {
+        descriptor,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return blocks;
+}
+
+/**
+ * Splice extra mapping definitions into a custom-service payload as sibling
+ * `ERModelMappingVersion` nodes.
+ *
+ * They are prepended so the *original* node stays last — `selectVersionNode`
+ * treats the last node as the primary one, which must remain the definition
+ * F&O actually resolved (it carries the real version metadata).
+ */
+function mergeMappingDefinitions(xml: string, blocks: string[]): string {
+  const trimmed = xml.replace(/^\uFEFF/, '').replace(/^\s*<\?xml[^?]*\?>\s*/i, '');
+  // A full solution envelope already carries every definition; don't touch it.
+  if (/^<\s*ERSolutionVersion[\s>]/i.test(trimmed)) return xml;
+  const wrapped = blocks
+    .map(
+      block =>
+        `<ERModelMappingVersion DateTime="" Description="" Number="0" ` +
+        `ID.="${ZERO_GUID},0"><Mapping>${block}</Mapping></ERModelMappingVersion>`,
+    )
+    .join('');
+  return `${wrapped}${trimmed}`;
 }
 
 /**
