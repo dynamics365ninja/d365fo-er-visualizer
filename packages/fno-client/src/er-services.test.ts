@@ -640,6 +640,36 @@ describe('downloadConfigXml', () => {
     expect(result.xml.indexOf('{MM-PROJ}')).toBeLessThan(result.xml.indexOf('{MM-SALES}'));
   });
 
+  it('keeps probing past the first descriptors that answer empty', async () => {
+    // The real Invoice model answers only for its 11th and 12th root container;
+    // the ten before them reply HTTP 200 with an empty body. A probe budget that
+    // counts those empties never reaches the second definition.
+    const op = 'GetModelMappingByID';
+    const empties = ['InvoiceBase', 'PostalAddress', 'Contact', 'Customer', 'TaxTrans',
+      'LineItem', 'BankAccount', 'CustomerTransaction', 'MarkupTransaction', 'LineBase'];
+    const byDescriptor: Record<string, string> = {
+      InvoiceCustomer: '<ERModelMapping ID.="{MM-CUST}" Name="Customer Invoice"></ERModelMapping>',
+      InvoiceProject: '<ERModelMapping ID.="{MM-PROJ}" Name="Project Invoice"></ERModelMapping>',
+    };
+    const { transport } = makeTransport({
+      post: (_url, body) => {
+        const b = body as Record<string, unknown>;
+        const descriptor = String(b._dataContainerDescriptorName ?? '');
+        return { [`${op}Result`]: byDescriptor[descriptor] ?? '' };
+      },
+    });
+    const result = await downloadConfigXml(transport, conn, 'tok', {
+      ...baseComponent,
+      configurationGuid: undefined,
+      componentType: 'ModelMapping',
+      parentDataModelGuid: 'dm-1',
+      descriptorNameCandidates: [...empties, 'InvoiceCustomer', 'InvoiceProject'],
+      descriptorNamesExclusive: true,
+    });
+    expect(result.xml).toContain('{MM-CUST}');
+    expect(result.xml).toContain('{MM-PROJ}');
+  });
+
   it('does not duplicate a definition another descriptor resolves to', async () => {
     const op = 'GetModelMappingByID';
     const same = '<ERModelMapping ID.="{MM-ONE}" Name="Only"></ERModelMapping>';

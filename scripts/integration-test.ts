@@ -43,6 +43,7 @@ import {
   downloadConfigXml,
   extractVersionFromXml,
   extractReferencedDataModelGuids,
+  extractNameFromPayload,
   buildDownloadAttempts,
   callErService,
   listServiceOperations,
@@ -2913,6 +2914,139 @@ async function main(): Promise<void> {
     );
   } catch (err15) {
     console.log(`  ⚠ Step 15 failed: ${err15 instanceof Error ? err15.message.slice(0, 200) : err15}`);
+  }
+  console.log();
+
+  // ─── Step 16: post-fix verification — dependency naming & mapping definitions ──
+  // Mirrors what the UI actually does for a Format's dependencies:
+  //   1. the DataModel is pulled by bare GUID under a synthetic
+  //      `DataModel {guid}` name (the listing exposes no DataModel GUIDs), and
+  //   2. the ModelMapping is resolved via (parent DM GUID, descriptor).
+  // Verifies the readable-name fallback, the listing-name upgrade the panel
+  // performs, and how many mapping definitions actually come back.
+  console.log('─── Step 16: dependency naming & mapping definition coverage');
+  try {
+    const targetFmt16 =
+      components.find(c => c.configurationName === cfg.configName && c.hasContent) ??
+      rootComponents.find(c => c.configurationName === cfg.configName && c.hasContent) ??
+      components.find(c => c.componentType === 'Format' && c.hasContent);
+    if (!targetFmt16) throw new Error('no downloadable format to probe');
+
+    const fmtDl16 = await downloadConfigXml(transport, conn, token, targetFmt16);
+    const refs16 = extractReferencedDataModelGuids(fmtDl16.xml);
+    const dmGuid16 = refs16.guids.find(g => !refs16.baseOnlyGuids.has(g));
+    if (!dmGuid16) throw new Error('format XML carries no own Model= GUID');
+    const dmRev16 = refs16.revisions[dmGuid16];
+    console.log(`  Format "${targetFmt16.configurationName}" → DataModel GUID ${dmGuid16}${dmRev16 ? ` rev ${dmRev16}` : ''}`);
+
+    // ── 16a. GUID-only DataModel: named from the referencing row's owner ──
+    // The listing exposes no DataModel GUIDs, so the UI names a GUID-only
+    // dependency after `ownerDataModelName` of the row that referenced it and
+    // only falls back to a `DataModel {guid}` placeholder when that is missing.
+    const ownerHint16 = targetFmt16.ownerDataModelName?.trim();
+    const askedName16 = ownerHint16 || `DataModel ${dmGuid16}`;
+    const dmDl16 = await downloadConfigXml(transport, conn, token, {
+      solutionName: ownerHint16 ? targetFmt16.solutionName : askedName16,
+      configurationName: askedName16,
+      componentType: 'DataModel',
+      configurationGuid: dmGuid16,
+      version: dmRev16 != null ? String(dmRev16) : undefined,
+      versionNumbers: dmRev16 != null ? [dmRev16] : [50, 40, 30, 20, 15, 10, 5, 1, 0],
+      hasContent: true,
+    });
+    const payloadName16 = extractNameFromPayload(dmDl16.xml);
+    console.log(`  16a. ownerDataModelName: ${ownerHint16 ?? '(none)'}`);
+    console.log(`       asked as     : ${askedName16}`);
+    console.log(`       payload name : ${payloadName16 ?? '(none)'} (the model's own name, not the configuration's)`);
+    console.log(`       path         : ${dmDl16.syntheticPath}`);
+    check(
+      'Step 16a: synthetic path carries no raw GUID',
+      !dmDl16.syntheticPath.toLowerCase().includes(dmGuid16.toLowerCase()),
+      dmDl16.syntheticPath,
+    );
+    // `buildFnoPath` slugifies the name (spaces → dashes) — compare like for like.
+    const slug16 = (s: string) => decodeURIComponent(s).toLowerCase().replace(/[\s_]+/g, '-');
+    check(
+      'Step 16a: DataModel dependency keeps its full configuration name',
+      Boolean(ownerHint16) && slug16(dmDl16.syntheticPath).includes(slug16(ownerHint16!)),
+      ownerHint16
+        ? `"${ownerHint16}" (payload alone would have said "${payloadName16}")`
+        : 'referencing row exposes no ownerDataModelName',
+    );
+
+    // ── 16b. The exact-match listing upgrade must not grab a sibling ──
+    const listingRows16 = [...components, ...rootComponents].filter(c => c.componentType === 'DataModel');
+    const lower16 = (payloadName16 ?? '').toLowerCase();
+    const exactMatch16 = lower16
+      ? listingRows16.find(m => (m.configurationName ?? '').toLowerCase() === lower16)
+      : undefined;
+    const prefixMatches16 = lower16
+      ? listingRows16.filter(m => (m.configurationName ?? '').toLowerCase().startsWith(`${lower16} `))
+      : [];
+    console.log(`  16b. DataModel rows in listing: ${listingRows16.length}` +
+      (listingRows16.length > 0 ? ` e.g. ${listingRows16.slice(0, 5).map(r => `"${r.configurationName}"`).join(', ')}` : ''));
+    console.log(`       exact match for "${payloadName16}": ${exactMatch16?.configurationName ?? '(none)'}`);
+    console.log(`       prefix matches (rejected): ${prefixMatches16.map(r => `"${r.configurationName}"`).join(', ') || '(none)'}`);
+    check(
+      'Step 16b: payload name alone never identifies the configuration',
+      !exactMatch16,
+      exactMatch16
+        ? `"${payloadName16}" happens to be a listing row`
+        : `prefix matching would have picked ${prefixMatches16.map(r => `"${r.configurationName}"`).join(', ') || '(nothing)'}`,
+    );
+
+    // ── 16c. How many mapping definitions come back ──
+    const dmParsed16 = parseERConfiguration(dmDl16.xml, 'step16-dm.xml');
+    const dmModel16 = dmParsed16.content.kind === ERComponentKind.DataModel
+      ? dmParsed16.content.version.model
+      : undefined;
+    const rootContainers16 = (dmModel16?.containers ?? []).filter(c => c.isRoot).map(c => c.name);
+    const allContainers16 = (dmModel16?.containers ?? []).map(c => c.name);
+    console.log(`  16c. DataModel containers: ${allContainers16.length} (${rootContainers16.length} root)`);
+    console.log(`       root descriptors: ${rootContainers16.slice(0, 12).join(', ') || '(none)'}`);
+
+    const descriptors16 = rootContainers16.length > 0 ? rootContainers16 : allContainers16;
+    const mappingDl16 = await downloadConfigXml(transport, conn, token, {
+      solutionName: targetFmt16.solutionName,
+      configurationName: `${targetFmt16.solutionName} mapping`,
+      componentType: 'ModelMapping',
+      parentDataModelGuid: dmGuid16,
+      descriptorNameCandidates: descriptors16,
+      hasContent: true,
+    });
+    const definitions16 = [...mappingDl16.xml.matchAll(/<ERModelMapping\b[^>]*?\sName="([^"]*)"/g)].map(m => m[1]);
+    console.log(`       merged download definitions (${definitions16.length}): ${definitions16.join(' | ') || '(none)'}`);
+
+    // Per-descriptor probe — shows which descriptors F&O actually answers for.
+    console.log('       per-descriptor probe:');
+    const perDescriptor16 = new Map<string, string>();
+    for (const descriptor of descriptors16.slice(0, 12)) {
+      try {
+        const raw16 = await callErService<unknown>(
+          transport, conn, token, ER_SERVICES.configurationStorage, 'GetModelMappingByID',
+          {
+            _mappingGuid: '00000000-0000-0000-0000-000000000000',
+            _dataModelGuid: dmGuid16,
+            _dataContainerDescriptorName: descriptor,
+          },
+        );
+        const asText16 = JSON.stringify(raw16 ?? '');
+        const name16 = /Name=\\?"([^"\\]*)\\?"/.exec(asText16)?.[1];
+        const hit16 = asText16.includes('ERModelMapping');
+        if (hit16 && name16) perDescriptor16.set(descriptor, name16);
+        console.log(`         "${descriptor.padEnd(28)}" → ${hit16 ? `✓ "${name16 ?? '?'}"` : '✗ empty'}`);
+      } catch (e16) {
+        console.log(`         "${descriptor.padEnd(28)}" → ✗ ${e16 instanceof Error ? e16.message.slice(0, 80) : e16}`);
+      }
+    }
+    const distinct16 = new Set(perDescriptor16.values());
+    check(
+      'Step 16c: more than one mapping definition is reachable',
+      definitions16.length > 1 || distinct16.size > 1,
+      `merged=${definitions16.length} distinct-per-descriptor=${distinct16.size}`,
+    );
+  } catch (err16) {
+    console.log(`  ⚠ Step 16 failed: ${err16 instanceof Error ? err16.message.slice(0, 200) : err16}`);
   }
   console.log();
 
