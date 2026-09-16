@@ -87,6 +87,32 @@ describe('parseERConfiguration', () => {
     expect(config.solutionVersion.solution.name).toBe('Invoice format');
   });
 
+  it('keeps the bare ERModelMapping when sibling definitions were spliced in', () => {
+    // `GetModelMappingByID` answers with a bare `ERModelMapping` root and only
+    // ever carries the definition the requested descriptor resolved to, so
+    // fno-client splices the siblings it probed in as `ERModelMappingVersion`
+    // nodes. The bare root used to be skipped as soon as a version node
+    // existed — silently dropping the very definition F&O resolved and leaving
+    // the workspace with one definition again.
+    const definition = (id: string, name: string, descriptor: string) =>
+      `<ERModelMapping ID.="{${id}}" Name="${name}" DataContainerDescriptor="${descriptor}" Model="{M}">` +
+      `<Datasource><ERModelDefinition ID.="{DS-${id}}" Name="Invoice" /></Datasource>` +
+      `</ERModelMapping>`;
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<ErFnoBundle Name="Invoice model mapping" Version="395">
+  <ERModelMappingVersion DateTime="" Description="" Number="0" ID.="{00000000-0000-0000-0000-000000000000},0">
+    <Mapping>${definition('MM-PROJ', 'Project Invoice', 'InvoiceProject')}</Mapping>
+  </ERModelMappingVersion>
+  ${definition('MM-CUST', 'Customer Invoice', 'InvoiceCustomer')}
+</ErFnoBundle>`;
+    const config = parseERConfiguration(xml, 'merged-mapping.xml');
+    if (config.content.kind !== 'ModelMapping') throw new Error('Expected model mapping content');
+    const descriptors = (config.content.version.mappings ?? []).map(m => m.dataContainerDescriptor);
+    expect(descriptors).toEqual(expect.arrayContaining(['InvoiceCustomer', 'InvoiceProject']));
+    // The definition F&O resolved stays primary — it carries the real metadata.
+    expect(config.content.version.mapping.dataContainerDescriptor).toBe('InvoiceCustomer');
+  });
+
   it('names a derived configuration after the listing hint, not the inherited base name', () => {
     // A DERIVED ER configuration inherits the base's content verbatim, so
     // `GetEffectiveFormatMappingByID` answers with the *effective* payload —

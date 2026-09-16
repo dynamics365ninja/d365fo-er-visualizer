@@ -262,14 +262,24 @@ function wrapBareContent(doc: Record<string, unknown>): Record<string, unknown> 
       Model: { ERDataModel: doc['ERDataModel'] },
     };
   }
-  if (!contents['ERModelMappingVersion'] && doc['ERModelMapping']) {
-    contents['ERModelMappingVersion'] = {
+  // `GetModelMappingByID` answers with a bare `ERModelMapping` root. When the
+  // download also spliced in sibling definitions (as `ERModelMappingVersion`
+  // nodes harvested from the other descriptors), both halves must survive:
+  // skipping the bare root because a version node already exists silently
+  // dropped the very definition F&O resolved. Append it last so
+  // `selectVersionNode` still treats it as the primary one.
+  if (doc['ERModelMapping']) {
+    const bareMappingVersion = {
       '@_DateTime': '',
       '@_Description': '',
       '@_Number': '0',
       '@_ID.': '00000000-0000-0000-0000-000000000000,0',
       Mapping: { ERModelMapping: doc['ERModelMapping'] },
     };
+    const existing = contents['ERModelMappingVersion'];
+    contents['ERModelMappingVersion'] = existing
+      ? [...(Array.isArray(existing) ? existing : [existing]), bareMappingVersion]
+      : bareMappingVersion;
   }
 
   if (Object.keys(contents).length === 0) return null;

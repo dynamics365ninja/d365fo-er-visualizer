@@ -670,6 +670,45 @@ describe('downloadConfigXml', () => {
     expect(result.xml).toContain('{MM-PROJ}');
   });
 
+  it('merges extra definitions inside an existing ErFnoBundle instead of nesting one', async () => {
+    // A response that ships several fragments (mapping + data model) arrives
+    // already wrapped in an ErFnoBundle. Prefixing the extra definitions left
+    // that bundle as a sibling, so `injectNameHint` wrapped everything a second
+    // time — and a nested bundle is opaque to the parser, which dropped the
+    // definition F&O actually resolved along with the model fragment.
+    const op = 'GetModelMappingByID';
+    const primary =
+      '<ErFnoBundle><ERDataModel ID.="{DM}" Name="Invoice" />' +
+      '<ERModelMapping ID.="{MM-CUST}" Name="Customer Invoice"></ERModelMapping></ErFnoBundle>';
+    const { transport } = makeTransport({
+      post: (_url, body) => {
+        const b = body as Record<string, unknown>;
+        const descriptor = String(b._dataContainerDescriptorName ?? '');
+        if (descriptor === 'InvoiceCustomer') return { [`${op}Result`]: primary };
+        if (descriptor === 'InvoiceProject') {
+          return { [`${op}Result`]: '<ERModelMapping ID.="{MM-PROJ}" Name="Project Invoice"></ERModelMapping>' };
+        }
+        return { [`${op}Result`]: '' };
+      },
+    });
+    const result = await downloadConfigXml(transport, conn, 'tok', {
+      ...baseComponent,
+      configurationGuid: undefined,
+      componentType: 'ModelMapping',
+      parentDataModelGuid: 'dm-1',
+      descriptorNameCandidates: ['InvoiceCustomer', 'InvoiceProject'],
+      descriptorNamesExclusive: true,
+    });
+    expect(result.xml.match(/<ErFnoBundle\b/g)).toHaveLength(1);
+    expect(result.xml).toContain('{MM-CUST}');
+    expect(result.xml).toContain('{MM-PROJ}');
+    // The data model fragment of the original bundle must survive the merge.
+    expect(result.xml).toContain('<ERDataModel ID.="{DM}"');
+    // The definition F&O resolved stays last — `selectVersionNode` treats the
+    // last node as the primary one.
+    expect(result.xml.indexOf('{MM-PROJ}')).toBeLessThan(result.xml.indexOf('{MM-CUST}'));
+  });
+
   it('does not duplicate a definition another descriptor resolves to', async () => {
     const op = 'GetModelMappingByID';
     const same = '<ERModelMapping ID.="{MM-ONE}" Name="Only"></ERModelMapping>';
