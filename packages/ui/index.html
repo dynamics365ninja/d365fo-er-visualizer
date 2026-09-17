@@ -22,11 +22,14 @@
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <!-- Safari draws no SVG favicon at all, so the mark needs a raster fallback.
        `alternate icon` keeps the SVG first for every engine that can render it
-       and leaves these to the ones that cannot. They are rendered from
-       favicon.svg in its light scheme: a PNG cannot follow the OS theme, and
-       those hues stay legible on a light and a dark tab strip alike. -->
-  <link rel="alternate icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
-  <link rel="alternate icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+       and leaves this one to the engines that cannot. .ico rather than a PNG
+       because it also answers the bare /favicon.ico that feed readers, chat
+       unfurls and bookmark managers request without reading any markup, and it
+       carries 16/32/48 in one file so each surface gets a native size.
+       Rendered from favicon.svg in its light scheme: a raster icon cannot
+       follow the OS theme, and those hues read on a light and a dark tab
+       strip alike. -->
+  <link rel="alternate icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="/favicon.ico" />
   <!-- Root-relative so Vite rewrites them with the configured base (./ for
        Electron's file:// load, /app/ for the web deployment). -->
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
