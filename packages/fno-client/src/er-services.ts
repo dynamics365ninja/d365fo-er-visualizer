@@ -831,10 +831,7 @@ export async function downloadConfigXml(
   let lastErr: FnoHttpError | null = null;
   let successBody: Record<string, unknown> | null = null;
 
-  let successIndex = -1;
-
-  for (let attIndex = 0; attIndex < attempts.length; attIndex += 1) {
-    const att = attempts[attIndex];
+  for (const att of attempts) {
     if (available && !available.has(att.operation)) continue;
     try {
       const attRaw = await callErService<unknown>(
@@ -867,7 +864,6 @@ export async function downloadConfigXml(
       operation = att.operation;
       extractedXml = candidateXml;
       successBody = att.body;
-      successIndex = attIndex;
       success = true;
       break;
     } catch (err) {
@@ -957,14 +953,13 @@ export async function downloadConfigXml(
 
   // A ModelMapping configuration holds one ERModelMapping *definition* per
   // DataContainerDescriptor, but `GetModelMappingByID` only ever answers with
-  // the single definition the requested GUID / descriptor resolves to. Probe
-  // the remaining descriptor candidates and merge whatever comes back, so the
-  // workspace shows every definition instead of just the one the selected
-  // format happened to bind to.
+  // the single definition the requested GUID / descriptor resolves to. When the
+  // caller vouches that the model's other definitions are ours
+  // (`siblingDescriptorNames`), probe those and merge whatever comes back.
   const extraDefinitions =
     component.componentType === 'ModelMapping' && operation === 'GetModelMappingByID'
       ? await collectExtraMappingDefinitions(
-          transport, conn, token, component, attempts, successIndex, primaryXml, signal,
+          transport, conn, token, component, successBody ?? {}, primaryXml, signal,
         )
       : [];
   const xml = extraDefinitions.length > 0
@@ -1114,8 +1109,15 @@ function mappingDefinitionIds(xml: string): Set<string> {
 }
 
 /**
- * Re-run the untried descriptor variants of `GetModelMappingByID` and return the
- * mapping definitions the primary answer didn't already contain.
+ * Probe the caller's `siblingDescriptorNames` with `GetModelMappingByID` and
+ * return the mapping definitions the primary answer didn't already contain.
+ *
+ * Opt-in only: a descriptor lookup answers with whichever ModelMapping
+ * configuration of the data model holds a definition for that container, and
+ * the payload never says which configuration that was. Sweeping the model's
+ * containers on a model with several mapping configurations (Invoice model has
+ * twenty) therefore pulled in definitions of unrelated mappings. Only the
+ * caller can tell whether every definition of the model is ours.
  *
  * Failures are swallowed: the extra definitions are a bonus, never a reason to
  * fail a download that already succeeded.
@@ -1125,53 +1127,35 @@ async function collectExtraMappingDefinitions(
   conn: FnoConnection,
   token: string,
   component: ErConfigSummary,
-  attempts: { operation: string; body: Record<string, unknown> }[],
-  successIndex: number,
+  successBody: Record<string, unknown>,
   primaryXml: string,
   signal?: AbortSignal,
 ): Promise<string[]> {
+  const siblings = component.siblingDescriptorNames ?? [];
+  // The direct-GUID path resolves with a zero data model GUID — probe the
+  // caller's model then.
+  const resolvedDmGuid = successBody._dataModelGuid;
+  const dmGuid = typeof resolvedDmGuid === 'string' && resolvedDmGuid && resolvedDmGuid !== ZERO_GUID
+    ? resolvedDmGuid
+    : component.parentDataModelGuid ?? component.parentDataModelRevisionGuid;
+  if (siblings.length === 0 || !dmGuid) return [];
+
   const knownIds = mappingDefinitionIds(primaryXml);
   const seenDescriptors = new Set<string>();
-  const successBody = attempts[successIndex]?.body ?? {};
   const successDescriptor = successBody._dataContainerDescriptorName;
   if (typeof successDescriptor === 'string') seenDescriptors.add(successDescriptor);
 
-  // Collect the descriptor variants worth probing before issuing any request,
-  // so the cap counts distinct descriptors rather than positions in `attempts`
-  // (which lists every descriptor once per data model GUID variant).
   const probeList: { descriptor: string; body: Record<string, unknown>; operation: string }[] = [];
-  for (let i = 0; i < attempts.length && probeList.length < MAX_EXTRA_MAPPING_PROBES; i += 1) {
-    if (i === successIndex) continue;
-    const att = attempts[i];
-    if (att.operation !== 'GetModelMappingByID') continue;
-    if (att.body._mappingGuid !== ZERO_GUID) continue;
-    const descriptor = att.body._dataContainerDescriptorName;
-    // The empty descriptor resolves to the model's default mapping, which is
-    // what the primary answer already is in the overwhelming majority of cases.
-    if (typeof descriptor !== 'string' || descriptor.length === 0) continue;
-    if (seenDescriptors.has(descriptor)) continue;
-    seenDescriptors.add(descriptor);
-    probeList.push({ descriptor, body: att.body, operation: att.operation });
-  }
-
-  // Callers that pinned the download to one exact descriptor have no other
-  // attempts to reuse — their siblings are listed separately, so the resolved
-  // definition stays the one they asked for while the rest is still collected.
-  const dmGuid = successBody._dataModelGuid
-    ?? component.parentDataModelGuid
-    ?? component.parentDataModelRevisionGuid;
-  if (dmGuid) {
-    for (const descriptor of component.siblingDescriptorNames ?? []) {
-      if (probeList.length >= MAX_EXTRA_MAPPING_PROBES) break;
-      const name = descriptor.trim();
-      if (!name || seenDescriptors.has(name)) continue;
-      seenDescriptors.add(name);
-      probeList.push({
-        descriptor: name,
-        operation: 'GetModelMappingByID',
-        body: { _mappingGuid: ZERO_GUID, _dataModelGuid: dmGuid, _dataContainerDescriptorName: name },
-      });
-    }
+  for (const descriptor of siblings) {
+    if (probeList.length >= MAX_EXTRA_MAPPING_PROBES) break;
+    const name = descriptor.trim();
+    if (!name || seenDescriptors.has(name)) continue;
+    seenDescriptors.add(name);
+    probeList.push({
+      descriptor: name,
+      operation: 'GetModelMappingByID',
+      body: { _mappingGuid: ZERO_GUID, _dataModelGuid: dmGuid, _dataContainerDescriptorName: name },
+    });
   }
 
   const payloads: string[] = [];

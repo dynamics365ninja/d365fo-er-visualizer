@@ -197,10 +197,13 @@ export interface ErConfigSummary {
    * definitions — never to resolve the download itself.
    *
    * A ModelMapping configuration holds one definition per DataContainerDescriptor,
-   * but `GetModelMappingByID` answers with a single one. When the caller knows
-   * the exact descriptor it wants (`descriptorNamesExclusive`), the download must
-   * still resolve to that definition — yet the workspace should show the siblings
-   * too. List the model's remaining root containers here to get both.
+   * but `GetModelMappingByID` answers with a single one. List the model's root
+   * containers here to merge the other definitions into the download.
+   *
+   * Only pass it when every definition of the data model belongs to this
+   * configuration: a descriptor lookup answers with *any* mapping configuration
+   * of the model and the payload does not say which. Omitted, the download
+   * carries just the definition it resolved to.
    */
   siblingDescriptorNames?: string[];
 }

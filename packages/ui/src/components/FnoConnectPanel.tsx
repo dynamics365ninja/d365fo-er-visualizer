@@ -1816,6 +1816,14 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         /** ERSolution GUID of the parent DataModel from the listing's Base field. */
         referencedModelGuid?: string;
       }[]>();
+      /**
+       * ModelMapping configurations listed under each DataModel: every name, and
+       * the family roots (a mapping derived from another listed mapping belongs
+       * to that family). A descriptor lookup answers with whichever family holds
+       * a definition for the container and never says which one it was, so the
+       * model's other definitions can only be merged when there is one family.
+       */
+      const mappingFamiliesByDmName = new Map<string, { names: Set<string>; roots: Set<string> }>();
 
       const mappingListingScanTask = async () => {
         // Enumerate ModelMapping siblings for loaded DataModels.
@@ -1931,6 +1939,16 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           // (and vice versa). The mapping's model must match the format's model.
           const childOwnerDm = child.ownerDataModelName ?? owningDmName;
           if (!dmNamesToScan.has(childOwnerDm)) continue;
+          {
+            const families = mappingFamiliesByDmName.get(owningDmName)
+              ?? { names: new Set<string>(), roots: new Set<string>() };
+            // The listing is depth-first, so a base mapping precedes its derivations.
+            if (!child.parentConfigName || !families.names.has(child.parentConfigName)) {
+              families.roots.add(child.configurationName);
+            }
+            families.names.add(child.configurationName);
+            mappingFamiliesByDmName.set(owningDmName, families);
+          }
           console.debug('[fno-ui] mapping branch found', {
             mappingName: child.configurationName, owningDmName, childOwnerDm,
             hasGuid: !!(child.revisionGuid || child.configurationGuid),
@@ -2551,6 +2569,17 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           ...(formatDescriptorsByDmGuid.get('') ?? []),
         ]),
       ];
+      /**
+       * Root containers to merge the model's other mapping definitions from —
+       * only when the listing shows a single mapping family for the model, i.e.
+       * when every definition F&O can answer with belongs to the downloaded one.
+       */
+      const siblingDescriptorsFor = (dm: DmSynthCandidate, listedAs?: string): string[] | undefined => {
+        const families = [listedAs, dm.solutionName, dm.name]
+          .map(name => (name ? mappingFamiliesByDmName.get(name) : undefined))
+          .find(Boolean);
+        return families?.roots.size === 1 ? dm.descriptorNames : undefined;
+      };
       console.debug('[fno-ui] format-declared descriptors', [...formatDescriptorsByDmGuid]);
 
       const synthQueue: { synth: ErConfigSummary; dmGuid: string; label: string }[] = [];
@@ -2638,6 +2667,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               parentDataModelGuid: ownerDm.guid,
               parentDataModelRevisionGuid: ownerDm.solutionGuid,
               descriptorNameCandidates: descriptors,
+              siblingDescriptorNames: siblingDescriptorsFor(ownerDm, dmName),
               hasContent: true,
             },
             dmGuid: ownerDm.guid,
@@ -2749,6 +2779,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             parentDataModelGuid: dm.guid,
             parentDataModelRevisionGuid: dm.solutionGuid,
             descriptorNameCandidates: [...formatDescriptorsFor(dm.guid), ...dm.descriptorNames],
+            siblingDescriptorNames: siblingDescriptorsFor(dm),
             hasContent: true,
           },
           dmGuid: dm.guid,
@@ -2833,10 +2864,10 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               parentDataModelRevisionGuid: dm.solutionGuid,
               descriptorNameCandidates: [descriptor],
               descriptorNamesExclusive: true,
-              // Resolve exactly this descriptor, but still collect the model's
-              // other definitions — a mapping configuration holds one per root
-              // container and the workspace should show all of them.
-              siblingDescriptorNames: dm.descriptorNames,
+              // Resolve exactly this descriptor. The model's other definitions
+              // are merged only when they can all belong to the same mapping —
+              // otherwise they come from unrelated mapping configurations.
+              siblingDescriptorNames: siblingDescriptorsFor(dm),
               hasContent: true,
             },
             recordDmGuid: dm.guid,

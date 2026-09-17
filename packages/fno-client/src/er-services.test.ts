@@ -607,7 +607,7 @@ describe('downloadConfigXml', () => {
     expect((posts[0].body as Record<string, unknown>)._mappingGuid).toBe('cfg-1');
   });
 
-  it('collects every mapping definition, not just the one the GUID resolved to', async () => {
+  it('collects every sibling definition, not just the one the GUID resolved to', async () => {
     // F&O answers `GetModelMappingByID` with a single ERModelMapping — the one
     // the mapping GUID / descriptor resolves to. Sibling definitions of the same
     // configuration are only reachable via their own descriptor name.
@@ -632,6 +632,7 @@ describe('downloadConfigXml', () => {
       parentDataModelGuid: 'dm-1',
       descriptorNameCandidates: ['SalesInvoice', 'ProjInvoice'],
       descriptorNamesExclusive: true,
+      siblingDescriptorNames: ['SalesInvoice', 'ProjInvoice'],
     });
     expect(result.xml).toContain('{MM-SALES}');
     expect(result.xml).toContain('{MM-PROJ}');
@@ -663,8 +664,9 @@ describe('downloadConfigXml', () => {
       configurationGuid: undefined,
       componentType: 'ModelMapping',
       parentDataModelGuid: 'dm-1',
-      descriptorNameCandidates: [...empties, 'InvoiceCustomer', 'InvoiceProject'],
+      descriptorNameCandidates: ['InvoiceCustomer'],
       descriptorNamesExclusive: true,
+      siblingDescriptorNames: [...empties, 'InvoiceCustomer', 'InvoiceProject'],
     });
     expect(result.xml).toContain('{MM-CUST}');
     expect(result.xml).toContain('{MM-PROJ}');
@@ -696,8 +698,9 @@ describe('downloadConfigXml', () => {
       configurationGuid: undefined,
       componentType: 'ModelMapping',
       parentDataModelGuid: 'dm-1',
-      descriptorNameCandidates: ['InvoiceCustomer', 'InvoiceProject'],
+      descriptorNameCandidates: ['InvoiceCustomer'],
       descriptorNamesExclusive: true,
+      siblingDescriptorNames: ['InvoiceCustomer', 'InvoiceProject'],
     });
     expect(result.xml.match(/<ErFnoBundle\b/g)).toHaveLength(1);
     expect(result.xml).toContain('{MM-CUST}');
@@ -753,10 +756,68 @@ describe('downloadConfigXml', () => {
       ...baseComponent,
       componentType: 'ModelMapping',
       parentDataModelGuid: 'dm-1',
-      descriptorNameCandidates: ['A', 'B'],
+      descriptorNameCandidates: ['A'],
       descriptorNamesExclusive: true,
+      siblingDescriptorNames: ['A', 'B'],
     });
     expect(result.xml.match(/\{MM-ONE\}/g)).toHaveLength(1);
+  });
+
+  it('keeps definitions of other mapping configurations out without siblingDescriptorNames', async () => {
+    // A descriptor lookup answers with whichever mapping configuration of the
+    // model covers that container — on Invoice model "Self invoice model
+    // mapping", "Packing slip model mapping", … — and the payload never says
+    // which. The heuristic descriptor candidates must not become a sweep.
+    const op = 'GetModelMappingByID';
+    const byDescriptor: Record<string, string> = {
+      SalesInvoice: '<ERModelMapping ID.="{MM-SALES}" Name="Sales invoice"></ERModelMapping>',
+      EInvoiceVendor: '<ERModelMapping ID.="{MM-SELF}" Name="Self Invoice"></ERModelMapping>',
+      PackingSlipCustomer: '<ERModelMapping ID.="{MM-PACK}" Name="Customer Packing slip"></ERModelMapping>',
+    };
+    const { transport, posts } = makeTransport({
+      post: (_url, body) => {
+        const b = body as Record<string, unknown>;
+        return { [`${op}Result`]: byDescriptor[String(b._dataContainerDescriptorName ?? '')] ?? '' };
+      },
+    });
+    const result = await downloadConfigXml(transport, conn, 'tok', {
+      ...baseComponent,
+      configurationGuid: undefined,
+      componentType: 'ModelMapping',
+      parentDataModelGuid: 'dm-1',
+      descriptorNameCandidates: ['SalesInvoice', 'EInvoiceVendor', 'PackingSlipCustomer'],
+    });
+    expect(result.xml).toContain('{MM-SALES}');
+    expect(result.xml).not.toContain('{MM-SELF}');
+    expect(result.xml).not.toContain('{MM-PACK}');
+    const descriptorProbes = posts.filter(
+      p => (p.body as Record<string, unknown>)._dataContainerDescriptorName,
+    );
+    expect(descriptorProbes).toHaveLength(1);
+  });
+
+  it('probes siblings under the caller model when the mapping resolved by GUID', async () => {
+    const op = 'GetModelMappingByID';
+    const { transport, posts } = makeTransport({
+      post: (_url, body) => {
+        const b = body as Record<string, unknown>;
+        if (b._mappingGuid !== '00000000-0000-0000-0000-000000000000') {
+          return { [`${op}Result`]: '<ERModelMapping ID.="{MM-A}" Name="A"></ERModelMapping>' };
+        }
+        return { [`${op}Result`]: '<ERModelMapping ID.="{MM-B}" Name="B"></ERModelMapping>' };
+      },
+    });
+    const result = await downloadConfigXml(transport, conn, 'tok', {
+      ...baseComponent,
+      componentType: 'ModelMapping',
+      parentDataModelGuid: 'dm-1',
+      siblingDescriptorNames: ['B'],
+    });
+    expect(result.xml).toContain('{MM-B}');
+    const siblingProbe = posts.find(
+      p => (p.body as Record<string, unknown>)._dataContainerDescriptorName === 'B',
+    );
+    expect((siblingProbe?.body as Record<string, unknown>)._dataModelGuid).toBe('dm-1');
   });
 
   it('names a GUID-only dependency after the payload instead of the placeholder', async () => {
