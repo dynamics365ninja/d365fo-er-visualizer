@@ -20,6 +20,13 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: http://localhost:5173 https://login.microsoftonline.com https://login.microsoft.com https://login.windows.net https://*.dynamics.com https://*.operations.dynamics.com https://*.cloudax.dynamics.com https://*.sandbox.operations.dynamics.com https://*.sandbox.ax.dynamics.com https://*.axcloud.dynamics.com; frame-src 'self' https://login.microsoftonline.com https://login.microsoft.com; form-action 'self' https://login.microsoftonline.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none';" />
   <title>D365FO ER Visualizer</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <!-- Safari draws no SVG favicon at all, so the mark needs a raster fallback.
+       `alternate icon` keeps the SVG first for every engine that can render it
+       and leaves these to the ones that cannot. They are rendered from
+       favicon.svg in its light scheme: a PNG cannot follow the OS theme, and
+       those hues stay legible on a light and a dark tab strip alike. -->
+  <link rel="alternate icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="alternate icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
   <!-- Root-relative so Vite rewrites them with the configured base (./ for
        Electron's file:// load, /app/ for the web deployment). -->
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />

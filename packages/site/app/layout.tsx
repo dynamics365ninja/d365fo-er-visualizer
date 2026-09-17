@@ -71,8 +71,16 @@ export const metadata: Metadata = {
     follow: true,
     googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1 },
   },
+  /* Safari draws no SVG favicon, so the mark needs a raster fallback.
+     `alternate icon` keeps the SVG first for every engine that can render it.
+     The PNGs are rendered from favicon.svg in its light scheme — a PNG cannot
+     follow the OS theme, and those hues read on a light and a dark tab alike. */
   icons: {
-    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon-32.png', type: 'image/png', sizes: '32x32', rel: 'alternate icon' },
+      { url: '/favicon-16.png', type: 'image/png', sizes: '16x16', rel: 'alternate icon' },
+    ],
     apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
   },
   category: 'technology',
