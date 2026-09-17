@@ -1,9 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="10 9 46 46" role="img" aria-labelledby="title desc">
   <title id="title">D365FO ER Visualizer favicon</title>
   <desc id="desc">The letters ER in the model, mapping and format gradient of the app's wordmark.</desc>
-  <!-- No tile, so it sits on any tab colour. The hues are the --er-model,
-       --er-mapping and --er-format tokens of the matching theme. The PNG
-       icons keep a dark tile, because home screens need an opaque one. -->
+  <!-- No tile, so it sits on any tab colour. The hues are the er-model,
+       er-mapping and er-format tokens of the matching theme. The PNG
+       icons keep a dark tile, because home screens need an opaque one.
+
+       Write the token names without their leading dashes: XML forbids a
+       double hyphen inside a comment, and a favicon that fails to parse is
+       not drawn at all. -->
   <style>
     .model { stop-color: #6d5ce7; }
     .mapping { stop-color: #a3308a; }
