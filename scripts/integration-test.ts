@@ -3013,6 +3013,7 @@ async function main(): Promise<void> {
       componentType: 'ModelMapping',
       parentDataModelGuid: dmGuid16,
       descriptorNameCandidates: descriptors16,
+      siblingDescriptorNames: descriptors16,
       hasContent: true,
     });
     const definitions16 = [...mappingDl16.xml.matchAll(/<ERModelMapping\b[^>]*?\sName="([^"]*)"/g)].map(m => m[1]);
@@ -3117,6 +3118,16 @@ async function main(): Promise<void> {
         !!soloId16 && pinnedPrimary16?.id === soloId16,
         `solo=${soloParsed16.content.kind === ERComponentKind.ModelMapping
           ? soloParsed16.content.version.mapping.name : '(n/a)'} primary=${pinnedPrimary16?.name ?? '(none)'}`,
+      );
+      // Without `siblingDescriptorNames` nothing is swept in: the model's other
+      // descriptors answer with definitions of unrelated mapping configurations.
+      const soloDefs16 = soloParsed16.content.kind === ERComponentKind.ModelMapping
+        ? (soloParsed16.content.version.mappings ?? [soloParsed16.content.version.mapping])
+        : [];
+      check(
+        'Step 16d: a download without siblings carries only its own definition',
+        soloDefs16.length === 1,
+        `parsed=${soloDefs16.length}`,
       );
     }
   } catch (err16) {
