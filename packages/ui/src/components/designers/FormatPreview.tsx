@@ -75,7 +75,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
   }
 
   if (isPdf && previewRoot === rootElement) {
-    return <div style={{ padding: 16, fontSize: 12, color: 'var(--text-secondary)' }}>📕 {t.pdfNoSourceComponent}</div>;
+    return <div style={{ padding: 16, fontSize: 12, color: 'var(--er-text-muted)' }}>📕 {t.pdfNoSourceComponent}</div>;
   }
 
   const showDelimitedTable = (info.label === 'Text / CSV' || info.label === 'Text') && delimitedPreview !== null;
@@ -94,7 +94,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
     margin: 0,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-all',
-    color: 'var(--text-primary)',
+    color: 'var(--er-text)',
     background: 'var(--bg-secondary)',
     padding: 16,
     borderRadius: 6,
@@ -102,23 +102,23 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
   };
   return (
     <div style={{ padding: 16, overflow: 'auto', height: '100%' }}>
-      <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+      <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--er-text-muted)' }}>
         {direction === ERDirection.Import ? `📥 ${t.excelInput}` : `📤 ${t.excelOutput}`} — {t.previewDescription}
       </div>
       {isPdf && (
-        <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+        <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--er-text-muted)' }}>
           📕 {t.pdfConvertedFrom(info.label)}
         </div>
       )}
       <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{locale === 'cs' ? 'Nevyřešené hodnoty:' : 'Unresolved values:'}</span>
+        <span style={{ fontSize: 11, color: 'var(--er-text-muted)' }}>{locale === 'cs' ? 'Nevyřešené hodnoty:' : 'Unresolved values:'}</span>
         <button
           type="button"
           onClick={() => setPlaceholderMode('sample')}
           style={{
-            border: placeholderMode === 'sample' ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-            background: placeholderMode === 'sample' ? 'color-mix(in srgb, var(--accent) 16%, transparent)' : 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
+            border: placeholderMode === 'sample' ? '1px solid var(--er-accent)' : '1px solid var(--border-color)',
+            background: placeholderMode === 'sample' ? 'color-mix(in srgb, var(--er-accent) 16%, transparent)' : 'var(--bg-secondary)',
+            color: 'var(--er-text)',
             fontSize: 11,
             padding: '3px 8px',
             borderRadius: 6,
@@ -131,9 +131,9 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
           type="button"
           onClick={() => setPlaceholderMode('braces')}
           style={{
-            border: placeholderMode === 'braces' ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-            background: placeholderMode === 'braces' ? 'color-mix(in srgb, var(--accent) 16%, transparent)' : 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
+            border: placeholderMode === 'braces' ? '1px solid var(--er-accent)' : '1px solid var(--border-color)',
+            background: placeholderMode === 'braces' ? 'color-mix(in srgb, var(--er-accent) 16%, transparent)' : 'var(--bg-secondary)',
+            color: 'var(--er-text)',
             fontSize: 11,
             padding: '3px 8px',
             borderRadius: 6,
@@ -146,9 +146,9 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
           type="button"
           onClick={() => setPlaceholderMode('omit')}
           style={{
-            border: placeholderMode === 'omit' ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-            background: placeholderMode === 'omit' ? 'color-mix(in srgb, var(--accent) 16%, transparent)' : 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
+            border: placeholderMode === 'omit' ? '1px solid var(--er-accent)' : '1px solid var(--border-color)',
+            background: placeholderMode === 'omit' ? 'color-mix(in srgb, var(--er-accent) 16%, transparent)' : 'var(--bg-secondary)',
+            color: 'var(--er-text)',
             fontSize: 11,
             padding: '3px 8px',
             borderRadius: 6,
@@ -160,14 +160,14 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
       </div>
       {showDelimitedTable && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{locale === 'cs' ? 'CSV zobrazení:' : 'CSV view:'}</span>
+          <span style={{ fontSize: 11, color: 'var(--er-text-muted)' }}>{locale === 'cs' ? 'CSV zobrazení:' : 'CSV view:'}</span>
           <button
             type="button"
             onClick={() => setCsvFirstRowHeader(v => !v)}
             style={{
-              border: csvFirstRowHeader ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-              background: csvFirstRowHeader ? 'color-mix(in srgb, var(--accent) 16%, transparent)' : 'var(--bg-secondary)',
-              color: 'var(--text-primary)',
+              border: csvFirstRowHeader ? '1px solid var(--er-accent)' : '1px solid var(--border-color)',
+              background: csvFirstRowHeader ? 'color-mix(in srgb, var(--er-accent) 16%, transparent)' : 'var(--bg-secondary)',
+              color: 'var(--er-text)',
               fontSize: 11,
               padding: '3px 8px',
               borderRadius: 6,
@@ -188,7 +188,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
           <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'right', width: 56, padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', fontSize: 11 }}>#</th>
+                <th style={{ textAlign: 'right', width: 56, padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--er-text-muted)', fontSize: 11 }}>#</th>
                 {Array.from({ length: delimitedPreview.columnCount }, (_, i) => (
                   <th
                     key={i}
@@ -196,7 +196,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
                       textAlign: 'left',
                       padding: '6px 8px',
                       borderBottom: '1px solid var(--border-subtle)',
-                      color: 'var(--text-secondary)',
+                      color: 'var(--er-text-muted)',
                       fontSize: 11,
                       fontWeight: 600,
                       whiteSpace: 'nowrap',
@@ -210,7 +210,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
             <tbody>
               {tableRows.map((row, rowIndex) => (
                 <tr key={rowIndex}>
-                  <td style={{ textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', fontSize: 11 }}>{rowIndex + (csvFirstRowHeader ? 2 : 1)}</td>
+                  <td style={{ textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--er-text-muted)', fontSize: 11 }}>{rowIndex + (csvFirstRowHeader ? 2 : 1)}</td>
                   {Array.from({ length: delimitedPreview.columnCount }, (_, colIndex) => (
                     <td
                       key={colIndex}

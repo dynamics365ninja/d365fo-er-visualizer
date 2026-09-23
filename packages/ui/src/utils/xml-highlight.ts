@@ -5,10 +5,10 @@
  * preview's own markup nor anything in the XML can be mistaken for the other.
  */
 
-const PUNCT_COLOR = 'var(--text-secondary)';
-const TAG_COLOR = 'var(--accent)';
-const ATTR_COLOR = 'var(--surface-warning-fg)';
-const VALUE_COLOR = 'var(--surface-success-fg)';
+const PUNCT_COLOR = 'var(--er-text-muted)';
+const TAG_COLOR = 'var(--er-accent)';
+const ATTR_COLOR = 'var(--er-warning)';
+const VALUE_COLOR = 'var(--er-success)';
 
 export function escapeHtml(value: string): string {
   return value

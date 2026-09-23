@@ -442,7 +442,7 @@ function FormatElementFocusTab({ node, configIndex }: { node: any; configIndex: 
     <div className="focused-node-tab">
       <div className="focused-node-tab-body">
         {bindings.length === 0 && childTreeNodes.length === 0 && (
-          <div style={{ padding: 16, color: 'var(--text-secondary)', fontSize: 12 }}>
+          <div style={{ padding: 16, color: 'var(--er-text-muted)', fontSize: 12 }}>
             {t.bindings}: 0
           </div>
         )}

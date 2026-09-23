@@ -199,11 +199,11 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
                   <span style={{
                     marginLeft: 'auto',
                     fontSize: 9,
-                    background: 'var(--surface-info-bg)',
-                    border: '1px solid var(--surface-info-border)',
+                    background: 'var(--er-info-soft)',
+                    border: '1px solid var(--er-info-border)',
                     padding: '1px 5px',
                     borderRadius: 3,
-                    color: 'var(--surface-info-fg)',
+                    color: 'var(--er-info)',
                     fontWeight: 600,
                   }}>{t.modelRootBadge}</span>
                 )}
@@ -211,18 +211,18 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
                   <span style={{
                     marginLeft: 'auto',
                     fontSize: 9,
-                    background: 'var(--surface-warning-bg)',
-                    border: '1px solid var(--surface-warning-border)',
+                    background: 'var(--er-warning-soft)',
+                    border: '1px solid var(--er-warning-border)',
                     padding: '1px 5px',
                     borderRadius: 3,
-                    color: 'var(--surface-warning-fg)',
+                    color: 'var(--er-warning)',
                     fontWeight: 600,
                   }}>{t.modelEnumBadge}</span>
                 )}
                 <span style={{
                   marginLeft: container.isRoot || container.isEnum ? 0 : 'auto',
                   fontSize: 9,
-                  color: 'var(--text-secondary)',
+                  color: 'var(--er-text-muted)',
                   fontWeight: 400,
                 }}>{t.statsFields(container.items.length)}</span>
               </div>
@@ -248,7 +248,7 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
                     </span>
                     {showTechnicalDetails && (
                       <span style={{
-                        color: f.typeDescriptor ? 'var(--surface-info-fg)' : 'var(--syn-field-type)',
+                        color: f.typeDescriptor ? 'var(--er-info)' : 'var(--syn-field-type)',
                         fontSize: 10,
                         fontWeight: f.typeDescriptor ? 600 : 400,
                         flexShrink: 0,
@@ -259,7 +259,7 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
                   </div>
                 ))}
                 {container.items.length > 14 && (
-                  <div style={{ padding: '2px 10px', color: 'var(--text-secondary)', fontSize: 10 }}>
+                  <div style={{ padding: '2px 10px', color: 'var(--er-text-muted)', fontSize: 10 }}>
                     {t.moreFields(container.items.length - 14)}
                   </div>
                 )}
@@ -296,7 +296,7 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
             label: item.name,
             animated: isRecordList,
             style: {
-              stroke: isRecordList ? 'var(--accent-text-success)' : 'var(--syn-edge)',
+              stroke: isRecordList ? 'var(--er-success)' : 'var(--syn-edge)',
               strokeWidth: isRecordList ? 2 : 1,
               strokeDasharray: item.type === 10 ? '5,3' : undefined,
             },

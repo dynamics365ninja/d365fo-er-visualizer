@@ -470,7 +470,7 @@ function ExcelTemplateGrid({
                   minWidth: colWidth(col),
                   padding: '2px 4px',
                   background: highlightArea && col >= highlightArea.startCol && col <= highlightArea.endCol
-                    ? 'color-mix(in srgb, var(--accent) 30%, ' + excelPaper.headerBg + ')'
+                    ? 'color-mix(in srgb, var(--er-accent) 30%, ' + excelPaper.headerBg + ')'
                     : excelPaper.headerBg,
                   color: excelPaper.headerText,
                   fontWeight: 500,
@@ -494,7 +494,7 @@ function ExcelTemplateGrid({
                 <td style={{
                   padding: '1px 4px',
                   background: highlightArea && row >= highlightArea.startRow && row <= highlightArea.endRow
-                    ? 'color-mix(in srgb, var(--accent) 30%, ' + excelPaper.headerBg + ')'
+                    ? 'color-mix(in srgb, var(--er-accent) 30%, ' + excelPaper.headerBg + ')'
                     : excelPaper.headerBg,
                   color: excelPaper.headerText,
                   fontWeight: 500,
@@ -574,7 +574,7 @@ function ExcelTemplateGrid({
                         // The whole named area lights up together, so it is obvious
                         // how far the range under the pointer reaches.
                         boxShadow: highlighted
-                          ? 'inset 0 0 0 1px var(--accent), inset 0 0 0 999px color-mix(in srgb, var(--accent) 16%, transparent)'
+                          ? 'inset 0 0 0 1px var(--er-accent), inset 0 0 0 999px color-mix(in srgb, var(--er-accent) 16%, transparent)'
                           : undefined,
                       }}
                     >
@@ -647,14 +647,14 @@ function ExcelTemplateGrid({
       <div style={{
         padding: '4px 12px',
         fontSize: 10,
-        color: 'var(--text-secondary)',
+        color: 'var(--er-text-muted)',
         borderTop: `1px solid ${excelColors.cellBorder}`,
         background: 'var(--bg-secondary)',
         display: 'flex',
         gap: 12,
         flexShrink: 0,
       }}>
-        <span style={{ color: 'var(--text-secondary)', fontSize: 10 }}>📄 {t.excelTemplateView} · 📊 {t.excelStructureView}</span>
+        <span style={{ color: 'var(--er-text-muted)', fontSize: 10 }}>📄 {t.excelTemplateView} · 📊 {t.excelStructureView}</span>
       </div>
 
       {/* Sheet tabs */}
@@ -680,7 +680,7 @@ function ExcelTemplateGrid({
                 border: 'none',
                 borderTop: i === activeSheet ? `2px solid ${excelColors.sheetTab}` : '2px solid transparent',
                 background: i === activeSheet ? excelColors.cellBg : 'transparent',
-                color: i === activeSheet ? excelColors.sheetTab : 'var(--text-secondary)',
+                color: i === activeSheet ? excelColors.sheetTab : 'var(--er-text-muted)',
                 marginTop: -2,
                 transition: 'all 0.15s',
               }}
@@ -832,22 +832,22 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
   }, []);
 
   if (sheets.length === 0) {
-    return <div style={{ padding: 16, color: 'var(--text-secondary)', fontSize: 12 }}>{t.excelNoSheets}</div>;
+    return <div style={{ padding: 16, color: 'var(--er-text-muted)', fontSize: 12 }}>{t.excelNoSheets}</div>;
   }
 
   // If template mode is active and data is ready, render template view
   if (viewMode === 'template') {
     if (xlsxLoading) {
-      return <div style={{ padding: 24, color: 'var(--text-secondary)', fontSize: 12 }}>{t.excelTemplateLoading}</div>;
+      return <div style={{ padding: 24, color: 'var(--er-text-muted)', fontSize: 12 }}>{t.excelTemplateLoading}</div>;
     }
     if (xlsxError) {
       return (
         <div
-          style={{ padding: 24, color: 'var(--error)', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 8 }}
+          style={{ padding: 24, color: 'var(--er-danger)', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 8 }}
           onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}
         >
           <div>{t.excelTemplateError}: {xlsxError}</div>
-          <div style={{ color: 'var(--text-secondary)' }}>{t.excelTemplateDropHint}</div>
+          <div style={{ color: 'var(--er-text-muted)' }}>{t.excelTemplateDropHint}</div>
         </div>
       );
     }
@@ -884,7 +884,7 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
           background: isDragOver
             ? (dragInvalid ? 'rgba(var(--error-rgb,220,38,38),0.08)' : 'rgba(var(--accent-rgb,3,131,135),0.08)')
             : 'var(--bg-secondary)',
-          border: `2px dashed ${isDragOver ? (dragInvalid ? 'var(--error,#dc2626)' : 'var(--focus-border,#038387)') : 'var(--border-color,#444)'}`,
+          border: `2px dashed ${isDragOver ? (dragInvalid ? 'var(--er-danger)' : 'var(--er-accent)') : 'var(--border-color)'}`,
           borderRadius: 8,
           margin: 16,
           transition: 'background 0.15s, border-color 0.15s',
@@ -893,18 +893,18 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
         }}
       >
         <span style={{ fontSize: 40 }}>{isDragOver ? (dragInvalid ? '🚫' : '📂') : '📄'}</span>
-        <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>
+        <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--er-text)', fontWeight: 600 }}>
           {isDragOver
             ? (dragInvalid ? t.excelTemplateDropInvalid : t.excelTemplateDropActive)
             : t.excelTemplateLoadBtn}
         </div>
         {template?.filename && !isDragOver && (
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono,monospace)' }}>
+          <div style={{ fontSize: 11, color: 'var(--er-text-muted)', fontFamily: 'var(--font-mono,monospace)' }}>
             {template.filename}
           </div>
         )}
         {!isDragOver && (
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center', maxWidth: 320 }}>
+          <div style={{ fontSize: 11, color: 'var(--er-text-muted)', textAlign: 'center', maxWidth: 320 }}>
             {t.excelTemplateDropHint}
           </div>
         )}
@@ -915,7 +915,7 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
           border: '1px solid var(--border-color,#444)',
           borderRadius: 4,
           cursor: 'pointer',
-          color: 'var(--text-secondary)',
+          color: 'var(--er-text-muted)',
           background: 'var(--bg-primary)',
         }}>
           {t.excelTemplateLoadBtn}
@@ -938,7 +938,7 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
         </label>
         <button
           onClick={() => setViewMode('structure')}
-          style={{ fontSize: 11, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+          style={{ fontSize: 11, color: 'var(--er-text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
         >
           {t.excelStructureView}
         </button>
@@ -962,11 +962,11 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
           position: 'absolute', inset: 0, zIndex: 100,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: dragInvalid ? 'rgba(220,38,38,0.12)' : 'rgba(3,131,135,0.12)',
-          border: `3px dashed ${dragInvalid ? '#dc2626' : '#038387'}`,
+          border: `3px dashed ${dragInvalid ? 'var(--er-danger)' : 'var(--er-accent)'}`,
           pointerEvents: 'none',
           borderRadius: 4,
         }}>
-          <span style={{ fontSize: 14, background: 'var(--bg-primary)', padding: '8px 16px', borderRadius: 6, fontWeight: 600, color: dragInvalid ? '#dc2626' : '#038387' }}>
+          <span style={{ fontSize: 14, background: 'var(--bg-primary)', padding: '8px 16px', borderRadius: 6, fontWeight: 600, color: dragInvalid ? 'var(--er-danger)' : 'var(--er-accent)' }}>
             {dragInvalid ? t.excelTemplateDropInvalid : t.excelTemplateDropActive}
           </span>
         </div>
@@ -1181,7 +1181,7 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
                 border: 'none',
                 borderTop: i === activeSheet ? `2px solid ${excelColors.sheetTab}` : '2px solid transparent',
                 background: i === activeSheet ? excelColors.cellBg : 'transparent',
-                color: i === activeSheet ? excelColors.sheetTab : 'var(--text-secondary)',
+                color: i === activeSheet ? excelColors.sheetTab : 'var(--er-text-muted)',
                 marginTop: -2,
                 transition: 'all 0.15s',
               }}

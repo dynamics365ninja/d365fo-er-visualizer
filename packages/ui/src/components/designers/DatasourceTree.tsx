@@ -517,7 +517,7 @@ export const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandl
   const effectiveCollapsedGroups = filterState ? EMPTY_STRING_SET : collapsedGroups;
 
   if (groups.length === 0) {
-    return <div style={{ color: 'var(--text-secondary)', fontSize: 12, padding: 12 }}>{t.noResults}</div>;
+    return <div style={{ color: 'var(--er-text-muted)', fontSize: 12, padding: 12 }}>{t.noResults}</div>;
   }
 
   return (

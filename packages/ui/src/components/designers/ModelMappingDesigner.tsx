@@ -476,7 +476,7 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
       <div className="designer-scroll-pane">
         {view === 'bindings' && (
           bindingTree.length === 0
-            ? <div style={{ color: 'var(--text-secondary)', fontSize: 12, padding: 12 }}>{t.noResults}</div>
+            ? <div style={{ color: 'var(--er-text-muted)', fontSize: 12, padding: 12 }}>{t.noResults}</div>
             : <div className="mm-tree" role="tree">
                 {bindingTree.map(node => (
                   <BindingTreeRows
@@ -502,7 +502,7 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
 
         {view === 'validations' && (
           filteredValidations.length === 0
-            ? <div style={{ color: 'var(--text-secondary)', fontSize: 12, padding: 12 }}>
+            ? <div style={{ color: 'var(--er-text-muted)', fontSize: 12, padding: 12 }}>
                 {validations.length === 0 ? t.mappingNoValidations : t.noResults}
               </div>
             : <div className="mm-validation-list">

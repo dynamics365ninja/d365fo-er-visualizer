@@ -16,11 +16,11 @@ function visibleText(html: string): string {
 describe('highlightXmlTag', () => {
   it('wraps the tag name, attribute name and value once each', () => {
     expect(highlightXmlTag('<Row id="1">')).toBe(
-      '<span style="color:var(--text-secondary)">&lt;</span>' +
-      '<span style="color:var(--accent);font-weight:600">Row</span> ' +
-      '<span style="color:var(--surface-warning-fg)">id</span>=' +
-      '<span style="color:var(--surface-success-fg)">&quot;1&quot;</span>' +
-      '<span style="color:var(--text-secondary)">&gt;</span>',
+      '<span style="color:var(--er-text-muted)">&lt;</span>' +
+      '<span style="color:var(--er-accent);font-weight:600">Row</span> ' +
+      '<span style="color:var(--er-warning)">id</span>=' +
+      '<span style="color:var(--er-success)">&quot;1&quot;</span>' +
+      '<span style="color:var(--er-text-muted)">&gt;</span>',
     );
   });
 
@@ -30,7 +30,7 @@ describe('highlightXmlTag', () => {
     const tag = `<${name} ${name}="${name}">`;
     const html = highlightXmlTag(tag);
     expect(visibleText(html)).toBe(tag);
-    expect(html).toContain(`<span style="color:var(--accent);font-weight:600">${name}</span>`);
+    expect(html).toContain(`<span style="color:var(--er-accent);font-weight:600">${name}</span>`);
   });
 
   it('handles closing, self-closing and declaration tags', () => {
@@ -43,7 +43,7 @@ describe('highlightXmlTag', () => {
     const tag = '<a title="x &amp; y">';
     const html = highlightXmlTag(tag);
     expect(visibleText(html)).toBe(tag);
-    expect(html).toContain('<span style="color:var(--surface-success-fg)">&quot;x &amp;amp; y&quot;</span>');
+    expect(html).toContain('<span style="color:var(--er-success)">&quot;x &amp;amp; y&quot;</span>');
   });
 
   it('never emits markup from the source', () => {

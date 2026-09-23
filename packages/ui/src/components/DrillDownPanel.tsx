@@ -2336,17 +2336,17 @@ function collectEdges(node: TreeExprNode, edges: Array<{ source: string; target:
 // ── ReactFlow custom node ────────────────────────────────────────────────────
 
 const BADGE_COLORS: Record<string, { bg: string; fg: string; border: string }> = {
-  root:    { bg: 'var(--brand-1)', fg: '#fff', border: 'var(--brand-1)' },
-  model:   { bg: 'var(--surface-info-bg)', fg: 'var(--surface-info-fg)', border: 'var(--surface-info-border)' },
-  mapping: { bg: 'var(--surface-warning-bg)', fg: 'var(--surface-warning-fg)', border: 'var(--surface-warning-border)' },
-  ds:      { bg: 'var(--bg-secondary)', fg: 'var(--text-primary)', border: 'var(--border-color)' },
-  table:   { bg: 'var(--surface-success-bg)', fg: 'var(--surface-success-fg)', border: 'var(--surface-success-border)' },
-  enum:    { bg: 'var(--surface-warning-bg)', fg: 'var(--surface-warning-fg)', border: 'var(--surface-warning-border)' },
-  class:   { bg: 'color-mix(in srgb,var(--accent)15%,transparent)', fg: 'var(--accent)', border: 'color-mix(in srgb,var(--accent)40%,transparent)' },
-  calc:    { bg: 'var(--bg-tertiary)', fg: 'var(--text-secondary)', border: 'var(--border-color)' },
-  param:   { bg: 'var(--surface-info-bg)', fg: 'var(--surface-info-fg)', border: 'var(--surface-info-border)' },
-  groupby: { bg: 'var(--bg-tertiary)', fg: 'var(--text-secondary)', border: 'var(--border-color)' },
-  leaf:    { bg: 'var(--surface-success-bg)', fg: 'var(--surface-success-fg)', border: 'var(--surface-success-border)' },
+  root:    { bg: 'var(--er-accent)', fg: 'var(--er-accent-contrast)', border: 'var(--er-accent)' },
+  model:   { bg: 'var(--er-info-soft)', fg: 'var(--er-info)', border: 'var(--er-info-border)' },
+  mapping: { bg: 'var(--er-warning-soft)', fg: 'var(--er-warning)', border: 'var(--er-warning-border)' },
+  ds:      { bg: 'var(--bg-secondary)', fg: 'var(--er-text)', border: 'var(--border-color)' },
+  table:   { bg: 'var(--er-success-soft)', fg: 'var(--er-success)', border: 'var(--er-success-border)' },
+  enum:    { bg: 'var(--er-warning-soft)', fg: 'var(--er-warning)', border: 'var(--er-warning-border)' },
+  class:   { bg: 'color-mix(in srgb,var(--er-accent)15%,transparent)', fg: 'var(--er-accent)', border: 'color-mix(in srgb,var(--er-accent)40%,transparent)' },
+  calc:    { bg: 'var(--bg-tertiary)', fg: 'var(--er-text-muted)', border: 'var(--border-color)' },
+  param:   { bg: 'var(--er-info-soft)', fg: 'var(--er-info)', border: 'var(--er-info-border)' },
+  groupby: { bg: 'var(--bg-tertiary)', fg: 'var(--er-text-muted)', border: 'var(--border-color)' },
+  leaf:    { bg: 'var(--er-success-soft)', fg: 'var(--er-success)', border: 'var(--er-success-border)' },
 };
 
 function badgeIcon(badge: string): React.ReactNode {
@@ -2577,11 +2577,11 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill, i
       target: e.target,
       type: 'smoothstep',
       style: highlightedEdgeIds.has(`${e.source}->${e.target}`)
-        ? { stroke: 'var(--accent)', strokeWidth: 2.2, opacity: 0.95 }
+        ? { stroke: 'var(--er-accent)', strokeWidth: 2.2, opacity: 0.95 }
         : { stroke: 'var(--border-color)', strokeWidth: 1.3, strokeDasharray: '4,3', opacity: 0.45 },
       markerEnd: {
         type: 'arrowclosed' as any,
-        color: highlightedEdgeIds.has(`${e.source}->${e.target}`) ? 'var(--accent)' : 'var(--border-color)',
+        color: highlightedEdgeIds.has(`${e.source}->${e.target}`) ? 'var(--er-accent)' : 'var(--border-color)',
         width: highlightedEdgeIds.has(`${e.source}->${e.target}`) ? 12 : 10,
         height: highlightedEdgeIds.has(`${e.source}->${e.target}`) ? 12 : 10,
       },

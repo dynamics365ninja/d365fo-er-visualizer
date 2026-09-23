@@ -20,28 +20,28 @@ export const formatTypeColorVarMap: Record<string, string> = {
 };
 
 export function getFormatTypeThemeColor(type: string): string {
-  return formatTypeColorVarMap[type] ?? 'var(--text-secondary)';
+  return formatTypeColorVarMap[type] ?? 'var(--er-text-muted)';
 }
 
 export const formatTypeBadgeSurfaceVarMap: Record<string, string> = {
-  File: 'var(--surface-success-bg)',
-  XMLElement: 'var(--surface-info-bg)',
-  XMLAttribute: 'var(--surface-warning-bg)',
-  XMLSequence: 'var(--surface-purple-bg)',
-  String: 'var(--surface-danger-bg)',
-  Numeric: 'var(--surface-success-bg)',
-  DateTime: 'var(--surface-warning-bg)',
-  Base64: 'var(--surface-info-bg)',
-  ExcelFile: 'var(--surface-success-bg)',
-  ExcelSheet: 'var(--surface-info-bg)',
-  ExcelRange: 'var(--surface-warning-bg)',
-  ExcelCell: 'var(--surface-info-bg)',
-  ExcelHeader: 'var(--surface-info-bg)',
-  ExcelFooter: 'var(--surface-info-bg)',
-  TextSequence: 'var(--surface-purple-bg)',
-  TextLine: 'var(--surface-danger-bg)',
-  WordFile: 'var(--surface-info-bg)',
-  PDFFile: 'var(--surface-danger-bg)',
+  File: 'var(--er-success-soft)',
+  XMLElement: 'var(--er-info-soft)',
+  XMLAttribute: 'var(--er-warning-soft)',
+  XMLSequence: 'var(--er-model-soft)',
+  String: 'var(--er-danger-soft)',
+  Numeric: 'var(--er-success-soft)',
+  DateTime: 'var(--er-warning-soft)',
+  Base64: 'var(--er-info-soft)',
+  ExcelFile: 'var(--er-success-soft)',
+  ExcelSheet: 'var(--er-info-soft)',
+  ExcelRange: 'var(--er-warning-soft)',
+  ExcelCell: 'var(--er-info-soft)',
+  ExcelHeader: 'var(--er-info-soft)',
+  ExcelFooter: 'var(--er-info-soft)',
+  TextSequence: 'var(--er-model-soft)',
+  TextLine: 'var(--er-danger-soft)',
+  WordFile: 'var(--er-info-soft)',
+  PDFFile: 'var(--er-danger-soft)',
 };
 
 export function getFormatTypeBadgeSurface(type: string): string {

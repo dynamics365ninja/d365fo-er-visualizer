@@ -19,24 +19,24 @@ export function unwrapConverterRoot(rootElement: ERFormatElement): ERFormatEleme
 
 export function detectFormatType(rootElement: any): FormatTypeInfo {
   const et = rootElement?.elementType ?? '';
-  if (et === 'ExcelFile') return { label: 'Excel', icon: '📊', color: 'var(--surface-success-fg)', bg: 'var(--surface-success-bg)' };
-  if (et === 'WordFile')  return { label: 'Word',  icon: '📝', color: 'var(--surface-info-fg)', bg: 'var(--surface-info-bg)' };
-  if (et === 'PDFFile')   return { label: 'PDF',   icon: '📕', color: 'var(--surface-danger-fg)', bg: 'var(--surface-danger-bg)' };
+  if (et === 'ExcelFile') return { label: 'Excel', icon: '📊', color: 'var(--er-success)', bg: 'var(--er-success-soft)' };
+  if (et === 'WordFile')  return { label: 'Word',  icon: '📝', color: 'var(--er-info)', bg: 'var(--er-info-soft)' };
+  if (et === 'PDFFile')   return { label: 'PDF',   icon: '📕', color: 'var(--er-danger)', bg: 'var(--er-danger-soft)' };
   if (et === 'File' || et === 'XMLElement') {
     // Look at children to determine sub-type
     const children: any[] = rootElement?.children ?? [];
     const childTypes = new Set(children.map((c: any) => c.elementType));
     if (childTypes.has('XMLElement') || et === 'XMLElement') {
-      return { label: 'XML', icon: '🏷️', color: 'var(--surface-info-fg)', bg: 'var(--surface-info-bg)' };
+      return { label: 'XML', icon: '🏷️', color: 'var(--er-info)', bg: 'var(--er-info-soft)' };
     }
     if (childTypes.has('TextSequence') || childTypes.has('TextLine')) {
-      return { label: 'Text / CSV', icon: '📃', color: 'var(--surface-success-fg)', bg: 'var(--surface-success-bg)' };
+      return { label: 'Text / CSV', icon: '📃', color: 'var(--er-success)', bg: 'var(--er-success-soft)' };
     }
   }
   if (et === 'TextSequence' || et === 'TextLine') {
-    return { label: 'Text', icon: '📃', color: 'var(--surface-success-fg)', bg: 'var(--surface-success-bg)' };
+    return { label: 'Text', icon: '📃', color: 'var(--er-success)', bg: 'var(--er-success-soft)' };
   }
-  return { label: et || t.formatTypeFile, icon: '📁', color: 'var(--surface-success-fg)', bg: 'var(--surface-success-bg)' };
+  return { label: et || t.formatTypeFile, icon: '📁', color: 'var(--er-success)', bg: 'var(--er-success-soft)' };
 }
 
 export function FormatTypeBadge({ rootElement }: { rootElement: any }) {
