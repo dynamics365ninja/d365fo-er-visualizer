@@ -9,7 +9,9 @@ export const metadata = docMetadata('troubleshooting');
 
 ### A file will not parse
 
-The landing page lists failed files with the reason. Common causes:
+A notification names the file and the reason (*Failed to load …*); a file without the `.xml`
+extension is listed under **Load errors** on the landing page as *is not an XML file*. Common
+causes:
 
 - **The configuration is derived.** A configuration that inherits from another has no XML of its
   own. Export and load the base configuration.
@@ -17,6 +19,19 @@ The landing page lists failed files with the reason. Common causes:
   exports look similar but are different artifacts.
 - **The export is incomplete.** Re-export from the Electronic reporting workspace and check the
   file is not truncated.
+
+### "… was not loaded — a newer version … is already open"
+
+The workspace holds one version of each configuration, and a newer one is already loaded. Close it
+first — in the Explorer or the [workspace manager](/docs/loading-configurations#the-workspace-manager)
+— if you really want the older version.
+
+### A recent session or configuration will not open
+
+The landing page re-opens recent work from the copy stored in your browser. When that copy is gone
+— site data cleared, or the entry removed from history — the session says the browser no longer has
+its configurations, and a configuration is marked *not stored in the browser*. Open the files again
+from disk or download them from F&amp;O.
 
 ### Everything loads but nothing cross-references
 
@@ -26,34 +41,35 @@ fills them. Load the model mapping and the data model as well — see
 
 ## Tracing
 
-### "Load the ModelMapping file to continue"
+### The trace stops at a **Model path** or an **Unresolved reference** row
 
-The expression resolves to a model path, and no model mapping for that data model is loaded. Load
-the mapping, or ingest it from the environment where the ancestor data models are pulled in
-automatically.
-
-### "Path not found in ModelMapping"
-
-The model path exists in the format but has no binding in the mapping you loaded. Usually a
-version mismatch: the format was built against a different version of the model than the mapping
-you have. Check the configuration versions in the Properties panel with technical view on.
-
-### "Datasource not found in loaded configurations"
-
-The expression names a datasource defined somewhere you have not loaded — frequently an import
-format referenced from a mapping. Load that configuration too.
+Something the chain needs is not in the workspace. A **Model path** row with nothing under it means
+the loaded model mapping has no binding for that path — or no model mapping for that data model is
+loaded at all; with both loaded, it usually means the format was built against a different version
+of the model than the mapping you have (compare the versions in the Properties panel with technical
+view on). An **Unresolved reference** row names a datasource defined in a configuration you have
+not loaded — frequently an import format referenced from a mapping. Load what is missing, or ingest
+it from the environment, where the related data models and mappings are pulled in automatically.
+See [When the chain stops](/docs/expression-drill-down#when-the-chain-stops) for every case.
 
 ### The trace stops at a complex function
 
-Some ER functions combine several sources and cannot resolve to a single one. The workbench shows
-the expression breakdown instead; click the individual references inside it to follow whichever
-branch you care about.
+Some ER functions combine several sources and cannot resolve to a single one. The drill-down shows
+the expression broken into its parts instead; click the individual references inside it to follow
+whichever branch you care about.
+
+### "The path branches too much to show in full"
+
+The drill-down stops building its tree after a certain depth and number of nodes, so a very wide
+expression is cut off — and some sources are then missing from the used-data list too. Click a
+part of the expression to narrow the breakdown to it.
 
 ## Signing in to Finance &amp; Operations
 
-### "Approval required" / "Žádost čeká na vyřízení"
+### "Approval required" / "Žádost čeká na vyřízení" / AADSTS65001
 
-Sign-in stops on a Microsoft page saying an administrator has been notified.
+Sign-in stops on a Microsoft page saying an administrator has been notified, or the connect panel
+reports *AADSTS65001: Sign-in was not consented*.
 
 This is not caused by the permission itself. `CustomService.FullAccess` is a **delegated**,
 user-consentable scope, so the API publisher allows an ordinary user to approve it. The tenant is
@@ -89,12 +105,10 @@ That still takes one administrator action per tenant.
 
 ### The sign-in popup is blocked
 
-Allow popups for the site, or use the [desktop app](/docs/desktop-app), which signs in through a
-loopback listener instead.
-
-On tablets and phones the popup is blocked by default, so the app automatically falls back to a
-full-page redirect: the tab navigates to Microsoft identity and back, and the sign-in resumes on
-its own. Nothing needs to be configured for this.
+Nothing needs to be done. When the browser will not let the popup complete — blocked, never
+opened, or timed out, as is the norm on tablets and phones — the app falls back to a full-page
+redirect: the tab navigates to Microsoft identity and back, the **D365 F&amp;O server** tab opens
+again, and the sign-in resumes on its own. Allowing popups for the site just saves the round trip.
 
 ### "AADSTS50011: the redirect URI … does not match"
 
@@ -103,7 +117,8 @@ ready-made build never hit this — it means the build's own registration is mis
 it is one for whoever hosts the app. See
 [Self-hosting: register the application](/docs/connect-to-fno#self-hosting-register-the-application).
 The connect panel prints the exact value to add in Entra under **Authentication → Add a platform →
-Single-page application**.
+Single-page application**. A *Sign-in failed* message that mentions **CORS** has the same cause and
+the same fix.
 
 It is the plain origin, with no path and no trailing slash, for example
 `https://your-er-visualizer-domain`. Watch out for:
@@ -112,6 +127,27 @@ It is the plain origin, with no path and no trailing slash, for example
   **Single-page application**,
 - a preview deployment, which has its own hostname and needs its own entry,
 - edits made in a different app registration than the one in `VITE_FNO_CLIENT_ID`.
+
+### Other AADSTS codes
+
+The connect panel translates the common Entra codes into a sentence with the fix:
+
+| Code | What it means |
+|---|---|
+| **AADSTS700016** | The client ID built into this build does not exist in your tenant — for a self-hosted copy, set `VITE_FNO_CLIENT_ID` (`FNO_CLIENT_ID` for the desktop app) to your own registration |
+| **AADSTS50020** | The account you picked is not in the tenant the environment runs in — sign in with a work account from that tenant, or an accepted guest account |
+| **AADSTS500011** | The environment URL matches no service principal — check the exact URL, with no trailing slash |
+| **AADSTS50076** / **AADSTS50079** | Multi-factor authentication is required — complete the prompt and try again |
+| **AADSTS54005** / **AADSTS9002313** | The authorization code was already used or is invalid — sign in again |
+| **AADSTS7000218** | Desktop app: the registration does not allow public client flows |
+| **AADSTS9002326** | Desktop app: `http://localhost` is registered as a single-page application instead of under **Mobile and desktop applications** |
+
+### "Could not load the sign-in module"
+
+The sign-in code is downloaded on demand, and that download failed —
+usually because the app was redeployed in the meantime or the network dropped. Reload the page and
+try again. The same cause shows as *Part of the application could not be downloaded* elsewhere in
+the app.
 
 ### "Sign-in failed" mentioning Content Security Policy
 
@@ -144,10 +180,19 @@ The environment rejected the access token and answered with a sign-in redirect. 
 
 ### "Target host not allowed"
 
-The proxy only forwards to F&O environment hosts (`*.operations.dynamics.com` and its regional
-and sandbox forms, `*.cloudax`, `*.axcloud`, `*.sandbox.ax.dynamics.com`) over HTTPS. A private or vanity host for your
-environment will not pass. Use the [desktop app](/docs/desktop-app), which calls the environment
-directly.
+The proxy only forwards to F&amp;O environment hosts (`*.operations.dynamics.com` and its regional
+and sandbox forms, `*.cloudax.dynamics.com`, `*.axcloud.dynamics.com`,
+`*.sandbox.ax.dynamics.com`) over HTTPS on the default port. Use the environment's own
+`dynamics.com` address in the profile — a private or vanity host will not pass. The [desktop
+app](/docs/desktop-app) applies the same rule, and additionally accepts
+`*.cloud.onebox.dynamics.com` for Tier-1 development VMs.
+
+### The environment answers 401 / 403 or 404
+
+A **401** or **403** means your F&amp;O user has no access to the ER services: it needs a role such
+as **Electronic reporting developer** or **Electronic reporting functional consultant**. A **404**
+means the endpoint does not exist on that environment — check the exact environment URL (without a
+path) and that the ER services are available there.
 
 ## Ingestion from an environment
 
@@ -156,16 +201,27 @@ directly.
 Derived configurations have no XML of their own and are reported as skipped. Select their base
 configurations instead.
 
+A configuration marked **Draft** has no completed version, and F&amp;O serves completed versions
+only, so there is nothing to download. Complete the version in F&amp;O (**Reporting configurations →
+Versions → Complete**) and it becomes selectable.
+
 ### "ModelMapping could not be downloaded"
 
 `GetModelMappingByID` returned nothing for that data model — it may not exist in the environment,
 or your account may not have access to it. Format element bindings still resolve through the
 format's own mapping information; the mapping-level trace is what you lose.
 
+### "F&amp;O exposes no id for these models and their mappings"
+
+F&amp;O returned no identifier to request the data model and its mappings with, so they are listed
+as skipped and only the format is downloaded. This is typical of import formats, which do not
+reference the model themselves. The format's element bindings are still available.
+
 ### The load pulled in more than I selected
 
 That is deliberate. Ancestor data models and mappings discovered inside downloaded XML are fetched
-so that bindings resolve end to end.
+so that bindings resolve end to end. In the download dialog they are marked **dependency**, next to
+the ones you **selected**. **Cancel download** stops a download you no longer want.
 
 ## Still stuck?
 

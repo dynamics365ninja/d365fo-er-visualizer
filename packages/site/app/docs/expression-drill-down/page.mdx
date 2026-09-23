@@ -7,89 +7,118 @@ export const metadata = docMetadata('expression-drill-down');
 
 An ER formula rarely tells you where its data comes from. `model.Invoice.Lines.Amount` is a model
 path; the mapping decides what fills it, and that may itself be a calculated field wrapping
-another calculated field. The drill-down workbench walks that chain for you, one level at a time.
+another calculated field. The drill-down walks that whole chain for you, down to the table, enum,
+or class at the end of it.
 
 ## Opening it
 
-Click an expression anywhere it appears — on a format element, on a mapping binding, or in the
-Properties panel. The workbench opens with the expression on the left and its resolution on the
-right.
+One gesture works everywhere: click a formula and the drill-down opens straight away in a dialog.
+That covers formulas on format elements in the **Structure** view, in the format's **Bindings**
+view, on model mapping bindings, and in validation conditions and messages. Clicking a datasource
+name in a **Data Sources** list, or a field in the data model's **List** view, opens the drill-down
+for that datasource or model path in the same way.
 
-**Double-click** the same expression — or `Ctrl`-click it (`⌘` on macOS) — and it opens as its own
-tab instead of a dialog. That is what you want when you are comparing two chains, or when you want
-the trace to stay open while you work elsewhere. Each tab keeps its own frame stack.
+**Double-click** the same formula — or `Ctrl`-click it (`⌘` on macOS) — and it opens as its own
+tab instead of a dialog. From the keyboard, `Enter` or `Space` opens the dialog and `Shift+Enter`
+or `Ctrl+Enter` opens the tab. Double-clicking a binding in the Explorer opens its drill-down as a
+tab as well.
 
-## How it works
+The dialog's title bar has two ways out:
 
-The workbench keeps a **stack of frames**. Each frame is one expression resolved to one source.
-Clicking a formula or a related datasource inside a frame pushes a new frame onto the stack, and a
-breadcrumb bar across the top jumps back to any earlier level — so you can dig four levels deep
-and still return to where you started in one click.
+- **Pin as tab** — turns the dialog into a tab in the group you are working in.
+- **Open to the side** — opens it as a tab in the other
+  [tab group](/docs/designers#tabs-and-tab-groups), next to the tab you came from. That is what
+  you want when you are comparing two chains, or when the trace should stay open while you work
+  elsewhere.
 
-The whole breakdown is also available as a graph. The toggle in the top-right switches between
-**Workbench** — the frame stack described above, one level at a time — and **Tree**, which lays the
-entire expression out as a node graph you can pan and zoom. The workbench is the better tool for
-following one thread; the tree is the better one for seeing how wide a formula actually is. Your
-choice is remembered.
+`Escape` closes the dialog.
 
-The tree view adds two controls of its own: a **Compact / Full** switch for how much of each label
-is written on a node, and an **Unresolved** toggle that reveals the references the resolver could
-not place — off by default, because on a complete workspace they are noise. Both choices are
-remembered.
+## Two views: Detail and Tree
+
+The toggle in the top-right switches between **Detail** — the value path described below — and
+**Tree**, which lays the entire expression out as a node graph you can pan and zoom. Detail is the
+better tool for following one thread; the tree is the better one for seeing how wide a formula
+actually is. Your choice is remembered.
+
+In the tree, clicking a node highlights its path back to the expression. Each node can copy its
+expression to the clipboard and, where it resolves to a datasource, show it in the Explorer. Large
+trees switch to compact labels on their own. With **Technical view** on, the tree adds a
+**Compact / Full** switch for how much of each label is written on a node, and an **Unresolved**
+toggle that reveals the references the resolver could not place — off by default, because on a
+complete workspace they are noise. Both choices are remembered.
 
 In its dialog form the panel is resizable: drag the grip in the bottom-right corner, or
-double-click the grip to go back to the default. The size is stored separately for the workbench
-and the tree, since the tree usually wants more room.
+double-click the grip to go back to the default. The size is stored separately for Detail and
+Tree, since the tree usually wants more room.
 
-A typical descent through a format element:
+## The value path
 
-1. **Format** — the element and the expression bound to it.
-2. **Mapping** — the model path the expression refers to, and the binding that fills it.
-3. **Value source** — the datasource behind that binding.
-4. **Table, enum, or class** — the concrete source, with its field, enum type, or class name.
+The Detail view shows the analysed expression at the top — syntax-coloured, with conditionals and
+function calls indented — and the **Value path** below it: the whole chain from the format
+expression down to the field in D365FO, as an outline. The top of the outline is open; a folded
+row shows how many rows it hides. With **Technical view** on, an **Unresolved** toggle adds the
+references the resolver could not place.
 
-Calculated fields add levels in the middle: the workbench shows the calculation rule and lets you
-click into the expressions inside it.
+Every row says what that hop is. A typical descent through a format element:
 
-## Reading a frame
+1. **Format expression** — the element and the expression bound to it.
+2. **Model path** — the model path the expression refers to, with the mapping **Definition** it
+   was resolved in.
+3. **Binding in model mapping** — the formula in the mapping that fills that path.
+4. **Data source** — the datasource the formula reads.
+5. **AX object** — the concrete table, enum, or class at the end of the chain.
 
-Frames label what they are showing — format, mapping, value source, table, enum, class,
-calculation — and the panel is explicit when a chain cannot continue, rather than silently
-stopping:
+Calculated fields add levels in the middle: a **Calculated field** row opens to show its formula
+and the sources that formula reads. **User parameter** and **Grouping** rows mark values entered
+when the report runs and group-by aggregations.
 
-| What you see | What it means |
-|---|---|
-| **This value is not connected** | The element has no expression assigned |
-| **Load the ModelMapping file to continue** | The reference points at the model, but no model mapping for it is loaded |
-| **Path not found in ModelMapping** | The model path has no binding in the mapping that is loaded — often a version mismatch |
-| **Datasource not found in loaded configurations** | The expression names a datasource that lives in a file you have not loaded |
-| **Complex ER function** | The expression cannot resolve to a single source; read the breakdown instead |
-| **Constant value** | There is no data source behind it |
-| **Label translation** | The expression is label text only — it renders a caption and reads no data |
-| **Reference to the current loop record** | `@` refers to the record of the enclosing format element — look at the parent to find the source |
+Below the value path, **D365FO data used** lists the tables, fields, enums, classes, and parameters
+the expression finally reads, grouped by kind. It starts folded; clicking an item opens the value
+path down to where that source sits and highlights the row.
 
-The first three are the ones you will actually hit, and all three mean the same thing in practice:
-something is missing from the workspace. Load the model mapping, or the data model, or the format
-that defines the datasource, and run the trace again.
+An expression that is nothing but label text reads no data at all, so instead of a value path the
+drill-down shows a **Label translation** card: the label ID and its text in every language the
+loaded configurations carry.
 
 ## Compound and conditional expressions
 
 Real formulas are rarely a single path. When an expression contains several references — a
-comparison, a conditional, a concatenation — the workbench shows the breakdown and highlights
-every reference in it. Each highlighted reference is clickable, so you choose which branch to
-follow rather than being given one arbitrary answer.
+comparison, a conditional, a concatenation — the value path follows every one of them at once,
+so you see each branch rather than being given one arbitrary answer.
 
-Conditionals (`IF`, `CASE`), operators, and function calls are parsed into typed nodes, which is
-why the breakdown can distinguish the condition from the branches instead of showing you one long
-string.
+To look at one part on its own, click it. Every part of a path is clickable, both in the analysed
+expression — where a small ↓ next to each part points at the breakdown below — and in the formulas
+further down:
+`model.Invoice.Address` answers a different question than `model.Invoice`. The breakdown then
+narrows to what that part returns, under **Selected part of the expression**, until you choose
+**Back to the whole expression**.
+
+## When the chain stops
+
+The drill-down does not guess. When a chain cannot continue, the value path ends there and says as
+much:
+
+| What you see | What it means |
+|---|---|
+| A **Model path** row with nothing under it | The loaded model mapping has no binding for that path — or no model mapping for the model is loaded at all |
+| An **Unresolved reference** row | The expression names something the loaded configurations do not define — often a datasource that lives in a file you have not loaded |
+| **No data reference** | The expression reads no data — a constant or a function of constants |
+| **Label translation** | The expression is label text only — it renders a caption and reads no data |
+| "only an intermediate hop" | The part you clicked does not lead to a data source of its own |
+| "The path branches too much to show in full" | The chain was cut off at its depth or size limit; some sources are missing from **D365FO data used** too. Click a part of the expression to narrow the breakdown to it |
+
+The first two are the ones you will actually hit, and both mean the same thing in practice:
+something is missing from the workspace. Load the model mapping, or the data model, or the format
+that defines the datasource, and open the drill-down again.
 
 ## Clickable paths and tooltips
 
-Outside the workbench, identifiers inside expressions are hyperlinks wherever they resolve.
-Hovering over one shows a tooltip card with the resolved source — enough to answer "what is this?"
-without leaving the view you are in. Clicking navigates to it.
+Outside the drill-down, identifiers inside expressions — in the Properties panel, for instance —
+are hyperlinks wherever they resolve. Hovering over one shows a tooltip card with the resolved
+source — enough to answer "what is this?" without leaving the view you are in. Clicking navigates
+to it.
 
-This is the shortcut for the common case. Use the workbench when you need the whole chain, and the
+This is the shortcut for the common case. Use the drill-down when you need the whole chain, and the
 tooltips when you need one step.
 
 ## When a trace stops early

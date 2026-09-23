@@ -5,20 +5,55 @@ export const metadata = docMetadata('designers');
 
 <DocHeader slug="designers" />
 
-Double-click the root of a configuration in the Explorer and it opens in a designer tab. Which
-designer you get depends on the component type. All three are interactive node graphs: pan by
-dragging the canvas, zoom with the wheel, and click a node to fill the Properties panel.
+Double-click a configuration in the Explorer — or select it and press `Enter` — and it opens in a
+designer tab. A single click only selects a row (and folds a parent open or shut); `Space` selects
+from the keyboard. Which designer you get depends on the component type: the data model has a
+field list and a graph, the model mapping and the format are organised as views of rows you switch
+between with the tabs under the designer header.
 
-Double-clicking a node **below** the root opens a focused detail view instead — the properties of
-that one node, without the surrounding graph. It is the quicker way in when you already know which
-element you care about.
+Double-clicking a node **below** the root opens that configuration's designer with the node in
+focus — the row is revealed and selected, and the Properties panel shows it. Bindings and
+transformations are the exception: double-clicking one opens its
+[drill-down](/docs/expression-drill-down) as a tab.
+
+## Tabs and tab groups
+
+Every designer, and every drill-down you pin, is a tab. The designer area can be split into a left
+and a right **group**, each with its own tab strip, the way an IDE splits its editors:
+
+- **Split** — drag a tab into the right half of the designer, or right-click it and choose
+  **Open to the side**. A group always keeps at least one tab, so splitting needs two tabs open.
+- **Move** — drag a tab onto the other group's strip or into its content, or use
+  **Move to the left group** / **Move to the right group** from the tab's context menu. Dragging
+  along a strip reorders the tabs.
+- **Focus** — the group you clicked last has focus, marked by an accent line. New tabs — from the
+  Explorer, a search result, or a drill-down's **Pin as tab** — open there; **Open to the side** in
+  the drill-down dialog uses the other group.
+- **Close** — a group closes with its last tab. The ✕ at the end of a strip closes the group and
+  moves its tabs into the other one.
+- **Resize** — drag the divider between the groups, or focus it and use the arrow keys;
+  double-click it to go back to half and half.
+
+Tabs keep their state while they are in the background — a filter, the scroll position, the
+branches you opened are all still there when you come back. Below roughly 720 px of width the two
+strips stack and only the focused group's content is shown.
 
 ## Data model designer
 
-The data model is laid out breadth-first from left to right: the root container, then its child
-containers, then theirs. Edges connect containers to the types they reference, so a model that
-reuses a sub-structure in several places shows that reuse as shared edges rather than as
-duplicated boxes.
+The data model designer has two views, switched with **List** / **Graph** in its header. **List**
+is the default, and the choice is remembered.
+
+**List** shows the root records with their fields as a tree. Each field carries its type, the enum
+it uses where it has one, and its label. The **Filter model fields…** box searches every field of
+the model by name or label and lists the matches with their full path. Click a field name to open
+the drill-down of its model path — what the loaded model mapping fills it with; the magnifier at
+the end of the row runs [where-used](/docs/search-and-where-used) for the field.
+
+**Graph** lays the containers out from left to right: the root, then the records it references,
+then theirs, with the enumerations in a column of their own on the right. Edges connect containers
+to the types they reference, so a model that reuses a sub-structure in several places shows that
+reuse as shared edges rather than as duplicated boxes; record lists are drawn as animated lines.
+Click a container to highlight it.
 
 What to look for:
 
@@ -27,30 +62,39 @@ What to look for:
 - **Enumerations** — model enums and their values, which are frequently what a format element's
   conditional logic actually switches on.
 
-Selecting any node fills the Properties panel with its label, description, type descriptor, and —
-in technical view — the identifiers underneath.
-
 ## Model mapping designer
 
-The mapping designer uses three columns, which is the order you read a mapping in anyway:
+The mapping designer has three views, each tab showing how many rows it holds:
 
-1. **Datasources** — where data comes from. Tables, enums, classes, user parameters, calculated
-   fields, group-by aggregations, and references to import formats each render with the properties
-   specific to their kind: the table name and cross-company flag for a table datasource, the class
-   name for a class datasource, the expression for a calculated field, and so on.
-2. **Bindings** — the model path each datasource feeds, with the expression that fills it.
+1. **Bindings** — the model paths of the mapping as a tree, each with the expression that fills it.
+2. **Data Sources** — where data comes from, grouped by kind. Tables, enums, classes, user
+   parameters, calculated fields, group-by aggregations, and references to import formats each
+   render with the properties specific to their kind: the table name for a table datasource, the
+   class name for a class datasource, the formula for a calculated field, and so on.
 3. **Validations** — the conditions and messages attached to the mapping.
 
-Click any expression to open the [drill-down workbench](/docs/expression-drill-down) for it.
+The header names the mapping definition being shown; when the mapping has several, click it to
+switch. The filter in the toolbar narrows the current view, and its suggestions cover all three —
+picking a datasource name while **Bindings** is open takes you to **Data Sources**. Both lists
+render only the rows on screen, so a mapping with thousands of bindings or datasources stays fast.
+
+Click a row to see it in the Properties panel. Click a formula — a binding, a validation condition
+or message — or a datasource name to open the [drill-down](/docs/expression-drill-down) for it; the
+magnifier on a datasource row runs where-used, and each row's ⋮ menu has **Reveal in Explorer**.
 
 ## Format designer
 
-A format is a tree of elements — the structure of the file that gets produced or read — so the
-format designer renders it as a hierarchy rather than a flat graph.
+A format is a tree of elements — the structure of the file that gets produced or read. The format
+designer shows it in several views: **Structure**, **Bindings**, **Data Sources**, **Preview**, and
+— for an import format that carries its own model mapping — **Mapping**. The header shows the file
+type, whether the format exports or imports, and how many elements are **bound** and **unbound**;
+clicking either count filters the structure to those elements. An import format also lists the
+**Model mappings** it is linked to.
 
-Each element carries a **binding status badge**, which is the fastest way to spot the two problems
-people usually go looking for: elements with no binding at all, and elements bound to something
-that cannot be resolved with the configurations currently loaded.
+In **Structure**, each element shows its type, name, label, constant value, and the formula it is
+bound to. A leaf element with no binding at all is marked **unbound**, which is the fastest way to
+spot the problem people usually go looking for. Selecting an element lists all of its bindings under
+it, grouped by kind; clicking any formula opens its drill-down.
 
 The **Bindings** view lists the same bindings by what they are for, in the order the file is built.
 Each section is the part of the structure the bindings sit in — a sheet, a range, an XML element —
@@ -66,7 +110,7 @@ so neighbouring cells stay together. Chips above the list filter by intent:
 Each chip shows how many bindings it covers, so the ratio of plain values to logic is visible before
 you scroll.
 
-The **By model** switch turns the list around: instead of the file's elements it shows the data
+The **By format** / **By model** switch turns the list around: instead of the file's elements it shows the data
 model fields the format reads, as a tree of model paths. Each field shows:
 
 - **Mapping** — the expression in the model mapping that fills the field, with the drill-down
@@ -81,17 +125,26 @@ the record list of the range or element around them, and calculated fields the f
 a model node (`$Split_Note`) count as a use of that node. Load the data model as well to see field
 labels next to the paths.
 
+### Preview
+
+**Preview** shows what the file will look like. For XML, text, and the other non-Excel formats it
+writes out a sample of the file: constant values are filled in from the bindings;
+dynamic values — datasource paths, functions — are shown as sample data, as `{placeholders}`, or
+left out, as you choose under **Unresolved values:**. XML output is syntax-highlighted, and a
+delimited text format can be shown as a table with **First row = header**.
+
 ### Excel template formats
 
-Formats built on an Excel template get an extra view: the workbook renders with its original
+For a format built on an Excel template, **Preview** renders the workbook with its original
 layout — merged cells, column widths, sheet tabs — and its named ranges highlighted. Clicking a
 cell that belongs to a named range jumps to the format element bound to it, which turns "which
-element writes this cell?" into a single click. A toggle in the top-right switches between the
-template view and the structure view.
+element writes this cell?" into a single click. The **Structure** / **Template** switch in the
+preview's toolbar moves between the template and a grid built from the format structure alone.
 
-Not every export carries the template file itself. When it does not, the template view shows a drop
-zone instead — drop the `.xlsx` in and the preview renders from your local copy. The file is used
-for rendering only; like everything else, it stays in your browser.
+Not every export carries the template file itself. When it does not, the switch reads
+**Load template (.xlsx)** and the template view shows a drop zone instead — drop the `.xlsx` in and
+the preview renders from your local copy. The file is used for rendering only; like everything
+else, it stays in your browser.
 
 ### PDF formats
 
@@ -101,18 +154,18 @@ component, marked with a badge saying the output is converted to PDF — so a PD
 same way as the Excel one behind it. If a PDF converter has no source component, the view says so
 rather than showing an empty canvas.
 
-Word, XML, CSV, and plain-text formats render as the element tree only.
-
-## Reading the graph
+## Conventions across the designers
 
 A few conventions run through all three designers:
 
 - **Colour marks the component type** — data model, model mapping, and format keep the same accent
   colour everywhere, including in the Explorer and in search results.
-- **Selection is shared** — selecting a node in a designer updates the Properties panel and the
-  Explorer selection, and vice versa.
-- **Technical view adds identifiers** — GUIDs, raw expression strings, and component references
-  appear on nodes and in the Properties panel when technical view is on.
+- **Selection follows you** — selecting a row in a designer updates the Properties panel;
+  selecting a node in the Explorer, a search result, or a where-used hit reveals it in its
+  designer. The Explorer does not jump around while you work in a designer — use
+  **Reveal in Explorer** from the row's ⋮ menu or the Properties panel when you want it to.
+- **Technical view adds identifiers** — GUIDs, raw element and datasource types, and component
+  references appear in the designers and in the Properties panel when **Technical view** is on.
 - **Labels are resolved to text** — ER stores names as label references such as
   `@GER_LABEL:Something`, and the dictionary that translates them ships only with the format
   configuration. The visualizer pools the dictionaries of everything you have loaded — and, when you
@@ -120,9 +173,11 @@ A few conventions run through all three designers:
   models and mappings show readable names too. Label text follows the interface language; where no
   translation is found, the raw reference is shown unchanged.
 
-## Panels around the canvas
+## Panels around the designer
 
 The Properties panel (`Ctrl+J`) adapts to what is selected: a configuration file, a container, a
-field, a datasource, a binding, or a format element each show a different property set. Paths and
-identifiers inside it are clickable where they resolve to something — hovering shows a tooltip
-card with the resolved target before you commit to the jump.
+field, a datasource, a binding, or a format element each show a different property set — for a
+format element, its bindings come first. Paths and identifiers inside it are clickable where they
+resolve to something — hovering shows a tooltip card with the resolved target before you commit to
+the jump. For a datasource, a model field or record, or an enum, the **Where used** button starts a
+[where-used](/docs/search-and-where-used) trace for it.

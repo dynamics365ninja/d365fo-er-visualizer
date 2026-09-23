@@ -90,7 +90,7 @@ export const docSections: DocSection[] = [
         title: 'Data model, mapping, and format designers',
         navLabel: 'Visual designers',
         description:
-          'How each of the three ER component types is visualized, and what the nodes, edges, and badges mean.',
+          'How each of the three ER component types is visualized — the data model list and graph, the mapping views, the format tree — and what the badges mean.',
       },
       {
         slug: 'search-and-where-used',
@@ -120,7 +120,7 @@ export const docSections: DocSection[] = [
         slug: 'desktop-app',
         title: 'Desktop app',
         description:
-          'Run the Electron shell for native file dialogs and loopback sign-in when browser popups are blocked.',
+          'Run the Electron shell for native file dialogs, loopback sign-in and a sign-in kept between runs.',
       },
       {
         slug: 'troubleshooting',
