@@ -341,6 +341,12 @@ export interface Translations {
   fnoRemoveProfileConfirmTitle: (name: string) => string;
   fnoRemoveProfileConfirmBody: string;
   cancel: string;
+  modelViewLabel: string;
+  modelViewList: string;
+  modelViewGraph: string;
+  modelListFilterPlaceholder: string;
+  modelListLabel: string;
+  modelListMoreMatches: (n: number) => string;
   recentSessionLoadFailed: (reason: string) => string;
   splitResize: string;
   searchShowMore: (next: number, remaining: number) => string;
@@ -976,6 +982,12 @@ const cs: Translations = {
   fnoRemoveProfileConfirmTitle: (name: string) => `Odebrat profil „${name}“?`,
   fnoRemoveProfileConfirmBody: 'Profil se odebere i s uloženým přihlášením k prostředí. Pro další stahování bude potřeba ho znovu vytvořit a přihlásit se.',
   cancel: 'Zrušit',
+  modelViewLabel: 'Zobrazení modelu',
+  modelViewList: 'Seznam',
+  modelViewGraph: 'Graf',
+  modelListFilterPlaceholder: 'Filtrovat pole modelu…',
+  modelListLabel: 'Pole datového modelu',
+  modelListMoreMatches: (n: number) => `…a ${n} ${csPlural(n, 'další pole', 'další pole', 'dalších polí')} — zužte filtr.`,
   recentSessionLoadFailed: (reason: string) => `Relaci se nepodařilo otevřít: ${reason}. Otevřete soubory znovu z disku.`,
   splitResize: 'Změnit poměr skupin (šipky; dvojklik vrátí na polovinu)',
   searchShowMore: (next: number, remaining: number) => `Zobrazit ${next === remaining ? 'zbývající' : 'dalších'} ${next}${next === remaining ? '' : ` (zbývá ${remaining})`}`,
@@ -1625,6 +1637,12 @@ const en: Translations = {
   fnoRemoveProfileConfirmTitle: (name: string) => `Remove profile "${name}"?`,
   fnoRemoveProfileConfirmBody: 'The profile is removed together with its saved sign-in to the environment. To download again you will need to create it and sign in again.',
   cancel: 'Cancel',
+  modelViewLabel: 'Model view',
+  modelViewList: 'List',
+  modelViewGraph: 'Graph',
+  modelListFilterPlaceholder: 'Filter model fields…',
+  modelListLabel: 'Data model fields',
+  modelListMoreMatches: (n: number) => `…and ${n} more field${n === 1 ? '' : 's'} — narrow the filter.`,
   recentSessionLoadFailed: (reason: string) => `The session could not be opened: ${reason}. Open the files again from disk.`,
   splitResize: 'Resize the groups (arrow keys; double-click resets to half)',
   searchShowMore: (next: number, remaining: number) => `Show ${next === remaining ? 'the remaining' : 'the next'} ${next}${next === remaining ? '' : ` (${remaining} left)`}`,

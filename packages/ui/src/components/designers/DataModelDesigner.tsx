@@ -9,6 +9,7 @@ import {
   Position,
 } from '@xyflow/react';
 import { BoxRegular, DataBarVerticalFilled, HomeRegular, TextCaseTitleRegular } from '@fluentui/react-icons';
+import { DataModelList } from './DataModelList';
 import { useAppStore, resolveDeepExpression } from '../../state/store';
 import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
@@ -122,9 +123,26 @@ function buildModelLayout(containers: any[]) {
   return { positions, nodeHeight };
 }
 
+/** The list is where fields are found; the graph gives the overview. Remembered per browser. */
+const MODEL_VIEW_KEY = 'er-visualizer.model-view';
+
+function readModelView(): 'list' | 'graph' {
+  try {
+    return window.localStorage.getItem(MODEL_VIEW_KEY) === 'graph' ? 'graph' : 'list';
+  } catch {
+    return 'list';
+  }
+}
+
 export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNode: any | null }) {
   const dm = (config.content as ERDataModelContent).version.model;
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const configIndex = useAppStore(s => s.configurations.indexOf(config));
+  const [view, setView] = useState<'list' | 'graph'>(readModelView);
+  const chooseView = (next: 'list' | 'graph') => {
+    setView(next);
+    try { window.localStorage.setItem(MODEL_VIEW_KEY, next); } catch { /* a convenience only */ }
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Selection follows navigation only: the focus effect below reads the
@@ -338,8 +356,26 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
           <span className="fmt-stat">{t.statsFields(stats.fields)}</span>
           <span className="fmt-stat">{t.statsRelations(stats.edges)}</span>
         </div>
+        <div className="search-scope-toggle dm-view-toggle" role="group" aria-label={t.modelViewLabel}>
+          {(['list', 'graph'] as const).map(v => (
+            <button
+              key={v}
+              type="button"
+              className={`search-scope-toggle__btn ${view === v ? 'active' : ''}`}
+              aria-pressed={view === v}
+              onClick={() => chooseView(v)}
+            >
+              {v === 'list' ? t.modelViewList : t.modelViewGraph}
+            </button>
+          ))}
+        </div>
         <DesignerHint text={t.modelHierarchyHint} />
       </div>
+      {view === 'list' ? (
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <DataModelList containers={dm.containers} configIndex={configIndex} />
+        </div>
+      ) : (
       <div style={{ flex: 1 }}>
         <ReactFlow nodes={nodes} edges={edges} fitView nodesConnectable={false} nodesDraggable proOptions={{ hideAttribution: true }}>
           <Background color="var(--er-border)" gap={20} variant={'dots' as any} />
@@ -359,6 +395,7 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
           />
         </ReactFlow>
       </div>
+      )}
     </div>
   );
 }

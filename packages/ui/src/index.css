@@ -8857,3 +8857,62 @@ div.path-tooltip-card {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* Data model as a list: the records' fields as a tree, filterable, each
+   field opening its drill-down. Rows reuse the datasource list's look. */
+.dm-view-toggle {
+  margin-left: auto;
+}
+
+.dm-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.dm-list__filter {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--er-border);
+}
+
+.dm-list__rows {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 8px 16px;
+}
+
+.dm-list__root + .dm-list__root {
+  margin-top: 12px;
+}
+
+.dm-list__root-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--er-surface);
+  border-bottom: 1px solid var(--er-border);
+  font-weight: 600;
+  color: var(--er-model);
+}
+
+.dm-list__root-label {
+  font-weight: 400;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+}
+
+.dm-list__root-head .ds-row-count {
+  margin-left: auto;
+}
+
+.dm-list__empty {
+  padding: 12px 8px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+}
