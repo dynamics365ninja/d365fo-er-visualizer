@@ -39,6 +39,7 @@ import {
   PinRegular,
   BranchForkRegular,
   ArrowExpandRegular,
+  SplitVerticalRegular,
   DismissRegular,
   CircleRegular,
   FlowRegular,
@@ -932,6 +933,12 @@ function LineageRow({ node, depth, highlightKey, openIds, onToggle, registerRef,
         {formula && !open && (
           <code className="lin-row__detail" title={formula}>{formula}</code>
         )}
+        {node.badge === 'model' && node.definition && (
+          <span className="lin-row__def" title={`${t.lineageModelDefinitionTitle}: ${node.definition}`}>
+            <span className="lin-row__def-label">{t.lineageModelDefinition}</span>
+            <span className="lin-row__def-value">{node.definition}</span>
+          </span>
+        )}
         {expandable && !open && (
           <span className="lin-row__more">+{countLineageDescendants(node) + (formula ? 1 : 0)}</span>
         )}
@@ -1155,6 +1162,7 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
     const built = buildExpressionTree({
       expression: peek.expression,
       configIndex: peek.configIndex,
+      scopeConfigIndex: configIndex,
       configurations,
       resolveModelPath,
       resolveDatasource,
@@ -1171,7 +1179,7 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
       children = only.children;
     }
     return children === built.children ? built : { ...built, children };
-  }, [peek, configurations, resolveModelPath, resolveDatasource, findModelPathBindings, activeLocale]);
+  }, [peek, configIndex, configurations, resolveModelPath, resolveDatasource, findModelPathBindings, activeLocale]);
 
   const peekIndex = useMemo(() => (peekTree ? buildLineageIndex(peekTree) : null), [peekTree]);
   const [peekOpenIds, setPeekOpenIds] = useState<Set<string>>(new Set());
@@ -1418,6 +1426,7 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
   }
 
   const openAsTab = () => openDrillDownTab(trimmedExpr, configIndex, elementName);
+  const openBeside = () => openDrillDownTab(trimmedExpr, configIndex, elementName, { side: true });
 
   // A modal opened on the first click would swallow the second one, so the
   // single-click open is deferred briefly and cancelled by a double-click.
@@ -1509,6 +1518,28 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
                 <CompassNorthwestRegular fontSize={16} />
                 {elementName && <span className="dd-dialog-title__name">{elementName}</span>}
               </span>
+              {/* A dialog is one at a time; a tab stays open and can sit next
+                  to another one — the way to compare two drill-downs. */}
+              <span className="dd-dialog-title__actions">
+                <Button
+                  appearance="subtle"
+                  size="small"
+                  icon={<PinRegular />}
+                  title={t.drillOpenAsTab}
+                  onClick={() => { setIsDialogOpen(false); openAsTab(); }}
+                >
+                  {t.drillPinAsTab}
+                </Button>
+                <Button
+                  appearance="subtle"
+                  size="small"
+                  icon={<SplitVerticalRegular />}
+                  title={t.drillOpenBesideHint}
+                  onClick={() => { setIsDialogOpen(false); openBeside(); }}
+                >
+                  {t.drillOpenBeside}
+                </Button>
+              </span>
             </DialogTitle>
             <DialogContent className="dd-dialog-content">
               <DrillDownBody
@@ -1549,6 +1580,8 @@ interface TreeExprNode {
   configIndex?: number;
   children: TreeExprNode[];
   leafType?: 'table' | 'enum' | 'class';
+  /** Model-path rows: the mapping definition the path was resolved in. */
+  definition?: string;
 }
 
 type TreeLabelMode = 'compact' | 'full';
@@ -1564,14 +1597,21 @@ const MAX_TREE_NODES = 600;
 
 interface TreeBuildContext {
   configurations: any[];
-  resolveModelPath: (p: string) => any;
-  resolveDatasource: (n: string, ci: number) => any;
+  /**
+   * The configuration the drill-down was opened in. Lookups deeper in the
+   * chain (inside a model mapping) keep resolving in the definition *its*
+   * format binds to.
+   */
+  scopeConfigIndex: number;
+  resolveModelPath: (p: string, fromConfigIndex?: number) => any;
+  resolveDatasource: (n: string, ci: number, scopeConfigIndex?: number) => any;
   /** Bindings under a container path — used when the container has none itself. */
-  findModelPathBindings?: (p: string) => Array<{
+  findModelPathBindings?: (p: string, fromConfigIndex?: number) => Array<{
     path: string;
     relativePath: string;
     expressionAsString: string;
     configIndex: number;
+    definitionLabel?: string;
   }>;
   includeUnresolvedRefs: boolean;
   /** Language the tree's own labels are written in. */
@@ -1597,21 +1637,24 @@ function buildTreeNode(
   // A format hangs calculated fields under the records of its data model
   // (`model.InvoiceBase.'$Split_Note'`). That path ends in the format's own
   // datasource, which no model mapping binds — it resolves as a datasource.
-  const formatDeep = isModel ? resolveDeepExpression(extractModelPath(expression), ctx.configurations, configIndex) : null;
+  const formatDeep = isModel ? resolveDeepExpression(extractModelPath(expression), ctx.configurations, configIndex, ctx.scopeConfigIndex) : null;
   const endsInFormatDatasource = Boolean(formatDeep?.nestedDs && formatDeep.rootDs?.type === 'DataModel');
 
   // ── Model path → resolve via ModelMapping ──────────────────────────────
   if (isModel && !endsInFormatDatasource) {
     const cleanPath = extractModelPath(expression);
-    const modelResult = ctx.resolveModelPath(cleanPath);
+    // Resolved in the definition *this* expression's format binds to — with
+    // two formats of one mapping open, each has its own.
+    const modelResult = ctx.resolveModelPath(cleanPath, ctx.scopeConfigIndex);
     if (!modelResult) {
       // A container usually carries no binding of its own — what fills it is
       // only visible through the bindings of the fields inside it.
-      const scoped = buildContainerChildren(ctx, id, cleanPath, configIndex, visited, depth);
+      const { children: scoped, definition } = buildContainerChildren(ctx, id, cleanPath, configIndex, visited, depth);
       return {
         id, kind: 'ref', label: cleanPath.split(/[.\\]/).pop() ?? cleanPath,
         sublabel: cleanPath, badge: 'model', expression, configIndex,
         children: scoped,
+        definition,
       };
     }
     const bindingExpr: string = modelResult.binding?.expressionAsString ?? '';
@@ -1648,17 +1691,18 @@ function buildTreeNode(
       badge: 'model',
       expression, configIndex,
       children: [mappingNode],
+      definition: modelResult.definitionLabel,
     };
   }
 
   // ── Direct DS reference ────────────────────────────────────────────────
-  const deep = endsInFormatDatasource ? formatDeep : resolveDeepExpression(expression, ctx.configurations, configIndex);
+  const deep = endsInFormatDatasource ? formatDeep : resolveDeepExpression(expression, ctx.configurations, configIndex, ctx.scopeConfigIndex);
   const resolvedDs = (deep?.nestedDs ?? deep?.rootDs) ?? null;
 
   if (!resolvedDs) {
     // Try simple root-name lookup
     const rootName = firstSegment(expression);
-    const direct = rootName ? ctx.resolveDatasource(rootName, configIndex) : null;
+    const direct = rootName ? ctx.resolveDatasource(rootName, configIndex, ctx.scopeConfigIndex) : null;
     if (!direct?.datasource) {
       if (!ctx.includeUnresolvedRefs) {
         // Filter out unresolved singleton identifiers (often constants/functions),
@@ -1704,9 +1748,9 @@ function buildContainerChildren(
   configIndex: number,
   visited: Set<string>,
   depth: number,
-): TreeExprNode[] {
-  const scoped = ctx.findModelPathBindings?.(cleanPath) ?? [];
-  if (scoped.length === 0) return [];
+): { children: TreeExprNode[]; definition?: string } {
+  const scoped = ctx.findModelPathBindings?.(cleanPath, ctx.scopeConfigIndex) ?? [];
+  if (scoped.length === 0) return { children: [] };
 
   // One row per distinct source — a container with 40 fields off one table
   // should read as "this table", not as 40 repetitions of it.
@@ -1730,7 +1774,7 @@ function buildContainerChildren(
     );
     if (child) children.push(child);
   }
-  return dedupeTreeChildren(children);
+  return { children: dedupeTreeChildren(children), definition: scoped[0].definitionLabel };
 }
 
 /**
@@ -1753,7 +1797,7 @@ function appendPathPrefixNodes(
   let added = false;
   for (let i = 1; i < segments.length; i++) {
     const prefix = segments.slice(0, i).map(formatSegmentForExpression).join('.');
-    const prefixDeep = resolveDeepExpression(prefix, ctx.configurations, configIndex);
+    const prefixDeep = resolveDeepExpression(prefix, ctx.configurations, configIndex, ctx.scopeConfigIndex);
     const prefixDs = prefixDeep?.nestedDs ?? prefixDeep?.rootDs;
     if (!prefixDs || prefixDs === leafDs || !hasOwnDefinition(prefixDs)) continue;
 
@@ -1875,7 +1919,7 @@ export function collectUsedSources(options: {
   expression: string;
   configIndex: number;
   configurations: any[];
-  resolveModelPath: (p: string) => any;
+  resolveModelPath: (p: string, fromConfigIndex?: number) => any;
   resolveDatasource: (n: string, ci: number) => any;
   /** Language of the source details (enum kinds, parameter notes). Defaults to the app's. */
   locale?: Locale;
@@ -1893,6 +1937,7 @@ export function collectUsedSources(options: {
     const tree = buildExpressionTree({
       expression: expr,
       configIndex: ci,
+      scopeConfigIndex: configIndex,
       configurations,
       resolveModelPath,
       resolveDatasource,
@@ -1970,7 +2015,7 @@ export function collectUsedSources(options: {
           ? (config.content.embeddedModelMappingVersions ?? [])
           : [];
       for (const version of versions) {
-        const definition = selectMappingDefinition(version, configurations);
+        const definition = selectMappingDefinition(version, configurations, configIndex);
         const bindings = ((definition?.bindings ?? []) as any[])
           .filter(binding => matchesSelectedPath(binding?.path));
         for (const binding of bindings.slice(0, 80)) {
@@ -1995,17 +2040,19 @@ export function buildExpressionTree(options: {
   expression: string;
   configIndex: number;
   configurations: any[];
-  resolveModelPath: (p: string) => any;
+  resolveModelPath: (p: string, fromConfigIndex?: number) => any;
   resolveDatasource: (n: string, ci: number) => any;
   findModelPathBindings?: TreeBuildContext['findModelPathBindings'];
   includeUnresolvedRefs?: boolean;
   /** Language the tree's labels are written in. Defaults to the app's. */
   locale?: Locale;
+  /** The configuration the drill-down belongs to, when `configIndex` is a hop inside it. */
+  scopeConfigIndex?: number;
 }): TreeExprNode {
   const {
     expression, configIndex, configurations,
     resolveModelPath, resolveDatasource, findModelPathBindings, includeUnresolvedRefs = false,
-    locale = getLocale(),
+    locale = getLocale(), scopeConfigIndex = configIndex,
   } = options;
 
   const dsTokens = uniqueDsTokens(tokenizeERExpr(expression));
@@ -2021,6 +2068,7 @@ export function buildExpressionTree(options: {
   } else {
     const ctx: TreeBuildContext = {
       configurations,
+      scopeConfigIndex,
       resolveModelPath,
       resolveDatasource,
       findModelPathBindings,
@@ -2057,7 +2105,7 @@ export function buildWorkbenchParts(options: {
   label: string;
   configIndex: number;
   configurations: any[];
-  resolveModelPath: (p: string) => any;
+  resolveModelPath: (p: string, fromConfigIndex?: number) => any;
   resolveDatasource: (n: string, ci: number) => any;
 }): WorkbenchPart[] {
   const { expression, label, configIndex, configurations, resolveModelPath, resolveDatasource } = options;

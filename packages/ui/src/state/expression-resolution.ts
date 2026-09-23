@@ -3,10 +3,11 @@
  * behind them, across every loaded configuration.
  */
 import { dsPathToExpression } from '../utils/ds-path';
+import { mappingDefinitionLabel } from '@er-visualizer/core';
 import {
-  getAllMappingSources,
   getDatasourcePoolsForConfig,
   getMappingSourcesForConfig,
+  getMappingSourcesInScope,
   getPreferredDescriptors,
 } from './mapping-definitions';
 import { findNodeByMatch, type WorkspaceTrees } from './tree-builder';
@@ -330,6 +331,8 @@ export function resolveDeepExpression(
   expression: string,
   configurations: any[],
   fromConfigIndex: number,
+  /** The format the lookup is made for, when it started in another configuration. */
+  scopeConfigIndex?: number | null,
 ): DeepResolutionResult | null {
   const pathSegments = parseDottedPath(expression);
   if (pathSegments.length === 0) return null;
@@ -337,7 +340,7 @@ export function resolveDeepExpression(
   // Collect all datasource pools from all configs for cross-config tracing
   const allDatasourcePools: any[][] = [];
   const configDatasources = new Map<number, any[][]>();
-  const preferredDescriptors = getPreferredDescriptors(configurations, fromConfigIndex);
+  const preferredDescriptors = getPreferredDescriptors(configurations, fromConfigIndex, scopeConfigIndex);
   const collectOrder = [
     fromConfigIndex,
     ...configurations.map((_: any, i: number) => i).filter((i: number) => i !== fromConfigIndex),
@@ -450,6 +453,8 @@ export interface ResolvedModelPath {
   datasource: any | null;
   datasourceConfigIndex: number | null;
   datasourceTreeNodeId: string | null;
+  /** Label of the mapping definition the binding was found in. */
+  definitionLabel?: string;
 }
 
 export interface ModelPathBinding {
@@ -457,6 +462,8 @@ export interface ModelPathBinding {
   relativePath: string;
   expressionAsString: string;
   configIndex: number;
+  /** Label of the mapping definition the binding belongs to. */
+  definitionLabel?: string;
 }
 
 /** Tree node of datasource `dsName` (under `parentPath`, when given) in configuration `configIndex`. */
@@ -502,6 +509,7 @@ export function resolveDatasource(
   state: WorkspaceTrees,
   expressionOrName: string,
   fromConfigIndex: number,
+  scopeConfigIndex?: number | null,
 ): ResolvedDatasource | null {
   // Walk the whole dotted path, not just its first segment: for
   // "Parameters.'$ReferenceNumber'" the interesting datasource is the user
@@ -514,7 +522,7 @@ export function resolveDatasource(
   if (!dsName) return null;
 
   const searchOrder = [fromConfigIndex, ...state.configurations.map((_, i) => i).filter(i => i !== fromConfigIndex)];
-  const preferredDescriptors = getPreferredDescriptors(state.configurations, fromConfigIndex);
+  const preferredDescriptors = getPreferredDescriptors(state.configurations, fromConfigIndex, scopeConfigIndex);
 
   for (const ci of searchOrder) {
     const config = state.configurations[ci];
@@ -577,7 +585,11 @@ export function resolveBinding(
  * Resolve a model path (e.g. "model.CompanyInformation.Name") through the
  * model mappings to its binding and the datasource that binding reads.
  */
-export function resolveModelPath(state: WorkspaceTrees, modelDotPath: string): ResolvedModelPath | null {
+export function resolveModelPath(
+  state: WorkspaceTrees,
+  modelDotPath: string,
+  fromConfigIndex?: number | null,
+): ResolvedModelPath | null {
   let path = modelDotPath;
   if (path.toLowerCase().startsWith('model.')) path = path.substring(6);
   else if (path.toLowerCase().startsWith('model\\')) path = path.substring(6);
@@ -614,7 +626,7 @@ export function resolveModelPath(state: WorkspaceTrees, modelDotPath: string): R
     }
   }
 
-  for (const source of getAllMappingSources(state.configurations)) {
+  for (const source of getMappingSourcesInScope(state.configurations, fromConfigIndex)) {
     const bindings = source.mapping.bindings as any[];
 
     const materializeBindingResolution = (binding: any) => {
@@ -644,6 +656,7 @@ export function resolveModelPath(state: WorkspaceTrees, modelDotPath: string): R
         datasource,
         datasourceConfigIndex,
         datasourceTreeNodeId,
+        definitionLabel: mappingDefinitionLabel(source.mapping),
       };
     };
 
@@ -664,6 +677,7 @@ export function resolveModelPath(state: WorkspaceTrees, modelDotPath: string): R
 export function findModelPathBindings(
   state: Pick<WorkspaceTrees, 'configurations'>,
   modelDotPath: string,
+  fromConfigIndex?: number | null,
 ): ModelPathBinding[] {
   let path = modelDotPath;
   if (path.toLowerCase().startsWith('model.') || path.toLowerCase().startsWith('model\\')) {
@@ -685,7 +699,7 @@ export function findModelPathBindings(
 
   for (const prefix of prefixes) {
     const needle = prefix.join('.').toLowerCase();
-    for (const source of getAllMappingSources(state.configurations)) {
+    for (const source of getMappingSourcesInScope(state.configurations, fromConfigIndex)) {
       for (const binding of source.mapping.bindings as any[]) {
         const normalized = String(binding.path ?? '').replace(/[\\/]/g, '.');
         const lower = normalized.toLowerCase();
@@ -700,6 +714,7 @@ export function findModelPathBindings(
           relativePath: normalized.slice(needle.length + 1),
           expressionAsString: expression,
           configIndex: source.configIndex,
+          definitionLabel: mappingDefinitionLabel(source.mapping),
         });
       }
     }

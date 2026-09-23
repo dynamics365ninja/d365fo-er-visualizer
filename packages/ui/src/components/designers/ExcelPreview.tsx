@@ -731,26 +731,32 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
   const sheets = useMemo(() => collectExcelSheets(rootElement, bindingMap, labels, previewOptions, labelLang), [rootElement, bindingMap, labels, previewOptions, labelLang]);
   const [activeSheet, setActiveSheet] = useTabState(tabId, 'excel.sheet', 0);
   const [selectedCell, setSelectedCell] = useState<ExcelCellData | null>(null);
-  // Default to template view when template is available (even filename-only — shows drop zone)
-  const [viewMode, setViewMode] = useTabState<'structure' | 'template'>(tabId, 'excel.viewMode', template ? 'template' : 'structure');
+  // A workbook the user loaded belongs to the format it was loaded for, and is
+  // kept with the tab: leaving the preview (for Structure, say) unmounts this
+  // component, and coming back used to ask for the same file again.
+  const templateKey = `${configIndex}\u0000${template?.filename ?? ''}`;
+  const [droppedTemplate, setDroppedTemplate] = useTabState<{ key: string; base64: string } | null>(tabId, 'excel.droppedTemplate', null);
+  const droppedBase64 = droppedTemplate?.key === templateKey ? droppedTemplate.base64 : null;
+  const effectiveBase64 = droppedBase64 ?? template?.base64 ?? null;
+  // Opening the preview starts on the template whenever there is one (even
+  // filename-only — that shows the drop zone). Deliberately not remembered per
+  // tab: a trip to Structure from inside the template must not make the next
+  // visit to Preview open on the structure.
+  const [viewMode, setViewMode] = useState<'structure' | 'template'>(
+    () => (template || effectiveBase64 ? 'template' : 'structure'),
+  );
   const [xlsxData, setXlsxData] = useState<XlsxWorkbook | null>(null);
   const [xlsxError, setXlsxError] = useState<string | null>(null);
   const [xlsxLoading, setXlsxLoading] = useState(false);
-  const [droppedBase64, setDroppedBase64] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragInvalid, setDragInvalid] = useState(false);
 
-  const effectiveBase64 = droppedBase64 ?? template?.base64 ?? null;
-
-  // A dropped workbook belongs to the format it was dropped on. Switching to
-  // another format tab reuses this component instance, so the override has to
-  // be cleared or the previous format's template leaks into the new one.
-  const templateKey = `${configIndex}\u0000${template?.filename ?? ''}`;
-  const templateKeyRef = useRef(templateKey);
-  if (templateKeyRef.current !== templateKey) {
-    templateKeyRef.current = templateKey;
-    if (droppedBase64 !== null) setDroppedBase64(null);
-  }
+  const loadTemplate = useCallback((base64: string) => {
+    setDroppedTemplate({ key: templateKey, base64 });
+    setXlsxData(null);
+    setXlsxError(null);
+    setViewMode('template');
+  }, [setDroppedTemplate, templateKey]);
 
   // Parse xlsx whenever effectiveBase64 becomes available.
   // The parsed workbook is cached against the base64 it came from: without
@@ -803,14 +809,10 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
       const dataUrl = ev.target?.result as string;
       // data:...;base64,XXXXX → take the part after the comma
       const b64 = dataUrl.split(',')[1];
-      if (b64) {
-        setDroppedBase64(b64);
-        setXlsxData(null);
-        setXlsxError(null);
-      }
+      if (b64) loadTemplate(b64);
     };
     reader.readAsDataURL(file);
-  }, []);
+  }, [loadTemplate]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -927,7 +929,7 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
               const reader = new FileReader();
               reader.onload = (ev) => {
                 const b64 = (ev.target?.result as string)?.split(',')[1];
-                if (b64) { setDroppedBase64(b64); setXlsxData(null); setXlsxError(null); }
+                if (b64) loadTemplate(b64);
               };
               reader.readAsDataURL(file);
               e.target.value = '';
@@ -984,7 +986,7 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
         <span style={{ fontSize: 14 }}>📊</span>
         <span>{direction === ERDirection.Import ? t.excelInput : t.excelOutput} {t.excelWorkbook}</span>
         {pdfOutput && <PdfOutputBadge />}
-        {template && (
+        {(template || effectiveBase64) && (
           <div style={{ display: 'flex', marginLeft: 8, border: '1px solid rgba(255,255,255,0.4)', borderRadius: 3, overflow: 'hidden' }}>
             <button
               onClick={() => setViewMode('structure')}

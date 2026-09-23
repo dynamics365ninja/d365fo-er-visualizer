@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseERConfiguration } from '@er-visualizer/core';
-import { openDesignerTabsForFormats } from './store';
+import { lastActiveFormatIndex, openDesignerTabsForFormats, useAppStore } from './store';
 
 const FORMAT_XML = (id: string, name: string) => `<?xml version="1.0" encoding="utf-8"?>
 <ERSolutionVersion>
@@ -127,5 +127,60 @@ describe('auto-opening the designer for loaded formats', () => {
     );
 
     expect(next.openTabs.map(tab => tab.id)).toEqual(['cfg-0']);
+  });
+});
+
+describe('side-by-side tabs', () => {
+  function loadTwoFormats() {
+    useAppStore.getState().removeAllConfigurations();
+    useAppStore.getState().loadXmlFile(FORMAT_XML('FMT-A', 'Sales invoice'), 'a.xml');
+    useAppStore.getState().loadXmlFile(FORMAT_XML('FMT-B', 'Credit note'), 'b.xml');
+  }
+
+  it('shows a tab next to the active one', () => {
+    loadTwoFormats();
+    useAppStore.getState().openTabToSide('cfg-0');
+    expect(useAppStore.getState().activeTabId).toBe('cfg-1');
+    expect(useAppStore.getState().splitTabId).toBe('cfg-0');
+  });
+
+  it('swaps the panes when the tab on the side is activated', () => {
+    loadTwoFormats();
+    useAppStore.getState().openTabToSide('cfg-0');
+    useAppStore.getState().setActiveTab('cfg-0');
+    expect(useAppStore.getState().activeTabId).toBe('cfg-0');
+    expect(useAppStore.getState().splitTabId).toBe('cfg-1');
+  });
+
+  it('opens a drill-down beside the active tab', () => {
+    loadTwoFormats();
+    useAppStore.getState().openDrillDownTab('model.Invoice.Date', 1, 'Date', { side: true });
+    const state = useAppStore.getState();
+    expect(state.activeTabId).toBe('cfg-1');
+    expect(state.splitTabId).toBe('drilldown:1:Date:model.Invoice.Date');
+    expect(state.openTabs.some(tab => tab.id === state.splitTabId)).toBe(true);
+  });
+
+  it('closes the side view with its tab', () => {
+    loadTwoFormats();
+    useAppStore.getState().openTabToSide('cfg-0');
+    useAppStore.getState().closeTab('cfg-0');
+    expect(useAppStore.getState().splitTabId).toBeNull();
+    expect(useAppStore.getState().activeTabId).toBe('cfg-1');
+  });
+
+  it('remembers the format of the last active tab', () => {
+    loadTwoFormats();
+    useAppStore.getState().setActiveTab('cfg-0');
+    expect(lastActiveFormatIndex(useAppStore.getState())).toBe(0);
+    // A drill-down speaks for the format it was opened from.
+    useAppStore.getState().openDrillDownTab('model.Invoice.Date', 1, 'Date');
+    expect(lastActiveFormatIndex(useAppStore.getState())).toBe(1);
+    useAppStore.getState().setActiveTab('cfg-0');
+    expect(lastActiveFormatIndex(useAppStore.getState())).toBe(0);
+    // Closing it hands over to the format of whatever tab comes forward.
+    useAppStore.getState().removeConfiguration(0);
+    expect(useAppStore.getState().lastActiveFormatPath).toBe('b.xml');
+    expect(lastActiveFormatIndex(useAppStore.getState())).toBe(0);
   });
 });

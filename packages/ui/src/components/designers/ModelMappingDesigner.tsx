@@ -1,12 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LinkFilled, CheckmarkCircleRegular, TextBulletListTreeRegular } from '@fluentui/react-icons';
-import { useAppStore } from '../../state/store';
-import { countDeclaredDatasources } from '../../utils/datasource-tree';
+import { LinkFilled, CheckmarkCircleRegular, CheckmarkRegular, ChevronDownRegular, TextBulletListTreeRegular } from '@fluentui/react-icons';
+import { Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from '@fluentui/react-components';
+import type { ERDataModelContent } from '@er-visualizer/core';
+import { useAppStore, getMappingDefinitions, mappingDefinitionLabel } from '../../state/store';
+import { countDeclaredDatasources, findModelForDescriptor } from '../../utils/datasource-tree';
+import { indexDataModel } from '../../utils/format-model-usage';
+import { buildLabelPool, labelLanguageTag, resolveLabel } from '../../utils/label-resolver';
+import { normGuid } from '../../utils/model-hierarchy';
 import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
 import { ExpandCollapseSlider } from '../ExpandCollapseSlider';
 import { FilterField } from '../FilterField';
-import { locale, t } from '../../i18n';
+import { locale, t, useLocale } from '../../i18n';
 import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../../utils/filter-suggestions';
 import { useTabState } from '../../utils/tab-view-state';
 import { findTreeNodeByMatch, DesignerHint, SlidingTabs, datasourceFocusKey, collectDatasourceTerms, EMPTY_STRING_SET, RevealInExplorerMenu } from './shared';
@@ -19,6 +24,8 @@ interface BindingTreeNode {
   key: string;
   /** Last path segment, i.e. what the F&O designer shows at this level. */
   name: string;
+  /** Label of the data model field at this path, when the model is loaded. */
+  label?: string;
   children: BindingTreeNode[];
   binding?: any;
   /** Number of bindings in this subtree, including this node. */
@@ -29,8 +36,12 @@ interface BindingTreeNode {
  * Turn the flat `parent/child/leaf` binding paths into the nested structure the
  * F&O model-mapping designer shows. Intermediate levels that carry no binding
  * of their own are still materialised so the hierarchy stays continuous.
+ * Exported for tests.
  */
-function buildBindingTree(bindings: any[]): BindingTreeNode[] {
+export function buildBindingTree(
+  bindings: any[],
+  labelFor: (path: string) => string | undefined = () => undefined,
+): BindingTreeNode[] {
   const roots: BindingTreeNode[] = [];
   const index = new Map<string, BindingTreeNode>();
 
@@ -41,6 +52,7 @@ function buildBindingTree(bindings: any[]): BindingTreeNode[] {
     const node: BindingTreeNode = {
       key: path,
       name: slash >= 0 ? path.slice(slash + 1) : path,
+      label: labelFor(path),
       children: [],
       count: 0,
     };
@@ -52,14 +64,75 @@ function buildBindingTree(bindings: any[]): BindingTreeNode[] {
 
   for (const b of bindings) ensure(b.path).binding = b;
 
+  // Alphabetical by name at every level, as the F&O model-mapping designer
+  // lists the model — the order paths happen to appear in the XML means nothing.
+  const byName = (left: BindingTreeNode, right: BindingTreeNode) =>
+    left.name.localeCompare(right.name, undefined, { sensitivity: 'base', numeric: true });
   const tally = (node: BindingTreeNode): number => {
-    // Children keep insertion order — i.e. the order in which the paths
-    // appear in the ER configuration — instead of an alphabetical sort.
+    node.children.sort(byName);
     node.count = (node.binding ? 1 : 0) + node.children.reduce((sum, c) => sum + tally(c), 0);
     return node.count;
   };
   for (const root of roots) tally(root);
-  return roots;
+  return roots.sort(byName);
+}
+
+/** The definition's own name for consultants; its descriptor too in technical mode. */
+function definitionDisplayName(mm: any, technical: boolean): string {
+  // The descriptor is the model root's technical name; consultants get the
+  // definition's own name.
+  if (technical && mm.name && mm.dataContainerDescriptor && mm.name !== mm.dataContainerDescriptor) {
+    return `${mm.name} (${mm.dataContainerDescriptor})`;
+  }
+  return technical ? (mm.dataContainerDescriptor || mm.name) : (mm.name || mm.dataContainerDescriptor);
+}
+
+/**
+ * Which definition is on screen. A mapping with several definitions (one per
+ * model root) turns it into a switch, so the definition a format binds to is
+ * one click away instead of a double-click in the explorer.
+ */
+function DefinitionStat({ mapping, definitions, technical, onPick }: {
+  mapping: any;
+  definitions: any[];
+  technical: boolean;
+  onPick: (index: number) => void;
+}) {
+  const title = technical
+    ? (locale === 'cs'
+      ? 'Definice mapování (DataContainerDescriptor — kořenový kontejner datového modelu)'
+      : 'Mapping definition (DataContainerDescriptor — root container of the data model)')
+    : (locale === 'cs' ? 'Definice mapování' : 'Mapping definition');
+  const text = <>{locale === 'cs' ? 'Definice' : 'Definition'}: {definitionDisplayName(mapping, technical)}</>;
+  if (definitions.length < 2) return <span className="fmt-stat" title={title}>{text}</span>;
+
+  return (
+    <Menu>
+      <MenuTrigger disableButtonEnhancement>
+        <button
+          type="button"
+          className="fmt-stat fmt-stat-btn mm-definition-picker"
+          title={locale === 'cs' ? `${title} — kliknutím přepnete` : `${title} — click to switch`}
+        >
+          {text}
+          <ChevronDownRegular fontSize={12} aria-hidden />
+        </button>
+      </MenuTrigger>
+      <MenuPopover>
+        <MenuList>
+          {definitions.map((definition, index) => (
+            <MenuItem
+              key={definition.id ?? index}
+              icon={definition === mapping ? <CheckmarkRegular /> : <span aria-hidden className="mm-definition-picker__spacer" />}
+              onClick={() => onPick(index)}
+            >
+              {technical ? mappingDefinitionLabel(definition) : definitionDisplayName(definition, false)}
+            </MenuItem>
+          ))}
+        </MenuList>
+      </MenuPopover>
+    </Menu>
+  );
 }
 
 /** Shared by every mapping without validations, so the filter memo stays stable. */
@@ -77,7 +150,49 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const selectNode = useAppStore(s => s.selectNode);
   const treeNodes = useAppStore(s => s.treeNodes);
+  const configurations = useAppStore(s => s.configurations);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const activeLocale = useLocale();
+
+  /* Every definition of this mapping configuration, so the header can switch
+     between them without a trip to the explorer. */
+  const definitions = useMemo(() => {
+    const config = configurations[configIndex];
+    if (config?.content.kind !== 'ModelMapping') return [];
+    return getMappingDefinitions((config.content as { version?: unknown }).version);
+  }, [configurations, configIndex]);
+  const showDefinition = useCallback((index: number) => {
+    // The explorer's mapping-definition node is what DesignerView renders from.
+    selectNode(`cfg-${configIndex}-mapping-${index}`, { revealInExplorer: false });
+  }, [configIndex, selectNode]);
+
+  /* Labels of the data model fields the bindings fill, as the F&O designer
+     shows them next to each name. */
+  const labelForPath = useMemo(() => {
+    const descriptor = String(mm.dataContainerDescriptor ?? '').trim();
+    if (!descriptor) return () => undefined;
+    const models = configurations.flatMap((cfg, index) => (cfg.content.kind === 'DataModel'
+      ? [{ model: (cfg.content as ERDataModelContent).version.model, index }]
+      : []));
+    const model = findModelForDescriptor(
+      models.map(m => m.model),
+      descriptor,
+      new Set([normGuid(mm.modelId)].filter(Boolean)),
+    );
+    if (!model) return () => undefined;
+    const fieldAt = indexDataModel(model, descriptor);
+    const labels = buildLabelPool(configurations, models.find(m => m.model === model)?.index ?? configIndex);
+    const lang = labelLanguageTag(activeLocale);
+    const cache = new Map<string, string | undefined>();
+    return (path: string): string | undefined => {
+      if (cache.has(path)) return cache.get(path);
+      const field = fieldAt(path.split('/'));
+      const resolved = resolveLabel(field?.label, labels, lang);
+      const text = resolved?.localized ?? resolved?.enUs;
+      cache.set(path, text);
+      return text;
+    };
+  }, [mm.dataContainerDescriptor, mm.modelId, configurations, configIndex, activeLocale]);
   const [filter, setFilter] = useTabState(tabId, 'mapping.filter', '');
   const [view, setView] = useTabState<'bindings' | 'datasources' | 'validations'>(tabId, 'mapping.view', 'bindings');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -154,13 +269,14 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
     const textFiltered = filter
       ? meaningful.filter((b: any) =>
           b.path.toLowerCase().includes(lower) ||
-          b.expressionAsString.toLowerCase().includes(lower)
+          b.expressionAsString.toLowerCase().includes(lower) ||
+          Boolean(labelForPath(b.path)?.toLowerCase().includes(lower))
         )
       : meaningful;
 
     // 4. Nest by path segments
-    return buildBindingTree(textFiltered);
-  }, [mm.bindings, filter]);
+    return buildBindingTree(textFiltered, labelForPath);
+  }, [mm.bindings, filter, labelForPath]);
 
   const toggleGroup = useCallback((g: string) => {
     setCollapsedGroups(prev => {
@@ -278,22 +394,12 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
         </span>
         <div className="fmt-header-stats">
           {(mm.dataContainerDescriptor || mm.name) && (
-            <span
-              className="fmt-stat"
-              title={showTechnicalDetails
-                ? (locale === 'cs'
-                  ? 'Definice mapování (DataContainerDescriptor — kořenový kontejner datového modelu)'
-                  : 'Mapping definition (DataContainerDescriptor — root container of the data model)')
-                : (locale === 'cs' ? 'Definice mapování' : 'Mapping definition')}
-            >
-              {locale === 'cs' ? 'Definice' : 'Definition'}: {
-                // The descriptor is the model root's technical name; consultants
-                // get the definition's own name.
-                showTechnicalDetails && mm.name && mm.dataContainerDescriptor && mm.name !== mm.dataContainerDescriptor
-                  ? `${mm.name} (${mm.dataContainerDescriptor})`
-                  : (showTechnicalDetails ? (mm.dataContainerDescriptor || mm.name) : (mm.name || mm.dataContainerDescriptor))
-              }
-            </span>
+            <DefinitionStat
+              mapping={mm}
+              definitions={definitions}
+              technical={showTechnicalDetails}
+              onPick={showDefinition}
+            />
           )}
         </div>
         <DesignerHint text={locale === 'cs'
@@ -565,6 +671,9 @@ function BindingTreeRows({
             <span className="mm-tree-toggle mm-tree-toggle--leaf" aria-hidden />
           )}
           <span className={binding ? 'mm-binding-name' : 'mm-tree-branch-name'}>{node.name}</span>
+          {node.label && node.label !== node.name && (
+            <span className="mm-tree-label" title={node.label}>{node.label}</span>
+          )}
           {hasChildren && (
             <span
               className="mm-group-count"

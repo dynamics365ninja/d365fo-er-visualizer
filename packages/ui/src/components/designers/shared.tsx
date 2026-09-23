@@ -71,7 +71,7 @@ export function ExpressionDetailLink({ expression, configIndex, className, inter
 
     const modelReference = extractFirstModelReference(expression);
     if (modelReference) {
-      const resolvedModel = resolveModelPath(modelReference);
+      const resolvedModel = resolveModelPath(modelReference, configIndex);
       const targetNodeId = resolvedModel?.bindingTreeNodeId ?? resolvedModel?.datasourceTreeNodeId;
       if (targetNodeId) {
         navigateToTreeNode(targetNodeId);

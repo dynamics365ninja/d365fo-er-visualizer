@@ -49,9 +49,15 @@ export function getDatasourcePoolsForConfig(
 export function getPreferredDescriptors(
   configurations: ERConfiguration[],
   fromConfigIndex: number,
+  scopeConfigIndex?: number | null,
 ): ReadonlySet<string> {
-  const from = configurations[fromConfigIndex];
-  if (from?.content.kind === 'Format') {
+  // `scopeConfigIndex` is the format a lookup is made on behalf of. A drill-down
+  // that has followed a binding into a model mapping resolves the mapping's
+  // datasources from there — without the format it started in, "any loaded
+  // format" would pick the definition again.
+  for (const index of [scopeConfigIndex, fromConfigIndex]) {
+    const from = index != null ? configurations[index] : undefined;
+    if (from?.content.kind !== 'Format') continue;
     const own = getFormatDescriptorNames(from.content as ERFormatContent);
     if (own.size > 0) return own;
   }
@@ -108,10 +114,18 @@ export function orderMappingDefinitions(definitions: any[], preferredDescriptors
  * the loaded formats (falls back to the first definition). Exported for the
  * designer views.
  */
-export function selectMappingDefinition(version: any, configurations: ERConfiguration[]): any {
+export function selectMappingDefinition(
+  version: any,
+  configurations: ERConfiguration[],
+  fromConfigIndex?: number | null,
+): any {
   const definitions = getMappingDefinitions(version);
   if (definitions.length <= 1) return definitions[0] ?? version?.mapping;
-  return orderMappingDefinitions(definitions, getAllFormatDescriptorNames(configurations))[0];
+  // A format in scope decides; otherwise any loaded format's descriptor will do.
+  const preferred = fromConfigIndex != null
+    ? getPreferredDescriptors(configurations, fromConfigIndex)
+    : getAllFormatDescriptorNames(configurations);
+  return orderMappingDefinitions(definitions, preferred)[0];
 }
 
 /**
@@ -230,4 +244,26 @@ export function getAllMappingSources(configurations: ERConfiguration[]): Mapping
   return configurations.flatMap((config, configIndex) =>
     getMappingSourcesForConfig(config, configIndex, preferredDescriptors),
   );
+}
+
+/**
+ * Every mapping definition, the ones a lookup started from `fromConfigIndex`
+ * binds to first. With two formats of the same mapping open, "every loaded
+ * format" names both descriptors, so a drill-down from the second format used
+ * to land in the definition of whichever format loaded first.
+ */
+export function getMappingSourcesInScope(
+  configurations: ERConfiguration[],
+  fromConfigIndex: number | null | undefined,
+): MappingSource[] {
+  if (fromConfigIndex == null) return getAllMappingSources(configurations);
+  const preferred = getPreferredDescriptors(configurations, fromConfigIndex);
+  const sources = configurations.flatMap((config, configIndex) =>
+    getMappingSourcesForConfig(config, configIndex, preferred),
+  );
+  if (preferred.size === 0) return sources;
+  const matches = (source: MappingSource) =>
+    preferred.has((source.mapping?.dataContainerDescriptor ?? '').trim().toLowerCase());
+  // Stable: config order is kept within the matching and the other definitions.
+  return [...sources.filter(matches), ...sources.filter(source => !matches(source))];
 }

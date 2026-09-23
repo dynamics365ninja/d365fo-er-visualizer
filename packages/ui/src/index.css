@@ -3768,6 +3768,9 @@ body {
 /* ─── Value path (data lineage) ─────────────────────────────────────────── */
 .lin {
   display: grid;
+  /* The cards may shrink below their content — the rows ellipsize instead of
+     pushing the panel wider than a side-by-side pane. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   padding: 2px;
 }
@@ -4108,6 +4111,43 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+/* The mapping definition a model path was resolved in, pinned to the row's end. */
+.lin-row__def {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  max-width: 45%;
+  flex-shrink: 0;
+  padding: 0 7px;
+  border-radius: var(--er-radius-pill);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  font-size: var(--er-text-2xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.lin-row__def-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
+}
+
+.lin-row__def-value {
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lin-row__def + .lin-row__more {
+  margin-left: 0;
 }
 
 .lin-row__more {
@@ -8542,4 +8582,130 @@ div.path-tooltip-card {
   .fmt-row-actions {
     opacity: 1;
   }
+}
+
+/* ── Model mapping: field labels and the definition switch ── */
+
+/* The model field's label follows its name, as in the F&O designer; the name
+   then only takes the room it needs so the label is not pushed off the row. */
+.mm-binding-name:has(+ .mm-tree-label),
+.mm-tree-branch-name:has(+ .mm-tree-label) {
+  flex: 0 1 auto;
+  max-width: 55%;
+}
+
+.mm-tree-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: var(--er-text-sm);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mm-definition-picker {
+  gap: 4px;
+  color: var(--text-primary);
+}
+
+.mm-definition-picker__spacer {
+  display: inline-block;
+  width: 16px;
+}
+
+/* ── Designer tabs: every open tab stays mounted; one (or two, side by side)
+      is visible. The panes share one grid cell per column so a tab moving
+      between the main and the side column is not remounted. ── */
+.designer-tabs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.designer-tabs--split {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.designer-tab-pane {
+  grid-row: 1;
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.designer-tab-pane--side {
+  grid-column: 2;
+  border-left: 1px solid var(--er-border);
+}
+
+/* Hidden, not removed: the scroll position survives, and nothing is laid out
+   again when the tab comes back. */
+.designer-tab-pane--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.designer-tab-pane__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.designer-tab-pane__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 6px 0 10px;
+  border-bottom: 1px solid var(--er-border);
+  background: var(--er-surface-2);
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  color: var(--er-text-muted);
+}
+
+.designer-tab-pane__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.designer-tab-pane__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--er-radius-sm);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.designer-tab-pane__close:hover {
+  background: var(--er-surface-3);
+  color: var(--er-text);
+}
+
+/* Drill-down dialog: pin it as a tab, or open it next to the active tab. */
+.dd-dialog-title__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 12px;
+  font-weight: 400;
 }

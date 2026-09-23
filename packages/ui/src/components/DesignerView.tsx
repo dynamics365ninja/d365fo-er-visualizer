@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   AppsListDetailRegular,
   ArrowEnterRegular,
@@ -9,15 +9,16 @@ import {
   DocumentFilled,
   CheckmarkCircleRegular,
   ArrowSyncRegular,
+  DismissRegular,
 } from '@fluentui/react-icons';
-import { useAppStore, selectMappingDefinition } from '../state/store';
+import { useAppStore, selectMappingDefinition, lastActiveFormatIndex, getMappingDefinitions, type OpenTab } from '../state/store';
 import { ClickablePath } from './ClickablePath';
 import { DrillDownBody, DrillDownTrigger } from './DrillDownPanel';
 import { PropertyInspector } from './PropertyInspector';
 import { t } from '../i18n';
 import { getBindingCategoryLabel, getConsultantBindingLabel } from '../utils/consultant-labels';
 import { buildFormatBindingPresentation, getFormatBindingCategoryLabel, getFormatBindingDisplayLabel, groupFormatBindingsByCategory } from '../utils/format-binding-display';
-import { type ERModelMappingContent, type ERFormatContent } from '@er-visualizer/core';
+import { type ERConfiguration, type ERModelMappingContent, type ERFormatContent } from '@er-visualizer/core';
 import { useCoarsePointer } from '../utils/responsive';
 import { pruneTabViewState } from '../utils/tab-view-state';
 import { ModelDesigner } from './designers/DataModelDesigner';
@@ -29,13 +30,12 @@ export type { GroupedDatasourceListHandle } from './designers/DatasourceTree';
 /**
  * The definition to render for a ModelMapping config: prefer the definition the
  * user actually selected in the explorer (the mapping node itself or any node
- * under it), falling back to the one the loaded format binds to.
+ * under it), then the one the last active format binds to, then the one any
+ * loaded format binds to.
  */
-function resolveActiveMappingDefinition(version: any, configs: any[], activeNode: any): any {
+function resolveActiveMappingDefinition(version: any, configs: any[], activeNode: any, formatIndex: number | null): any {
   if (activeNode?.type === 'mapping' && activeNode.data) return activeNode.data;
-  const definitions: any[] = Array.isArray(version?.mappings) && version.mappings.length > 0
-    ? version.mappings
-    : (version?.mapping ? [version.mapping] : []);
+  const definitions: any[] = getMappingDefinitions(version);
   // Multi-definition tree ids look like "cfg-2-mapping-1-binding-5".
   const match = typeof activeNode?.id === 'string'
     ? activeNode.id.match(/^cfg-\d+-mapping-(\d+)(?:-|$)/)
@@ -44,7 +44,7 @@ function resolveActiveMappingDefinition(version: any, configs: any[], activeNode
     const definition = definitions[Number(match[1])];
     if (definition) return definition;
   }
-  return selectMappingDefinition(version, configs);
+  return selectMappingDefinition(version, configs, formatIndex);
 }
 
 function getNodeHeaderIcon(node: any): React.ReactNode {
@@ -83,14 +83,23 @@ function getNodeHeaderIcon(node: any): React.ReactNode {
 
 export function DesignerView() {
   const activeTabId = useAppStore(s => s.activeTabId);
+  const splitTabId = useAppStore(s => s.splitTabId);
   const tabs = useAppStore(s => s.openTabs);
   const configs = useAppStore(s => s.configurations);
   const treeNodes = useAppStore(s => s.treeNodes);
   const selectedNode = useAppStore(s => s.selectedNode);
+  const formatIndex = useAppStore(lastActiveFormatIndex);
+  const closeSplit = useAppStore(s => s.closeSplit);
   const coarse = useCoarsePointer();
   const openHint = coarse ? t.openInExplorerTouch : t.openInExplorer;
 
   useEffect(() => { pruneTabViewState(tabs.map(tb => tb.id)); }, [tabs]);
+
+  /* What each tab was focused on while it was on screen. A tab in the
+     background keeps that focus instead of following the selection around —
+     its designer would otherwise re-run its "reveal this node" effects for
+     selections made in some other tab. */
+  const focusByTab = useRef(new Map<string, any>());
 
   if (!activeTabId) {
     return (
@@ -124,10 +133,72 @@ export function DesignerView() {
     );
   }
 
-  const tab = tabs.find(t => t.id === activeTabId);
-  if (!tab) return null;
+  const split = Boolean(splitTabId && splitTabId !== activeTabId && tabs.some(tab => tab.id === splitTabId));
 
-  const config = configs[tab.configIndex];
+  /* Every open tab stays mounted; only the active one (and the one on the
+     side) is visible. Switching tabs used to unmount the designer, so a filter,
+     the scroll position or an opened branch were gone on the way back. */
+  return (
+    <div className={`designer-tabs${split ? ' designer-tabs--split' : ''}`}>
+      {tabs.map(tab => {
+        const slot = tab.id === activeTabId ? 'main' : (split && tab.id === splitTabId ? 'side' : 'hidden');
+        const live = slot !== 'hidden';
+        const tabNode = findTreeNodeById(treeNodes, tab.id);
+        if (live) {
+          focusByTab.current.set(tab.id, selectedNode?.configIndex === tab.configIndex ? selectedNode : tabNode);
+        }
+        const focusNode = focusByTab.current.get(tab.id) ?? tabNode;
+        return (
+          <section
+            key={tab.id}
+            className={`designer-tab-pane designer-tab-pane--${slot}`}
+            aria-hidden={live ? undefined : true}
+            inert={live ? undefined : true}
+          >
+            {slot === 'side' && (
+              <header className="designer-tab-pane__head">
+                <span className="designer-tab-pane__title" title={tab.label}>{tab.label}</span>
+                <button
+                  type="button"
+                  className="designer-tab-pane__close"
+                  onClick={closeSplit}
+                  title={t.splitClose}
+                  aria-label={t.splitClose}
+                >
+                  <DismissRegular fontSize={12} />
+                </button>
+              </header>
+            )}
+            <div className="designer-tab-pane__body">
+              <TabContent
+                tab={tab}
+                config={configs[tab.configIndex]}
+                configs={configs}
+                tabNode={tabNode}
+                focusNode={focusNode}
+                formatIndex={formatIndex}
+              />
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * One tab's designer. Memoised so the tabs in the background do not re-render
+ * with every selection change in the one on screen — their props only change
+ * when their own configuration does.
+ */
+const TabContent = React.memo(function TabContent({ tab, config, configs, tabNode, focusNode, formatIndex }: {
+  tab: OpenTab;
+  config: ERConfiguration | undefined;
+  configs: ERConfiguration[];
+  tabNode: any;
+  focusNode: any;
+  formatIndex: number | null;
+}) {
   if (!config) return null;
 
   // Drill-down tabs carry their own expression/element — render the drill-down body directly
@@ -144,26 +215,21 @@ export function DesignerView() {
     );
   }
 
-  const tabNode = findTreeNodeById(treeNodes, activeTabId);
-
-  const activeNode = selectedNode?.configIndex === tab.configIndex
-    ? selectedNode
-    : findTreeNodeById(treeNodes, activeTabId);
-
   if (tabNode && tabNode.type !== 'file') {
     return <FocusedNodeTab node={tabNode} />;
   }
 
-  if (config.kind === 'DataModel') return <ModelDesigner key={tab.id} config={config} focusNode={activeNode} />;
-  if (config.kind === 'ModelMapping') return <MappingDesigner key={tab.id} tabId={tab.id} mapping={resolveActiveMappingDefinition((config.content as ERModelMappingContent).version, configs, activeNode)} configIndex={tab.configIndex} focusNode={activeNode} />;
-  if (config.kind === 'Format') return <FormatDesigner key={tab.id} tabId={tab.id} config={config} configIndex={tab.configIndex} focusNode={activeNode} />;
+  if (config.kind === 'DataModel') return <ModelDesigner config={config} focusNode={focusNode} />;
+  if (config.kind === 'ModelMapping') return <MappingDesigner tabId={tab.id} mapping={resolveActiveMappingDefinition((config.content as ERModelMappingContent).version, configs, focusNode, formatIndex)} configIndex={tab.configIndex} focusNode={focusNode} />;
+  if (config.kind === 'Format') return <FormatDesigner tabId={tab.id} config={config} configIndex={tab.configIndex} focusNode={focusNode} />;
 
   return <div style={{ padding: 16 }}>{t.designerUnsupportedView(config.kind)}</div>;
-}
+});
 
 function FocusedNodeTab({ node }: { node: any }) {
   const configs = useAppStore(s => s.configurations);
   const selectedNode = useAppStore(s => s.selectedNode);
+  const formatIndex = useAppStore(lastActiveFormatIndex);
   const focusNode = selectedNode?.configIndex === node.configIndex ? selectedNode : node;
   const config = node.configIndex != null ? configs[node.configIndex] : null;
 
@@ -194,7 +260,7 @@ function FocusedNodeTab({ node }: { node: any }) {
   }
   if (node.type === 'file' && config.kind === 'ModelMapping' && node.configIndex != null) {
     const mappingContent = config.content as { version?: { mapping?: unknown } };
-    const mapping = mappingContent.version ? resolveActiveMappingDefinition(mappingContent.version, configs, focusNode) : undefined;
+    const mapping = mappingContent.version ? resolveActiveMappingDefinition(mappingContent.version, configs, focusNode, formatIndex) : undefined;
     if (mapping) {
       return <MappingDesigner mapping={mapping} configIndex={node.configIndex} focusNode={focusNode} />;
     }
