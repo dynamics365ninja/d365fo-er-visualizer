@@ -307,6 +307,11 @@ export class FnoHttpError extends Error {
     public readonly status: number,
     public readonly url: string,
     public readonly body?: string,
+    /**
+     * Response headers (lower-cased names) when the transport has them. Used
+     * for `Retry-After` on 429/503 — absent headers just mean default backoff.
+     */
+    public readonly headers?: Readonly<Record<string, string>>,
   ) {
     super(message);
     this.name = 'FnoHttpError';

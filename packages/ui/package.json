@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit && eslint src --max-warnings 0"
   },
   "dependencies": {
     "@azure/msal-browser": "^3.28.0",
@@ -18,6 +18,7 @@
     "@er-visualizer/fno-client": "workspace:*",
     "@fluentui/react-components": "^9.73.7",
     "@fluentui/react-icons": "^2.0.324",
+    "@tanstack/react-virtual": "^3.14.13",
     "@xyflow/react": "^12.8.2",
     "jszip": "^3.10.1",
     "react": "^19.1.0",
@@ -26,13 +27,19 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@tailwindcss/vite": "^4.1.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.4.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "fake-indexeddb": "^6.2.5",
+    "globals": "^17.12.0",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.7.0",
-    "vite": "^6.3.0",
-    "vitest": "^3.1.0"
+    "typescript-eslint": "^8.70.1",
+    "vite": "^6.4.3",
+    "vitest": "^3.2.7"
   }
 }

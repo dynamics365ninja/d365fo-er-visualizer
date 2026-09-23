@@ -3,3 +3,6 @@ packages:
 allowBuilds:
   electron: true
   esbuild: true
+overrides:
+  # Next.js pins postcss 8.4.31, which has known path-traversal advisories.
+  next>postcss: ^8.5.23

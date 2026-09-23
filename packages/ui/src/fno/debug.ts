@@ -67,7 +67,6 @@ export function dumpFnoDebug(label: string): void {
   if (!fnoDebugEnabled() || entries.length === 0) return;
   const payload = entries;
   entries = [];
-  // eslint-disable-next-line no-console
   console.log(
     `[er-fno-debug] ${label} — ${payload.length} entries (copy the JSON below)\n` +
       JSON.stringify(payload, jsonSafe, 2),
@@ -136,7 +135,6 @@ export function installFnoDebugHandle(): void {
   };
   Object.defineProperty(window, '__erFnoDebug', { value: handle, configurable: true });
   if (fnoDebugEnabled()) {
-    // eslint-disable-next-line no-console
     console.log(
       `[er-fno-debug] recording is on (${debugSetting()}). ` +
         'The JSON blob prints when a download finishes — or call __erFnoDebug.dump().',

@@ -6,25 +6,17 @@ import {
   FilterRegular,
   TextCollapseRegular,
 } from '@fluentui/react-icons';
-import { useAppStore, activeMappingDefinitionLabel, relatedMappingDefinitionLabels } from '../state/store';
+import { useAppStore, relatedMappingDefinitionLabels, MIN_SEARCH_QUERY_LENGTH } from '../state/store';
 import type { TreeNode } from '../state/store';
-import type { ERConfiguration, GUIDEntry } from '@er-visualizer/core';
+import type { ERConfiguration } from '@er-visualizer/core';
 import { locale, t, useLocale } from '../i18n';
 import { getConsultantFormatTypeLabel } from '../utils/consultant-labels';
 import { getFormatTypeThemeColor } from '../utils/theme-colors';
 import { relatedConfigIndices, relatedContainerRules, hitPassesContainerRule, type ScopeContainerRule } from '../utils/model-hierarchy';
 import { referenceCategory, WHERE_USED_CATEGORY_ORDER, type ReferenceCategory } from '../utils/where-used-category';
 import { ExpandCollapseSlider } from './ExpandCollapseSlider';
+import { buildSearchNodeIndex, findNodeForSearchResult, type SearchRegistry, type SearchResultEntry } from '../utils/search-node-index';
 
-type SearchResultEntry = {
-  target: string;
-  targetType: string;
-  sourceConfigPath: string;
-  sourceComponent: string;
-  /** Mapping definition the hit was indexed in, when it came from a mapping. */
-  sourceDefinition?: string;
-  sourceContext: string;
-};
 
 /**
  * First node matching `predicate`, preferring the one that sits in
@@ -226,6 +218,7 @@ export function SearchPanel() {
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const configurations = useAppStore(s => s.configurations);
   const whereUsedTrigger = useAppStore(s => s.whereUsedTrigger);
+  const consumeWhereUsedTrigger = useAppStore(s => s.consumeWhereUsedTrigger);
   const openTabs = useAppStore(s => s.openTabs);
   const activeTabId = useAppStore(s => s.activeTabId);
 
@@ -277,7 +270,7 @@ export function SearchPanel() {
   // not as a catalogue of what the box accepts; the query itself rides along
   // as a secondary line so the mapping stays learnable.
   const searchExamples = useMemo<ExamplePreset[]>(() => {
-    const cs = locale === 'cs';
+    const cs = currentLocale === 'cs';
     const section = cs
       ? { mapping: 'Odkud se berou data', calc: 'Výpočty a podmínky', output: 'Podoba výstupu' }
       : { mapping: 'Where the data comes from', calc: 'Calculations and conditions', output: 'Shape of the output' };
@@ -295,7 +288,7 @@ export function SearchPanel() {
   }, [currentLocale]);
 
   const whereUsedExamples = useMemo<ExamplePreset[]>(() => {
-    const cs = locale === 'cs';
+    const cs = currentLocale === 'cs';
     const section = cs
       ? { impact: 'Dopad změny', trace: 'Dohledání hodnoty' }
       : { impact: 'Impact of a change', trace: 'Tracing a value' };
@@ -313,8 +306,11 @@ export function SearchPanel() {
     executeSearch();
   }, [executeSearch]);
 
+  // The panel unmounts whenever the right pane shows Properties, so a trigger
+  // is acknowledged in the store once run — remounting must not replay it.
   useEffect(() => {
-    if (!whereUsedTrigger) return;
+    if (!whereUsedTrigger || whereUsedTrigger.consumed) return;
+    consumeWhereUsedTrigger(whereUsedTrigger.version);
     setMode('where-used');
     executeWhereUsed(whereUsedTrigger.query);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -324,7 +320,7 @@ export function SearchPanel() {
     setMode('search');
     setSearchQuery(value);
     executeSearch();
-  }, [executeSearch, setSearchQuery]);
+  }, [executeSearch, setSearchQuery, setMode]);
 
   const applyWhereUsedExample = useCallback((value: string) => {
     setMode('where-used');
@@ -428,8 +424,12 @@ export function SearchPanel() {
   // hides everything — otherwise the user is stranded on "nothing found".
   const whereUsedTotalRefs = whereUsedGrouping.totalRefs;
 
-  // Resolving a hit to its tree node walks the whole tree, so do it exactly
-  // once per result set here; the grouped list below reuses the map.
+  // Hits are resolved to tree nodes through an index built once per tree, not
+  // a full walk per hit; the grouped list below reuses the resulting map.
+  const searchNodeIndex = useMemo(
+    () => buildSearchNodeIndex(treeNodes, configurations),
+    [treeNodes, configurations],
+  );
   const navigableSearch = useMemo(() => {
     const seen = new Set<string>();
     const nodeByResult = new Map<SearchResultEntry, TreeNode>();
@@ -437,13 +437,13 @@ export function SearchPanel() {
       const key = getSearchResultDedupeKey(r);
       if (seen.has(key)) return false;
       seen.add(key);
-      const node = findNodeForSearchResult(r, configurations, treeNodes, registry);
+      const node = findNodeForSearchResult(r, configurations, searchNodeIndex, registry);
       if (!node) return false;
       nodeByResult.set(r, node);
       return true;
     });
     return { results, nodeByResult };
-  }, [searchResults, configurations, treeNodes, registry]);
+  }, [searchResults, configurations, searchNodeIndex, registry]);
 
   const currentQuery = mode === 'search' ? searchQuery : whereUsedQuery;
   const trimmedCurrentQuery = currentQuery.trim();
@@ -630,7 +630,6 @@ export function SearchPanel() {
                           <SearchResultsGrouped
                             results={capped}
                             nodeByResult={navigableSearch.nodeByResult}
-                            totalCount={totalNested}
                             query={searchQuery}
                             expandSignal={searchExpandSignal}
                             configurations={configurations}
@@ -646,7 +645,15 @@ export function SearchPanel() {
             )}
 
             {searchResults.length === 0 && trimmedCurrentQuery && (
-              <div className="search-panel__empty">{t.noResults}</div>
+              trimmedCurrentQuery.length < MIN_SEARCH_QUERY_LENGTH
+                ? (
+                  <p className="search-panel__hint">
+                    {locale === 'cs'
+                      ? `Zadejte alespoň ${MIN_SEARCH_QUERY_LENGTH} znaky.`
+                      : `Type at least ${MIN_SEARCH_QUERY_LENGTH} characters.`}
+                  </p>
+                )
+                : <div className="search-panel__empty">{t.noResults}</div>
             )}
           </>
         )}
@@ -770,7 +777,6 @@ export function SearchPanel() {
 function SearchResultsGrouped({
   results,
   nodeByResult,
-  totalCount,
   query,
   expandSignal,
   configurations,
@@ -781,11 +787,10 @@ function SearchResultsGrouped({
   results: SearchResultEntry[];
   /** Tree node for each result, resolved once by the panel. */
   nodeByResult: Map<SearchResultEntry, TreeNode>;
-  totalCount: number;
   query: string;
   expandSignal: { version: number; expanded: boolean };
   configurations: ERConfiguration[];
-  registry: { lookup: (guid: string) => GUIDEntry | undefined };
+  registry: SearchRegistry;
   navigateToTreeNode: (nodeId: string) => void;
 }) {
   const groups = useMemo(() => {
@@ -876,7 +881,7 @@ function hitCategoryLabel(category: HitCategory): string {
 
 function parseSearchHit(
   result: SearchResultEntry,
-  registry: { lookup: (guid: string) => GUIDEntry | undefined },
+  registry: SearchRegistry,
   showTechnicalDetails: boolean,
 ): ParsedHit {
   const ctx = result.sourceContext ?? '';
@@ -932,7 +937,7 @@ function parseSearchHit(
   // ── Format binding to GUID component (optionally with [PropName]) ─
   if (ctx.startsWith('Format binding') && ctx.includes('to component:')) {
     const expr     = ctx.slice(ctx.indexOf('to component:') + 'to component:'.length).trim();
-    const resolved = registry.lookup(tgt);
+    const resolved = registry.lookup(tgt, result.sourceConfigPath);
     const propMatch = ctx.match(/Format binding \[([^\]]+)\] to component/);
     const prop = propMatch?.[1] ?? '';
     const { label, labelKind } = formatBindingLabel(prop, cs, showTechnicalDetails);
@@ -981,7 +986,7 @@ function parseSearchHit(
   // internals; the consultant view calls them references.
   const referenceLabel = cs ? 'Odkaz' : 'Reference';
   if (result.targetType === 'GUID') {
-    const resolved = registry.lookup(tgt);
+    const resolved = registry.lookup(tgt, result.sourceConfigPath);
     return {
       label: showTechnicalDetails ? (resolved?.kind ?? 'GUID') : referenceLabel,
       labelKind: 'guid',
@@ -1043,7 +1048,7 @@ function SearchResultGroup({
   nodeByResult: Map<SearchResultEntry, TreeNode>;
   query: string;
   expandSignal: { version: number; expanded: boolean };
-  registry: { lookup: (guid: string) => GUIDEntry | undefined };
+  registry: SearchRegistry;
   navigateToTreeNode: (nodeId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
@@ -1419,187 +1424,3 @@ function ReferenceRow({
     </button>
   );
 }
-
-function findNodeForSearchResult(
-  result: SearchResultEntry,
-  configurations: Array<{ filePath: string }>,
-  treeNodes: TreeNode[],
-  registry: { lookup: (guid: string) => GUIDEntry | undefined },
-): TreeNode | null {
-  const configIndex = configurations.findIndex(config => config.filePath === result.sourceConfigPath);
-  if (configIndex < 0) return null;
-
-  const rootNode = treeNodes[configIndex];
-  if (!rootNode) return null;
-
-  const sourceExpr = extractExpressionFromContext(result.sourceContext);
-  // The same binding path is mapped in every definition of a mapping solution;
-  // resolve against the one the loaded format goes through.
-  const preferred = result.sourceDefinition
-    ?? activeMappingDefinitionLabel(configurations as ERConfiguration[], configIndex);
-  const find = (predicate: (node: TreeNode) => boolean) =>
-    findTreeNodeByMatch(rootNode.children ?? [], predicate, preferred);
-
-  if (result.sourceContext === 'TypeDescriptor reference in model field') {
-    return findFieldNode(rootNode, result.sourceComponent);
-  }
-
-  if (result.sourceContext === 'Model mapping references data model') {
-    return find(node => node.type === 'mapping')
-      ?? (rootNode.data?.kind === 'ModelMapping' ? rootNode : null);
-  }
-
-  if (result.sourceContext === 'Format mapping references format definition') {
-    return find(node => node.type === 'format')
-      ?? (rootNode.data?.kind === 'Format' ? rootNode : null);
-  }
-
-  if (result.sourceContext === 'Base model reference') {
-    return rootNode;
-  }
-
-  if (result.sourceContext.startsWith('Binding:')) {
-    return find(node => node.type === 'binding' && node.data?.path === result.target);
-  }
-
-  if (result.sourceContext.startsWith('Binding for ')) {
-    const bindingPath = result.sourceContext.slice('Binding for '.length).split(':')[0]?.trim();
-    if (bindingPath) {
-      return find(node => node.type === 'binding' && node.data?.path === bindingPath);
-    }
-  }
-
-  if (result.sourceContext.startsWith('Format binding to component:')) {
-    return find(node =>
-      (node.type === 'formatElement' && node.data?.id === result.target)
-      || (node.type === 'formatBinding' && node.data?.componentId === result.target),
-    );
-  }
-
-  if (result.sourceContext.startsWith('Format binding expression:') && sourceExpr) {
-    const bindingNode = findFormatBindingNode(rootNode, sourceExpr);
-    if (bindingNode) return bindingNode;
-  }
-
-  if (result.targetType === 'GUID') {
-    const guidNode = resolveGuidTargetNode(result.target, treeNodes, configurations, registry)
-      ?? find(node =>
-        (node.type === 'formatElement' && node.data?.id === result.target)
-        || node.data?.id === result.target,
-      );
-    if (guidNode) return guidNode;
-  }
-
-  if (result.targetType === 'ModelPath') {
-    const bindingNode = find(node => node.type === 'binding' && node.data?.path === result.target);
-    if (bindingNode) return bindingNode;
-  }
-
-  if (result.targetType === 'Formula') {
-    if (sourceExpr) {
-      const formatBindingNode = findFormatBindingNode(rootNode, sourceExpr);
-      if (formatBindingNode) return formatBindingNode;
-    }
-
-    const bindingPath = result.sourceContext.startsWith('Binding for ')
-      ? result.sourceContext.slice('Binding for '.length).split(':')[0]?.trim()
-      : null;
-    if (bindingPath) {
-      const bindingNode = find(node => node.type === 'binding' && node.data?.path === bindingPath);
-      if (bindingNode) return bindingNode;
-    }
-  }
-
-  return find(node => node.type === 'datasource' && node.name === result.sourceComponent);
-}
-
-function findFieldNode(rootNode: TreeNode, sourceComponent: string): TreeNode | null {
-  const [containerName, fieldName] = sourceComponent.split('.');
-  return findTreeNodeWithAncestors(rootNode.children ?? [], [], (node, ancestors) => {
-    if (node.type !== 'field' || node.name !== fieldName) return false;
-    const parentContainer = ancestors[ancestors.length - 1];
-    return parentContainer?.type === 'container' && parentContainer.name === containerName;
-  });
-}
-
-function findFormatBindingNode(rootNode: TreeNode, expression: string): TreeNode | null {
-  return findTreeNodeByMatch(rootNode.children ?? [], node =>
-    node.type === 'formatBinding' && node.data?.expressionAsString === expression,
-  );
-}
-
-function resolveGuidTargetNode(
-  guid: string,
-  treeNodes: TreeNode[],
-  configurations: Array<{ filePath: string }>,
-  registry: { lookup: (guid: string) => GUIDEntry | undefined },
-): TreeNode | null {
-  const entry = registry.lookup(guid);
-  if (!entry) return null;
-
-  const configIndex = configurations.findIndex(config => config.filePath === entry.configFilePath);
-  if (configIndex < 0) return null;
-
-  const rootNode = treeNodes[configIndex];
-  if (!rootNode) return null;
-
-  switch (entry.kind) {
-    case 'Solution':
-      return rootNode;
-    case 'ModelVersion':
-      return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'model')
-        ?? (rootNode.data?.kind === 'DataModel' ? rootNode : null);
-    case 'MappingVersion':
-      return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'mapping')
-        ?? (rootNode.data?.kind === 'ModelMapping' ? rootNode : null);
-    case 'FormatVersion':
-    case 'FormatMappingVersion':
-      return findTreeNodeByMatch(rootNode.children ?? [], node => node.type === 'format')
-        ?? (rootNode.data?.kind === 'Format' ? rootNode : null);
-    case 'Container':
-      return findTreeNodeByMatch(rootNode.children ?? [], node =>
-        node.type === 'container' && node.data?.id === guid,
-      );
-    case 'FormatElement':
-      return findTreeNodeByMatch(rootNode.children ?? [], node =>
-        node.type === 'formatElement' && node.data?.id === guid,
-      );
-    case 'FormatEnum':
-      return findTreeNodeByMatch(rootNode.children ?? [], node =>
-        node.type === 'enum' && node.data?.id === guid,
-      );
-    case 'Transformation':
-      return findTreeNodeByMatch(rootNode.children ?? [], node =>
-        node.type === 'transformation' && node.data?.id === guid,
-      );
-    case 'ValidationRule':
-      return findTreeNodeByMatch(rootNode.children ?? [], node =>
-        node.type === 'validation' && Array.isArray(node.data?.conditions)
-          && node.data.conditions.some((condition: { id?: string }) => condition.id === guid),
-      );
-    default:
-      return findTreeNodeByMatch(rootNode.children ?? [], node => node.data?.id === guid);
-  }
-}
-
-function findTreeNodeWithAncestors(
-  nodes: TreeNode[],
-  ancestors: TreeNode[],
-  predicate: (node: TreeNode, ancestors: TreeNode[]) => boolean,
-): TreeNode | null {
-  for (const node of nodes) {
-    if (predicate(node, ancestors)) return node;
-    if (node.children) {
-      const found = findTreeNodeWithAncestors(node.children, [...ancestors, node], predicate);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-function extractExpressionFromContext(sourceContext: string): string | null {
-  const separatorIndex = sourceContext.indexOf(': ');
-  if (separatorIndex === -1) return null;
-  return sourceContext.slice(separatorIndex + 2).trim() || null;
-}
-

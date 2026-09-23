@@ -51,7 +51,8 @@ import { FnoIngestOverlay } from './FnoIngestPanel';
 import { ActivityBar } from './ActivityBar';
 import { TouchTitleTooltip } from './TouchTitleTooltip';
 import { useCompactLayout, useStackedLayout } from '../utils/responsive';
-import { t, locale, useLocale } from '../i18n';
+import { matchWorkspaceShortcut } from '../utils/workspace-shortcuts';
+import { t, useLocale } from '../i18n';
 
 // ────────────────────────── styles ──────────────────────────
 
@@ -362,13 +363,9 @@ export function App() {
   const treeNodes = useAppStore(s => s.treeNodes);
   const openTabs = useAppStore(s => s.openTabs);
   const activeTabId = useAppStore(s => s.activeTabId);
-  const cycleTheme = useAppStore(s => s.cycleTheme);
-  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
-  const setShowTechnicalDetails = useAppStore(s => s.setShowTechnicalDetails);
   const navigateBack = useAppStore(s => s.navigateBack);
   const navigateForward = useAppStore(s => s.navigateForward);
   const rebuildDerivedState = useAppStore(s => s.rebuildDerivedState);
-  const requestExplorerExpand = useAppStore(s => s.requestExplorerExpand);
   const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
   const whereUsedTrigger = useAppStore(s => s.whereUsedTrigger);
   const setSearchPanelMode = useAppStore(s => s.setSearchPanelMode);
@@ -485,41 +482,21 @@ export function App() {
       // Workspace shortcuts have nothing to act on while the landing page is
       // shown (panels are not mounted) — leave the browser's defaults.
       if (landingVisibleRef.current) return;
-      const mod = e.ctrlKey || e.metaKey;
       const target = e.target as HTMLElement | null;
       const inEditable = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || (target as HTMLElement).isContentEditable);
 
       if (inEditable) return;
 
-      if (mod && (e.key === 'f' || e.key === 'F')) {
-        e.preventDefault();
-        toggleSearch();
-        return;
-      }
-      if (mod && (e.key === 'u' || e.key === 'U')) {
-        e.preventDefault();
-        toggleWhereUsed();
-        return;
-      }
-      if (mod && (e.key === 'b' || e.key === 'B')) {
-        e.preventDefault();
-        toggleExplorer();
-        return;
-      }
-      if (mod && (e.key === 'j' || e.key === 'J')) {
-        e.preventDefault();
-        toggleProperties();
-        return;
-      }
-      if (e.altKey && e.key === 'ArrowLeft') {
-        e.preventDefault();
-        navigateBack();
-        return;
-      }
-      if (e.altKey && e.key === 'ArrowRight') {
-        e.preventDefault();
-        navigateForward();
-        return;
+      const shortcut = matchWorkspaceShortcut(e);
+      if (!shortcut) return;
+      e.preventDefault();
+      switch (shortcut) {
+        case 'search': toggleSearch(); break;
+        case 'whereUsed': toggleWhereUsed(); break;
+        case 'explorer': toggleExplorer(); break;
+        case 'properties': toggleProperties(); break;
+        case 'back': navigateBack(); break;
+        case 'forward': navigateForward(); break;
       }
     };
     window.addEventListener('keydown', handler);

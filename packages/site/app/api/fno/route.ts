@@ -9,20 +9,34 @@
  *
  * The target URL is passed in the `X-Fno-Target-Url` header. Only hosts that
  * match the F&O SaaS DNS patterns are allowed — this prevents the function
- * from being abused as an open proxy. Nothing is logged or stored: the
- * upstream body is streamed straight back to the caller.
+ * from being abused as an open proxy. Callers are checked server-side too:
+ * a browser request from a foreign origin is refused outright rather than
+ * merely left unreadable by CORS. Nothing is logged or stored: the upstream
+ * body is streamed straight back to the caller.
  */
 
 export const runtime = 'edge';
 
+/**
+ * F&O environment hosts — not the whole of *.dynamics.com, which also serves
+ * Dataverse/CRM and other products the SPA never talks to:
+ *   - `<env>.operations.dynamics.com`, `<env>.sandbox.operations.dynamics.com`
+ *     and their regional forms (`<env>.operations.eu.dynamics.com`,
+ *     `<env>.sandbox.operations.eu.dynamics.com`, …),
+ *   - cloud-hosted / legacy AX7 hosts: `<env>.cloudax.dynamics.com`,
+ *     `<env>.axcloud.dynamics.com`, `<env>.sandbox.ax.dynamics.com`.
+ * Keep in sync with packages/electron/src/fno/ipc.ts (which additionally
+ * allows `cloud.onebox` dev VMs — reachable only from the VM, never from here).
+ */
 const ALLOWED_HOST_PATTERNS = [
-  // Generic catch-all for *.dynamics.com (covers regional and sandbox suffixes
-  // such as .sandbox.operations.eu.dynamics.com, .cloudax.dynamics.com, etc).
-  /(^|\.)dynamics\.com$/i,
+  /^(?:[a-z0-9-]+\.)+operations(?:\.[a-z]{2,8})?\.dynamics\.com$/i,
+  /^(?:[a-z0-9-]+\.)+(?:cloudax|axcloud|sandbox\.ax)\.dynamics\.com$/i,
 ];
 
 function isAllowedTarget(url: URL): boolean {
   if (url.protocol !== 'https:') return false;
+  // No credentials or non-default port smuggled into the target.
+  if (url.username || url.password || url.port) return false;
   return ALLOWED_HOST_PATTERNS.some((re) => re.test(url.hostname));
 }
 
@@ -45,6 +59,25 @@ function isAllowedOrigin(origin: string | null, selfOrigin: string): origin is s
 }
 
 /**
+ * Server-side caller check. CORS only stops a foreign page from *reading* the
+ * response; the upstream call would still be made. So:
+ *   - an `Origin` header, when present, must be allowed;
+ *   - `Sec-Fetch-Site`, when present (every current browser sends it), must be
+ *     `same-origin`, or `cross-site`/`same-site` from an allowed origin. `none`
+ *     is a user typing the URL — never how the SPA calls the proxy.
+ * Non-browser callers send neither header and still have to present a bearer
+ * token F&O accepts, so they gain nothing they could not do directly.
+ */
+function isAllowedCaller(req: Request, selfOrigin: string): boolean {
+  const origin = req.headers.get('origin');
+  const originOk = origin === null || isAllowedOrigin(origin, selfOrigin);
+  if (!originOk) return false;
+  const site = req.headers.get('sec-fetch-site');
+  if (site === null || site === 'same-origin') return true;
+  return isAllowedOrigin(origin, selfOrigin);
+}
+
+/**
  * Same-origin requests (the staged SPA under /app) carry no `Origin` header on
  * GET and need no ACAO at all; cross-origin callers get ACAO only when their
  * origin is allowed. Preflight still answers with the method/header grants so
@@ -57,18 +90,27 @@ function corsHeaders(origin: string | null, selfOrigin: string): Record<string, 
     'Access-Control-Allow-Headers':
       'Authorization, Content-Type, Accept, X-Fno-Target-Url, X-Fno-Method',
     'Access-Control-Expose-Headers':
-      'Content-Type, X-Fno-Proxy-Upstream-Status, X-Fno-Proxy-Upstream-Location',
+      'Content-Type, Retry-After, X-Fno-Proxy-Upstream-Status, X-Fno-Proxy-Upstream-Location',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
+    // Responses carry tenant data fetched with the caller's token: never cache
+    // them anywhere, and never let a browser sniff them into something else.
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
   };
 }
 
 async function handler(req: Request): Promise<Response> {
   const origin = req.headers.get('origin');
-  const cors = corsHeaders(origin, new URL(req.url).origin);
+  const selfOrigin = new URL(req.url).origin;
+  const cors = corsHeaders(origin, selfOrigin);
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: cors });
+  }
+
+  if (!isAllowedCaller(req, selfOrigin)) {
+    return new Response('Caller origin not allowed', { status: 403, headers: cors });
   }
 
   const targetHeader = req.headers.get('x-fno-target-url');
@@ -157,6 +199,9 @@ async function handler(req: Request): Promise<Response> {
 
   const contentType = upstream.headers.get('content-type');
   if (contentType) responseHeaders.set('Content-Type', contentType);
+  // Lets the client honour F&O throttling (429/503) instead of guessing.
+  const retryAfter = upstream.headers.get('retry-after');
+  if (retryAfter) responseHeaders.set('Retry-After', retryAfter);
 
   return new Response(upstream.body, {
     status: upstream.status,

@@ -335,7 +335,7 @@ export default function HomePage() {
               The live F&amp;O connection signs you in with your own Entra application registration
               using the standard Microsoft authentication library. Because Finance &amp; Operations
               does not send CORS headers, those API calls pass through a stateless proxy that only
-              forwards to <code className="font-mono text-sm">*.dynamics.com</code> hosts and keeps
+              forwards to Finance &amp; Operations environment hosts and keeps
               nothing.
             </p>
             <Link

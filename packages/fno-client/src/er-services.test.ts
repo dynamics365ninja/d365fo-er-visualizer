@@ -1402,3 +1402,201 @@ describe('pickDisplayVersion', () => {
     expect(pickDisplayVersion(undefined)).toBeUndefined();
   });
 });
+
+/** The test runtime's AbortSignal and the one in the library typings differ nominally. */
+const asSignal = (signal: unknown) => signal as Parameters<typeof callErService>[6];
+
+describe('user-derived names in replacement strings', () => {
+  const source = {
+    solutionName: 'Invoice',
+    configurationName: 'Invoice',
+    componentType: 'DataModel',
+    hasContent: true,
+  } as ErConfigSummary;
+
+  it('keeps `$&`, `$1` and `$\'` literal when renaming an existing bundle', () => {
+    const next = relabelDownload(
+      {
+        xml: '<ErFnoBundle Name="Old" Version="3"><ERModelDefinition Name="Invoice" /></ErFnoBundle>',
+        syntheticPath: 'fno://x/Invoice/Invoice@3.xml',
+        source,
+      },
+      { envUrl: conn.envUrl, configurationName: "Cost $& $1 $' $` model" },
+    );
+    expect(next.xml).toContain(`Name="Cost $&amp; $1 $' $\` model"`);
+    expect(next.xml).toContain('<ERModelDefinition Name="Invoice" />');
+    expect(next.xml.match(/<ErFnoBundle/g)).toHaveLength(1);
+  });
+
+  it('keeps `$` sequences literal when adding a Name to a bundle that has none', () => {
+    const next = relabelDownload(
+      {
+        xml: '<ErFnoBundle Version="3"><ERModelDefinition Name="Invoice" /></ErFnoBundle>',
+        syntheticPath: 'fno://x/Invoice/Invoice@3.xml',
+        source,
+      },
+      { envUrl: conn.envUrl, configurationName: 'A $& B' },
+    );
+    expect(next.xml.startsWith('<ErFnoBundle Name="A $&amp; B" Version="3">')).toBe(true);
+  });
+
+  it('keeps `$` sequences literal when wrapping a bare payload (injectNameHint)', () => {
+    const next = relabelDownload(
+      {
+        xml: '<ERModelDefinition Name="Invoice" />',
+        syntheticPath: 'fno://x/Invoice/Invoice.xml',
+        source,
+      },
+      { envUrl: conn.envUrl, configurationName: 'Tax $1 $& report' },
+    );
+    expect(next.xml).toBe(
+      '<ErFnoBundle Name="Tax $1 $&amp; report"><ERModelDefinition Name="Invoice" /></ErFnoBundle>',
+    );
+  });
+});
+
+describe('callErService retries', () => {
+  it('retries 429 honouring Retry-After and then succeeds', async () => {
+    let calls = 0;
+    const { transport } = makeTransport({
+      post: () => {
+        calls++;
+        if (calls < 3) {
+          throw new FnoHttpError('throttled', 429, 'u', undefined, { 'retry-after': '0' });
+        }
+        return { ok: true };
+      },
+    });
+    await expect(
+      callErService(transport, conn, 'tok', ER_SERVICES.configurationList, 'op'),
+    ).resolves.toEqual({ ok: true });
+    expect(calls).toBe(3);
+  });
+
+  it('gives up after the retry budget and rethrows the last 503', async () => {
+    let calls = 0;
+    const { transport } = makeTransport({
+      post: () => {
+        calls++;
+        throw new FnoHttpError('unavailable', 503, 'u', undefined, { 'retry-after': '0' });
+      },
+    });
+    await expect(
+      callErService(transport, conn, 'tok', ER_SERVICES.configurationList, 'op'),
+    ).rejects.toMatchObject({ status: 503 });
+    expect(calls).toBe(4);
+  });
+
+  it('does not retry other statuses', async () => {
+    let calls = 0;
+    const { transport } = makeTransport({
+      post: () => {
+        calls++;
+        throw new FnoHttpError('boom', 500, 'u');
+      },
+    });
+    await expect(
+      callErService(transport, conn, 'tok', ER_SERVICES.configurationList, 'op'),
+    ).rejects.toMatchObject({ status: 500 });
+    expect(calls).toBe(1);
+  });
+
+  it('stops waiting when the signal aborts', async () => {
+    const ctrl = new AbortController();
+    const { transport } = makeTransport({
+      post: () => {
+        throw new FnoHttpError('throttled', 429, 'u', undefined, { 'retry-after': '20' });
+      },
+    });
+    const pending = callErService(transport, conn, 'tok', ER_SERVICES.configurationList, 'op', {}, asSignal(ctrl.signal));
+    setTimeout(() => ctrl.abort(new Error('cancelled')), 10);
+    await expect(pending).rejects.toThrow('cancelled');
+  });
+});
+
+describe('listSolutions concurrency', () => {
+  it('keeps at most six probes in flight and shares one discovery GET', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let discoveries = 0;
+    const transport: FnoTransport = {
+      async getJson(): Promise<never> {
+        throw new Error('unexpected getJson');
+      },
+      async getBinary(url: string): Promise<ArrayBuffer> {
+        // An all-empty result also enumerates the service groups for
+        // diagnostics; only the list-service discovery matters here.
+        if (url.endsWith(ER_SERVICES.configurationList)) discoveries++;
+        await new Promise(r => setTimeout(r, 5));
+        return new TextEncoder().encode(
+          `<Operations><Operation><Name>${ER_SERVICE_OPS.listSolutions[0]}</Name></Operation></Operations>`,
+        ).buffer as ArrayBuffer;
+      },
+      async postJson<T>(): Promise<T> {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise(r => setTimeout(r, 1));
+        inFlight--;
+        return [] as T;
+      },
+    };
+    await listSolutions(transport, conn, 'tok');
+    expect(maxInFlight).toBeLessThanOrEqual(6);
+    expect(maxInFlight).toBeGreaterThan(1);
+    expect(discoveries).toBe(1);
+  });
+
+  it('shares one in-flight discovery GET between concurrent callers', async () => {
+    let discoveries = 0;
+    const { transport } = makeTransport({
+      getBinary: () => {
+        discoveries++;
+        return new TextEncoder().encode('<Operations><Operation><Name>x</Name></Operation></Operations>').buffer as ArrayBuffer;
+      },
+    });
+    const results = await Promise.all([
+      listServiceOperations(transport, conn, 'tok', ER_SERVICES.configurationList),
+      listServiceOperations(transport, conn, 'tok', ER_SERVICES.configurationList),
+      listServiceOperations(transport, conn, 'tok', ER_SERVICES.configurationList),
+    ]);
+    expect(results).toEqual([['x'], ['x'], ['x']]);
+    expect(discoveries).toBe(1);
+  });
+});
+
+describe('listComponents error handling', () => {
+  const discovery = () =>
+    new TextEncoder().encode(
+      `<Operations><Operation><Name>${ER_SERVICE_OPS.listComponents[0]}</Name></Operation></Operations>`,
+    ).buffer as ArrayBuffer;
+
+  it('rethrows 401/403 instead of reporting an empty solution', async () => {
+    const { transport } = makeTransport({
+      getBinary: discovery,
+      post: () => { throw new FnoHttpError('unauthorized', 401, 'u'); },
+    });
+    await expect(listComponents(transport, conn, 'tok', 'Invoice')).rejects.toMatchObject({ status: 401 });
+  });
+
+  it('rethrows aborts', async () => {
+    const ctrl = new AbortController();
+    const { transport } = makeTransport({
+      getBinary: discovery,
+      post: () => {
+        ctrl.abort();
+        throw new DOMException('aborted', 'AbortError');
+      },
+    });
+    await expect(listComponents(transport, conn, 'tok', 'Invoice', asSignal(ctrl.signal))).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+  });
+
+  it('still treats a rejected parent (404) as no children', async () => {
+    const { transport } = makeTransport({
+      getBinary: discovery,
+      post: () => { throw new FnoHttpError('not found', 404, 'u'); },
+    });
+    await expect(listComponents(transport, conn, 'tok', 'Invoice')).resolves.toEqual([]);
+  });
+});

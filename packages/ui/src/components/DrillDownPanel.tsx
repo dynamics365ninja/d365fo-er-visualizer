@@ -50,21 +50,15 @@ import {
   ChevronRightRegular,
 } from '@fluentui/react-icons';
 import { useAppStore, resolveDeepExpression, selectMappingDefinition, getScopedMappingDefinitions } from '../state/store';
-import { locale, t } from '../i18n';
+import { locale, t, getLocale, useLocale, type Locale } from '../i18n';
 import { dsPathToExpression } from '../utils/ds-path';
 import { useResizableDialog } from '../utils/resizable-dialog';
 import { formatEnumDisplayName } from '../utils/enum-display';
-import { resolveLabel, buildLabelPool, labelDisplayText, collectLabelTranslations, getUserLanguageTag } from '../utils/label-resolver';
+import { resolveLabel, buildLabelPool, collectLabelTranslations, getUserLanguageTag } from '../utils/label-resolver';
 import { useCoarsePointer } from '../utils/responsive';
 import type { ERLabel } from '@er-visualizer/core';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
-interface Frame {
-  label: string;           // breadcrumb label
-  expression: string;      // expression being resolved
-  configIndex: number;     // config index to resolve from
-}
 
 export function getDrillDownEffectiveResolutionInput({
   selectedExpression,
@@ -93,14 +87,6 @@ export function getDrillDownEffectiveResolutionInput({
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function dsTypeBadge(ds: any): string {
-  if (ds.tableInfo)       return 'table';
-  if (ds.enumInfo)        return 'enum';
-  if (ds.classInfo)       return 'class';
-  if (ds.calculatedField) return 'calc';
-  return ds.type?.toLowerCase() ?? 'unknown';
-}
 
 /** Plural of `localizeBadgeLabel`, for the heading over a group of sources. */
 function localizeBadgeGroupLabel(badge: string): string {
@@ -184,14 +170,6 @@ function humanizeInternalName(token: string): string {
     .trim();
   if (!words) return locale === 'cs' ? 'Zdroj' : 'Source';
   return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
-}
-
-function localizeDatasourceType(ds: any): string {
-  if (ds.tableInfo) return localizeBadgeLabel('table');
-  if (ds.enumInfo) return localizeBadgeLabel('enum');
-  if (ds.classInfo) return localizeBadgeLabel('class');
-  if (ds.calculatedField) return localizeBadgeLabel('calc');
-  return localizeBadgeLabel(String(ds.type ?? 'unknown').toLowerCase());
 }
 
 function firstSegment(expr: string): string {
@@ -390,7 +368,7 @@ export function tokenizeERExpr(expr: string): ERToken[] {
         while (k < n && /[A-Za-z0-9_]/.test(expr[k])) k++;
         if (k < n && expr[k] === ':' && k + 1 < n && /[A-Za-z0-9_]/.test(expr[k + 1])) {
           k++;
-          while (k < n && /[A-Za-z0-9_.\-]/.test(expr[k])) k++;
+          while (k < n && /[A-Za-z0-9_.-]/.test(expr[k])) k++;
         }
         tokens.push({ kind: 'label', raw: expr.slice(i, k) });
         i = k; continue;
@@ -770,12 +748,6 @@ function ExpressionView({ expr, configIndex, onSegment, activeSegment }: Express
 
 // ─── Frame content ────────────────────────────────────────────────────────────
 
-interface FrameViewProps {
-  frame: Frame;
-  onPush: (newFrame: Frame) => void;
-  configurations: any[];
-}
-
 /** One row of the workbench's left-hand "Expression parts" list. */
 interface WorkbenchPart {
   id: string;
@@ -1068,6 +1040,8 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
   const findModelPathBindings = useAppStore(s => s.findModelPathBindings);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  // The tree's labels are localized when built, so a language switch must rebuild it.
+  const activeLocale = useLocale();
   const [showUnresolved, setShowUnresolved] = useState(false);
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
   const [peek, setPeek] = useState<{ label: string; expression: string; configIndex: number } | null>(null);
@@ -1087,7 +1061,8 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
     resolveDatasource,
     findModelPathBindings,
     includeUnresolvedRefs: showUnresolved,
-  }), [expression, configIndex, configurations, resolveModelPath, resolveDatasource, findModelPathBindings, showUnresolved]);
+    locale: activeLocale,
+  }), [expression, configIndex, configurations, resolveModelPath, resolveDatasource, findModelPathBindings, showUnresolved, activeLocale]);
 
   const usedSources = useMemo(() => collectUsedSources({
     expression,
@@ -1095,7 +1070,8 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
     configurations,
     resolveModelPath,
     resolveDatasource,
-  }), [expression, configIndex, configurations, resolveModelPath, resolveDatasource]);
+    locale: activeLocale,
+  }), [expression, configIndex, configurations, resolveModelPath, resolveDatasource, activeLocale]);
 
   /* The used-data list runs to dozens of rows on a real expression, so it
      starts folded: the outline above it is the answer, this is the evidence. */
@@ -1184,6 +1160,7 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
       resolveDatasource,
       findModelPathBindings,
       includeUnresolvedRefs: true,
+      locale: activeLocale,
     });
     const target = normalizeExpr(peek.expression);
     let children = built.children;
@@ -1194,7 +1171,7 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
       children = only.children;
     }
     return children === built.children ? built : { ...built, children };
-  }, [peek, configurations, resolveModelPath, resolveDatasource, findModelPathBindings]);
+  }, [peek, configurations, resolveModelPath, resolveDatasource, findModelPathBindings, activeLocale]);
 
   const peekIndex = useMemo(() => (peekTree ? buildLineageIndex(peekTree) : null), [peekTree]);
   const [peekOpenIds, setPeekOpenIds] = useState<Set<string>>(new Set());
@@ -1597,6 +1574,8 @@ interface TreeBuildContext {
     configIndex: number;
   }>;
   includeUnresolvedRefs: boolean;
+  /** Language the tree's own labels are written in. */
+  locale: Locale;
   /** Remaining node budget, decremented as nodes are produced. */
   budget: number;
 }
@@ -1641,7 +1620,7 @@ function buildTreeNode(
     const mappingNode: TreeExprNode = {
       id: `${id}-m`,
       kind: 'mapping',
-      label: locale === 'cs' ? 'Mapování' : 'Mapping',
+      label: ctx.locale === 'cs' ? 'Mapování' : 'Mapping',
       sublabel: bindingExpr,
       badge: 'mapping',
       expression: bindingExpr,
@@ -1838,7 +1817,7 @@ function buildDsNode(
       });
     }
   } else if (ds.enumInfo) {
-    const enumDisplay = qualify(formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo));
+    const enumDisplay = qualify(formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo, ctx.locale));
     dsNode.badge = 'enum';
     dsNode.sublabel = !sameLabel(enumDisplay, ds.name) ? enumDisplay : undefined;
     dsNode.leafType = 'enum';
@@ -1867,7 +1846,7 @@ function buildDsNode(
     dsNode.badge = 'param';
     dsNode.sublabel = valueExpr
       ? valueExpr
-      : [edt, locale === 'cs' ? 'zadává uživatel při spuštění' : 'entered by the user at run time']
+      : [edt, ctx.locale === 'cs' ? 'zadává uživatel při spuštění' : 'entered by the user at run time']
           .filter(Boolean).join(' — ');
     if (valueExpr) expandExpression(dsNode, valueExpr, 'ds-param-ref', configIndex);
   } else if (ds.groupByInfo) {
@@ -1898,8 +1877,10 @@ export function collectUsedSources(options: {
   configurations: any[];
   resolveModelPath: (p: string) => any;
   resolveDatasource: (n: string, ci: number) => any;
+  /** Language of the source details (enum kinds, parameter notes). Defaults to the app's. */
+  locale?: Locale;
 }): UsedSource[] {
-  const { expression, configIndex, configurations, resolveModelPath, resolveDatasource } = options;
+  const { expression, configIndex, configurations, resolveModelPath, resolveDatasource, locale = getLocale() } = options;
 
   const out = new Map<string, UsedSource>();
   const add = (src: UsedSource) => {
@@ -1915,6 +1896,7 @@ export function collectUsedSources(options: {
       configurations,
       resolveModelPath,
       resolveDatasource,
+      locale,
     });
     const walk = (node: TreeExprNode): void => {
       if ((node.kind === 'datasource' || node.kind === 'calcfield' || node.kind === 'leaf')
@@ -2017,10 +1999,13 @@ export function buildExpressionTree(options: {
   resolveDatasource: (n: string, ci: number) => any;
   findModelPathBindings?: TreeBuildContext['findModelPathBindings'];
   includeUnresolvedRefs?: boolean;
+  /** Language the tree's labels are written in. Defaults to the app's. */
+  locale?: Locale;
 }): TreeExprNode {
   const {
     expression, configIndex, configurations,
     resolveModelPath, resolveDatasource, findModelPathBindings, includeUnresolvedRefs = false,
+    locale = getLocale(),
   } = options;
 
   const dsTokens = uniqueDsTokens(tokenizeERExpr(expression));
@@ -2040,6 +2025,7 @@ export function buildExpressionTree(options: {
       resolveDatasource,
       findModelPathBindings,
       includeUnresolvedRefs,
+      locale,
       budget: MAX_TREE_NODES,
     };
     dsTokens.forEach((tok, ti) => {
@@ -2382,14 +2368,16 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill, i
   const pushToast = useAppStore(s => s.pushToast);
   const flowRef = React.useRef<any>(null);
   const [selectedNodeId, setSelectedNodeId] = useState('root');
+  // The tree's labels are localized when built, so a language switch must rebuild it.
+  const activeLocale = useLocale();
 
   // Build tree data structure
   const rootNode = useMemo<TreeExprNode>(
     () => buildExpressionTree({
       expression, configIndex, configurations,
-      resolveModelPath, resolveDatasource, includeUnresolvedRefs,
+      resolveModelPath, resolveDatasource, includeUnresolvedRefs, locale: activeLocale,
     }),
-    [expression, configIndex, configurations, includeUnresolvedRefs, resolveModelPath, resolveDatasource],
+    [expression, configIndex, configurations, includeUnresolvedRefs, resolveModelPath, resolveDatasource, activeLocale],
   );
 
   React.useEffect(() => {

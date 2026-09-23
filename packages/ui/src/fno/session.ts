@@ -6,12 +6,17 @@
  *   const solutions = await fnoSession.listSolutions(profile);
  *   ...
  *
- * Tokens are cached in-memory keyed by connection id with a small safety
- * margin so we don't hand out about-to-expire tokens.
+ * Tokens are cached in-memory keyed by connection id *and* the audience they
+ * were issued for, with a small safety margin so we don't hand out
+ * about-to-expire tokens. The audience is part of the key because editing a
+ * profile keeps its id: a token for the old environment URL must never be sent
+ * to the new one.
  */
 
 import {
+  authContextKey,
   buildFnoPath,
+  buildFnoScope,
   downloadConfigXml,
   listComponents,
   listSolutions,
@@ -85,7 +90,7 @@ function harvestLabels(component: ErConfigSummary, xml: string): void {
 /** Structural fingerprint of a downloaded payload, for the debug recorder. */
 function describePayload(xml: string): Record<string, unknown> {
   const directions = new Set<string>();
-  for (const m of xml.matchAll(/([A-Za-z]*Direction)\s*=\s*"([^"]{0,80})"/g)) {
+  for (const m of xml.matchAll(/\b([A-Za-z]*Direction)\s*=\s*"([^"]{0,80})"/g)) {
     directions.add(`${m[1]}=${m[2]}`);
     if (directions.size >= 4) break;
   }
@@ -100,6 +105,37 @@ function describePayload(xml: string): Record<string, unknown> {
 }
 
 const tokenCache = new Map<string, AuthResult>();
+
+/**
+ * Cache key for a connection's token: the profile id plus everything that
+ * decides which token Entra issues (tenant, client and the environment scope).
+ * Exported for tests.
+ */
+export function tokenCacheKey(conn: FnoConnection): string {
+  return `${conn.id}|${authContextKey(conn)}|${buildFnoScope(conn)}`;
+}
+
+function dropProfileTokens(connId: string): void {
+  const prefix = `${connId}|`;
+  for (const key of [...tokenCache.keys()]) {
+    if (key.startsWith(prefix)) tokenCache.delete(key);
+  }
+}
+
+/** A token is only reusable for the environment it was issued for. */
+function sameEnv(a: string, b: string): boolean {
+  const norm = (u: string) => u.trim().replace(/\/+$/, '').toLowerCase();
+  return norm(a) === norm(b);
+}
+
+/**
+ * Optional capability of an auth adapter: finish a sign-in without any UI.
+ * Only the browser adapter has it — it is what resumes a redirect sign-in after
+ * the page reloads, where no user gesture is available to open a popup.
+ */
+interface SilentAuthProvider {
+  acquireTokenSilentOnly?(conn: FnoConnection): Promise<AuthResult | null>;
+}
 let sharedTransport: FnoTransport | null = null;
 
 function transport(): FnoTransport {
@@ -108,24 +144,48 @@ function transport(): FnoTransport {
 }
 
 async function ensureToken(conn: FnoConnection, signal?: AbortSignal): Promise<AuthResult> {
-  const cached = tokenCache.get(conn.id);
-  if (cached && cached.expiresAt > Date.now() + TOKEN_MIN_LIFETIME_MS) {
+  // A cancelled caller must never get as far as an interactive sign-in.
+  signal?.throwIfAborted();
+  const key = tokenCacheKey(conn);
+  const cached = tokenCache.get(key);
+  if (cached && cached.expiresAt > Date.now() + TOKEN_MIN_LIFETIME_MS && sameEnv(cached.envUrl, conn.envUrl)) {
     return cached;
   }
   const fresh = await (await getAuthProvider()).acquireToken(conn, signal);
-  tokenCache.set(conn.id, fresh);
+  rememberToken(conn, fresh);
   return fresh;
+}
+
+function rememberToken(conn: FnoConnection, auth: AuthResult): void {
+  // One live token per profile: an older key (previous URL) is dead weight.
+  dropProfileTokens(conn.id);
+  tokenCache.set(tokenCacheKey(conn), auth);
 }
 
 export const fnoSession = {
   async signIn(conn: FnoConnection, signal?: AbortSignal): Promise<AuthResult> {
     const result = await (await getAuthProvider()).acquireToken(conn, signal);
-    tokenCache.set(conn.id, result);
+    rememberToken(conn, result);
+    return result;
+  },
+
+  /**
+   * Finish a sign-in without any interactive UI — no popup, no redirect.
+   * Resolves to `null` when that is not possible (nothing cached, the adapter
+   * cannot do it, or the silent attempt failed); the caller then waits for the
+   * user to click Connect. Used to resume after a redirect round trip, where
+   * the page has no user gesture to open a popup with.
+   */
+  async resumeSignIn(conn: FnoConnection): Promise<AuthResult | null> {
+    const provider = (await getAuthProvider()) as SilentAuthProvider;
+    if (typeof provider.acquireTokenSilentOnly !== 'function') return null;
+    const result = await provider.acquireTokenSilentOnly(conn);
+    if (result) rememberToken(conn, result);
     return result;
   },
 
   async signOut(conn: FnoConnection): Promise<void> {
-    tokenCache.delete(conn.id);
+    dropProfileTokens(conn.id);
     await (await getAuthProvider()).signOut(conn);
   },
 
@@ -212,9 +272,12 @@ export const fnoSession = {
     });
   },
 
-  /** Drop cached access token; useful for tests and explicit refresh. */
+  /**
+   * Drop cached access tokens — for one profile (after it was edited or
+   * deleted) or all of them.
+   */
   clearTokenCache(connId?: string): void {
-    if (connId) tokenCache.delete(connId);
+    if (connId) dropProfileTokens(connId);
     else tokenCache.clear();
   },
 };

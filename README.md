@@ -199,7 +199,9 @@ site's `public/app`, then `next build`.
 > `packages/site` — the old `packages/ui/vercel.json` and `packages/ui/api/fno.ts` have been
 > replaced by the site package and its edge route.
 
-The proxy forwards only to `*.dynamics.com` over HTTPS and stores nothing; the target URL travels
+The proxy forwards only to F&O environment hosts (`*.operations[.<region>].dynamics.com`, `*.cloudax`,
+`*.axcloud`, `*.sandbox.ax.dynamics.com`) over HTTPS, refuses callers from foreign origins, and stores
+nothing; the target URL travels
 in the `X-Fno-Target-Url` header. CORS headers are only issued for the site's own origin and for
 origins listed in the optional `FNO_PROXY_ALLOWED_ORIGINS` (comma-separated, e.g.
 `http://localhost:5173,https://preview.example.com`); the same-origin SPA under `/app` needs

@@ -9,7 +9,13 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeAll } from 'vitest';
 import JSZip from 'jszip';
-import { parseXlsxBase64, type XlsxWorkbook, type XlsxCellStyle } from './xlsx-parser.js';
+import {
+  parseXlsxBase64,
+  splitDefinedNameAreas,
+  decodeXmlEntities,
+  XlsxTooLargeError,
+  type XlsxWorkbook,
+} from './xlsx-parser.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = resolve(__dirname, '../../../../scripts/fixtures/template.b64');
@@ -240,5 +246,166 @@ describe('xlsx-parser — drawing layer', () => {
 
   it('reads explicit row heights', () => {
     expect(sheet.rows[0]!.height).toBe(30);
+  });
+});
+
+// ── Entities, sheet-scoped names, decompression budget (synthetic, no fixture) ──
+
+const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+/** Two sheets, one of them named with an entity, plus every flavour of defined name. */
+async function buildWorkbookWithNames(extraFiles: Record<string, string> = {}): Promise<string> {
+  const zip = new JSZip();
+  zip.file('xl/workbook.xml',
+    `<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="${REL_NS}">` +
+    `<sheets>` +
+      `<sheet name="R&amp;D" sheetId="7" r:id="rId1"/>` +
+      `<sheet name="My sheet" sheetId="3" r:id="rId2"/>` +
+    `</sheets>` +
+    `<definedNames>` +
+      // The same name, local to each sheet — must not overwrite each other.
+      `<definedName name="Total" localSheetId="0">'R&amp;D'!$B$2</definedName>` +
+      `<definedName name="Total" localSheetId="1">'My sheet'!$C$4:$D$5</definedName>` +
+      // Workbook-scoped, quoted sheet name with a doubled quote and a "!" in it.
+      `<definedName name="Quoted">'It''s!odd'!$A$1</definedName>` +
+      // Multi-area: the first area anchors the name.
+      `<definedName name="Multi">'My sheet'!$E$6:$F$7,'R&amp;D'!$A$9</definedName>` +
+      // Not a cell reference — dropped.
+      `<definedName name="Broken">#REF!</definedName>` +
+    `</definedNames>` +
+    `</workbook>`);
+  zip.file('xl/_rels/workbook.xml.rels',
+    `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+    `<Relationship Id="rId1" Type="${REL_NS}/worksheet" Target="worksheets/sheet1.xml"/>` +
+    `<Relationship Id="rId2" Type="${REL_NS}/worksheet" Target="worksheets/sheet2.xml"/>` +
+    `</Relationships>`);
+  zip.file('xl/sharedStrings.xml',
+    `<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+    `<si><t>R&amp;D</t></si>` +
+    // Already-escaped text must come out as the literal "&lt;", not as "<".
+    `<si><t>a &amp;lt; b</t></si>` +
+    `<si><r><t>Tom </t></r><r><t>&amp; Jerry</t></r><rPh sb="0" eb="1"><t>PHONETIC</t></rPh></si>` +
+    `</sst>`);
+  zip.file('xl/worksheets/sheet1.xml',
+    `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>` +
+    `<row r="1">` +
+      `<c r="A1" t="s"><v>0</v></c>` +
+      `<c r="B1" t="s"><v>1</v></c>` +
+      `<c r="C1" t="s"><v>2</v></c>` +
+      `<c r="D1" t="inlineStr"><is><r><t>&lt;b&gt;</t></r><r><t> &#169; &#x263A;</t></r></is></c>` +
+      `<c r="E1" t="str"><f>A1</f><v>Q&amp;A</v></c>` +
+    `</row>` +
+    `</sheetData></worksheet>`);
+  zip.file('xl/worksheets/sheet2.xml',
+    `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>` +
+    `<row r="1"><c r="A1"><v>1</v></c></row>` +
+    `</sheetData></worksheet>`);
+  for (const [path, content] of Object.entries(extraFiles)) zip.file(path, content);
+  return zip.generateAsync({ type: 'base64', compression: 'DEFLATE' });
+}
+
+describe('xlsx-parser — XML entities', () => {
+  let wb: XlsxWorkbook;
+  beforeAll(async () => { wb = await parseXlsxBase64(await buildWorkbookWithNames()); });
+
+  const cell = (ref: string) => wb.sheets[0]!.rows.flatMap(r => r.cells).find(c => c.ref === ref)!;
+
+  it('decodes shared strings', () => {
+    expect(cell('A1').value).toBe('R&D');
+  });
+
+  it('decodes exactly once', () => {
+    expect(cell('B1').value).toBe('a &lt; b');
+  });
+
+  it('joins rich-text runs and leaves out phonetic hints', () => {
+    expect(cell('C1').value).toBe('Tom & Jerry');
+  });
+
+  it('decodes inline strings across runs, numeric references included', () => {
+    expect(cell('D1').value).toBe('<b> © ☺');
+  });
+
+  it('decodes formula string results', () => {
+    expect(cell('E1').value).toBe('Q&A');
+  });
+
+  it('decodes sheet names', () => {
+    expect(wb.sheets.map(s => s.name)).toEqual(['R&D', 'My sheet']);
+  });
+});
+
+describe('xlsx-parser — defined names keep their sheet', () => {
+  let wb: XlsxWorkbook;
+  beforeAll(async () => { wb = await parseXlsxBase64(await buildWorkbookWithNames()); });
+
+  it('keeps each sheet-local definition of a repeated name', () => {
+    expect(wb.namedAreas.filter(n => n.name === 'TOTAL')).toEqual([
+      { name: 'TOTAL', sheet: 'R&D', scopeSheet: 'R&D', anchor: 'B2', area: { startCol: 2, startRow: 2, endCol: 2, endRow: 2 } },
+      { name: 'TOTAL', sheet: 'My sheet', scopeSheet: 'My sheet', anchor: 'C4', area: { startCol: 3, startRow: 4, endCol: 4, endRow: 5 } },
+    ]);
+  });
+
+  it('reads quoted sheet names with doubled quotes and "!"', () => {
+    const quoted = wb.namedAreas.find(n => n.name === 'QUOTED')!;
+    expect(quoted.sheet).toBe("It's!odd");
+    expect(quoted.scopeSheet).toBeUndefined();
+    expect(quoted.anchor).toBe('A1');
+  });
+
+  it('anchors a multi-area name on its first area', () => {
+    const multi = wb.namedAreas.find(n => n.name === 'MULTI')!;
+    expect(multi.sheet).toBe('My sheet');
+    expect(multi.anchor).toBe('E6');
+    expect(wb.definedNames.get('MULTI')).toBe('E6');
+    expect(wb.definedRanges.get('MULTI')).toEqual({ startCol: 5, startRow: 6, endCol: 6, endRow: 7 });
+  });
+
+  it('drops names that do not point at cells', () => {
+    expect(wb.namedAreas.some(n => n.name === 'BROKEN')).toBe(false);
+  });
+
+  it('keeps the first definition in the sheet-less maps', () => {
+    expect(wb.definedNames.get('TOTAL')).toBe('B2');
+  });
+});
+
+describe('splitDefinedNameAreas', () => {
+  it('splits plain and quoted areas', () => {
+    expect(splitDefinedNameAreas("Sheet1!$A$1:$B$2,'a, b'!$C$3")).toEqual([
+      { sheet: 'Sheet1', cells: '$A$1:$B$2' },
+      { sheet: 'a, b', cells: '$C$3' },
+    ]);
+  });
+
+  it('leaves the sheet out when there is no prefix', () => {
+    expect(splitDefinedNameAreas('$A$1')).toEqual([{ sheet: undefined, cells: '$A$1' }]);
+  });
+});
+
+describe('decodeXmlEntities', () => {
+  it('decodes named and numeric references in one pass', () => {
+    expect(decodeXmlEntities('&lt;&amp;amp;&#38;lt;&#x41;&quot;&apos;&gt;')).toBe('<&amp;&lt;A"\'>');
+  });
+
+  it('leaves unknown or out-of-range references alone', () => {
+    expect(decodeXmlEntities('&nbsp; &#99999999;')).toBe('&nbsp; &#99999999;');
+  });
+});
+
+describe('xlsx-parser — decompression budget', () => {
+  // Highly compressible, so the zip itself stays small while it inflates to 2 MB.
+  const padding = { 'xl/theme/theme1.xml': 'x'.repeat(2 * 1024 * 1024) };
+
+  it('refuses a workbook that inflates past the limit', async () => {
+    const base64 = await buildWorkbookWithNames(padding);
+    expect(base64.length).toBeLessThan(64 * 1024);
+    await expect(parseXlsxBase64(base64, { maxUncompressedBytes: 1024 * 1024 }))
+      .rejects.toBeInstanceOf(XlsxTooLargeError);
+  });
+
+  it('opens the same workbook under the default limit', async () => {
+    const wb = await parseXlsxBase64(await buildWorkbookWithNames(padding));
+    expect(wb.sheets).toHaveLength(2);
   });
 });

@@ -5,7 +5,6 @@
 
 import {
   PublicClientApplication,
-  InteractionRequiredAuthError,
   BrowserAuthError,
   LogLevel,
   type Configuration,
@@ -26,12 +25,55 @@ import {
 import { clearRedirectPending, computeRedirectUri, markRedirectPending } from './redirect-state';
 import { BUILT_IN_CLIENT_ID } from './built-in-client';
 
-const pool = new Map<string, PublicClientApplication>();
-/** Auth response picked up by `handleRedirectPromise`, consumed by the next `acquireToken`. */
+/**
+ * One MSAL instance per auth context, cached as the *initialisation promise* so
+ * concurrent first calls share it — two instances would both run
+ * `handleRedirectPromise`, and only one of them can consume the response.
+ */
+const pool = new Map<string, Promise<PublicClientApplication>>();
+/**
+ * Auth response picked up by `handleRedirectPromise`, consumed by the next
+ * `acquireToken` *for the same environment*. Keyed by auth context, which every
+ * profile on the built-in registration shares — so the scope is checked on the
+ * way out (`takeRedirectResult`) before the token is handed to anyone.
+ */
 const redirectResults = new Map<string, AuthenticationResult>();
 
 function appKey(conn: FnoConnection): string {
   return authContextKey(conn, BUILT_IN_CLIENT_ID);
+}
+
+/** `https://env.dynamics.com/.default` → `https://env.dynamics.com`, lower-cased. */
+function scopeResource(scope: string): string {
+  const trimmed = scope.trim().replace(/\/\.default$/i, '').replace(/\/+$/, '');
+  try {
+    return new URL(trimmed).origin.toLowerCase();
+  } catch {
+    return trimmed.toLowerCase();
+  }
+}
+
+/**
+ * True when a redirect response was issued for `scope`. The redirect request
+ * carries the scope in its `state`, which Entra echoes back verbatim; the
+ * granted scopes are the fallback for a response without it.
+ */
+export function redirectResultMatchesScope(
+  result: Pick<AuthenticationResult, 'state' | 'scopes'>,
+  scope: string,
+): boolean {
+  const wanted = scopeResource(scope);
+  if (result.state) return scopeResource(result.state) === wanted;
+  return (result.scopes ?? []).some(s => scopeResource(s) === wanted);
+}
+
+/** Hand out (once) the redirect response for this connection's environment, if any. */
+function takeRedirectResult(conn: FnoConnection, scope: string): AuthenticationResult | null {
+  const key = appKey(conn);
+  const result = redirectResults.get(key);
+  if (!result || !redirectResultMatchesScope(result, scope)) return null;
+  redirectResults.delete(key);
+  return result;
 }
 
 /**
@@ -40,10 +82,20 @@ function appKey(conn: FnoConnection): string {
  */
 export { computeRedirectUri } from './redirect-state';
 
-async function getOrCreate(conn: FnoConnection): Promise<PublicClientApplication> {
+function getOrCreate(conn: FnoConnection): Promise<PublicClientApplication> {
   const key = appKey(conn);
   const existing = pool.get(key);
   if (existing) return existing;
+  const created = createApp(conn, key);
+  pool.set(key, created);
+  // A failed initialisation must not stick: the next call gets a fresh try.
+  created.catch(() => {
+    if (pool.get(key) === created) pool.delete(key);
+  });
+  return created;
+}
+
+async function createApp(conn: FnoConnection, key: string): Promise<PublicClientApplication> {
   const config: Configuration = {
     auth: {
       clientId: resolveClientId(conn, BUILT_IN_CLIENT_ID),
@@ -84,7 +136,6 @@ async function getOrCreate(conn: FnoConnection): Promise<PublicClientApplication
     console.error('[BrowserAuthProvider] handleRedirectPromise failed', err);
     clearRedirectPending();
   }
-  pool.set(key, app);
   return app;
 }
 
@@ -159,24 +210,10 @@ function buildSignInErrorMessage(err: unknown): string {
 export class BrowserAuthProvider implements AuthProvider {
   async acquireToken(conn: FnoConnection): Promise<AuthResult> {
     const app = await getOrCreate(conn);
-    const scopes = [buildFnoScope(conn)];
-    // A sign-in that completed through the redirect fallback is already done —
-    // hand back its token instead of starting a new interactive round trip.
-    const fromRedirect = redirectResults.get(appKey(conn));
-    if (fromRedirect) {
-      redirectResults.delete(appKey(conn));
-      return resultToAuth(fromRedirect, conn.envUrl);
-    }
-    const accounts = app.getAllAccounts();
-    if (accounts.length > 0) {
-      try {
-        const silent = await app.acquireTokenSilent({ account: accounts[0], scopes });
-        return resultToAuth(silent, conn.envUrl);
-      } catch {
-        // Every silent-token failure (InteractionRequiredAuthError, expired
-        // refresh token, network, ...) falls through to the interactive flow.
-      }
-    }
+    const scope = buildFnoScope(conn);
+    const scopes = [scope];
+    const silent = await this.trySilent(app, conn, scope);
+    if (silent) return silent;
     try {
       const popup = await app.acquireTokenPopup({ scopes, prompt: 'select_account' });
       return resultToAuth(popup, conn.envUrl);
@@ -189,11 +226,44 @@ export class BrowserAuthProvider implements AuthProvider {
         // `handleRedirectPromise` above finishes the sign-in on the way back.
         console.warn('[BrowserAuthProvider] popup unusable, falling back to redirect');
         markRedirectPending(conn.id);
-        await app.acquireTokenRedirect({ scopes, prompt: 'select_account' });
+        // `state` comes back verbatim — it is how the response is matched to
+        // this environment and not handed to another profile's request.
+        await app.acquireTokenRedirect({ scopes, prompt: 'select_account', state: scope });
         // acquireTokenRedirect navigates away; this never resolves normally.
         return new Promise<AuthResult>(() => {});
       }
       throw new FnoAuthError(buildSignInErrorMessage(err), err);
+    }
+  }
+
+  /**
+   * Token without any UI: the redirect response, or MSAL's silent flow.
+   * `null` when either would need the user. Never opens a popup or navigates —
+   * safe to call without a user gesture (e.g. right after a redirect reload).
+   */
+  async acquireTokenSilentOnly(conn: FnoConnection): Promise<AuthResult | null> {
+    const app = await getOrCreate(conn);
+    return this.trySilent(app, conn, buildFnoScope(conn));
+  }
+
+  private async trySilent(
+    app: PublicClientApplication,
+    conn: FnoConnection,
+    scope: string,
+  ): Promise<AuthResult | null> {
+    // A sign-in that completed through the redirect fallback is already done —
+    // hand back its token instead of starting a new interactive round trip.
+    const fromRedirect = takeRedirectResult(conn, scope);
+    if (fromRedirect) return resultToAuth(fromRedirect, conn.envUrl);
+    const accounts = app.getAllAccounts();
+    if (accounts.length === 0) return null;
+    try {
+      const silent = await app.acquireTokenSilent({ account: accounts[0], scopes: [scope] });
+      return resultToAuth(silent, conn.envUrl);
+    } catch {
+      // Every silent-token failure (InteractionRequiredAuthError, expired
+      // refresh token, network, ...) means "needs the user".
+      return null;
     }
   }
 

@@ -5,52 +5,83 @@
  */
 
 import type { FnoTransport } from '@er-visualizer/fno-client';
-import { FnoHttpError } from '@er-visualizer/fno-client';
-import { getElectronApi } from './electron-bridge';
+import { FnoHttpError, parseJsonResponseText } from '@er-visualizer/fno-client';
+import { getElectronApi, type ElectronFnoRequest, type ElectronFnoResponse } from './electron-bridge';
+
+/**
+ * Both transports report failures the same way: non-2xx is an `FnoHttpError`
+ * carrying the body (an upstream redirect arrives as the 502 both the web
+ * proxy and the Electron main process synthesize), and a 2xx body that should
+ * be JSON but is not goes through `parseJsonResponseText` — so a sign-in page
+ * served with 200 is an auth error on either host, never "empty content".
+ */
+
+function newRequestId(): string {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
 
 class ElectronFnoTransport implements FnoTransport {
-  async getJson<T = unknown>(url: string, token: string, signal?: AbortSignal): Promise<T> {
+  /**
+   * One IPC round trip. The request carries an id so an abort of `signal`
+   * cancels the `net.request` in the main process rather than leaving it to
+   * run to completion.
+   */
+  private async send(payload: Omit<ElectronFnoRequest, 'requestId'>, signal?: AbortSignal): Promise<ElectronFnoResponse> {
     const api = getElectronApi();
     if (!api?.fnoRequest) throw new Error('Electron IPC not available');
     signal?.throwIfAborted?.();
-    const res = await api.fnoRequest({ url, token, responseType: 'json', timeoutMs: 20_000 });
+    const requestId = newRequestId();
+    const onAbort = () => api.fnoAbort?.(requestId);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    let res: ElectronFnoResponse;
+    try {
+      res = await api.fnoRequest({ ...payload, requestId });
+    } catch (err) {
+      // An aborted request comes back as a generic IPC error; report the
+      // caller's abort reason instead.
+      signal?.throwIfAborted?.();
+      throw err;
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+    }
     signal?.throwIfAborted?.();
     if (res.status < 200 || res.status >= 300) {
-      throw new FnoHttpError(`${res.status} ${res.statusText}`, res.status, url, res.bodyText);
+      throw new FnoHttpError(`${res.status} ${res.statusText}`, res.status, payload.url, res.bodyText, res.headers);
     }
-    return res.json as T;
+    return res;
+  }
+
+  private json<T>(res: ElectronFnoResponse, url: string): T {
+    if (res.json !== undefined) return res.json as T;
+    return parseJsonResponseText(res.bodyText ?? '', url, res.status) as T;
+  }
+
+  async getJson<T = unknown>(url: string, token: string, signal?: AbortSignal): Promise<T> {
+    const res = await this.send({ url, token, responseType: 'json', timeoutMs: 20_000 }, signal);
+    return this.json<T>(res, url);
   }
 
   async getBinary(url: string, token: string, signal?: AbortSignal): Promise<ArrayBuffer> {
-    const api = getElectronApi();
-    if (!api?.fnoRequest) throw new Error('Electron IPC not available');
-    signal?.throwIfAborted?.();
-    const res = await api.fnoRequest({ url, token, responseType: 'binary', timeoutMs: 60_000 });
-    signal?.throwIfAborted?.();
-    if (res.status < 200 || res.status >= 300) {
-      throw new FnoHttpError(`${res.status} ${res.statusText}`, res.status, url, res.bodyText);
-    }
+    const res = await this.send({ url, token, responseType: 'binary', timeoutMs: 60_000 }, signal);
     return base64ToArrayBuffer(res.binaryBase64 ?? '');
   }
 
   async postJson<T = unknown>(url: string, token: string, body: unknown, signal?: AbortSignal): Promise<T> {
-    const api = getElectronApi();
-    if (!api?.fnoRequest) throw new Error('Electron IPC not available');
-    signal?.throwIfAborted?.();
-    const res = await api.fnoRequest({
-      url,
-      token,
-      method: 'POST',
-      responseType: 'json',
-      timeoutMs: 20_000,
-      body: JSON.stringify(body ?? {}),
-      contentType: 'application/json; charset=utf-8',
-    });
-    signal?.throwIfAborted?.();
-    if (res.status < 200 || res.status >= 300) {
-      throw new FnoHttpError(`${res.status} ${res.statusText}`, res.status, url, res.bodyText);
-    }
-    return res.json as T;
+    const res = await this.send(
+      {
+        url,
+        token,
+        method: 'POST',
+        responseType: 'json',
+        timeoutMs: 20_000,
+        body: JSON.stringify(body ?? {}),
+        contentType: 'application/json; charset=utf-8',
+      },
+      signal,
+    );
+    return this.json<T>(res, url);
   }
 }
 
@@ -78,11 +109,8 @@ class BrowserFnoTransport implements FnoTransport {
       signal,
       credentials: 'omit',
     });
-    if (!res.ok) {
-      const text = await safeText(res);
-      throw new FnoHttpError(`${res.status} ${res.statusText}`, res.status, url, text);
-    }
-    return (await res.json()) as T;
+    await throwIfNotOk(res, url);
+    return parseJsonResponseText(await res.text(), url, res.status) as T;
   }
 
   async getBinary(url: string, token: string, signal?: AbortSignal): Promise<ArrayBuffer> {
@@ -97,10 +125,7 @@ class BrowserFnoTransport implements FnoTransport {
       signal,
       credentials: 'omit',
     });
-    if (!res.ok) {
-      const text = await safeText(res);
-      throw new FnoHttpError(`${res.status} ${res.statusText}`, res.status, url, text);
-    }
+    await throwIfNotOk(res, url);
     return await res.arrayBuffer();
   }
 
@@ -118,12 +143,19 @@ class BrowserFnoTransport implements FnoTransport {
       signal,
       credentials: 'omit',
     });
-    if (!res.ok) {
-      const text = await safeText(res);
-      throw new FnoHttpError(`${res.status} ${res.statusText}`, res.status, url, text);
-    }
-    return (await res.json()) as T;
+    await throwIfNotOk(res, url);
+    return parseJsonResponseText(await res.text(), url, res.status) as T;
   }
+}
+
+/** Non-2xx → `FnoHttpError` with the body and the headers retry logic reads. */
+async function throwIfNotOk(res: Response, url: string): Promise<void> {
+  if (res.ok) return;
+  const text = await safeText(res);
+  const headers: Record<string, string> = {};
+  const retryAfter = res.headers.get('retry-after');
+  if (retryAfter) headers['retry-after'] = retryAfter;
+  throw new FnoHttpError(`${res.status} ${res.statusText}`, res.status, url, text, headers);
 }
 
 async function safeText(res: Response): Promise<string | undefined> {

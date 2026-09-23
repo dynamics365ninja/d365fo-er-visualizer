@@ -9,13 +9,35 @@ import JSZip from 'jszip';
 
 export interface XlsxWorkbook {
   sheets: XlsxSheet[];
-  /** Named ranges: uppercased name → normalized first-cell ref (e.g. "CONTACTINFO_LABEL" → "B3") */
+  /**
+   * Named ranges: uppercased name → normalized first-cell ref (e.g.
+   * "CONTACTINFO_LABEL" → "B3"). Sheet-less, so a name defined on several
+   * sheets keeps its workbook-scoped (else first) definition — use
+   * {@link namedAreas} whenever the sheet matters.
+   */
   definedNames: Map<string, string>;
   /**
    * Named ranges with their full extent, so a multi-cell range can be
-   * highlighted as one area instead of just its anchor cell.
+   * highlighted as one area instead of just its anchor cell. Same scoping
+   * caveat as {@link definedNames}.
    */
   definedRanges: Map<string, XlsxArea>;
+  /** Every named range with the sheet its cells sit on, in document order. */
+  namedAreas: XlsxNamedArea[];
+}
+
+/** One `<definedName>` that points at cells. */
+export interface XlsxNamedArea {
+  /** Uppercased, as ER's `ExcelRange` attribute is matched case-insensitively. */
+  name: string;
+  /** Sheet the cells are on — from the `Sheet!` prefix, else the name's local scope. */
+  sheet?: string;
+  /** Set when the name is local to one sheet (`localSheetId`); workbook-scoped otherwise. */
+  scopeSheet?: string;
+  /** Normalized first cell, e.g. "B3". */
+  anchor: string;
+  /** Extent of the first area — a multi-area name (`A1,C3`) is anchored on its first one. */
+  area: XlsxArea;
 }
 
 /** A rectangular block of cells, 1-based and inclusive on both ends. */
@@ -117,14 +139,17 @@ export interface XlsxMerge {
 /**
  * Parse a base64-encoded .xlsx file and return structured workbook data.
  */
-export async function parseXlsxBase64(base64: string): Promise<XlsxWorkbook> {
-  const zip = await JSZip.loadAsync(base64, { base64: true });
+export async function parseXlsxBase64(base64: string, options: XlsxParseOptions = {}): Promise<XlsxWorkbook> {
+  const zip = createZipReader(
+    await JSZip.loadAsync(base64, { base64: true }),
+    options.maxUncompressedBytes ?? MAX_XLSX_UNCOMPRESSED_BYTES,
+  );
 
   // 1. Read shared strings
   const sharedStrings = await readSharedStrings(zip);
 
   // 2. Read workbook.xml to get sheet names & rIds, and defined names
-  const { sheetMeta, definedNames, definedRanges } = await readWorkbookData(zip);
+  const { sheetMeta, definedNames, definedRanges, namedAreas } = await readWorkbookData(zip);
 
   // 3. Read workbook.xml.rels to map rIds to file paths
   const relMap = await readRels(zip, 'xl/_rels/workbook.xml.rels');
@@ -141,7 +166,7 @@ export async function parseXlsxBase64(base64: string): Promise<XlsxWorkbook> {
     const relPath = relMap.get(meta.rId);
     if (!relPath) continue;
     const sheetPath = relPath.startsWith('/') ? relPath.slice(1) : `xl/${relPath}`;
-    const sheetXml = await zip.file(sheetPath)?.async('text');
+    const sheetXml = await zip.text(sheetPath);
     if (!sheetXml) continue;
     const sheet = parseSheet(meta.name, sheetXml, sharedStrings, styles);
     // 7. Drawing layer — logos and floating text boxes live outside the cell grid.
@@ -151,7 +176,105 @@ export async function parseXlsxBase64(base64: string): Promise<XlsxWorkbook> {
     sheets.push(sheet);
   }
 
-  return { sheets, definedNames, definedRanges };
+  return { sheets, definedNames, definedRanges, namedAreas };
+}
+
+// ─── Decompression budget ─────────────────────────────────────────────────
+
+/**
+ * Ceiling on the bytes inflated out of one workbook. JSZip itself has no
+ * limit, and a template can come from any dropped file, so a few kilobytes of
+ * zip bomb would otherwise inflate until the tab runs out of memory.
+ */
+export const MAX_XLSX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024;
+
+export interface XlsxParseOptions {
+  /** Overrides {@link MAX_XLSX_UNCOMPRESSED_BYTES}. */
+  maxUncompressedBytes?: number;
+}
+
+/** Thrown when a workbook inflates past the decompression budget. */
+export class XlsxTooLargeError extends Error {
+  constructor(limit: number) {
+    super(`The workbook expands to more than ${Math.round(limit / (1024 * 1024))} MB and was not opened.`);
+    this.name = 'XlsxTooLargeError';
+  }
+}
+
+/** Reads zip entries while counting every inflated byte against one shared budget. */
+interface ZipReader {
+  text(path: string): Promise<string | undefined>;
+  base64(path: string): Promise<string | undefined>;
+}
+
+/**
+ * `internalStream` is public JSZip API (documented, and what `async()` is
+ * built on) but missing from its typings.
+ */
+type StreamableZipObject = JSZip.JSZipObject & {
+  internalStream(type: 'uint8array'): JSZip.JSZipStreamHelper<Uint8Array>;
+};
+
+function createZipReader(zip: JSZip, limit: number): ZipReader {
+  let used = 0;
+
+  // Streaming lets the read stop as soon as the budget runs out, instead of
+  // inflating the whole entry first and only then noticing it was too big.
+  const bytes = (path: string): Promise<Uint8Array | undefined> => {
+    const file = zip.file(path) as StreamableZipObject | null;
+    if (!file) return Promise.resolve(undefined);
+    return new Promise((resolve, reject) => {
+      const chunks: Uint8Array[] = [];
+      let length = 0;
+      let settled = false;
+      const stream = file.internalStream('uint8array');
+      stream
+        .on('data', chunk => {
+          if (settled) return;
+          used += chunk.length;
+          if (used > limit) {
+            settled = true;
+            stream.pause();
+            reject(new XlsxTooLargeError(limit));
+            return;
+          }
+          chunks.push(chunk);
+          length += chunk.length;
+        })
+        .on('error', err => {
+          if (settled) return;
+          settled = true;
+          reject(err);
+        })
+        .on('end', () => {
+          if (settled) return;
+          settled = true;
+          const out = new Uint8Array(length);
+          let at = 0;
+          for (const chunk of chunks) { out.set(chunk, at); at += chunk.length; }
+          resolve(out);
+        })
+        .resume();
+    });
+  };
+
+  const decoder = new TextDecoder('utf-8');
+  return {
+    text: async path => {
+      const data = await bytes(path);
+      return data ? decoder.decode(data) : undefined;
+    },
+    base64: async path => {
+      const data = await bytes(path);
+      if (!data) return undefined;
+      // Chunked, so a large picture does not overflow the argument list.
+      let binary = '';
+      for (let i = 0; i < data.length; i += 0x8000) {
+        binary += String.fromCharCode(...data.subarray(i, i + 0x8000));
+      }
+      return btoa(binary);
+    },
+  };
 }
 
 // ─── Internals ────────────────────────────────────────────────────────────
@@ -181,75 +304,150 @@ function parseXmlTags(xml: string, tagName: string): { attrs: Record<string, str
   return results;
 }
 
-async function readSharedStrings(zip: JSZip): Promise<string[]> {
-  const file = zip.file('xl/sharedStrings.xml');
-  if (!file) return [];
-  const xml = await file.async('text');
+async function readSharedStrings(zip: ZipReader): Promise<string[]> {
+  const xml = await zip.text('xl/sharedStrings.xml');
+  if (!xml) return [];
   const strings: string[] = [];
   // Each <si> contains one or more <t> elements (rich text uses <r><t>)
   const siTags = parseXmlTags(xml, 'si');
   for (const si of siTags) {
-    // Collect all <t> text inside this <si>
-    const tTags = parseXmlTags(si.inner, 't');
-    strings.push(tTags.map(t => t.inner).join(''));
+    // Collect all <t> text inside this <si>, minus the phonetic (<rPh>) runs
+    // East Asian workbooks attach — those are reading hints, not cell text.
+    const tTags = parseXmlTags(si.inner.replace(/<rPh\b[\s\S]*?<\/rPh>/g, ''), 't');
+    strings.push(decodeXmlEntities(tTags.map(t => t.inner).join('')));
   }
   return strings;
 }
 
-async function readWorkbookData(zip: JSZip): Promise<{ sheetMeta: { name: string; sheetId: string; rId: string }[]; definedNames: Map<string, string>; definedRanges: Map<string, XlsxArea> }> {
-  const file = zip.file('xl/workbook.xml');
-  if (!file) return { sheetMeta: [], definedNames: new Map(), definedRanges: new Map() };
-  const xml = await file.async('text');
+/**
+ * Split a defined name's formula into its areas and each area into its
+ * optional sheet and its cells: `'My sheet'!$A$1:$B$2,Other!$C$3` →
+ * `[{ sheet: 'My sheet', cells: '$A$1:$B$2' }, { sheet: 'Other', cells: '$C$3' }]`.
+ * A quoted sheet name may itself hold `!`, `,` and doubled `''` quotes.
+ */
+export function splitDefinedNameAreas(formula: string): { sheet?: string; cells: string }[] {
+  const areas: { sheet?: string; cells: string }[] = [];
+  let sheet: string | undefined;
+  let buf = '';
+  let i = 0;
+  const text = formula.trim();
+  while (i < text.length) {
+    const ch = text[i]!;
+    if (ch === "'" && buf === '') {
+      // Quoted sheet name — runs to the next lone quote.
+      let name = '';
+      i++;
+      while (i < text.length) {
+        if (text[i] === "'") {
+          if (text[i + 1] === "'") { name += "'"; i += 2; continue; }
+          i++;
+          break;
+        }
+        name += text[i++];
+      }
+      buf = name;
+      // Only a sheet if the `!` follows; otherwise keep it as plain text.
+      if (text[i] === '!') { sheet = name; buf = ''; i++; }
+      continue;
+    }
+    if (ch === '!') { sheet = buf; buf = ''; i++; continue; }
+    if (ch === ',') {
+      areas.push({ sheet, cells: buf.trim() });
+      sheet = undefined;
+      buf = '';
+      i++;
+      continue;
+    }
+    buf += ch;
+    i++;
+  }
+  if (buf.trim() || sheet !== undefined) areas.push({ sheet, cells: buf.trim() });
+  return areas;
+}
+
+/** `$B$3:$D$5` → anchor "B3" and the area it spans; undefined for non-cell formulas. */
+function parseCellArea(cells: string): { anchor: string; area: XlsxArea } | undefined {
+  const bounds = cells.split(':').map(part => part.replace(/\$/g, '').toUpperCase());
+  const topLeft = bounds[0]!;
+  if (!/^[A-Z]+\d+$/.test(topLeft)) return undefined;
+  const bottomRight = bounds[1] && /^[A-Z]+\d+$/.test(bounds[1]) ? bounds[1] : topLeft;
+  const start = cellRefToCoords(topLeft);
+  const end = cellRefToCoords(bottomRight);
+  return {
+    anchor: topLeft,
+    area: {
+      startCol: Math.min(start.col, end.col),
+      startRow: Math.min(start.row, end.row),
+      endCol: Math.max(start.col, end.col),
+      endRow: Math.max(start.row, end.row),
+    },
+  };
+}
+
+async function readWorkbookData(zip: ZipReader): Promise<{
+  sheetMeta: { name: string; sheetId: string; rId: string }[];
+  definedNames: Map<string, string>;
+  definedRanges: Map<string, XlsxArea>;
+  namedAreas: XlsxNamedArea[];
+}> {
+  const xml = await zip.text('xl/workbook.xml');
+  if (!xml) return { sheetMeta: [], definedNames: new Map(), definedRanges: new Map(), namedAreas: [] };
 
   const sheetTags = parseXmlTags(xml, 'sheet');
   const sheetMeta = sheetTags.map(s => ({
-    name: s.attrs['name'] ?? '',
+    name: decodeXmlEntities(s.attrs['name'] ?? ''),
     sheetId: s.attrs['sheetId'] ?? '',
     rId: s.attrs['r:id'] ?? '',
   }));
 
   // Parse <definedName> elements — content is like "Sheet1!$B$3" or "Sheet1!$B$3:$D$5"
-  const definedNames = new Map<string, string>();
-  const definedRanges = new Map<string, XlsxArea>();
+  const namedAreas: XlsxNamedArea[] = [];
   const defSection = extractSection(xml, 'definedNames');
   if (defSection) {
     const defTags = parseXmlTags(defSection, 'definedName');
     for (const d of defTags) {
-      const name = d.attrs['name'];
+      const name = decodeXmlEntities(d.attrs['name'] ?? '');
       if (!name) continue;
-      // Normalize: strip sheet prefix and dollar signs.
-      // e.g. "Sheet1!$B$3:$D$5" → anchor "B3", area B3:D5
-      const raw = d.inner.trim();
-      const cellPart = raw.split('!').pop() ?? raw; // after "Sheet1!"
-      const bounds = cellPart.split(':').map(part => part.replace(/\$/g, '').toUpperCase());
-      const topLeft = bounds[0]!;
-      if (!/^[A-Z]+\d+$/.test(topLeft)) continue;
-      definedNames.set(name.toUpperCase(), topLeft);
-
-      const bottomRight = bounds[1] && /^[A-Z]+\d+$/.test(bounds[1]) ? bounds[1] : topLeft;
-      const start = cellRefToCoords(topLeft);
-      const end = cellRefToCoords(bottomRight);
-      definedRanges.set(name.toUpperCase(), {
-        startCol: Math.min(start.col, end.col),
-        startRow: Math.min(start.row, end.row),
-        endCol: Math.max(start.col, end.col),
-        endRow: Math.max(start.row, end.row),
+      // localSheetId is the 0-based position in <sheets>, not the sheetId.
+      const localId = d.attrs['localSheetId'];
+      const scopeSheet = localId !== undefined ? sheetMeta[parseInt(localId, 10)]?.name : undefined;
+      // Only the first area anchors the name — that is the cell ER writes to.
+      const first = splitDefinedNameAreas(decodeXmlEntities(d.inner))[0];
+      if (!first) continue;
+      const parsed = parseCellArea(first.cells);
+      if (!parsed) continue;
+      namedAreas.push({
+        name: name.toUpperCase(),
+        sheet: first.sheet ?? scopeSheet,
+        scopeSheet,
+        anchor: parsed.anchor,
+        area: parsed.area,
       });
     }
   }
 
-  return { sheetMeta, definedNames, definedRanges };
+  // Sheet-less lookups: a workbook-scoped name wins over sheet-local ones of
+  // the same name, and otherwise the first definition wins.
+  const definedNames = new Map<string, string>();
+  const definedRanges = new Map<string, XlsxArea>();
+  const ordered = [...namedAreas.filter(n => !n.scopeSheet), ...namedAreas.filter(n => n.scopeSheet)];
+  for (const n of ordered) {
+    if (definedNames.has(n.name)) continue;
+    definedNames.set(n.name, n.anchor);
+    definedRanges.set(n.name, n.area);
+  }
+
+  return { sheetMeta, definedNames, definedRanges, namedAreas };
 }
 
-async function readRels(zip: JSZip, path: string): Promise<Map<string, string>> {
-  const file = zip.file(path);
-  if (!file) return new Map();
-  const xml = await file.async('text');
+async function readRels(zip: ZipReader, path: string): Promise<Map<string, string>> {
+  const xml = await zip.text(path);
+  if (!xml) return new Map();
   const map = new Map<string, string>();
   const rels = parseXmlTags(xml, 'Relationship');
   for (const r of rels) {
     if (r.attrs['Id'] && r.attrs['Target']) {
-      map.set(r.attrs['Id'], r.attrs['Target']);
+      map.set(r.attrs['Id'], decodeXmlEntities(r.attrs['Target']));
     }
   }
   return map;
@@ -298,13 +496,13 @@ function applyTint(hex: string, tint: number): string {
   return [clamp(nr),clamp(ng),clamp(nb)].map(v => v.toString(16).padStart(2,'0')).join('').toUpperCase();
 }
 
-async function readThemeColors(zip: JSZip): Promise<string[]> {
+async function readThemeColors(zip: ZipReader): Promise<string[]> {
   // Theme file is usually xl/theme/theme1.xml
   const candidates = ['xl/theme/theme1.xml','xl/theme/Theme1.xml'];
   let xml = '';
   for (const path of candidates) {
-    const f = zip.file(path);
-    if (f) { xml = await f.async('text'); break; }
+    const text = await zip.text(path);
+    if (text !== undefined) { xml = text; break; }
   }
   if (!xml) return [];
 
@@ -348,10 +546,9 @@ function resolveColor(attrs: Record<string, string>, themeColors: string[]): str
 /** Resolved styles table indexed by xf (cell format) index. */
 type StylesTable = XlsxCellStyle[];
 
-async function readStyles(zip: JSZip, themeColors: string[]): Promise<StylesTable> {
-  const file = zip.file('xl/styles.xml');
-  if (!file) return [];
-  const xml = await file.async('text');
+async function readStyles(zip: ZipReader, themeColors: string[]): Promise<StylesTable> {
+  const xml = await zip.text('xl/styles.xml');
+  if (!xml) return [];
   return parseStyles(xml, themeColors);
 }
 
@@ -495,12 +692,13 @@ function parseSheet(name: string, xml: string, sharedStrings: string[], styles: 
         value = rawValue === '1' ? 'TRUE' : 'FALSE';
         type = 'bool';
       } else if (cellType === 'e') {
-        value = rawValue;
+        value = decodeXmlEntities(rawValue);
         type = 'error';
       } else if (cellType === 'str' || cellType === 'inlineStr') {
-        // Formula result as string, or inline string
+        // Formula result as string (<v>), or inline string (<is>, whose rich
+        // text splits into several <r><t> runs).
         const isTags = parseXmlTags(ct.inner, 't');
-        value = isTags.length > 0 ? isTags[0].inner : rawValue;
+        value = decodeXmlEntities(isTags.length > 0 ? isTags.map(t => t.inner).join('') : rawValue);
         type = 'string';
       } else if (rawValue) {
         value = rawValue;
@@ -599,7 +797,7 @@ function resolveDrawingColor(inner: string, themeColors: string[]): string | und
  * the cell grid renders a blank header band.
  */
 async function readSheetDrawings(
-  zip: JSZip,
+  zip: ZipReader,
   sheetPath: string,
   sheetXml: string,
   themeColors: string[],
@@ -617,7 +815,7 @@ async function readSheetDrawings(
   if (!drawingTarget) return empty;
 
   const drawingPath = resolveZipPath(sheetPath, drawingTarget);
-  const drawingXml = await zip.file(drawingPath)?.async('text');
+  const drawingXml = await zip.text(drawingPath);
   if (!drawingXml) return empty;
 
   const drawingRels = await readRels(zip, resolveZipPath(drawingPath, `_rels/${drawingPath.split('/').pop()}.rels`));
@@ -631,7 +829,7 @@ async function readSheetDrawings(
     if (target) {
       const mediaPath = resolveZipPath(drawingPath, target);
       const ext = mediaPath.split('.').pop()?.toLowerCase() ?? '';
-      const base64 = await zip.file(mediaPath)?.async('base64');
+      const base64 = await zip.base64(mediaPath);
       if (base64) dataUrl = `data:${MIME_BY_EXT[ext] ?? 'application/octet-stream'};base64,${base64}`;
     }
     mediaCache.set(rid, dataUrl);
@@ -696,14 +894,21 @@ async function readSheetDrawings(
   return { images, textShapes };
 }
 
-function decodeXmlEntities(value: string): string {
-  return value
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
-    .replace(/&amp;/g, '&');
+const NAMED_XML_ENTITIES: Record<string, string> = { lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' };
+
+/**
+ * Decode the five XML entities and numeric character references in one pass,
+ * so `&amp;lt;` stays the literal text `&lt;` instead of turning into `<`.
+ */
+export function decodeXmlEntities(value: string): string {
+  if (!value.includes('&')) return value;
+  return value.replace(/&(#x[0-9A-Fa-f]+|#\d+|[A-Za-z]+);/g, (match, body: string) => {
+    if (body[0] === '#') {
+      const code = body[1] === 'x' || body[1] === 'X' ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
+      return code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+    }
+    return NAMED_XML_ENTITIES[body] ?? match;
+  });
 }
 
 /** Convert cell reference like "AB12" to { col: 28, row: 12 } (1-based). */
