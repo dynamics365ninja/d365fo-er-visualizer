@@ -4010,11 +4010,10 @@ body {
   min-width: 0;
 }
 
-/* Indent + rail: the rail is what makes the chain read as one continuous path. */
+/* Indent only — no rail beside the expanded branch. */
 .lin-branch {
   margin-left: 9px;
-  padding-left: 13px;
-  border-left: 2px solid color-mix(in srgb, var(--border-color) 65%, transparent);
+  padding-left: 15px;
 }
 
 .lin-row {
