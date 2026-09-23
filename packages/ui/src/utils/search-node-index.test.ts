@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ERComponentKind, GUIDRegistry } from '@er-visualizer/core';
 import type { TreeNode } from '../state/store';
 import { buildSearchNodeIndex, findNodeForSearchResult, type SearchResultEntry } from './search-node-index';
 
@@ -50,5 +51,32 @@ describe('findNodeForSearchResult', () => {
   it('returns the root for a base model reference and null for an unknown file', () => {
     expect(findNodeForSearchResult(hit({ sourceContext: 'Base model reference' }), configurations, index, registry)).toBe(root);
     expect(findNodeForSearchResult(hit({ sourceConfigPath: 'other.xml' }), configurations, index, registry)).toBeNull();
+  });
+});
+
+describe('findNodeForSearchResult with shared element GUIDs', () => {
+  // A derived format and its base carry the same element GUID.
+  const guid = '{11111111-2222-3333-4444-555555555555}';
+  const baseElement = node('cfg-0-fmt', 'formatElement', 'Invoice', { data: { id: guid } });
+  const derivedElement = node('cfg-1-fmt', 'formatElement', 'Invoice', { data: { id: guid }, configIndex: 1 });
+  const baseRoot = node('cfg-0', 'file', 'Base', { data: { kind: 'Format' }, children: [baseElement] });
+  const derivedRoot = node('cfg-1', 'file', 'Derived', { data: { kind: 'Format' }, configIndex: 1, children: [derivedElement] });
+  // Not real formats, so no mapping definition is preferred.
+  const formats = [
+    { filePath: 'base.xml', content: { kind: 'DataModel' } },
+    { filePath: 'derived.xml', content: { kind: 'DataModel' } },
+  ];
+  const formatIndex = buildSearchNodeIndex([baseRoot, derivedRoot], formats);
+
+  const registry = new GUIDRegistry();
+  for (const filePath of ['base.xml', 'derived.xml']) {
+    registry.register({ guid, kind: 'FormatElement', name: 'Invoice', configFilePath: filePath, componentKind: ERComponentKind.Format });
+  }
+
+  it('resolves the GUID in the file the hit came from', () => {
+    const fromBase = hit({ target: guid, targetType: 'GUID', sourceConfigPath: 'base.xml' });
+    const fromDerived = hit({ target: guid, targetType: 'GUID', sourceConfigPath: 'derived.xml' });
+    expect(findNodeForSearchResult(fromBase, formats, formatIndex, registry)).toBe(baseElement);
+    expect(findNodeForSearchResult(fromDerived, formats, formatIndex, registry)).toBe(derivedElement);
   });
 });

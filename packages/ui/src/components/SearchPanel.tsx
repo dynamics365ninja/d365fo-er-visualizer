@@ -8,14 +8,14 @@ import {
 } from '@fluentui/react-icons';
 import { useAppStore, relatedMappingDefinitionLabels, MIN_SEARCH_QUERY_LENGTH } from '../state/store';
 import type { TreeNode } from '../state/store';
-import type { ERConfiguration, GUIDEntry } from '@er-visualizer/core';
+import type { ERConfiguration } from '@er-visualizer/core';
 import { locale, t, useLocale } from '../i18n';
 import { getConsultantFormatTypeLabel } from '../utils/consultant-labels';
 import { getFormatTypeThemeColor } from '../utils/theme-colors';
 import { relatedConfigIndices, relatedContainerRules, hitPassesContainerRule, type ScopeContainerRule } from '../utils/model-hierarchy';
 import { referenceCategory, WHERE_USED_CATEGORY_ORDER, type ReferenceCategory } from '../utils/where-used-category';
 import { ExpandCollapseSlider } from './ExpandCollapseSlider';
-import { buildSearchNodeIndex, findNodeForSearchResult, type SearchResultEntry } from '../utils/search-node-index';
+import { buildSearchNodeIndex, findNodeForSearchResult, type SearchRegistry, type SearchResultEntry } from '../utils/search-node-index';
 
 
 /**
@@ -793,7 +793,7 @@ function SearchResultsGrouped({
   query: string;
   expandSignal: { version: number; expanded: boolean };
   configurations: ERConfiguration[];
-  registry: { lookup: (guid: string) => GUIDEntry | undefined };
+  registry: SearchRegistry;
   navigateToTreeNode: (nodeId: string) => void;
 }) {
   const groups = useMemo(() => {
@@ -884,7 +884,7 @@ function hitCategoryLabel(category: HitCategory): string {
 
 function parseSearchHit(
   result: SearchResultEntry,
-  registry: { lookup: (guid: string) => GUIDEntry | undefined },
+  registry: SearchRegistry,
   showTechnicalDetails: boolean,
 ): ParsedHit {
   const ctx = result.sourceContext ?? '';
@@ -940,7 +940,7 @@ function parseSearchHit(
   // ── Format binding to GUID component (optionally with [PropName]) ─
   if (ctx.startsWith('Format binding') && ctx.includes('to component:')) {
     const expr     = ctx.slice(ctx.indexOf('to component:') + 'to component:'.length).trim();
-    const resolved = registry.lookup(tgt);
+    const resolved = registry.lookup(tgt, result.sourceConfigPath);
     const propMatch = ctx.match(/Format binding \[([^\]]+)\] to component/);
     const prop = propMatch?.[1] ?? '';
     const { label, labelKind } = formatBindingLabel(prop, cs, showTechnicalDetails);
@@ -989,7 +989,7 @@ function parseSearchHit(
   // internals; the consultant view calls them references.
   const referenceLabel = cs ? 'Odkaz' : 'Reference';
   if (result.targetType === 'GUID') {
-    const resolved = registry.lookup(tgt);
+    const resolved = registry.lookup(tgt, result.sourceConfigPath);
     return {
       label: showTechnicalDetails ? (resolved?.kind ?? 'GUID') : referenceLabel,
       labelKind: 'guid',
@@ -1051,7 +1051,7 @@ function SearchResultGroup({
   nodeByResult: Map<SearchResultEntry, TreeNode>;
   query: string;
   expandSignal: { version: number; expanded: boolean };
-  registry: { lookup: (guid: string) => GUIDEntry | undefined };
+  registry: SearchRegistry;
   navigateToTreeNode: (nodeId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);

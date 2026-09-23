@@ -1,6 +1,6 @@
 import type { ERConfiguration, GUIDEntry } from '@er-visualizer/core';
-import { activeMappingDefinitionLabel } from '../state/store';
-import type { TreeNode } from '../state/store';
+import { activeMappingDefinitionLabel } from '../state/mapping-definitions';
+import type { TreeNode } from '../state/tree-builder';
 
 /** The registry cross-ref fields the search panel resolves to a tree node. */
 export type SearchResultEntry = {
@@ -127,11 +127,20 @@ function filterType(list: TreeNode[] | undefined, type: string): TreeNode[] | un
   return list?.filter(node => node.type === type);
 }
 
+/**
+ * The part of `GUIDRegistry` the search panel reads. A derived format and its
+ * base share element GUIDs, so a lookup names the file the hit came from and
+ * gets that file's component rather than whichever was indexed last.
+ */
+export type SearchRegistry = {
+  lookup: (guid: string, preferredConfigPath?: string) => GUIDEntry | undefined;
+};
+
 export function findNodeForSearchResult(
   result: SearchResultEntry,
   configurations: Array<{ filePath: string }>,
   nodeIndex: SearchNodeIndex,
-  registry: { lookup: (guid: string) => GUIDEntry | undefined },
+  registry: SearchRegistry,
 ): TreeNode | null {
   const configIndex = nodeIndex.configIndexByPath.get(result.sourceConfigPath);
   if (configIndex == null) return null;
@@ -189,7 +198,7 @@ export function findNodeForSearchResult(
   }
 
   if (result.targetType === 'GUID') {
-    const guidNode = resolveGuidTargetNode(result.target, nodeIndex, registry)
+    const guidNode = resolveGuidTargetNode(result.target, result.sourceConfigPath, nodeIndex, registry)
       ?? pick(index, preferred, index.byDataId.get(result.target));
     if (guidNode) return guidNode;
   }
@@ -234,10 +243,11 @@ function findFormatBindingNode(index: ConfigNodeIndex, expression: string): Tree
 
 function resolveGuidTargetNode(
   guid: string,
+  sourceConfigPath: string,
   nodeIndex: SearchNodeIndex,
-  registry: { lookup: (guid: string) => GUIDEntry | undefined },
+  registry: SearchRegistry,
 ): TreeNode | null {
-  const entry = registry.lookup(guid);
+  const entry = registry.lookup(guid, sourceConfigPath);
   if (!entry) return null;
 
   const configIndex = nodeIndex.configIndexByPath.get(entry.configFilePath);
