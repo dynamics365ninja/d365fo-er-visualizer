@@ -29,9 +29,12 @@ In the app, switch to the **D365 F&amp;O server** tab and click **New profile**.
 | **Profile name** | Anything you will recognise — `Contoso UAT` |
 | **Environment URL** | `https://myenv.sandbox.operations.dynamics.com` |
 
-Click **Save profile**, then **Connect**. Microsoft sign-in opens in a popup; after it completes
-the panel shows the account you are connected as. Profiles are stored in your browser's local
-storage so you only do this once per environment.
+The URL is the address F&amp;O runs on, with no path after the domain. Click **Save profile**, then
+**Connect**. Microsoft sign-in opens in a popup — or, when the browser will not let a popup
+through, the whole tab goes to Microsoft and comes back — and the panel then shows **Connected as**
+with your account. Profiles are stored in your browser's local storage so you only do this once
+per environment; **Edit profile** changes one, and **Remove profile** deletes it together with its
+saved sign-in after asking you to confirm.
 
 Everything the tool then does runs as *you*: your Electronic Reporting permissions in that
 environment decide what you can see, and nothing is written back.
@@ -41,9 +44,12 @@ environment decide what you can see, and nothing is written back.
 Skip this unless you are building and hosting the tool yourself — users of a ready-made build
 never touch it.
 
-A build carries its registration in `VITE_FNO_CLIENT_ID` (`FNO_CLIENT_ID`, or
-`packages/electron/src/fno/built-in-client.ts`, for the desktop shell). Without it the connect
-panel refuses to sign in and says so. Create the registration once, in any tenant you control:
+A build signs in with the shipped registration, whose client ID is baked into
+`packages/ui/src/fno/built-in-client.ts` (`packages/electron/src/fno/built-in-client.ts` for the
+desktop shell). `VITE_FNO_CLIENT_ID` (`FNO_CLIENT_ID` for the desktop shell) overrides it. A copy
+you host on your own origin needs its own registration, because the redirect URI has to be listed
+on it; with the variable set to an empty value the connect panel refuses to sign in and says so.
+Create the registration once, in any tenant you control:
 
 In the Entra admin center, go to **App registrations → New registration**.
 
@@ -88,19 +94,28 @@ F&amp;O user permissions are what count.
 
 ## Browse and ingest
 
-Once connected, the panel walks the ER hierarchy of the environment:
+Once connected, the panel walks the ER hierarchy of the environment in two columns:
 
-1. **ER solutions** — the top level. Pick one to see its configurations.
-2. **Configurations** — tick the ones you want. You can filter by component type, use **Select
-   all** or **Clear selection**, and keep selections across drill levels — the counter shows how
-   many are selected in total.
-3. **Load selected** — downloads and parses everything you picked.
+1. **ER solutions** (left) — the data models of the environment. Pick one to see the
+   configurations built on it; **Filter models…** narrows the list, and **Search formats too**
+   also looks through the formats and mappings underneath every model (it downloads each model's
+   configuration list, so a large environment takes a while).
+2. **Configurations** (right) — tick the ones you want. You can filter by component type or by
+   name, drill into a configuration's children, use **Select all** or **Clear selection**, and keep
+   selections across drill levels — the footer shows how many are selected in total. When you tick
+   a format, the panel offers its data model and model mapping from the same list (**Also load
+   related configurations?**).
+3. **Load selected** — downloads and parses everything you picked. **Cancel download** stops a
+   download that is running.
 
-Ingestion runs in phases, and the progress display names the one it is in: resolving data model
-identifiers, downloading data models, downloading formats and mappings, resolving labels from
-ancestor models, downloading model mappings, and finally resolving data models discovered inside
-the mapping XML. That last phase is why a load sometimes pulls in more configurations than you
-selected — dependencies found along the way are fetched so bindings actually resolve.
+The download shows its progress in a dialog, **Downloading configurations from F&amp;O**: a stepper
+through **Preparing**, **Data models**, **Formats &amp; mappings**, **Model mappings** and
+**Finalizing**, a status line naming the exact step, and one row per configuration marked
+**selected** or **dependency** with its state — **Done**, **No own XML**, **Skipped** or
+**Failed**. Dependencies are why a load sometimes pulls in more configurations than you selected:
+data models and mappings referenced from the downloaded XML are fetched so bindings actually
+resolve. When something did not arrive, the dialog stays open after the download so you can see
+what and why.
 
 Configurations loaded this way behave exactly like files opened from disk, and cross-reference
 them freely.
@@ -109,6 +124,10 @@ them freely.
 
 - **Derived configurations are skipped.** A configuration that inherits from another one has no
   XML of its own; load the base configuration instead. The tool tells you which ones it skipped.
+- **Draft-only configurations cannot be downloaded.** F&amp;O serves completed versions only, so a
+  configuration with nothing but a draft is marked **Draft** and cannot be ticked. Complete the
+  version in F&amp;O (**Reporting configurations → Versions → Complete**) and it becomes
+  selectable.
 - **Model mappings are not always downloadable.** When `GetModelMappingByID` returns nothing for a
   data model, the panel says so — format element bindings still resolve through the format's own
   mapping information, but the mapping-level trace stops there.
@@ -125,10 +144,12 @@ Finance &amp; Operations does not send CORS headers, so a browser cannot call it
 directly. The hosted app routes those calls through a stateless proxy that forwards the request
 server-side, carrying your bearer token, and returns the response with CORS headers attached.
 
-The proxy only forwards to Finance & Operations environment hosts (`*.operations.dynamics.com` and
-its regional and sandbox forms, `*.cloudax`, `*.axcloud`, `*.sandbox.ax.dynamics.com`) over HTTPS — it cannot be used as an
-open relay — and it stores nothing: no tokens, no configuration content, no logs of your data. The
-[desktop app](/docs/desktop-app) skips the proxy entirely and calls the environment directly.
+The proxy only forwards to Finance &amp; Operations environment hosts (`*.operations.dynamics.com`
+and its regional and sandbox forms, `*.cloudax.dynamics.com`, `*.axcloud.dynamics.com`,
+`*.sandbox.ax.dynamics.com`) over HTTPS on the default port, and only for calls coming from the app
+itself — it cannot be used as an open relay — and it stores nothing: no tokens, no configuration
+content, no logs of your data. The [desktop app](/docs/desktop-app) skips the proxy entirely and
+calls the environment directly.
 
 If sign-in or downloading fails, [Troubleshooting](/docs/troubleshooting) lists the errors this
 setup actually produces and what each one means.

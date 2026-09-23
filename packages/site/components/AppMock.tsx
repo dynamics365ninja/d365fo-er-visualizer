@@ -4,8 +4,9 @@ import { useState } from 'react';
 
 /**
  * Stylised illustration of the drill-down — the screen that makes the product
- * what it is. It mirrors the real dialog: the "D365FO data used" summary on top
- * and the "Value path" lineage below, with the Detail/Tree switch working.
+ * what it is. It mirrors the real dialog: "Pin as tab" and "Open to the side"
+ * in the title bar, the "Value path" lineage with the "D365FO data used"
+ * summary below it, and the Detail/Tree switch working.
  *
  * The panels are decorative (and marked as such); only the switch is exposed
  * to assistive tech. Unlike a screenshot, this stays theme-aware, responsive,
@@ -14,14 +15,20 @@ import { useState } from 'react';
 
 type View = 'detail' | 'tree';
 
-/** A clickable token inside a formula — the ↓ mirrors the app's drill affordance. */
-function Chip({ children }: { children: React.ReactNode }) {
+/**
+ * A clickable token inside a formula. The ↓ appears only in the analysed
+ * expression at the top of the path — as in the app, where it says the part
+ * leads further down.
+ */
+function Chip({ children, leadsBelow = false }: { children: React.ReactNode; leadsBelow?: boolean }) {
   return (
     <span className="inline-flex items-center gap-0.5 whitespace-nowrap rounded-md border border-accent/25 bg-accent-soft px-1.5 py-[1px] text-accent">
       {children}
-      <span aria-hidden="true" className="text-[8px] opacity-60">
-        ↓
-      </span>
+      {leadsBelow && (
+        <span aria-hidden="true" className="text-[8px] opacity-60">
+          ↓
+        </span>
+      )}
     </span>
   );
 }
@@ -116,18 +123,32 @@ function Branch({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** The chip row at the top: every D365FO object this expression finally reads. */
-function SourceChip({ name, kind }: { name: string; kind: string }) {
+/** A chip in the summary: one D365FO object this expression finally reads. */
+function SourceChip({ name }: { name: string }) {
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1.5">
       <span aria-hidden="true" className="shrink-0 text-[9px] text-muted">
         ▤
       </span>
       <span className="truncate font-mono text-[10.5px] font-semibold">{name}</span>
-      <span className="shrink-0 text-[8.5px] font-semibold uppercase tracking-wider text-muted">
-        {kind}
-      </span>
     </span>
+  );
+}
+
+/** The summary groups its chips by kind; the kind is the heading, not a chip label. */
+function SourceGroup({ kind, names }: { kind: string; names: string[] }) {
+  return (
+    <div className="mt-2">
+      <p className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-muted">
+        {kind}
+        <span className="rounded bg-surface-2 px-1 py-[1px] text-[9px]">{names.length}</span>
+      </p>
+      <div className="mt-1 flex flex-wrap gap-1.5">
+        {names.map((name) => (
+          <SourceChip key={name} name={name} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -143,25 +164,25 @@ function ExpressionBlock() {
         <Line indent={1}>
           <Token>model</Token>
           <Punct>.</Punct>
-          <Chip>InvoiceLinesLocalization</Chip>
+          <Chip leadsBelow>InvoiceLinesLocalization</Chip>
           <Punct>.</Punct>
-          <Chip>ExternalItemId</Chip>
+          <Chip leadsBelow>ExternalItemId</Chip>
           <Punct>{'<> "",'}</Punct>
         </Line>
         <Line indent={1}>
           <Token>model</Token>
           <Punct>.</Punct>
-          <Chip>InvoiceLinesLocalization</Chip>
+          <Chip leadsBelow>InvoiceLinesLocalization</Chip>
           <Punct>.</Punct>
-          <Chip>ExternalItemId</Chip>
+          <Chip leadsBelow>ExternalItemId</Chip>
           <Punct>,</Punct>
         </Line>
         <Line indent={1}>
           <Token>model</Token>
           <Punct>.</Punct>
-          <Chip>InvoiceLinesLocalization</Chip>
+          <Chip leadsBelow>InvoiceLinesLocalization</Chip>
           <Punct>.</Punct>
-          <Chip>ItemId</Chip>
+          <Chip leadsBelow>ItemId</Chip>
         </Line>
         <Line>
           <Punct>)</Punct>
@@ -211,26 +232,6 @@ function ModelPathBranch({
 function DetailView() {
   return (
     <div className="space-y-3 bg-bg-soft p-3 sm:p-4">
-      {/* D365FO data used */}
-      <section className="rounded-xl border border-border bg-surface p-3">
-        <div className="flex items-center gap-2">
-          <h3 className="text-[12px] font-semibold">D365FO data used</h3>
-          <span className="rounded bg-surface-2 px-1.5 py-[1px] text-[10px] font-semibold text-muted">
-            4
-          </span>
-        </div>
-        <p className="mt-1 text-[10.5px] leading-4 text-muted">
-          Tables, fields and parameters this expression finally reads from. Click an item to
-          reveal where it sits in the value path below.
-        </p>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          <SourceChip name="ReportDataProvider" kind="AX class" />
-          <SourceChip name="SalesInvoiceDP.getSalesInvoiceLocalizationTmp" kind="AX class" />
-          <SourceChip name="$SalesInvoiceLocalizationTmp" kind="Calculated field" />
-          <SourceChip name="$SalesInvoiceLocalizationTmp_Lines" kind="Calculated field" />
-        </div>
-      </section>
-
       {/* Value path */}
       <section className="rounded-xl border border-border bg-surface p-3">
         <h3 className="text-[12px] font-semibold">Value path</h3>
@@ -269,6 +270,31 @@ function DetailView() {
             />
           </div>
         </div>
+      </section>
+
+      {/* D365FO data used */}
+      <section className="rounded-xl border border-border bg-surface p-3">
+        <div className="flex items-center gap-2">
+          <span aria-hidden="true" className="text-[9px] text-muted">
+            ▾
+          </span>
+          <h3 className="text-[12px] font-semibold">D365FO data used</h3>
+          <span className="rounded bg-surface-2 px-1.5 py-[1px] text-[10px] font-semibold text-muted">
+            4
+          </span>
+        </div>
+        <p className="mt-1 text-[10.5px] leading-4 text-muted">
+          Tables, fields and parameters this expression finally reads from. Click an item to
+          reveal where it sits in the value path above.
+        </p>
+        <SourceGroup
+          kind="AX classes"
+          names={['ReportDataProvider', 'SalesInvoiceDP.getSalesInvoiceLocalizationTmp']}
+        />
+        <SourceGroup
+          kind="Calculated fields"
+          names={['$SalesInvoiceLocalizationTmp', '$SalesInvoiceLocalizationTmp_Lines']}
+        />
       </section>
     </div>
   );
@@ -489,6 +515,71 @@ function TreeView() {
   );
 }
 
+/* Line icons drawn after the app's Fluent icons — inline so the mock stays static. */
+function Icon({ children }: { children: React.ReactNode }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="h-3.5 w-3.5 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {children}
+    </svg>
+  );
+}
+
+function CompassIcon() {
+  return (
+    <span className="text-muted">
+      <Icon>
+        <circle cx="8" cy="8" r="6" />
+        <path d="M5.5 5.5 9.5 6.5 10.5 10.5 6.5 9.5Z" />
+      </Icon>
+    </span>
+  );
+}
+
+function PinIcon() {
+  return (
+    <Icon>
+      <path d="M9.5 2.5 13.5 6.5 11 7.5 8.5 10 8 12.5 3.5 8 6 7.5 8.5 5Z" />
+      <path d="M5.5 10.5 2.5 13.5" />
+    </Icon>
+  );
+}
+
+function SplitIcon() {
+  return (
+    <Icon>
+      <rect x="2.5" y="3" width="11" height="10" rx="1.5" />
+      <path d="M8 3v10" />
+    </Icon>
+  );
+}
+
+function DismissIcon() {
+  return (
+    <Icon>
+      <path d="M4 4l8 8M12 4l-8 8" />
+    </Icon>
+  );
+}
+
+/** A subtle title-bar button: icon always, its label from `sm` up. */
+function TitleAction({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <span className="flex items-center gap-1 rounded px-1.5 py-1 text-[10.5px] font-semibold text-muted">
+      {icon}
+      <span className="hidden sm:inline">{label}</span>
+    </span>
+  );
+}
+
 export function AppMock() {
   const [view, setView] = useState<View>('detail');
 
@@ -513,15 +604,16 @@ export function AppMock() {
     >
       {/* Dialog title bar */}
       <div className="flex items-center gap-2.5 border-b border-border bg-surface px-4 py-3">
-        <span aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-muted" />
-        <span aria-hidden="true" className="font-display text-sm font-bold">
+        <CompassIcon />
+        <span aria-hidden="true" className="min-w-0 truncate font-display text-sm font-bold">
           InvoiceLines_ItemNumber_Value
         </span>
-        <span
-          aria-hidden="true"
-          className="ml-auto flex h-5 w-5 items-center justify-center rounded border border-border text-[11px] text-muted"
-        >
-          ✕
+        <span aria-hidden="true" className="ml-auto flex shrink-0 items-center gap-1">
+          <TitleAction icon={<PinIcon />} label="Pin as tab" />
+          <TitleAction icon={<SplitIcon />} label="Open to the side" />
+          <span className="ml-1 flex h-5 w-5 items-center justify-center rounded text-muted">
+            <DismissIcon />
+          </span>
         </span>
       </div>
 

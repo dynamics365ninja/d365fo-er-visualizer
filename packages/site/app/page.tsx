@@ -45,17 +45,17 @@ const features = [
   },
   {
     title: 'Visual designers',
-    body: 'Node-graph views for data models, model mappings, and formats — containers, datasources, bindings, and validations laid out so the structure is visible at a glance.',
+    body: 'A view built for each component type — the data model as a field list or a graph, the mapping as bindings, datasources, and validations, the format as an element tree with binding status. Fast even with thousands of rows.',
     href: '/docs/designers',
   },
   {
     title: 'Search and where-used',
-    body: 'Full-text search across every loaded configuration, plus a reverse trace that lists every format binding, model binding, and datasource referencing an element.',
+    body: 'Relevance-ranked search across every loaded configuration, plus a reverse trace — from the inspector, the Explorer, or Ctrl+U — that lists every format element, mapping binding, and expression referencing an element.',
     href: '/docs/search-and-where-used',
   },
   {
     title: 'Expression drill-down',
-    body: 'Split workbench: the expression tree on the left, its resolution on the right. Identifiers inside ER formulas are hyperlinks with a tooltip card for the resolved source, so you click through calculated fields to the concrete table, class, or enum instead of copying GUIDs between files.',
+    body: 'Click any formula or datasource and the drill-down opens: the value path through model bindings and calculated fields to the concrete table, class, or enum, and a summary of the D365FO data it reads. No more copying GUIDs between files.',
     href: '/docs/expression-drill-down',
   },
   {
@@ -69,8 +69,13 @@ const features = [
     href: '/docs/designers',
   },
   {
+    title: 'Tab groups',
+    body: 'Split the designer into two tab groups, like an IDE. Drag a tab across or open a drill-down to the side to compare two formats, or two traces, next to each other.',
+    href: '/docs/getting-started',
+  },
+  {
     title: 'Workspace and recents',
-    body: 'See exactly what is loaded, grouped by data model, and add or close entries one at a time. Files are cached in your browser, so a previous file or a whole session re-opens in one click.',
+    body: 'See exactly what is loaded, grouped by data model, and add or close entries one at a time. Recent sessions and configurations are cached in your browser and re-open in one click.',
     href: '/docs/loading-configurations',
   },
   {
@@ -92,15 +97,15 @@ const steps = [
   },
   {
     title: 'Explore the hierarchy',
-    body: 'The Explorer panel shows the full structure of everything you loaded. Click to select an element; double-click to open its visualization in a new tab.',
+    body: 'The Explorer panel shows the full structure of everything you loaded. Click to select an element; double-click or press Enter to open its visualization in a tab.',
   },
   {
     title: 'Drill into expressions',
-    body: 'Click a formula in the format or mapping view. Pick expression parts on the left and inspect how each resolves on the right, then keep digging until you reach the final source.',
+    body: 'Click a formula in the format or mapping view and the drill-down opens. Click a part of the expression to narrow the value path to it, then keep digging until you reach the final source.',
   },
   {
     title: 'Trace where-used',
-    body: 'Search for a table such as TaxTrans and run “Where used”. Every format element that consumes data from it appears in one list.',
+    body: 'Select a datasource, field, or enum and choose “Where used” — or press Ctrl+U and type a table such as TaxTrans. Every element that consumes it appears in one list.',
   },
 ];
 
@@ -111,7 +116,7 @@ const faqs = [
   },
   {
     q: 'Are my ER files uploaded to a server?',
-    a: 'No. Parsing happens entirely in your browser and XML files you drag in never leave your machine. So the app can offer you a recent file or session again, their content is cached in your own browser — you can clear it from the landing page at any time, and it is never uploaded. When you use the live connection, requests to your Finance & Operations environment are relayed through this site\'s own stateless proxy (F&O does not send CORS headers); it forwards your bearer token and the response and stores nothing.',
+    a: 'No. Parsing happens entirely in your browser and XML files you drag in never leave your machine. So the app can offer you a recent configuration or session again, their content is cached in your own browser — you can clear it from the landing page at any time, and it is never uploaded. When you use the live connection, requests to your Finance & Operations environment are relayed through this site\'s own stateless proxy (F&O does not send CORS headers); it forwards your bearer token and the response and stores nothing.',
   },
   {
     q: 'Which ER component types are supported?',
@@ -328,7 +333,7 @@ export default function HomePage() {
             <p className="mt-5 leading-relaxed text-muted">
               Every XML file you open is parsed by code running in your own browser tab. There is no
               upload, no account, and no server-side storage of configuration content. What you
-              load is cached in your own browser so recent files and sessions can be re-opened —
+              load is cached in your own browser so recent configurations and sessions can be re-opened —
               local to your machine, and clearable from the landing page.
             </p>
             <p className="mt-4 leading-relaxed text-muted">

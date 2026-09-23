@@ -5,23 +5,26 @@ export const metadata = docMetadata('desktop-app');
 
 <DocHeader slug="desktop-app" />
 
-The web app covers almost every case. The desktop shell exists for the one it does not: tenants
-where the Microsoft sign-in popup is blocked, or where a web origin cannot be added to the Entra
-app registration at all.
+The web app covers almost every case — when a sign-in popup is blocked it already falls back to a
+full-page redirect. The desktop shell exists for the cases it does not cover: tenants where the hosted web
+app cannot sign in at all, or where F&amp;O traffic must not pass through a proxy.
 
 ## What it adds
 
-- **Loopback sign-in** — authorization code with PKCE against a temporary `http://localhost`
-  listener, instead of a browser popup.
+- **Loopback sign-in** — the Microsoft sign-in opens in your default browser, and the answer comes
+  back to a temporary `http://localhost` listener (authorization code with PKCE) instead of a
+  browser popup. The sign-in is kept between runs, encrypted with the operating system's own
+  storage; where the system offers no encryption it is kept in memory only.
 - **Native file dialogs** — the operating system's own file picker for opening ER XML.
 - **Direct API calls** — requests go to your environment from the desktop process, so the CORS
-  proxy the web version needs is not involved at all.
+  proxy the web version needs is not involved at all. The same F&amp;O host rules apply, plus
+  `*.cloud.onebox.dynamics.com` for Tier-1 development VMs.
 
 Everything else is identical: same interface, same parser, same designers.
 
 ## Running it
 
-There is no packaged installer yet — the desktop shell runs from the repository. You need
+There is no published installer yet — the desktop shell runs from the repository. You need
 [Node.js](https://nodejs.org) 20 or newer and [pnpm](https://pnpm.io).
 
 ```bash
@@ -33,14 +36,24 @@ pnpm dev:electron
 
 That starts the Vite dev server and opens the Electron window against it.
 
+To build an installer for your own machine instead — a `.dmg` / `.zip` on macOS, an NSIS installer
+on Windows, an AppImage on Linux — run:
+
+```bash
+pnpm --filter @er-visualizer/electron dist
+```
+
+The result lands in `packages/electron/release/`.
+
 ## Entra registration for the desktop flow
 
 Connection profiles are entered exactly as in the browser: profile name and environment URL,
-nothing else. Since the shell runs from the repository, you supply the registration it signs in
-with — set `FNO_CLIENT_ID`, or fill in `FALLBACK_CLIENT_ID` in
-`packages/electron/src/fno/built-in-client.ts` for a packaged build.
+nothing else. The shell signs in with the shipped registration, whose client ID is set as
+`FALLBACK_CLIENT_ID` in `packages/electron/src/fno/built-in-client.ts`; you only need your own when
+you want the shell to use a registration you control — set `FNO_CLIENT_ID`, or change
+`FALLBACK_CLIENT_ID` for a packaged build.
 
-On top of what
+For your own registration, on top of what
 [Self-hosting: register the application](/docs/connect-to-fno#self-hosting-register-the-application)
 describes, the loopback flow needs two things:
 
@@ -55,6 +68,6 @@ handles files identically.
 
 Reach for the desktop shell when:
 
-- sign-in popups are blocked by tenant policy, or
+- sign-in in the browser is blocked by tenant policy, or
 - your security team will not allow the hosted origin as a redirect URI, or
 - you want F&amp;O traffic to leave your machine directly rather than through a proxy.

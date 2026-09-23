@@ -10,9 +10,12 @@ panel and a single index built across every configuration you have loaded.
 
 ## Search
 
-Open it from the activity bar or with `Ctrl+F`, then type. The index covers data models, model
-mappings, and formats at once, so a search for a container name finds it in the model, in the
-mapping that fills it, and in the format elements that consume it — in one list.
+Open it from the activity bar, from the **Search** tab of the right-hand panel, or with `Ctrl+F` —
+the cursor is already in the box — and type. Results appear as you type, from two characters on;
+with the box empty, the panel suggests a few searches framed as questions, such as **Where amounts
+get rounded**. The index covers data models, model mappings, and formats at once, so a search for
+a container name finds it in the model, in the mapping that fills it, and in the format elements
+that consume it — in one list.
 
 Each result carries its source context: which configuration it came from and where inside it the
 match sits. That context is what lets you tell apart the four `Amount` fields that a large
@@ -21,7 +24,17 @@ solution inevitably contains.
 Clicking a result selects the node — in the Explorer, in the designer, and in the Properties
 panel — and highlights it so you can see where you landed.
 
+In the box, `Escape` clears the query, and a second `Escape` leaves the box. `Ctrl+F` with the
+panel already open puts the cursor back in the box; pressing it again while you are in the box
+closes the panel.
+
 ### How results are organised
+
+Results are ranked by relevance: an exact name first, then names that start with the query, names
+with a word that starts with it, matches in the path, and last the hits that only occur inside an
+expression. The first 100 are shown; **Show the next 100** below the list brings in more (the last
+batch reads **Show the remaining …**), and the count above the list reads *shown / total* while
+some are still held back.
 
 Results are grouped by the configuration they came from, and inside each configuration by what
 kind of hit it is: **Structure**, **Bindings**, **Expressions**, **Data sources** and
@@ -35,7 +48,7 @@ paths and would otherwise look like duplicates.
 Two independent filters sit above the results:
 
 - **All / Format / Mappings / Model** — restricts results to one component type.
-- **Related only / All** — the *reach*. See below.
+- The filter button next to them — the *reach*. See below.
 
 The slider on the right expands or collapses every group at once.
 
@@ -44,19 +57,33 @@ The slider on the right expands or collapses every group at once.
 A workspace often holds several unrelated model trees, and an unscoped search reports hits from
 all of them. So the reach defaults to **Related only**: the open configuration, its data model,
 mappings of that same model — and, when the open configuration is a format, the one mapping
-definition that format actually goes through.
+definition that format actually goes through. "Open" means the tab in the focused
+[tab group](/docs/designers#tabs-and-tab-groups).
 
-When something is hidden by that filter, a **+N elsewhere** note appears next to the toggle, so
-you always know there is more to see. Switch to **All** to include unrelated models; results from
-the related tree stay at the top of the list.
+In search, the reach is the filter button beside the scope chips. While it is on, a badge on it
+counts the hits it is holding back, so you always know there is more to see. Turn it off to include
+unrelated models (**All**); results from the related tree stay at the top of the list.
 
-The toggle only appears when there is an open configuration to be related *to*.
+The toggle only appears when there is an open configuration to be related *to*, and something
+outside it to leave out.
 
 ## Where used
 
-Where-used runs the reference graph backwards. Open it from the activity bar or with `Ctrl+U`,
-enter the name of a table, enum, class, or datasource — the field suggests examples such as
-`TaxTrans`, `CustTable`, or a calculated field name — and run the trace.
+Where-used runs the reference graph backwards. Open it from the activity bar, the **Where used**
+tab of the right-hand panel, or with `Ctrl+U`, and enter the name of a table, enum, class, or
+datasource — the placeholder suggests `TaxTrans`, `CustTable`, or a calculated field name, and with
+the box empty the panel offers examples such as **What breaks if a table changes**. The trace runs
+as you type.
+
+It is usually quicker to start from the thing itself. For a datasource, a model field or record, or
+an enum, **Where used** is available:
+
+- as a button in the Properties panel,
+- in the row's ⋮ menu in the Explorer,
+- as the magnifier at the end of a datasource row in the **Data Sources** lists, and of a field row
+  in the data model's **List** view.
+
+Each of these fills in the name and runs the trace straight away.
 
 Results are grouped by the configuration they were found in — and by mapping definition within it
 — so you can see immediately whether a change is contained in one format or spreads across the
@@ -68,8 +95,11 @@ whole solution. Inside each group the references are split into colour-coded sec
 
 An **All / Mappings / Format** scope toggle above the results narrows them to one side of the
 trace — useful when a table is read by a dozen mapping bindings but you only care about which
-output elements change. The same **Related only / All** reach toggle as in search applies here
-too.
+output elements change. The reach applies here too, as a **Related only** / **All** switch; when it
+hides everything, the panel says so and points you at **All**.
+
+A datasource that exists but that nothing references is listed as a **Dead datasource** — a
+candidate for cleanup rather than a place where a change would land.
 
 ## The workflow this is for
 
@@ -84,9 +114,9 @@ particular transaction table.
    question is "what breaks anywhere?".
 3. Work through the format bindings in the result. Each one is a place where the output would
    change.
-4. For anything non-obvious, open the binding in the [drill-down
-   workbench](/docs/expression-drill-down) to see the full expression rather than guessing from
-   the path.
+4. For anything non-obvious, click the binding's formula to open the
+   [drill-down](/docs/expression-drill-down) and see the full chain rather than guessing from the
+   path.
 
 ## Keyboard reference
 
@@ -97,7 +127,18 @@ particular transaction table.
 | `Ctrl+U` | Where used |
 | `Ctrl+J` | Properties panel |
 | `Alt+←` / `Alt+→` | Back / forward through the places you have navigated to |
+| `Escape` | In the search box: clear the query, then leave the box |
 
 On macOS, use `⌘` in place of `Ctrl`. The back and forward steps are also the two arrow buttons at
 the left end of the toolbar. The shortcuts act on the workspace, so they do nothing on the landing
-page or while you are typing in a field.
+page or while you are typing in a field — except that `Ctrl+F` and `Ctrl+U` still close their panel
+from inside the search box.
+
+A few keys work inside particular parts of the workspace:
+
+| Where | Keys |
+|---|---|
+| Explorer | `↑` / `↓` move, `→` / `←` open and close a branch, `Home` / `End` jump, `Space` selects, `Enter` opens |
+| A formula or datasource name | `Enter` or `Space` opens the drill-down dialog, `Shift+Enter` or `Ctrl+Enter` opens it as a tab |
+| Drill-down dialog | `Escape` closes it |
+| Divider between tab groups | `←` / `→` move it, `Home` / `End` to either limit |

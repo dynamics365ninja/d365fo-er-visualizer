@@ -12,24 +12,26 @@ XML is parsed by code running in your own browser tab.
 ## Open the app
 
 Go to [the app](/app). There is nothing to install and no account to create. It runs in any current
-browser; if your tenant blocks the Microsoft sign-in popup, use the [desktop
-app](/docs/desktop-app) instead.
+browser. The [desktop app](/docs/desktop-app) exists for the rare tenant that will not let the
+hosted web app sign in to Finance &amp; Operations at all.
 
 ## Load your first configuration
 
 Export a configuration from Finance &amp; Operations first — in the **Electronic reporting**
-workspace, open **Reporting configurations**, select the configuration, and use **Exchange →
-Export configuration** to download the XML file.
+workspace, open **Reporting configurations**, select the configuration, and in its **Versions** use **Exchange → Export as XML file** to
+download the XML file.
 
 Then either:
 
-- drag the XML file onto the drop zone on the landing page, or
+- drag the XML file onto the drop zone on the landing page (**Local files** tab), or
 - click the drop zone and pick the files, or
 - switch to the **D365 F&amp;O server** tab and [pull the configurations straight from an
   environment](/docs/connect-to-fno).
 
-You can load several files at once, and you can keep adding files later — everything you load
-shares one workspace and one cross-reference index.
+You can load several files at once, and you can keep adding files later — with **Load XML** in the
+toolbar, by dropping files onto the Explorer, or from the [workspace
+manager](/docs/loading-configurations#the-workspace-manager). Everything you load shares one
+workspace and one cross-reference index. A format opens in its designer as soon as it is loaded.
 
 > Load all three component types together — the data model, the model mapping, and the format. A
 > format on its own shows you which model paths its elements bind to, but not which table those
@@ -42,18 +44,21 @@ The workspace follows the layout of a code editor.
 
 | Area | What it does |
 |---|---|
-| **Activity bar** (far left) | Switches panels and toggles view options |
+| **Activity bar** (far left) | **Home** (back to the landing page), switches panels, and toggles language, view and theme |
+| **Toolbar** (top) | **Back** / **Forward** through where you have been (`Alt+←` / `Alt+→`) and **Load XML** |
 | **Explorer** (`Ctrl+B`) | The hierarchy of everything you have loaded |
-| **Designer tabs** (centre) | The visual view of the configuration you opened |
+| **Designer** (centre) | What you opened, as tabs — which can be split into a left and a right group to compare two views side by side |
 | **Search** (`Ctrl+F`) | Full-text search across every loaded configuration |
 | **Where used** (`Ctrl+U`) | Reverse trace: what references this element |
 | **Properties** (`Ctrl+J`) | Details of whatever is currently selected |
 
-In the Explorer, a **single click** selects a node and fills the Properties panel. A **double
-click** opens it, and what opens depends on the node: the root of a configuration opens the full
-designer, a node that carries an expression — a binding, a calculated field, a validation — opens
-the [drill-down workbench](/docs/expression-drill-down) on that expression, and anything else
-opens a focused detail view.
+In the Explorer, a **single click** selects a node and fills the Properties panel (on a node with
+children it also folds or unfolds it). A **double click** — or **Enter** — opens it, and what opens
+depends on the node: the root of a configuration opens the full designer, a node that carries an
+expression — a binding, a calculated field, a validation — opens the
+[drill-down](/docs/expression-drill-down) on that expression as a tab, and anything else opens its
+configuration's designer with the node selected. With the keyboard, the arrow keys walk the tree
+and **Space** selects.
 
 ## A few things worth knowing on day one
 
@@ -66,19 +71,21 @@ mostly noise when you are trying to understand a report. The choice is remembere
 
 ### Theme and language
 
-The theme switch sits below the view toggle and cycles through three states — **system**, **light**,
-**dark**. System is the default and keeps following your operating system; only an explicit choice
+The theme switch sits below the view toggle (and in the top bar of the landing page) and cycles
+through three states — **Follow system**, **Light**, **Dark**. System is the default and keeps following your operating system; only an explicit choice
 is remembered. The same switch and the same choice apply to this documentation site.
 
 The interface language follows your browser locale — Czech and English are supported — and can be
-switched from the toolbar at the top. That choice is remembered too, and it also decides which
-translation of an ER label you see.
+switched with the **CZ** / **EN** buttons at the top of the landing page, or with the language
+button just above the view toggle in the activity bar. That choice is remembered too, and it also
+decides which translation of an ER label you see.
 
 ### Picking up where you left off
 
-Files you load are cached in your browser, so the landing page can offer them back. **Recent files**
-re-opens a single configuration and **Recent sessions** restores a whole set in one click — no
-re-picking from disk, and no round trip to the environment. See
+Configurations you load are cached in your browser, so the landing page can offer them back.
+**Recent sessions** restores a whole set of configurations that were open together in one click,
+and **Recent configurations** re-opens a single one — no re-picking from disk, and no round trip to
+the environment. See
 [Loading configurations](/docs/loading-configurations) for what is stored and how to clear it.
 
 ## Where to go next
