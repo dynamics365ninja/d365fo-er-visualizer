@@ -50,7 +50,7 @@ import {
   ChevronRightRegular,
 } from '@fluentui/react-icons';
 import { useAppStore, resolveDeepExpression, selectMappingDefinition, getScopedMappingDefinitions } from '../state/store';
-import { locale, t } from '../i18n';
+import { locale, t, useLocale } from '../i18n';
 import { dsPathToExpression } from '../utils/ds-path';
 import { useResizableDialog } from '../utils/resizable-dialog';
 import { formatEnumDisplayName } from '../utils/enum-display';
@@ -1068,6 +1068,8 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
   const resolveDatasource = useAppStore(s => s.resolveDatasource);
   const findModelPathBindings = useAppStore(s => s.findModelPathBindings);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  // The tree's labels are localized when built, so a language switch must rebuild it.
+  const activeLocale = useLocale();
   const [showUnresolved, setShowUnresolved] = useState(false);
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
   const [peek, setPeek] = useState<{ label: string; expression: string; configIndex: number } | null>(null);
@@ -1087,7 +1089,7 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
     resolveDatasource,
     findModelPathBindings,
     includeUnresolvedRefs: showUnresolved,
-  }), [expression, configIndex, configurations, resolveModelPath, resolveDatasource, findModelPathBindings, showUnresolved]);
+  }), [expression, configIndex, configurations, resolveModelPath, resolveDatasource, findModelPathBindings, showUnresolved, activeLocale]);
 
   const usedSources = useMemo(() => collectUsedSources({
     expression,
@@ -1095,7 +1097,7 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
     configurations,
     resolveModelPath,
     resolveDatasource,
-  }), [expression, configIndex, configurations, resolveModelPath, resolveDatasource]);
+  }), [expression, configIndex, configurations, resolveModelPath, resolveDatasource, activeLocale]);
 
   /* The used-data list runs to dozens of rows on a real expression, so it
      starts folded: the outline above it is the answer, this is the evidence. */
@@ -1194,7 +1196,7 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
       children = only.children;
     }
     return children === built.children ? built : { ...built, children };
-  }, [peek, configurations, resolveModelPath, resolveDatasource, findModelPathBindings]);
+  }, [peek, configurations, resolveModelPath, resolveDatasource, findModelPathBindings, activeLocale]);
 
   const peekIndex = useMemo(() => (peekTree ? buildLineageIndex(peekTree) : null), [peekTree]);
   const [peekOpenIds, setPeekOpenIds] = useState<Set<string>>(new Set());
@@ -2382,6 +2384,8 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill, i
   const pushToast = useAppStore(s => s.pushToast);
   const flowRef = React.useRef<any>(null);
   const [selectedNodeId, setSelectedNodeId] = useState('root');
+  // The tree's labels are localized when built, so a language switch must rebuild it.
+  const activeLocale = useLocale();
 
   // Build tree data structure
   const rootNode = useMemo<TreeExprNode>(
@@ -2389,7 +2393,7 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill, i
       expression, configIndex, configurations,
       resolveModelPath, resolveDatasource, includeUnresolvedRefs,
     }),
-    [expression, configIndex, configurations, includeUnresolvedRefs, resolveModelPath, resolveDatasource],
+    [expression, configIndex, configurations, includeUnresolvedRefs, resolveModelPath, resolveDatasource, activeLocale],
   );
 
   React.useEffect(() => {

@@ -27,7 +27,8 @@ import {
   AppsListDetailRegular,
   AddRegular,
 } from '@fluentui/react-icons';
-import { locale, t } from '../i18n';
+import { locale, t, useLocale } from '../i18n';
+import { adjacentRow, treeArrowAction } from '../utils/tree-keyboard';
 import { useAppStore, type TreeNode } from '../state/store';
 import { ERDirection } from '@er-visualizer/core';
 import type { ERConfiguration } from '@er-visualizer/core';
@@ -471,6 +472,26 @@ export function ConfigExplorer() {
   // row still has to open and highlight.
   const selectedPathIds = useMemo(() => collectAncestorIds(storeTreeNodes, selectedNodeId), [storeTreeNodes, selectedNodeId]);
 
+  // Stable, so memoized rows are not re-rendered by a fresh closure each time.
+  const closeConfigurationNode = useCallback((node: TreeNode) => {
+    if (node.configIndex != null) removeConfiguration(node.configIndex);
+  }, [removeConfiguration]);
+
+  /*
+   * Roving tabindex: the tree is one tab stop, on the selected row. When the
+   * selection is not among the rendered rows (nothing selected, filtered out,
+   * folded into a collapsed kind group) the first row takes the tab stop, so
+   * the tree never drops out of the tab order.
+   */
+  const treeRef = React.useRef<HTMLDivElement>(null);
+  const [fallbackTabStopId, setFallbackTabStopId] = useState<string | null>(null);
+  React.useLayoutEffect(() => {
+    const rows = treeRef.current?.querySelectorAll<HTMLElement>('[role="treeitem"]');
+    const rowIds = rows ? Array.from(rows, row => row.dataset.nodeId) : [];
+    const next = selectedNodeId && rowIds.includes(selectedNodeId) ? null : (rowIds[0] ?? null);
+    if (next !== fallbackTabStopId) setFallbackTabStopId(next);
+  });
+
   // Counts across the full unfiltered set, so filtering never disables a chip.
   const kindCounts = useMemo(() => {
     const counts: Record<ConfigKind, number> = { DataModel: 0, ModelMapping: 0, Format: 0 };
@@ -598,6 +619,7 @@ export function ConfigExplorer() {
 
   return (
     <ActiveScopeContext.Provider value={activeScopeNodeIds}>
+    <TreeTabStopContext.Provider value={fallbackTabStopId}>
     <div
       className={`explorer-tree-shell explorer-dropzone ${isDragging ? 'explorer-dropzone-dragging' : ''}`}
       onDragEnter={handleDragEnter}
@@ -746,7 +768,7 @@ export function ConfigExplorer() {
           <p>{t.noResults}</p>
         </div>
       ) : hierarchyView && hierarchy ? (
-        <div className="explorer-sections explorer-hierarchy-view" role="tree" aria-label={t.configurations}>
+        <div ref={treeRef} className="explorer-sections explorer-hierarchy-view" role="tree" aria-label={t.configurations}>
           {(() => {
             const { roots, orphans } = hierarchy;
             const sharedProps = {
@@ -762,7 +784,7 @@ export function ConfigExplorer() {
               onSelect: selectNode,
               onNavigate: navigateToTreeNode,
               onDoubleClick: handleExplorerDoubleClick,
-              onRemove: removeConfiguration,
+              onCloseConfiguration: closeConfigurationNode,
             };
             const hasAnyRootVisible = roots.some(r =>
               groupHasVisibleContent(r, configurations, treeNodes, filteredNodeIds, kindFilter));
@@ -792,8 +814,7 @@ export function ConfigExplorer() {
                           key={node.id}
                           node={node}
                           depth={0}
-                          selectedId={selectedNodeId}
-                          selectedPathIds={selectedPathIds}
+                          {...selectionFor(node.id, selectedNodeId, selectedPathIds)}
                           showTechnicalDetails={showTechnicalDetails}
                           version={getDisplayVersion(cfg, showTechnicalDetails)}
                           onSelect={selectNode}
@@ -801,7 +822,7 @@ export function ConfigExplorer() {
                           expandMode={expandMode}
                           expandVersion={expandVersion}
                           onDoubleClick={handleExplorerDoubleClick}
-                          onCloseConfiguration={(n) => { if (n.configIndex != null) removeConfiguration(n.configIndex); }}
+                          onCloseConfiguration={closeConfigurationNode}
                         />
                       );
                     })}
@@ -812,7 +833,7 @@ export function ConfigExplorer() {
           })()}
         </div>
       ) : (
-        <div className="explorer-sections" role="tree" aria-label={t.configurations}>
+        <div ref={treeRef} className="explorer-sections" role="tree" aria-label={t.configurations}>
           {groupedTreeNodes.map(group => {
             // An empty kind has nothing to show, so it stays visually folded.
             const isCollapsed = !isFiltering && (collapsedGroups.has(group.kind) || group.nodes.length === 0);
@@ -843,8 +864,7 @@ export function ConfigExplorer() {
                           key={node.id}
                           node={node}
                           depth={0}
-                          selectedId={selectedNodeId}
-                          selectedPathIds={selectedPathIds}
+                          {...selectionFor(node.id, selectedNodeId, selectedPathIds)}
                           showTechnicalDetails={showTechnicalDetails}
                           version={version}
                           onSelect={selectNode}
@@ -853,11 +873,7 @@ export function ConfigExplorer() {
                           expandVersion={expandVersion}
                           onDoubleClick={handleExplorerDoubleClick}
                           inKindGroup
-                          onCloseConfiguration={(n) => {
-                            if (n.configIndex != null) {
-                              removeConfiguration(n.configIndex);
-                            }
-                          }}
+                          onCloseConfiguration={closeConfigurationNode}
                         />
                       );
                     })}
@@ -869,6 +885,7 @@ export function ConfigExplorer() {
         </div>
       )}
     </div>
+    </TreeTabStopContext.Provider>
     </ActiveScopeContext.Provider>
   );
 }
@@ -880,11 +897,31 @@ export function ConfigExplorer() {
  */
 const ActiveScopeContext = React.createContext<ReadonlySet<string>>(new Set<string>());
 
+/** The row that holds the tree's tab stop when the selected row is not rendered. */
+const TreeTabStopContext = React.createContext<string | null>(null);
+
+const NO_SELECTION_PATH: ReadonlySet<string> = new Set<string>();
+
+/**
+ * The selection as a row sees it. Only rows on the path to the selected node
+ * are handed the selection; every other row gets the same `null` and empty
+ * set on every render, so a selection change re-renders just the old and the
+ * new path instead of the whole (memoized) tree.
+ */
+function selectionFor(id: string, selectedId: string | null, selectedPathIds: ReadonlySet<string>) {
+  return id === selectedId || selectedPathIds.has(id)
+    ? { selectedId, selectedPathIds }
+    : { selectedId: null, selectedPathIds: NO_SELECTION_PATH };
+}
+
 interface TreeNodeRowProps {
   node: TreeNode;
   depth: number;
+  /** Row this one is nested under, for the left arrow to step out to. */
+  parentId?: string;
+  /** The selected node — only set on rows on its path (see {@link selectionFor}). */
   selectedId: string | null;
-  selectedPathIds: Set<string>;
+  selectedPathIds: ReadonlySet<string>;
   showTechnicalDetails: boolean;
   version?: string | number;
   onSelect: (id: string) => void;
@@ -897,7 +934,7 @@ interface TreeNodeRowProps {
   inKindGroup?: boolean;
 }
 
-function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDetails, version, onSelect, onNavigate, expandMode, expandVersion, onDoubleClick, onCloseConfiguration, inKindGroup }: TreeNodeRowProps) {
+const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, parentId, selectedId, selectedPathIds, showTechnicalDetails, version, onSelect, onNavigate, expandMode, expandVersion, onDoubleClick, onCloseConfiguration, inKindGroup }: TreeNodeRowProps) {
   const [expanded, setExpanded] = useState(depth === 0);
   const visibleChildren = showTechnicalDetails
     ? node.children
@@ -927,6 +964,9 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
   }, [node, onDoubleClick]);
 
   const configurations = useAppStore(s => s.configurations);
+  // A memoized row is not re-rendered by its parent on a language switch, so
+  // it listens for one itself — its labels and kind pills are localized.
+  const activeLocale = useLocale();
   const rawLabel: string | undefined = node.type === 'file' || node.type === 'section'
     ? undefined
     : (typeof node.data?.label === 'string' ? node.data.label : undefined);
@@ -937,7 +977,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
     // An unresolved reference is noise, not information — hide it.
     if (looksLikeLabelRef(rawLabel) && text === rawLabel) return undefined;
     return text;
-  }, [rawLabel, configurations, node.configIndex, node.name, locale]);
+  }, [rawLabel, configurations, node.configIndex, node.name, activeLocale]);
 
   const isSelected = node.id === selectedId;
   const isAncestor = !isSelected && selectedPathIds.has(node.id);
@@ -958,9 +998,61 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
     if (!isSelected) return;
     const el = rowRef.current;
     if (!el) return;
+    // Arrow keys move the selection, so focus follows it — but only while
+    // focus is already in the tree, never pulled in from elsewhere.
+    const tree = el.closest('[role="tree"]');
+    if (tree && document.activeElement !== el && tree.contains(document.activeElement)) {
+      el.focus({ preventScroll: true });
+    }
     const frame = requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest' }));
     return () => cancelAnimationFrame(frame);
   }, [isSelected]);
+
+  const fallbackTabStopId = React.useContext(TreeTabStopContext);
+  const isTabStop = isSelected || fallbackTabStopId === node.id;
+
+  /** WAI-ARIA tree keys: arrows walk and fold, Home / End jump, Enter / Space select. */
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    // Keys from the row's menu button stay with the button; modified keys are
+    // workspace shortcuts (Alt+Left / Alt+Right walk the navigation history).
+    if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const renderedRows = (): HTMLElement[] => {
+      const tree = rowRef.current?.closest('[role="tree"]');
+      // Rendered rows in document order are exactly the visible ones.
+      return tree ? Array.from(tree.querySelectorAll<HTMLElement>('[role="treeitem"]')) : [];
+    };
+    const selectRow = (row: HTMLElement | undefined) => {
+      const id = row?.dataset.nodeId;
+      if (id) onSelect(id);
+    };
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onSelect(node.id);
+      return;
+    }
+    if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      const rows = renderedRows();
+      selectRow(event.key === 'Home' ? rows[0] : rows[rows.length - 1]);
+      return;
+    }
+    const action = treeArrowAction(event.key, {
+      hasChildren: Boolean(hasChildren),
+      expanded,
+      collapsible: true,
+      hasParent: parentId != null,
+    });
+    if (!action) return;
+    event.preventDefault();
+    if (action === 'expand') setExpanded(true);
+    else if (action === 'collapse') setExpanded(false);
+    else if (action === 'parent') onSelect(parentId!);
+    else if (rowRef.current) {
+      // An open row's first child is simply the next rendered row.
+      selectRow(adjacentRow(renderedRows(), rowRef.current, action === 'previous' ? 'previous' : 'next'));
+    }
+  };
   const accentClass = getExplorerNodeAccentClass(node);
   const sectionKindClass = node.type === 'section' && node.data?.sectionKind
     ? `tree-node-section-kind-${node.data.sectionKind}`
@@ -979,11 +1071,18 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
     <>
       <div
         ref={rowRef}
+        role="treeitem"
+        aria-level={depth + 1}
+        aria-selected={isSelected}
+        aria-expanded={hasChildren ? expanded : undefined}
+        tabIndex={isTabStop ? 0 : -1}
+        data-node-id={node.id}
         className={`tree-node tree-node-${node.type} ${sectionClass} ${parentClass} ${sectionKindClass} ${accentClass} ${isSelected ? 'selected' : ''} ${isAncestor ? 'ancestor' : ''}`}
         data-depth={depth}
         style={{ paddingLeft: 8 + depth * 16, ['--depth' as string]: depth }}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
+        onKeyDown={handleKeyDown}
       >
         {hasChildren ? (
           <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
@@ -1046,8 +1145,8 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
           key={child.id}
           node={child}
           depth={depth + 1}
-          selectedId={selectedId}
-          selectedPathIds={selectedPathIds}
+          parentId={node.id}
+          {...selectionFor(child.id, selectedId, selectedPathIds)}
           showTechnicalDetails={showTechnicalDetails}
           onSelect={onSelect}
           onNavigate={onNavigate}
@@ -1059,7 +1158,7 @@ function TreeNodeRow({ node, depth, selectedId, selectedPathIds, showTechnicalDe
       ))}
     </>
   );
-}
+});
 
 // ─── Kind filter chip ───
 
@@ -1108,7 +1207,7 @@ interface ModelGroupSectionProps {
   onSelect: (id: string) => void;
   onNavigate: (id: string) => void;
   onDoubleClick: (node: TreeNode) => void;
-  onRemove: (index: number) => void;
+  onCloseConfiguration: (node: TreeNode) => void;
 }
 
 function ModelGroupSection({
@@ -1126,7 +1225,7 @@ function ModelGroupSection({
   onSelect,
   onNavigate,
   onDoubleClick,
-  onRemove,
+  onCloseConfiguration,
 }: ModelGroupSectionProps) {
   const modelNode = treeNodes[group.configIdx];
   if (!modelNode) return null;
@@ -1151,8 +1250,7 @@ function ModelGroupSection({
     const cfg = configurations[idx];
     return {
       depth: 0 as const,
-      selectedId: selectedNodeId,
-      selectedPathIds,
+      ...selectionFor(treeNodes[idx]?.id ?? '', selectedNodeId, selectedPathIds),
       showTechnicalDetails,
       version: getDisplayVersion(cfg, showTechnicalDetails),
       onSelect,
@@ -1160,7 +1258,7 @@ function ModelGroupSection({
       expandMode,
       expandVersion,
       onDoubleClick,
-      onCloseConfiguration: (n: TreeNode) => { if (n.configIndex != null) onRemove(n.configIndex); },
+      onCloseConfiguration,
     };
   };
 
@@ -1208,7 +1306,7 @@ function ModelGroupSection({
               onSelect={onSelect}
               onNavigate={onNavigate}
               onDoubleClick={onDoubleClick}
-              onRemove={onRemove}
+              onCloseConfiguration={onCloseConfiguration}
             />
           ))}
         </div>

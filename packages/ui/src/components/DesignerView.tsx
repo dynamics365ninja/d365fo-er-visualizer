@@ -37,7 +37,7 @@ import { DrillDownBody, DrillDownTrigger } from './DrillDownPanel';
 import { PropertyInspector } from './PropertyInspector';
 import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 import { FilterField } from './FilterField';
-import { locale, t } from '../i18n';
+import { locale, t, useLocale } from '../i18n';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { adjacentRow, isTreeArrowKey, treeArrowAction } from '../utils/tree-keyboard';
 import { getBindingCategoryLabel, getConsultantBindingLabel, getConsultantFieldTypeLabel, getConsultantFormatTypeLabel, isXmlNamespaceDeclaration } from '../utils/consultant-labels';
@@ -60,6 +60,7 @@ import { ERDirection, getFormatElementExcelRange, type ERConfiguration, type ERD
 import { resolveLabel, buildLabelPool } from '../utils/label-resolver';
 import { useCoarsePointer, useCompactLayout } from '../utils/responsive';
 import { useTabState, pruneTabViewState } from '../utils/tab-view-state';
+import { renderXmlHighlightedMarkup } from '../utils/xml-highlight';
 import { parseXlsxBase64, colToLetter, type XlsxWorkbook, type XlsxCell as XlsxCellType, type XlsxMerge, type XlsxArea, type XlsxDrawing, type XlsxAnchorPoint } from '../utils/xlsx-parser';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
@@ -2646,15 +2647,28 @@ function ExcelTemplateGrid({
   const previewOptions = useMemo<PreviewRenderOptions>(() => ({ placeholderMode: 'sample' }), []);
   const cellBindings = useMemo(() => buildCellBindingMap(rootElement, bindingMap, labels, previewOptions), [rootElement, bindingMap, labels, previewOptions]);
 
+  const sheetName = workbook.sheets[Math.min(activeSheet, workbook.sheets.length - 1)]?.name;
+
+  /**
+   * The named ranges whose cells sit on the sheet on screen. A name is often
+   * defined once per sheet (`localSheetId`), and each definition only applies
+   * to its own sheet — a name with no sheet at all applies everywhere.
+   */
+  const sheetNamedAreas = useMemo(() => {
+    const current = sheetName?.toUpperCase();
+    return (workbook.namedAreas ?? []).filter(n => !n.sheet || n.sheet.toUpperCase() === current);
+  }, [workbook.namedAreas, sheetName]);
+
   // Reverse map: cell ref (e.g. "B3") → named range (e.g. "CONTACTINFO_LABEL")
   // Needed because ExcelRange attribute stores named range names, not cell addresses.
   const cellRefToNamedRange = useMemo(() => {
     const map = new Map<string, string>();
-    for (const [name, ref] of workbook.definedNames) {
-      map.set(ref.toUpperCase(), name); // name is already uppercased in parser
+    for (const { name, anchor } of sheetNamedAreas) {
+      // name is already uppercased in parser; the first definition wins.
+      if (!map.has(anchor)) map.set(anchor, name);
     }
     return map;
-  }, [workbook.definedNames]);
+  }, [sheetNamedAreas]);
 
   /**
    * Every cell covered by a named range, mapped to that range. A named range
@@ -2663,7 +2677,7 @@ function ExcelTemplateGrid({
    */
   const cellRefToArea = useMemo(() => {
     const map = new Map<string, { name: string; area: XlsxArea }>();
-    for (const [name, area] of workbook.definedRanges ?? []) {
+    for (const { name, area } of sheetNamedAreas) {
       const width = area.endCol - area.startCol + 1;
       const height = area.endRow - area.startRow + 1;
       // A runaway whole-column range would paint the entire sheet.
@@ -2676,7 +2690,7 @@ function ExcelTemplateGrid({
       }
     }
     return map;
-  }, [workbook.definedRanges]);
+  }, [sheetNamedAreas]);
 
   const sheet = workbook.sheets[Math.min(activeSheet, workbook.sheets.length - 1)];
   if (!sheet) return null;
@@ -3761,60 +3775,6 @@ function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellD
   );
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function highlightXmlTag(tag: string): string {
-  const punctColor = 'var(--text-secondary)';
-  const tagColor = 'var(--accent)';
-  const attrColor = 'var(--surface-warning-fg)';
-  const valueColor = 'var(--surface-success-fg)';
-
-  const escapedTag = escapeHtml(tag);
-  const openMatch = tag.match(/^<\/?([A-Za-z_][A-Za-z0-9_.:-]*)/);
-  const closeMatch = tag.match(/^<\/?([A-Za-z_][A-Za-z0-9_.:-]*)\s*>$/);
-  const tagName = openMatch?.[1] ?? closeMatch?.[1] ?? null;
-
-  let result = escapedTag
-    .replace(/(&lt;\/?|\/?&gt;|\?&gt;|&lt;\?)/g, `<span style="color:${punctColor}">$1</span>`);
-
-  if (tagName) {
-    const escapedName = escapeHtml(tagName);
-    result = result.replace(escapedName, `<span style="color:${tagColor};font-weight:600">${escapedName}</span>`);
-  }
-
-  result = result.replace(
-    /([A-Za-z_][A-Za-z0-9_.:-]*)(\s*=\s*)(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;)/g,
-    `<span style="color:${attrColor}">$1</span>$2<span style="color:${valueColor}">$3</span>`,
-  );
-
-  return result;
-}
-
-function renderXmlHighlightedMarkup(xml: string): string {
-  const parts: string[] = [];
-  const tagRegex = /<[^>]+>/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = tagRegex.exec(xml)) !== null) {
-    const textBefore = xml.slice(lastIndex, match.index);
-    if (textBefore) parts.push(escapeHtml(textBefore));
-    parts.push(highlightXmlTag(match[0]));
-    lastIndex = match.index + match[0].length;
-  }
-
-  const tail = xml.slice(lastIndex);
-  if (tail) parts.push(escapeHtml(tail));
-  return parts.join('');
-}
-
 type DelimitedPreviewData = {
   delimiter: string;
   rows: string[][];
@@ -4351,9 +4311,20 @@ function forwardArrowKeyToSelectedRow(event: React.KeyboardEvent<HTMLDivElement>
   if (forwarded.defaultPrevented) event.preventDefault();
 }
 
-function FormatElementTree({ element, depth, bindingMap, transformationMap, configIndex, filter, showAll, expandMode, expandVersion, selectedId, onSelect, showTechnicalDetails, bindingFilter, treeIndex, selectedAncestors, onReveal }: FormatElementTreeProps) {
+const NO_SELECTED_ANCESTORS: Set<string> = new Set<string>();
+
+/**
+ * Memoized, and only rows on the path to the selected element are handed the
+ * selection — every other row sees the same `null` / empty set on each
+ * render, so moving the selection re-renders the old and the new path rather
+ * than the whole structure tree.
+ */
+const FormatElementTree = React.memo(function FormatElementTreeRow({ element, depth, bindingMap, transformationMap, configIndex, filter, showAll, expandMode, expandVersion, selectedId, onSelect, showTechnicalDetails, bindingFilter, treeIndex, selectedAncestors, onReveal }: FormatElementTreeProps) {
   const [expanded, setExpanded] = useState(expandMode === 'all');
   const configurations = useAppStore(s => s.configurations);
+  // Not re-rendered by its parent on a language switch any more (memo), so it
+  // listens for one itself.
+  const activeLocale = useLocale();
   const labels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
 
   useEffect(() => {
@@ -4369,7 +4340,7 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
 
   // Resolve label for this element
   const labelRef = element.attributes?.['Label'];
-  const resolvedLabel = useMemo(() => resolveLabel(labelRef, labels), [labelRef, labels, locale]);
+  const resolvedLabel = useMemo(() => resolveLabel(labelRef, labels), [labelRef, labels, activeLocale]);
   // An unresolved reference is only an id — worth showing in the technical view alone.
   const labelText = resolvedLabel?.localized ?? resolvedLabel?.enUs ?? (showTechnicalDetails && resolvedLabel?.id ? resolvedLabel.id : undefined);
   const excelRange = getFormatElementExcelRange(element);
@@ -4684,18 +4655,19 @@ function FormatElementTree({ element, depth, bindingMap, transformationMap, conf
           showAll={showAll || (matchesFilter && manuallyExpanded)}
           expandMode={expandMode}
           expandVersion={expandVersion}
-          selectedId={selectedId}
+          {...(child.id === selectedId || selectedAncestors.has(child.id)
+            ? { selectedId, selectedAncestors }
+            : { selectedId: null, selectedAncestors: NO_SELECTED_ANCESTORS })}
           onSelect={onSelect}
           showTechnicalDetails={showTechnicalDetails}
           bindingFilter={bindingFilter}
           treeIndex={treeIndex}
-          selectedAncestors={selectedAncestors}
           onReveal={onReveal}
         />
       ))}
     </div>
   );
-}
+});
 
 // ── Bindings tab ──
 
