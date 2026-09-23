@@ -73,6 +73,7 @@ import {
 } from '@er-visualizer/fno-client';
 import { parseERConfigurations } from '@er-visualizer/core';
 import { t } from '../i18n';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../state/store';
 import { useFnoProfiles, newProfileId } from '../state/fno-profiles';
 import { useFnoSession } from '../state/fno-session';
@@ -607,6 +608,12 @@ interface DeepSearchState {
   running: boolean;
 }
 
+/** Environment URLs compared the way sign-in scopes them (case, trailing slash). */
+function sameEnvUrl(a: string, b: string): boolean {
+  const norm = (u: string) => u.trim().replace(/\/+$/, '').toLowerCase();
+  return norm(a) === norm(b);
+}
+
 interface FnoConnectPanelProps {
   onFilesLoaded?: () => void;
 }
@@ -615,9 +622,13 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   const styles = useStyles();
   const pushToast = useAppStore(s => s.pushToast);
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
-  const { profiles, upsert, remove, markUsed } = useFnoProfiles();
+  const { profiles, upsert, remove, markUsed } = useFnoProfiles(useShallow(s => ({
+    profiles: s.profiles, upsert: s.upsert, remove: s.remove, markUsed: s.markUsed,
+  })));
 
   // ── Zustand: connection & browsing state (survives unmount) ──
+  // Picked field by field (shallow-compared) so a change elsewhere in the
+  // store — e.g. rootDataModelByPath — does not re-render this whole panel.
   const {
     activeProfileId, connState, setActiveProfileId, setConnState,
     solutions, loadingSolutions, solutionFilter,
@@ -628,7 +639,21 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     selected, setSelected, clearSelection, toggleSelected,
     allDataModelsSeen, dataModelChain,
     setRootDataModelByPath, setAllDataModelsSeen, setDataModelChain,
-  } = useFnoSession();
+  } = useFnoSession(useShallow(s => ({
+    activeProfileId: s.activeProfileId, connState: s.connState,
+    setActiveProfileId: s.setActiveProfileId, setConnState: s.setConnState,
+    solutions: s.solutions, loadingSolutions: s.loadingSolutions, solutionFilter: s.solutionFilter,
+    setSolutions: s.setSolutions, setLoadingSolutions: s.setLoadingSolutions, setSolutionFilter: s.setSolutionFilter,
+    activeSolution: s.activeSolution, solutionPath: s.solutionPath, components: s.components,
+    loadingComponents: s.loadingComponents, componentTypeFilter: s.componentTypeFilter, componentFilter: s.componentFilter,
+    setActiveSolution: s.setActiveSolution, setSolutionPath: s.setSolutionPath, setComponents: s.setComponents,
+    setLoadingComponents: s.setLoadingComponents, setComponentTypeFilter: s.setComponentTypeFilter,
+    setComponentFilter: s.setComponentFilter,
+    selected: s.selected, setSelected: s.setSelected, clearSelection: s.clearSelection, toggleSelected: s.toggleSelected,
+    allDataModelsSeen: s.allDataModelsSeen, dataModelChain: s.dataModelChain,
+    setRootDataModelByPath: s.setRootDataModelByPath, setAllDataModelsSeen: s.setAllDataModelsSeen,
+    setDataModelChain: s.setDataModelChain,
+  })));
 
   // ── Local-only state (OK to lose on unmount) ──
   // Editor target: `null` = closed, `{ id: null }` = creating, `{ id }` = editing
@@ -656,6 +681,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   // Monotonic id of the latest listing request. A slower, older response must
   // not overwrite the components of a newer click (pick / drill / back).
   const listRequestSeqRef = useRef(0);
+  // Cancels the running "Load selected" pipeline (see handleLoadSelected).
+  const ingestAbortRef = useRef<AbortController | null>(null);
 
   // ── Cross-model search ───────────────────────────────────────────────────
   // The left-hand filter only ever saw model names, because formats and
@@ -688,6 +715,21 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     () => profiles.find(p => p.id === activeProfileId) ?? null,
     [profiles, activeProfileId],
   );
+
+  // Listings cached per root model belong to one environment. Switching
+  // profile — or editing the active one to another URL — invalidates them,
+  // along with any search still walking the old environment.
+  const activeEnvKey = activeProfile ? `${activeProfile.id}|${activeProfile.envUrl}` : '';
+  const lastEnvKeyRef = useRef(activeEnvKey);
+  useEffect(() => {
+    if (lastEnvKeyRef.current === activeEnvKey) return;
+    lastEnvKeyRef.current = activeEnvKey;
+    rootComponentCacheRef.current.clear();
+    listRequestSeqRef.current++;
+    ingestAbortRef.current?.abort();
+    setLoadingComponents(false);
+    clearSearch();
+  }, [activeEnvKey, clearSearch, setLoadingComponents]);
 
   /**
    * Push a download into the workspace, upgrading placeholder names first.
@@ -761,11 +803,16 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       tenantId: undefined,
       clientId: undefined,
     };
+    // The profile keeps its id across edits, so a token cached for the old
+    // environment would otherwise be sent to the new one.
+    const envChanged = !!editorTarget && !sameEnvUrl(editorTarget.envUrl, profile.envUrl);
+    if (editorTarget) fnoSession.clearTokenCache(profile.id);
     upsert(profile);
     // Re-activating the already active profile would reset the connection
     // state (setActiveProfileId clears solutions/components) — only switch
-    // when a different/new profile was saved.
-    if (profile.id !== activeProfileId) setActiveProfileId(profile.id);
+    // when a different/new profile was saved, or when the active profile now
+    // points at another environment and everything listed is stale.
+    if (profile.id !== activeProfileId || envChanged) setActiveProfileId(profile.id);
     pushToast({
       kind: 'success',
       message: editorTarget ? t.fnoProfileUpdated(profile.displayName) : t.fnoProfileSaved(profile.displayName),
@@ -774,6 +821,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   }, [canSave, editorTarget, profileName, envUrl, upsert, pushToast, activeProfileId]);
 
   const handleRemoveProfile = useCallback((id: string) => {
+    fnoSession.clearTokenCache(id);
     remove(id);
     if (activeProfileId === id) setActiveProfileId(null);
     // Leaving the dialog open on a profile that no longer exists would silently
@@ -781,13 +829,29 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     setEditor(prev => (prev?.id === id ? null : prev));
   }, [remove, activeProfileId]);
 
-  const handleConnect = useCallback(async () => {
+  /**
+   * Sign in and list solutions. `silentOnly` never opens a popup or redirects
+   * — the redirect resume below runs without a user gesture, so a popup would
+   * be blocked and its redirect fallback would loop the page back to Microsoft.
+   */
+  const handleConnect = useCallback(async (opts?: { silentOnly?: boolean }) => {
     if (!activeProfile) return;
     setConnState({ kind: 'connecting' });
     // Phase 1 — sign in (MSAL).
     let auth: Awaited<ReturnType<typeof fnoSession.signIn>>;
     try {
-      auth = await fnoSession.signIn(activeProfile);
+      if (opts?.silentOnly) {
+        const resumed = await fnoSession.resumeSignIn(activeProfile);
+        if (!resumed) {
+          // Nothing to resume (the user backed out of the Microsoft page, or
+          // the session expired): wait for an explicit Connect click.
+          setConnState({ kind: 'disconnected' });
+          return;
+        }
+        auth = resumed;
+      } else {
+        auth = await fnoSession.signIn(activeProfile);
+      }
     } catch (err) {
       console.error('[fno-auth] sign-in failed', err);
       const message = explainAuthError(err);
@@ -822,13 +886,22 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
   // and any browser that blocks the popup). The redirect reloads the SPA, so
   // re-select the profile the user started from and resume automatically —
   // otherwise the app comes back looking exactly like a failed sign-in.
+  //
+  // The marker is consumed exactly once, whatever happens next: a profile that
+  // no longer exists must not keep the landing page on the F&O tab, and the
+  // resume is silent-only so backing out of the Microsoft page cannot bounce
+  // the user straight back there.
   const redirectResumedRef = useRef(false);
   useEffect(() => {
     if (redirectResumedRef.current) return;
     const pendingId = peekRedirectPending();
     if (!pendingId) return;
-    // Profiles come from localStorage; wait until they are available.
-    if (!profiles.some(p => p.id === pendingId)) return;
+    // Profiles load synchronously from localStorage, so a miss is final.
+    if (!profiles.some(p => p.id === pendingId)) {
+      redirectResumedRef.current = true;
+      clearRedirectPending();
+      return;
+    }
     if (activeProfileId !== pendingId) {
       setActiveProfileId(pendingId);
       return;
@@ -836,7 +909,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     if (!activeProfile) return;
     redirectResumedRef.current = true;
     clearRedirectPending();
-    void handleConnect();
+    void handleConnect({ silentOnly: true });
   }, [profiles, activeProfileId, activeProfile, handleConnect]);
 
   const handleRetryWithRoot = useCallback(async () => {
@@ -938,6 +1011,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
 
   const handleDisconnect = useCallback(async () => {
     if (!activeProfile) return;
+    ingestAbortRef.current?.abort();
     try {
       await fnoSession.signOut(activeProfile);
     } catch (err) {
@@ -994,22 +1068,23 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         rootComponentCacheRef.current.set(rootName, fullTree);
       }
       if (requestSeq !== listRequestSeqRef.current) return;
-      fullTree.sort((a, b) => (a.configurationName ?? '').localeCompare(b.configurationName ?? '', undefined, { sensitivity: 'base', numeric: true }));
+      // Sort a copy: `fullTree` may be the cached list, shared with search.
+      const sortedTree = [...fullTree].sort((a, b) => (a.configurationName ?? '').localeCompare(b.configurationName ?? '', undefined, { sensitivity: 'base', numeric: true }));
 
       // Accumulate every DataModel we've ever seen so handleLoadSelected
       // can resolve ancestor GUIDs back to downloadable summaries.
-      setAllDataModelsSeen(prev => rememberDataModels(prev, fullTree));
+      setAllDataModelsSeen(prev => rememberDataModels(prev, sortedTree));
 
       // Promote nested DataModels found among the children to the
       // left solution panel so the user can navigate to them directly.
-      const promoted = promoteDmToSolutions(solutions, fullTree, rootName);
+      const promoted = promoteDmToSolutions(solutions, sortedTree, rootName);
       if (promoted !== solutions) setSolutions(promoted);
 
       // Scope the component list to the clicked DataModel. When the
       // user clicks a derived model we must show only its direct
       // children — not all formats from the root. The `ownerDataModelName`
       // on each component identifies which DataModel it belongs to.
-      const list = scopeComponentsToModel(fullTree, solutionName);
+      const list = scopeComponentsToModel(sortedTree, solutionName);
 
       // The first DataModel we see at level 1 is the *root* DataModel
       // for this subtree. Remember it so deeper ModelMapping / Format
@@ -1027,6 +1102,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       setDataModelChain(chain);
       setComponents(annotateWithParentDataModel(list, chain));
     } catch (err) {
+      // A superseded request's failure is no longer the user's concern.
+      if (requestSeq !== listRequestSeqRef.current) return;
       const message = err instanceof Error ? err.message : String(err);
       pushToast({ kind: 'error', message: t.fnoLoadingFailed(message) });
     } finally {
@@ -1069,6 +1146,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       const promoted = promoteDmToSolutions(solutions, list, drillRoot);
       if (promoted !== solutions) setSolutions(promoted);
     } catch (err) {
+      // A superseded request's failure is no longer the user's concern.
+      if (requestSeq !== listRequestSeqRef.current) return;
       const message = err instanceof Error ? err.message : String(err);
       pushToast({ kind: 'error', message: t.fnoLoadingFailed(message) });
     } finally {
@@ -1089,6 +1168,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       setActiveSolution(null);
       setComponents([]);
       setDataModelChain([]);
+      // Bumping the sequence above orphaned any in-flight listing, whose
+      // `finally` will now leave the spinner alone — clear it here.
+      setLoadingComponents(false);
       return;
     }
     const nextPath = solutionPath.slice(0, -1);
@@ -1123,16 +1205,20 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         rootComponentCacheRef.current.set(apiName, fullTree);
       }
       if (requestSeq !== listRequestSeqRef.current) return;
-      setAllDataModelsSeen(prev => rememberDataModels(prev, fullTree));
+      // Sort a copy, never the cached list itself (see handlePickSolution).
+      const sortedTree = [...fullTree].sort((a, b) => (a.configurationName ?? '').localeCompare(b.configurationName ?? '', undefined, { sensitivity: 'base', numeric: true }));
+      setAllDataModelsSeen(prev => rememberDataModels(prev, sortedTree));
       const backRoot = parentSol?.rootSolutionName ?? parent;
-      const promoted = promoteDmToSolutions(solutions, fullTree, backRoot);
+      const promoted = promoteDmToSolutions(solutions, sortedTree, backRoot);
       if (promoted !== solutions) setSolutions(promoted);
       // Scope to the model being navigated back to.
       const list = isBackToModel
-        ? scopeComponentsToModel(fullTree, parent)
-        : fullTree;
+        ? scopeComponentsToModel(sortedTree, parent)
+        : sortedTree;
       setComponents(annotateWithParentDataModel(list, nextChain));
     } catch (err) {
+      // A superseded request's failure is no longer the user's concern.
+      if (requestSeq !== listRequestSeqRef.current) return;
       const message = err instanceof Error ? err.message : String(err);
       pushToast({ kind: 'error', message: t.fnoLoadingFailed(message) });
     } finally {
@@ -1220,7 +1306,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     setSelected(next);
   }, [filteredComponents, isComponentDownloadable, selected, setSelected]);
 
-  const resolveInheritedLabels = useCallback(async () => {
+  const resolveInheritedLabels = useCallback(async (signal?: AbortSignal) => {
     if (!activeProfile) return;
     const norm = (g: string | undefined) => (g ?? '').replace(/^\{|\}$/g, '').toLowerCase();
     const isGuid = (g: string) => g.length > 0 && g !== ZERO_GUID_LOWER;
@@ -1244,6 +1330,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     const MAX_ANCESTORS = 8;
     const allVersions = [50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
     while (queue.length > 0 && visited.size < MAX_ANCESTORS) {
+      if (signal?.aborted) return;
       const guid = queue.shift()!;
       if (visited.has(guid)) continue;
       visited.add(guid);
@@ -1268,7 +1355,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           versionNumbers: kind === 'DataModel' ? allVersions : undefined,
         };
         try {
-          download = await fnoSession.downloadConfiguration(activeProfile, spec, undefined, { silent: true });
+          download = await fnoSession.downloadConfiguration(activeProfile, spec, signal, { silent: true });
           break;
         } catch (err) {
           console.info('[fno-ui] inherited labels: ancestor not available as', kind, { guid, err });
@@ -1428,6 +1515,12 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         augmented.set(componentKey(synthDm), synthDm);
       }
     }
+    // Aborted by Disconnect / switching environment: stop issuing requests
+    // (and, above all, stop re-acquiring a token the user just gave up).
+    const ingestAbort = new AbortController();
+    ingestAbortRef.current?.abort();
+    ingestAbortRef.current = ingestAbort;
+    const ingestSignal = ingestAbort.signal;
     setIngesting(true);
     // What the user picked vs. what the pipeline decided to fetch for them —
     // the two differ whenever an ancestor or a mapping is auto-included.
@@ -1671,7 +1764,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         setIngestStatus(t.fnoStatusDownloadingDM(Math.min(batch + DM_BATCH_SIZE, dataModels.length)));
         const results = await Promise.allSettled(
           slice.map(async component => {
-            const download = await fnoSession.downloadConfiguration(activeProfile, component);
+            const download = await fnoSession.downloadConfiguration(activeProfile, component, ingestSignal);
             return { component, download };
           }),
         );
@@ -1718,7 +1811,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           const slice = nonDataModels.slice(batch, batch + PARALLEL_BATCH_SIZE);
           const results = await Promise.allSettled(
             slice.map(async component => {
-              const download = await fnoSession.downloadConfiguration(activeProfile, component);
+              const download = await fnoSession.downloadConfiguration(activeProfile, component, ingestSignal);
               return { component, download };
             }),
           );
@@ -1770,7 +1863,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                   version: typeof rev === 'number' ? String(rev) : undefined,
                   versionNumbers,
                 };
-                const download = await fnoSession.downloadConfiguration(activeProfile, synth);
+                const download = await fnoSession.downloadConfiguration(activeProfile, synth, ingestSignal);
                 return { guid, download };
               }),
             );
@@ -1887,7 +1980,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         visitedScanNames.add(dmName);
         let children: ErConfigSummary[];
         try {
-          children = await fnoSession.listComponents(activeProfile, dmName);
+          children = await fnoSession.listComponents(activeProfile, dmName, { signal: ingestSignal });
         } catch (err) {
           console.warn('[fno-ui] listComponents failed during mapping scan for', dmName, err);
           continue;
@@ -2011,7 +2104,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
 
         // Phase 2 & 3 — download the format XML.
         try {
-          const dl = await fnoSession.downloadConfiguration(activeProfile, scoutFormat, undefined, { silent: true });
+          const dl = await fnoSession.downloadConfiguration(activeProfile, scoutFormat, ingestSignal, { silent: true });
 
           // Phase 2: standard model-attribute extraction.
           const scoutedGuid = scoutedDataModelGuid(
@@ -2052,7 +2145,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                   hasContent: true,
                   hasChildren: false,
                 };
-                await fnoSession.downloadConfiguration(activeProfile, mappingProbe, undefined, { silent: true });
+                await fnoSession.downloadConfiguration(activeProfile, mappingProbe, ingestSignal, { silent: true });
                 discoveredDmGuidsByName.set(scoutDmName, candidateGuid);
               } catch {
                 // Not the DataModel GUID, try next.
@@ -2121,7 +2214,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
 
           let derivedRows: ErConfigSummary[];
           try {
-            derivedRows = await fnoSession.listComponents(activeProfile, comp.configurationName);
+            derivedRows = await fnoSession.listComponents(activeProfile, comp.configurationName, { signal: ingestSignal });
           } catch (err) {
             console.warn('[fno-ui] mapping-scan drill into base mapping failed', comp.configurationName, err);
             continue;
@@ -2228,7 +2321,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           visitedScanNames.add(dmName);
           let children: ErConfigSummary[];
           try {
-            children = await fnoSession.listComponents(activeProfile, dmName);
+            children = await fnoSession.listComponents(activeProfile, dmName, { signal: ingestSignal });
           } catch (err) {
             console.warn('[fno-ui] import format DM scan failed', dmName, err);
             continue;
@@ -2487,7 +2580,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             versionNumbers: [50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
           };
           try {
-            const download = await fnoSession.downloadConfiguration(activeProfile, synthDm);
+            const download = await fnoSession.downloadConfiguration(activeProfile, synthDm, ingestSignal);
             loadDownload(download);
             ok += 1;
             const newestConfigs = useAppStore.getState().configurations;
@@ -2983,7 +3076,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
           if (pending.length === 0) continue;
           const results = await Promise.allSettled(
             pending.map(async item => {
-              const download = await fnoSession.downloadConfiguration(activeProfile, item.synth);
+              const download = await fnoSession.downloadConfiguration(activeProfile, item.synth, ingestSignal);
               return { item, download };
             }),
           );
@@ -3106,7 +3199,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
             };
             let resolvedGuid: string | undefined;
             try {
-              const dmDownload = await fnoSession.downloadConfiguration(activeProfile, probeSpec);
+              const dmDownload = await fnoSession.downloadConfiguration(activeProfile, probeSpec, ingestSignal);
               loadDownload(dmDownload);
               ok += 1;
               const newestConfigs = useAppStore.getState().configurations;
@@ -3203,7 +3296,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 versionNumbers: [50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
               };
               try {
-                const dmDl = await fnoSession.downloadConfiguration(activeProfile, probeSpecC);
+                const dmDl = await fnoSession.downloadConfiguration(activeProfile, probeSpecC, ingestSignal);
                 loadDownload(dmDl);
                 ok += 1;
                 const newest = useAppStore.getState().configurations;
@@ -3269,7 +3362,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
               if (pending.length === 0) continue;
               const results = await Promise.allSettled(
                 pending.map(async item => {
-                  const dl = await fnoSession.downloadConfiguration(activeProfile, item.synth);
+                  const dl = await fnoSession.downloadConfiguration(activeProfile, item.synth, ingestSignal);
                   return { item, dl };
                 }),
               );
@@ -3404,7 +3497,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
                 version: typeof rev === 'number' ? String(rev) : undefined,
                 versionNumbers,
               };
-              const download = await fnoSession.downloadConfiguration(activeProfile, synthDm);
+              const download = await fnoSession.downloadConfiguration(activeProfile, synthDm, ingestSignal);
               return { guid, download };
             }),
           );
@@ -3431,15 +3524,20 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // DataModel further up the `Base` chain. Those ancestors are deliberately
       // not loaded into the workspace, so fetch their XML quietly and merge only
       // the label table into the configurations that inherit from them.
-      await resolveInheritedLabels();
+      await resolveInheritedLabels(ingestSignal);
       // Labels harvested from any response during this batch (scouts,
       // ancestors, sibling label packs) become visible everywhere.
       useAppStore.getState().refreshLabelPool();
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      console.error('[fno-ui] ingest aborted', e);
-      pushToast({ kind: 'error', message: t.fnoIngestAborted(message) });
+      if (ingestSignal.aborted) {
+        console.info('[fno-ui] ingest cancelled');
+      } else {
+        const message = e instanceof Error ? e.message : String(e);
+        console.error('[fno-ui] ingest aborted', e);
+        pushToast({ kind: 'error', message: t.fnoIngestAborted(message) });
+      }
     } finally {
+      if (ingestAbortRef.current === ingestAbort) ingestAbortRef.current = null;
       setIngesting(false);
       setIngestStatus('');
       endFnoIngest();
@@ -3456,6 +3554,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       })));
       dumpFnoDebug('load selected');
     }
+    // Cancelled: whatever arrived is in the workspace, but this is no success.
+    if (ingestSignal.aborted) return;
     if (ok > 0) {
       // Clear the queue when the entire batch resolved (success or
       // benign empty). Partial *real* failures stay selected for retry.
