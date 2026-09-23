@@ -1,5 +1,5 @@
 import type { ERFormatBinding, ERFormatElement } from '@er-visualizer/core';
-import { locale } from '../i18n';
+import { t } from '../i18n';
 
 export type FormatBindingCategory = 'data' | 'visibility' | 'formatting' | 'property';
 
@@ -40,23 +40,18 @@ interface IndexedFormatElement {
 const DATA_BINDING_PROPS = new Set(['', 'value', 'data']);
 const VALUE_ELEMENT_TYPES = new Set(['String', 'Numeric', 'DateTime', 'Base64']);
 
-const categoryLabels: Record<'cs' | 'en', Record<FormatBindingCategory, string>> = {
-  cs: { data: 'Data', visibility: 'Viditelnost', formatting: 'Formátování', property: 'Ostatní vlastnosti' },
-  en: { data: 'Data', visibility: 'Visibility', formatting: 'Formatting', property: 'Other Properties' },
-};
-
 /**
  * A binding category's title in the current language. Read at render time:
  * the labels stamped on normalized bindings are fixed when the tree is built
  * and would stay in the old language after a switch.
  */
 export function getFormatBindingCategoryLabel(category: FormatBindingCategory): string {
-  return categoryLabels[locale === 'cs' ? 'cs' : 'en'][category];
+  return t.formatBindingCategoryLabels[category];
 }
 
 /** A binding's badge: "Value" for the data binding, otherwise the ER property it sets. */
 export function getFormatBindingDisplayLabel(binding: { bindingCategory: FormatBindingCategory; propertyName?: string }): string {
-  if (binding.bindingCategory === 'data') return locale === 'cs' ? 'Hodnota' : 'Value';
+  if (binding.bindingCategory === 'data') return t.formatBindingValueBadge;
   return binding.propertyName ?? getFormatBindingCategoryLabel(binding.bindingCategory);
 }
 

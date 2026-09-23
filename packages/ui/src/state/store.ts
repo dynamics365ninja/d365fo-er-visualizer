@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { ERConfiguration, ERLabel } from '@er-visualizer/core';
 import { parseERConfigurations, GUIDRegistry } from '@er-visualizer/core';
-import { locale, t } from '../i18n';
+import { t } from '../i18n';
 import { useFnoSession } from './fno-session';
 import { clearHarvestedLabels } from '../utils/label-resolver';
 import { onFnoDownloadEvent } from '../fno/session';
@@ -423,9 +423,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const version = config.solutionVersion.publicVersionNumber;
         get().pushToast({
           kind: 'info',
-          message: locale === 'cs'
-            ? `${fileName} (verze ${version}) nebyl načten – již je otevřena novější verze${loadedVersion ? ` ${loadedVersion}` : ''}.`
-            : `${fileName} (version ${version}) was not loaded — a newer version${loadedVersion ? ` ${loadedVersion}` : ''} is already open.`,
+          message: t.toastNewerVersionOpen(fileName, version, loadedVersion),
         });
         return false;
       }
@@ -517,7 +515,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Surface as a toast instead of letting a window error propagate.
       const message = e instanceof Error ? e.message : String(e);
       const fileName = filePath.split(/[\\/]/).pop() ?? filePath;
-      get().pushToast({ kind: 'error', message: locale === 'cs' ? `Chyba při načítání ${fileName}: ${message}` : `Failed to load ${fileName}: ${message}` });
+      get().pushToast({ kind: 'error', message: t.toastLoadFailedWithMessage(fileName, message) });
       throw markErrorReported(e);
     }
   },
@@ -617,9 +615,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     const cached = get().cachedPaths.has(path) || get().recentFiles.some(r => r.path === path && r.bundlePath);
     get().pushToast({
       kind: 'info',
-      message: locale === 'cs' ? `Konfigurace „${name}“ byla zavřena.` : `Configuration "${name}" was closed.`,
+      message: t.toastConfigClosed(name),
       action: cached
-        ? { label: locale === 'cs' ? 'Znovu otevřít' : 'Reopen', onClick: () => { void get().loadCachedFile(path, name); } }
+        ? { label: t.toastReopen, onClick: () => { void get().loadCachedFile(path, name); } }
         : undefined,
     });
   },
@@ -1177,9 +1175,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (available.length === 0) {
       get().pushToast({
         kind: 'warning',
-        message: locale === 'cs'
-          ? 'Obsah relace už není v mezipaměti, otevřete soubory znovu ručně.'
-          : 'The session content is no longer cached, please open the files again.',
+        message: t.toastSessionNotCached,
       });
       return false;
     }
@@ -1225,9 +1221,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (missing.length > 0) {
       get().pushToast({
         kind: 'warning',
-        message: locale === 'cs'
-          ? `Některé soubory v relaci nebyly načteny (chybí mezipaměť): ${missing.join(', ')}.`
-          : `Some files in the session were not loaded (not cached): ${missing.join(', ')}.`,
+        message: t.toastSessionFilesMissing(missing.join(', ')),
       });
     }
     // Files that were open already (or newer versions of them) still make
@@ -1242,7 +1236,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (get().configurations.some(c => c.filePath === path)) {
       get().pushToast({
         kind: 'info',
-        message: locale === 'cs' ? `„${label}“ už je otevřen v pracovní ploše.` : `"${label}" is already open in the workspace.`,
+        message: t.toastAlreadyOpen(label),
       });
       return true;
     }
@@ -1251,9 +1245,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!content) {
       get().pushToast({
         kind: 'warning',
-        message: locale === 'cs'
-          ? `Obsah „${label}“ už není v mezipaměti, otevřete soubor znovu ručně.`
-          : `"${label}" is no longer cached, please open the file again.`,
+        message: t.toastFileNotCached(label),
       });
       return false;
     }

@@ -1,5 +1,5 @@
 import type { ERFormatElement } from '@er-visualizer/core';
-import { locale } from '../i18n';
+import { t } from '../i18n';
 import { normalizeGuid, type NormalizedFormatBinding, type NormalizedFormatBindingGroup } from './format-binding-display';
 
 /**
@@ -42,46 +42,17 @@ export function classifyBindingIntent(
   return 'calculated';
 }
 
-const intentLabels: Record<'cs' | 'en', Record<BindingIntent, string>> = {
-  cs: { direct: 'Přímé hodnoty', calculated: 'Výpočty', condition: 'Podmínky', text: 'Texty', property: 'Vlastnosti' },
-  en: { direct: 'Direct values', calculated: 'Calculations', condition: 'Conditions', text: 'Texts', property: 'Properties' },
-};
-
-/** One binding of the kind — the badge on a data binding row. */
-const intentItemLabels: Record<'cs' | 'en', Record<BindingIntent, string>> = {
-  cs: { direct: 'Hodnota', calculated: 'Výpočet', condition: 'Podmínka', text: 'Text', property: 'Vlastnost' },
-  en: { direct: 'Value', calculated: 'Calculation', condition: 'Condition', text: 'Text', property: 'Property' },
-};
-
-const intentHints: Record<'cs' | 'en', Record<BindingIntent, string>> = {
-  cs: {
-    direct: 'Hodnota převzatá beze změny z datového modelu nebo zdroje dat',
-    calculated: 'Hodnota, kterou výraz počítá nebo upravuje — funkce, operátory',
-    condition: 'Kdy se prvek generuje — Enabled, Visible a podobné',
-    text: 'Pevný text nebo konstanta, typicky popisky sloupců (@GER_LABEL)',
-    property: 'Nastavení prvku — název souboru, jazyk, formát, kódování',
-  },
-  en: {
-    direct: 'Value taken unchanged from the data model or a data source',
-    calculated: 'Value an expression computes or transforms — functions, operators',
-    condition: 'When the element is generated — Enabled, Visible and the like',
-    text: 'Fixed text or a constant, typically column captions (@GER_LABEL)',
-    property: 'Element settings — file name, language, format, encoding',
-  },
-};
-
-const lang = () => (locale === 'cs' ? 'cs' : 'en');
 
 export function getBindingIntentLabel(intent: BindingIntent): string {
-  return intentLabels[lang()][intent];
+  return t.bindingIntentLabels[intent];
 }
 
 export function getBindingIntentItemLabel(intent: BindingIntent): string {
-  return intentItemLabels[lang()][intent];
+  return t.bindingIntentItemLabels[intent];
 }
 
 export function getBindingIntentHint(intent: BindingIntent): string {
-  return intentHints[lang()][intent];
+  return t.bindingIntentHints[intent];
 }
 
 export function countBindingIntents(groups: readonly NormalizedFormatBindingGroup[]): Record<BindingIntent, number> {

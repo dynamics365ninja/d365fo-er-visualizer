@@ -13,7 +13,7 @@ import { DataModelList } from './DataModelList';
 import { useAppStore, resolveDeepExpression } from '../../state/store';
 import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
-import { locale, t } from '../../i18n';
+import { t } from '../../i18n';
 import { type ERConfiguration, type ERDataModelContent } from '@er-visualizer/core';
 import { ExpressionDetailLink, DesignerHint, enumLabelFor, fieldTypeLabel } from './shared';
 
@@ -347,7 +347,7 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
       <div className="fmt-header">
         <span className="fmt-header-title">
           <DataBarVerticalFilled fontSize={15} />
-          {locale === 'cs' ? 'Datový model' : 'Data Model'}
+          {t.dmDesignerTitle}
         </span>
         <div className="fmt-header-stats">
           <span className="fmt-stat" style={{ color: 'var(--er-model)' }}>{t.statsRoots(stats.roots)}</span>
@@ -514,7 +514,7 @@ function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: n
 
         <div className="focused-detail-card">
           <div className="focused-detail-card__head">
-            <span className="focused-detail-card__title">{locale === 'cs' ? 'Vlastnosti datového zdroje' : 'Datasource properties'}</span>
+            <span className="focused-detail-card__title">{t.dmDatasourceProperties}</span>
             <span className="focused-detail-card__badge">{(showTechnicalDetails && datasource.type) || t.nodeTypeLabel('datasource')}</span>
           </div>
           <div className="focused-detail-grid">
@@ -533,7 +533,7 @@ function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: n
             <span className="focused-detail-card__badge">{relevantDatasourceBindings.length}</span>
           </div>
           {relevantDatasourceBindings.length === 0 ? (
-            <div className="focused-detail-empty">{locale === 'cs' ? 'Žádné relevantní vazby pro vybraný zdroj.' : 'No relevant bindings for the selected datasource.'}</div>
+            <div className="focused-detail-empty">{t.dmNoRelevantBindings}</div>
           ) : (
             <div className="focused-detail-binding-list">
               {relevantDatasourceBindings.map((binding, index) => (

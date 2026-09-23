@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from '@fluentui/react-components';
 import { DataBarVerticalFilled, DocumentFilled, LinkFilled } from '@fluentui/react-icons';
-import { locale, t } from '../i18n';
+import { t } from '../i18n';
 
 export type DependencyKind = 'DataModel' | 'ModelMapping' | 'Format';
 
@@ -30,10 +30,8 @@ export interface DependencyPromptRequest {
 }
 
 export function dependencyKindLabel(kind: DependencyKind | string | undefined): string {
-  if (locale === 'cs') {
-    return kind === 'DataModel' ? 'Datový model' : kind === 'ModelMapping' ? 'Mapování modelu' : kind === 'Format' ? 'Formát' : '?';
-  }
-  return kind === 'DataModel' ? 'Data model' : kind === 'ModelMapping' ? 'Model mapping' : kind === 'Format' ? 'Format' : '?';
+  const labels = t.configKindLabels;
+  return kind === 'DataModel' ? labels.DataModel : kind === 'ModelMapping' ? labels.ModelMapping : kind === 'Format' ? labels.Format : '?';
 }
 
 export function DependencyKindIcon({ kind }: { kind: DependencyKind | string | undefined }) {

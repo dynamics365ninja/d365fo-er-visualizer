@@ -2,7 +2,7 @@
  * Load-time checks of the loaded configurations, surfaced in the status bar.
  */
 import type { ERConfiguration, ERFormatContent } from '@er-visualizer/core';
-import { locale } from '../i18n';
+import { t } from '../i18n';
 import { getMappingDefinitions } from './mapping-definitions';
 
 export interface ConfigWarning {
@@ -36,18 +36,14 @@ export function collectConfigurationWarnings(configurations: ERConfiguration[]):
     warnings.push({
       configIndex: -1,
       severity: 'info',
-      message: locale === 'cs'
-        ? 'Pro plný drill-down načti i Data Model soubor.'
-        : 'Load a Data Model file as well for a complete drill-down.',
+      message: t.warnLoadDataModelForDrillDown,
     });
   }
   if (hasFormat && !hasMapping && !configurations.some(c => c.content.kind === 'Format' && (c.content as ERFormatContent).embeddedModelMappingVersions?.length > 0)) {
     warnings.push({
       configIndex: -1,
       severity: 'warning',
-      message: locale === 'cs'
-        ? 'Formát bez Model Mapping — výrazy nebude možné trasovat na zdrojové tabulky.'
-        : 'Format loaded without a Model Mapping — expressions cannot be traced back to source tables.',
+      message: t.warnFormatWithoutMapping,
     });
   }
 
@@ -131,9 +127,7 @@ export function collectConfigurationWarnings(configurations: ERConfiguration[]):
         warnings.push({
           configIndex: ci,
           severity: 'warning',
-          message: locale === 'cs'
-            ? `Formát "${config.solutionVersion.solution.name}" obsahuje ${brokenRefs} výrazů odkazujících na neznámý datový zdroj.\n${detail}${brokenRefs > 30 ? `\n  … a ${brokenRefs - 30} dalších` : ''}`
-            : `Format "${config.solutionVersion.solution.name}" contains ${brokenRefs} expressions that reference an unknown data source.\n${detail}${brokenRefs > 30 ? `\n  … and ${brokenRefs - 30} more` : ''}`,
+          message: t.warnBrokenDatasourceRefs(config.solutionVersion.solution.name, brokenRefs, detail, brokenRefs > 30 ? brokenRefs - 30 : 0),
         });
       }
     }

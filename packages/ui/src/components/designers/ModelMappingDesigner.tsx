@@ -11,7 +11,7 @@ import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
 import { ExpandCollapseSlider } from '../ExpandCollapseSlider';
 import { FilterField } from '../FilterField';
-import { locale, t, useLocale } from '../../i18n';
+import { t, useLocale } from '../../i18n';
 import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../../utils/filter-suggestions';
 import { useTabState } from '../../utils/tab-view-state';
 import { findTreeNodeByMatch, DesignerHint, SlidingTabs, datasourceFocusKey, collectDatasourceTerms, EMPTY_STRING_SET, RevealInExplorerMenu } from './shared';
@@ -101,11 +101,9 @@ function DefinitionStat({ mapping, definitions, technical, onPick }: {
   onPick: (index: number) => void;
 }) {
   const title = technical
-    ? (locale === 'cs'
-      ? 'Definice mapování (DataContainerDescriptor — kořenový kontejner datového modelu)'
-      : 'Mapping definition (DataContainerDescriptor — root container of the data model)')
-    : (locale === 'cs' ? 'Definice mapování' : 'Mapping definition');
-  const text = <>{locale === 'cs' ? 'Definice' : 'Definition'}: {definitionDisplayName(mapping, technical)}</>;
+    ? t.mmDefinitionTitleTechnical
+    : t.mmDefinitionTitle;
+  const text = <>{t.mmDefinition}: {definitionDisplayName(mapping, technical)}</>;
   if (definitions.length < 2) return <span className="fmt-stat" title={title}>{text}</span>;
 
   return (
@@ -114,7 +112,7 @@ function DefinitionStat({ mapping, definitions, technical, onPick }: {
         <button
           type="button"
           className="fmt-stat fmt-stat-btn mm-definition-picker"
-          title={locale === 'cs' ? `${title} — kliknutím přepnete` : `${title} — click to switch`}
+          title={t.mmClickToSwitch(title)}
         >
           {text}
           <ChevronDownRegular fontSize={12} aria-hidden />
@@ -395,7 +393,7 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
       <div className="fmt-header">
         <span className="fmt-header-title">
           <LinkFilled fontSize={15} />
-          {locale === 'cs' ? 'Mapování modelu' : 'Model mapping'}
+          {t.mmDesignerTitle}
         </span>
         <div className="fmt-header-stats">
           {(mm.dataContainerDescriptor || mm.name) && (
@@ -407,9 +405,7 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
             />
           )}
         </div>
-        <DesignerHint text={locale === 'cs'
-          ? 'Klikni na řádek pro vlastnosti, na lupu pro rozpad výrazu'
-          : 'Click a row for properties, the magnifier for the expression drill-down'}
+        <DesignerHint text={t.mmDesignerHint}
         />
       </div>
       <div className="fmt-toolbar">
@@ -552,7 +548,7 @@ function ValidationRow({ validation, configIndex, focused, focusRef, onSelect, o
         {rules.length > 1 && (
           <span
             className="mm-group-count"
-            title={locale === 'cs' ? `Počet pravidel: ${rules.length}` : `Number of rules: ${rules.length}`}
+            title={t.mmRuleCount(rules.length)}
           >{rules.length}</span>
         )}
         {onReveal && <RevealInExplorerMenu onReveal={() => onReveal(validation.path)} />}
@@ -762,7 +758,7 @@ function BindingTreeRow({
         {hasChildren && (
           <span
             className="mm-group-count"
-            title={locale === 'cs' ? `Počet vazeb v této větvi: ${node.count}` : `Number of bindings in this branch: ${node.count}`}
+            title={t.mmBranchBindingCount(node.count)}
           >{node.count}</span>
         )}
         {binding && onRevealBinding && <RevealInExplorerMenu onReveal={() => onRevealBinding(node.key)} />}

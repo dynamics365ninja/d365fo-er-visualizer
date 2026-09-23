@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowDownloadRegular, ArrowUploadRegular, DocumentPdfRegular } from '@fluentui/react-icons';
 import { useAppStore } from '../../state/store';
-import { locale, t } from '../../i18n';
+import { t } from '../../i18n';
 import { ERDirection, type ERFormatContent, type ERFormatElement } from '@er-visualizer/core';
 import { renderXmlHighlightedMarkup } from '../../utils/xml-highlight';
 import { formatTypeLabelFor } from './shared';
@@ -114,7 +114,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
         </div>
       )}
       <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, color: 'var(--er-text-muted)' }}>{locale === 'cs' ? 'Nevyřešené hodnoty:' : 'Unresolved values:'}</span>
+        <span style={{ fontSize: 11, color: 'var(--er-text-muted)' }}>{t.previewUnresolvedValues}</span>
         <button
           type="button"
           onClick={() => setPlaceholderMode('sample')}
@@ -128,7 +128,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
             cursor: 'pointer',
           }}
         >
-          {locale === 'cs' ? 'Vzorová data' : 'Sample data'}
+          {t.previewSampleData}
         </button>
         <button
           type="button"
@@ -143,7 +143,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
             cursor: 'pointer',
           }}
         >
-          {locale === 'cs' ? 'Ponechat {placeholder}' : 'Keep {placeholder}'}
+          {t.previewKeepPlaceholder}
         </button>
         <button
           type="button"
@@ -158,12 +158,12 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
             cursor: 'pointer',
           }}
         >
-          {locale === 'cs' ? 'Skrýt nevyřešené' : 'Hide unresolved'}
+          {t.previewHideUnresolved}
         </button>
       </div>
       {showDelimitedTable && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color: 'var(--er-text-muted)' }}>{locale === 'cs' ? 'CSV zobrazení:' : 'CSV view:'}</span>
+          <span style={{ fontSize: 11, color: 'var(--er-text-muted)' }}>{t.previewCsvView}</span>
           <button
             type="button"
             onClick={() => setCsvFirstRowHeader(v => !v)}
@@ -177,7 +177,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
               cursor: 'pointer',
             }}
           >
-            {locale === 'cs' ? 'První řádek = hlavička' : 'First row = header'}
+            {t.previewFirstRowHeader}
           </button>
         </div>
       )}

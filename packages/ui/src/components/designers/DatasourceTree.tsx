@@ -4,50 +4,17 @@ import { useAppStore } from '../../state/store';
 import { dsPathToExpression } from '../../utils/ds-path';
 import { ancestorPathKeys, buildDatasourceTree, filterDatasources, keysWithDeclaredDescendants, type DatasourceModel, type DatasourceTree, type DatasourceTreeFilter, type DatasourceTreeNode } from '../../utils/datasource-tree';
 import { DrillDownTrigger } from '../DrillDownPanel';
-import { locale, t } from '../../i18n';
+import { t } from '../../i18n';
 import { getConsultantFieldTypeLabel } from '../../utils/consultant-labels';
 import { type ERDatasource } from '@er-visualizer/core';
 import { enumLabelFor, EMPTY_STRING_SET, RevealInExplorerMenu, fieldTypeLabel } from './shared';
 
 function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): string {
   if (showTechnicalDetails) {
-    return dsGroupLabels[locale === 'cs' ? 'cs' : 'en'][type] ?? type;
+    return t.dsGroupLabelsTechnical[type] ?? type;
   }
 
-  const csLabels: Record<string, string> = {
-    Table: 'Tabulky',
-    CalculatedField: 'Vypočtené hodnoty',
-    Class: 'Logika',
-    Object: 'Objekty',
-    Enum: 'Hodnoty',
-    ModelEnum: 'Hodnoty',
-    FormatEnum: 'Hodnoty',
-    ImportFormat: 'Importní formát',
-    UserParameter: 'Parametry',
-    GroupBy: 'Seskupená data',
-    Container: 'Kontejnery',
-    Join: 'Spojení',
-    DataModel: 'Datový model',
-    Values: 'Hodnoty',
-  };
-  const enLabels: Record<string, string> = {
-    Table: 'Tables',
-    CalculatedField: 'Calculated values',
-    Class: 'Logic',
-    Object: 'Objects',
-    Enum: 'Values',
-    ModelEnum: 'Values',
-    FormatEnum: 'Values',
-    ImportFormat: 'Import format',
-    UserParameter: 'Parameters',
-    GroupBy: 'Grouped data',
-    Container: 'Containers',
-    Join: 'Joins',
-    DataModel: 'Data model',
-    Values: 'Values',
-  };
-  const labels = locale === 'cs' ? csLabels : enLabels;
-  return labels[type] ?? (locale === 'cs' ? 'Ostatní' : 'Other');
+  return t.dsGroupLabelsConsultant[type] ?? t.groupOther;
 }
 
 /** Datasource types the consultant view names; the rest share one "Other" group. */
@@ -183,12 +150,12 @@ function DatasourceTreeRow({ node, ctx, insideMatch }: {
   } else if (ds.importFormatInfo) {
     targetLabel = showTechnicalDetails
       ? ds.importFormatInfo.formatGuid
-      : (locale === 'cs' ? 'Importní formát' : 'Import format');
+      : t.dsImportFormat;
   } else if (ds.groupByInfo) {
     targetLabel = ds.groupByInfo.listToGroup
       ? (showTechnicalDetails
           ? `list: ${ds.groupByInfo.listToGroup}`
-          : `${locale === 'cs' ? 'Seskupení podle' : 'Grouped by'}: ${ds.groupByInfo.listToGroup.split('/').pop()}`)
+          : `${t.dsGroupedBy}: ${ds.groupByInfo.listToGroup.split('/').pop()}`)
       : null;
   } else if (ds.modelInfo) {
     const descriptor = ds.modelInfo.dataContainerDescriptorName || null;
@@ -374,39 +341,6 @@ function DatasourceTreeRow({ node, ctx, insideMatch }: {
 
 // The data model leads: in a format, calculated fields hang off its records.
 const dsGroupOrder = ['DataModel', 'Table', 'CalculatedField', 'Class', 'Object', 'Enum', 'ModelEnum', 'FormatEnum', 'Values', 'UserParameter', 'GroupBy', 'Container', 'Join', 'Other'];
-/** Group titles in the technical view, one per raw datasource type. */
-const dsGroupLabels: Record<'cs' | 'en', Record<string, string>> = {
-  cs: {
-    Table: 'Tabulky',
-    CalculatedField: 'Vypočtená pole',
-    Class: 'Třídy',
-    Object: 'Objekty',
-    Enum: 'Výčty AX',
-    ModelEnum: 'Výčty datového modelu',
-    FormatEnum: 'Výčty formátu',
-    ImportFormat: 'Importní formáty',
-    UserParameter: 'Uživatelské parametry',
-    GroupBy: 'Seskupení',
-    Container: 'Kontejnery',
-    Join: 'Spojení',
-    DataModel: 'Datový model',
-  },
-  en: {
-    Table: 'Tables',
-    CalculatedField: 'Calculated Fields',
-    Class: 'Classes',
-    Object: 'Objects',
-    Enum: 'Ax Enums',
-    ModelEnum: 'Data model Enums',
-    FormatEnum: 'Format enums',
-    ImportFormat: 'Import formats',
-    UserParameter: 'User Parameters',
-    GroupBy: 'Group By',
-    Container: 'Containers',
-    Join: 'Joins',
-    DataModel: 'Data model',
-  },
-};
 
 export interface GroupedDatasourceListHandle {
   expandAll: () => void;
