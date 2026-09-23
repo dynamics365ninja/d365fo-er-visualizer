@@ -1,0 +1,1438 @@
+/* ═══════════════════════════════════════════════════════════════
+   TOUCH / TABLET LAYER
+   The workspace is a dense, hover-driven desktop UI. On a tablet there is no
+   hover and no mouse precision, so this layer restores the affordances that
+   hover used to carry and grows the hit targets to a finger-sized minimum.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Long-press card that surfaces a native `title` on touch — see
+   components/TouchTitleTooltip.tsx. Positioned from JS. */
+.touch-title-tip {
+  position: fixed;
+  z-index: 10000;
+  padding: 8px 11px;
+  border-radius: var(--er-radius-lg);
+  background: var(--bg-secondary, var(--er-surface));
+  color: var(--er-text);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 30%);
+  font-size: var(--er-text-md);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  animation: tooltip-appear 110ms ease;
+}
+
+@media (pointer: coarse) {
+  /* iOS shows its own selection callout on long press, which would fight the
+     tooltip above for the same gesture. */
+  [title]:not([title=""]) {
+    -webkit-touch-callout: none;
+  }
+
+  /* ── Hit targets ───────────────────────────────────────────────
+     Rows sit at 22–28px for density on a mouse; a finger needs ~40px.
+     Prefixed with `.app-shell` so these beat the row rules further up the
+     file (`.explorer-tree-shell .tree-node` and friends) and the Griffel
+     classes, which all outrank a bare element selector. */
+  .app-shell .tree-node,
+  .app-shell .explorer-tree-shell .tree-node,
+  .app-shell .explorer-tree-shell .tree-node[data-depth='0'],
+  .app-shell .fmt-element-row,
+  .app-shell .mm-binding-row,
+  .app-shell .mm-tree-row,
+  .app-shell .ds-row,
+  .app-shell .lin-row,
+  .app-shell .search-hit,
+  .app-shell .wu-ref-row,
+  .app-shell .fmt-bind-card,
+  .app-shell .dd-collapsible__trigger,
+  .app-shell .ws-row {
+    min-height: 40px;
+  }
+
+  .app-shell .tree-node,
+  .app-shell .explorer-tree-shell .tree-node {
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+
+  /* Scope/reach pills sit in a dense header row, so they get a touch target
+     without inheriting the generic button sizing that would wrap the row. */
+  .app-shell .search-scope-toggle__btn {
+    min-height: 30px;
+    padding: 5px 12px;
+    font-size: var(--er-text-sm);
+  }
+
+  .app-shell button,
+  .app-shell [role="button"],
+  .app-shell [role="tab"],
+  .app-shell .explorer-kind-chip,
+  .app-shell .fmt-tab-btn,
+  .app-shell .fmt-sliding-tabs__btn,
+  .app-shell .fmt-icon-btn,
+  .app-shell .fmt-stat-btn,
+  .app-shell .dd-hero__btn,
+  .app-shell .lin-chip {
+    min-height: 36px;
+  }
+
+  .app-shell .activity-bar__btn {
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  /* ── Status bar ────────────────────────────────────────────────
+     A 30px strip of chips. The blanket rule above only grew the one chip
+     carrying `role="button"` (the validator), so it both outgrew the strip
+     and towered over its neighbours. Size the strip for a finger and give
+     every chip in it the same height instead. */
+  .app-shell .app-statusbar {
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .app-shell .app-statusbar > span {
+    min-height: 30px;
+    box-sizing: border-box;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  /* ── Designer toolbar controls ─────────────────────────────────
+     The icon buttons (28px square) and the expand/collapse slider (22px
+     options) sat at three different heights next to the 36px tabs. Give the
+     whole toolbar one height and let the labelled variants set their width
+     from their text. */
+  .app-shell .fmt-icon-btn,
+  .app-shell .expand-slider__option,
+  .app-shell .expand-slider--compact .expand-slider__option,
+  .app-shell .filter-field {
+    height: 36px;
+    min-height: 36px;
+  }
+
+  .app-shell .filter-field {
+    box-sizing: border-box;
+  }
+
+  /* Sizing the wrapper left the bordered input itself at its content height,
+     so the field looked shorter than the controls beside it. */
+  .app-shell .filter-field__input {
+    height: 100%;
+    box-sizing: border-box;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  /* ── One row per bar ───────────────────────────────────────────
+     Width-driven, not pointer-driven: it mirrors `useCompactLayout`, which
+     is what moves the tools out of the toolbar. See the max-width: 900px
+     block for the layout half of this. */
+
+  /* Spelling the toolbar buttons out leaves the filter squeezed to a couple
+     of characters. Let it claim the rest of the row and wrap onto its own
+     line rather than shrink below a usable width. */
+  .app-shell .fmt-toolbar .filter-field {
+    flex: 1 1 180px;
+    min-width: 180px;
+  }
+
+  .app-shell .expand-slider,
+  .app-shell .expand-slider--compact {
+    align-items: center;
+  }
+
+  /* The chevron is the expand/collapse target for the whole tree. */
+  .app-shell .tree-chevron,
+  .app-shell .tree-chevron-placeholder,
+  .app-shell .ds-row-toggle,
+  .app-shell .lin-row__toggle {
+    min-width: 26px;
+    min-height: 26px;
+  }
+
+  /* ── Hover-only affordances become permanent ───────────────────
+     Everything below was revealed by :hover, i.e. unreachable on touch. */
+  .app-shell .tree-node-actions,
+  .app-shell .explorer-tree-shell .tree-node-actions,
+  .app-shell .ds-row-where-used,
+  .app-shell .search-hit__arrow,
+  .app-shell .search-hit__tab,
+  .app-shell .ddt-node__drill-hint {
+    opacity: 1;
+  }
+
+  .app-shell .tree-node-actions,
+  .app-shell .explorer-tree-shell .tree-node-actions {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* ── Panel splitters ───────────────────────────────────────────
+     A 1px hairline cannot be grabbed with a finger. Keep the hairline look,
+     but make the surrounding transparent strip the actual touch target. */
+  [data-panel-group-direction="horizontal"] > [data-resize-handle],
+  [data-panel-group-direction="horizontal"] > [data-resize-handle]:hover,
+  [data-panel-group-direction="horizontal"] > [data-resize-handle][data-resize-handle-state="drag"] {
+    position: relative;
+    width: 14px;
+    background: transparent;
+  }
+
+  [data-panel-group-direction="horizontal"] > [data-resize-handle]::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    background: var(--border-color);
+  }
+
+  [data-panel-group-direction="horizontal"] > [data-resize-handle][data-resize-handle-state="drag"]::after {
+    width: 4px;
+    background: var(--er-accent);
+  }
+
+  [data-panel-group-direction="vertical"] > [data-resize-handle],
+  [data-panel-group-direction="vertical"] > [data-resize-handle]:hover {
+    position: relative;
+    height: 14px;
+    background: transparent;
+  }
+
+  [data-panel-group-direction="vertical"] > [data-resize-handle]::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    transform: translateY(-50%);
+    background: var(--border-color);
+  }
+
+  [data-panel-group-direction="vertical"] > [data-resize-handle][data-resize-handle-state="drag"]::after {
+    height: 4px;
+    background: var(--er-accent);
+  }
+
+  /* Taller tabs push long labels ("Kde je použito") onto a second line and
+     out of the strip. Let the tabs shrink and ellipsise instead — scrolling
+     the whole strip would push the close/expand actions out of reach. */
+  .app-shell [role="tablist"] > [role="tab"] {
+    white-space: nowrap;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Native overlay scrollbars are all iOS draws; the 6px custom track only
+     narrows the content. Widen it for the engines that do honour it. */
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+}
+
+/* ── Narrow viewport (tablet portrait, split view, phone) ──────────
+   The workspace stacks to a single column in App.tsx; the chrome around it
+   has to give up its desktop breathing room too. */
+@media (max-width: 900px) {
+  .explorer-toolbar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  /* The designer bars deliberately stay on one line — see the touch layer. */
+
+  /* ── Designer bars stay on one line ────────────────────────────
+     The designer pane is ~445px wide on a tablet in portrait, which cannot
+     hold the view tabs, the tools and the filter on one line. The tools move
+     up into the header (which has the slack); what is left down here is the
+     tab strip, which scrolls, plus a filter at a usable fixed width. */
+  .app-shell .fmt-header,
+  .app-shell .fmt-toolbar {
+    flex-wrap: nowrap;
+  }
+
+  .app-shell .fmt-toolbar .fmt-sliding-tabs {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .app-shell .fmt-toolbar .fmt-sliding-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-shell .fmt-sliding-tabs__btn {
+    flex-shrink: 0;
+  }
+
+  .app-shell .fmt-header-tools {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  .app-shell .fmt-header-stats {
+    min-width: 0;
+  }
+
+  /* "0 bound" / "4 unbound" are what make the header counters ~230px wide.
+     The icon and the number carry the meaning; the word is restored by the
+     button's own `title` (long-press on touch). */
+  .app-shell .fmt-stat-btn__word {
+    display: none;
+  }
+
+  /* Drill-down dialogs are sized for a desktop window. */
+  .dd-dialog-surface {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0;
+  }
+}
+
+/* Respect the home-indicator / rounded-corner insets on iPadOS and iOS when
+   the app runs full-screen from the home screen. The shell is `position:
+   fixed; inset: 0`, so the insets have to land on it rather than on <body>. */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .app-shell {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ─── Model-mapping validations ───
+   The mapping designer listed bindings and data sources only, so validations
+   were visible as a header count and nowhere else. They render as cards: the
+   guarded model path on top, then one block per rule with its condition and
+   message expression, each with the row drill-down bindings already have. */
+.mm-validation-list {
+  padding: 4px 0 12px;
+}
+
+.mm-validation-row {
+  margin: 5px 12px;
+  cursor: pointer;
+}
+
+.mm-validation-row:hover {
+  background: var(--er-surface-3);
+}
+
+.mm-validation-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--er-accent);
+}
+
+.mm-validation-rule {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-md);
+  background: var(--bg-secondary);
+}
+
+.mm-validation-rule-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.mm-validation-rule-title {
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--er-text-muted);
+}
+
+.mm-validation-badge {
+  padding: 1px 6px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+}
+
+.mm-validation-expr {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+  min-width: 0;
+}
+
+.mm-validation-expr-label {
+  flex-shrink: 0;
+  width: 68px;
+  padding-top: 1px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+}
+
+.mm-validation-expr .mm-binding-expr {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The label column costs more than it gives on a phone-width panel. */
+@media (max-width: 640px) {
+  .mm-validation-expr {
+    flex-wrap: wrap;
+  }
+
+  .mm-validation-expr-label {
+    width: auto;
+  }
+}
+
+/* ─── Filter type-ahead ───
+   The dropdown under the explorer and designer filter boxes. It floats over
+   the panel below (the toolbars it sits in are only ~36px tall, so there is
+   nowhere to push content to) and is anchored to the field, which is why
+   `.filter-field` is the positioned ancestor. */
+.filter-suggest {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  /* At least as wide as the field, but free to grow for long names — a
+     toolbar filter is ~180px and every suggestion would read as an ellipsis. */
+  min-width: 100%;
+  width: max-content;
+  max-width: min(420px, 70vw);
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  z-index: 30;
+}
+
+.filter-suggest__group {
+  padding: 6px 8px 3px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.filter-suggest__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--er-radius-md);
+  cursor: pointer;
+  font-size: var(--er-text-md);
+  color: var(--er-text);
+}
+
+/* The keyboard cursor. The soft tint alone was easy to miss against the
+   dropdown surface, so the active row also carries an accent bar and the
+   accent text colour. */
+.filter-suggest__item.active {
+  background: var(--er-accent-soft);
+  box-shadow: inset 2px 0 0 var(--er-accent);
+  color: var(--er-accent);
+}
+
+.filter-suggest__item.active .filter-suggest__count {
+  background: var(--er-surface);
+  color: var(--er-accent);
+}
+
+.filter-suggest__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The typed part, so it is obvious why a row is being offered. */
+.filter-suggest__label mark {
+  background: none;
+  color: var(--er-accent);
+  font-weight: 700;
+}
+
+.filter-suggest__count {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The explorer field used to be a Fluent Input; keep its softer surface. */
+.explorer-filter-field .filter-field__input {
+  min-height: 26px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-radius: var(--er-radius-md);
+  background: var(--er-bg-soft);
+}
+
+/* A finger needs the rows taller than a mouse does. */
+@media (pointer: coarse) {
+  .app-shell .filter-suggest__item {
+    min-height: 36px;
+  }
+}
+
+/* ─── Lists read as lists ───
+   Every row in the designers used to be a bordered card floating on the pane:
+   three hundred outlines down a scroll, each competing with the expression
+   inside it. Rows keep their spacing and their states — the outline goes.
+   Trees (bindings, format elements) rely on hover and selection alone, since
+   a separator under an indented row draws a staircase; flat lists (data
+   sources, validations) get a hairline to keep the rhythm. */
+.mm-binding-row,
+.mm-validation-row,
+.ds-row,
+.fmt-element-row {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.mm-binding-row:hover,
+.mm-validation-row:hover,
+.ds-row:hover,
+.fmt-element-row:hover {
+  background: var(--er-surface-3);
+  border: none;
+}
+
+/* Flat lists keep a hairline between rows. */
+.ds-row,
+.mm-validation-row {
+  border-bottom: 1px solid color-mix(in srgb, var(--er-border) 55%, transparent);
+  border-radius: 0;
+}
+
+.ds-row-wrap {
+  padding: 0;
+}
+
+/* Selected / matched rows: a tinted band with an accent edge, the same cursor
+   language the filter type-ahead uses. */
+.fmt-element-row.selected,
+.fmt-element-row.search-match:not(.selected),
+.mm-binding-row.search-match,
+.mm-validation-row.search-match,
+.ds-row-wrap.search-match .ds-row {
+  background: var(--er-accent-soft);
+  border: none;
+  box-shadow: inset 2px 0 0 var(--er-accent);
+}
+
+:root[data-theme='light'] .fmt-element-row.search-match:not(.selected),
+:root[data-theme='light'] .ds-row-wrap.search-match .ds-row {
+  background: var(--er-accent-soft);
+}
+
+.fmt-element-row.selected {
+  font-weight: 600;
+}
+
+/* The tree rows sit on a rail, so they keep a rounded hover/selection shape
+   rather than bleeding to both edges of the pane. */
+.mm-binding-row,
+.fmt-element-row {
+  border-radius: var(--er-radius-md);
+}
+
+/* The search reach filter, folded into the results bar as one toggle. */
+.search-reach-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.search-reach-toggle:hover {
+  border-color: var(--er-border-strong);
+  color: var(--er-text);
+}
+
+.search-reach-toggle.active {
+  border-color: var(--er-accent-border);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+/* How many hits the related-only filter is holding back. */
+.search-reach-toggle__badge {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Expression hover card ───
+   A raised surface like menus and popovers. It hangs off the hovered name, so
+   it never needs pointer events of its own. */
+div.path-tooltip-card {
+  --tip-accent: var(--er-accent);
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  min-width: 240px;
+  max-width: min(440px, calc(100vw - 16px));
+  overflow: hidden;
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-raised);
+  box-shadow: var(--er-shadow-3);
+  color: var(--er-text);
+  font-family: var(--er-font-sans);
+  font-size: var(--er-text-sm);
+  line-height: 1.45;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity var(--er-duration-fast) var(--er-ease), transform var(--er-duration-fast) var(--er-ease);
+}
+
+div.path-tooltip-card.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+div.path-tooltip-card--model-field {
+  --tip-accent: var(--er-model);
+}
+
+.path-tooltip-card__head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px 9px;
+}
+
+.path-tooltip-card__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.path-tooltip-card__dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tip-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tip-accent) 22%, transparent);
+}
+
+.path-tooltip-card__title {
+  color: var(--er-text);
+  font-family: var(--er-font-mono);
+  font-size: var(--er-text-md);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.path-tooltip-card__path {
+  color: var(--er-text-subtle);
+  font-family: var(--er-font-mono);
+  font-size: var(--er-text-xs);
+  overflow-wrap: anywhere;
+}
+
+.path-tooltip-card__path .is-active {
+  color: var(--tip-accent);
+  font-weight: 600;
+}
+
+.path-tooltip-card__path .is-after {
+  opacity: 0.55;
+}
+
+.path-tooltip-card__sep {
+  opacity: 0.6;
+}
+
+.path-tooltip-card__rows {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 5px 12px;
+  margin: 0;
+  padding: 9px 12px 10px;
+  border-top: 1px solid var(--er-border);
+}
+
+.path-tooltip-card__row {
+  display: contents;
+}
+
+.path-tooltip-card__row dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  white-space: nowrap;
+}
+
+.path-tooltip-card__row dt svg {
+  flex-shrink: 0;
+  color: var(--er-text-subtle);
+}
+
+.path-tooltip-card__row dd {
+  display: -webkit-box;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--er-text);
+  overflow-wrap: anywhere;
+}
+
+.path-tooltip-card__row dd.is-mono {
+  font-family: var(--er-font-mono);
+  font-size: var(--er-text-xs);
+}
+
+.path-tooltip-card__row.is-muted dd {
+  color: var(--er-text-muted);
+}
+
+.path-tooltip-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px 7px;
+  border-top: 1px solid var(--er-border);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+}
+
+.path-tooltip-card__foot svg {
+  color: var(--tip-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  div.path-tooltip-card {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ─── Elevation ───
+   Dark themes read depth as light: something on top of the window is lighter
+   than the window, something quoted from it is darker. The dialogs used to be
+   a shade *below* the app they covered — a drill-down opened as a black slab
+   on a black workbench — and the code blocks inside them were the same colour
+   as the dialog, so the formula had no frame at all. */
+[class*="fui-DialogSurface"]:not(.fui-DialogSurface__backdrop) {
+  background-color: var(--er-surface-raised);
+  border: 1px solid var(--er-border-strong);
+  box-shadow: var(--er-shadow-3);
+}
+
+/* Menus, popovers and the drill-down's own floating card ride the same level.
+   Compound selectors on purpose: Fluent's styles are injected after ours, so a
+   single class ties on specificity and loses on order. */
+div[class*="fui-MenuPopover"],
+div[class*="fui-PopoverSurface"],
+div.command-palette-surface,
+div.path-tooltip-card {
+  background-color: var(--er-surface-raised);
+  border-color: var(--er-border-strong);
+}
+
+/* Inside a raised dialog the panel is the dialog: no second, darker box. */
+.dd-panel--dialog,
+.dd-panel--dialog .dd-frame-content {
+  background: transparent;
+}
+
+/* The drill-down header band. Its gradient is switched off app-wide, which
+   left it a flat slab of the same colour as everything else; a wash of the
+   accent over the raised surface gives the dialog a head again. */
+.dd-hero {
+  background-color: color-mix(in srgb, var(--er-accent) 7%, var(--er-surface-raised));
+}
+
+/* Verbatim content sits below the surface it is quoted on. */
+.er-expr,
+.dd-formula,
+.dd-panel--dialog .dd-step,
+.dd-panel--dialog .dd-ds-card {
+  background-color: var(--er-surface-sunken);
+  background-image: none;
+}
+
+/* Elevation context: inside a dialog the "page" is the raised surface, so
+   every card, band and code block that levels itself against `--bg-*` lands
+   one step above the app instead of one step below it. The `!important` rules
+   below are the same weight as the flattening layer above; they win on order,
+   which is the only lever left once that layer set the tone for everything. */
+[class*="fui-DialogSurface"] {
+  --bg-primary: var(--er-surface-raised);
+  --bg-secondary: var(--er-surface-raised-2);
+  --bg-tertiary: var(--er-surface-3);
+  /* A hairline that reads on the app's own surfaces disappears on a modal's
+     lighter one, and a modal is all edges: sections, cards, code blocks. Every
+     line inside one comes from the strong outline. */
+  --border-color: var(--er-border-strong);
+  /* The `--ui-*` layer resolves its `var(--bg-*)` at :root, so re-levelling
+     `--bg-*` alone would not reach anything painted through it. */
+  --ui-surface-0: var(--er-surface-raised);
+  --ui-surface-1: color-mix(in srgb, var(--er-accent) 8%, var(--er-surface-raised));
+  --ui-surface-2: var(--er-surface-raised-2);
+  --ui-stroke-1: var(--er-border-strong);
+  --ui-stroke-2: color-mix(in srgb, var(--er-border-strong) 70%, transparent);
+}
+
+.dd-dialog-surface .er-expr,
+.dd-dialog-surface .dd-hero__expr-wrap,
+.dd-dialog-surface .dd-hero__consolidated,
+.dd-dialog-surface .dd-formula {
+  background: var(--er-surface-sunken) !important;
+}
+
+/* Workspace manager: closed by the corner ✕, like the drill-down dialog — a
+   full-width action bar for a single "Close" was a row of chrome saying what
+   the ✕ already says. */
+.ws-dialog-close {
+  position: absolute !important;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+}
+
+.ws-titlebar {
+  padding-right: 40px;
+}
+
+/* ─── Used data: folded, and grouped by kind when opened ───
+   The evidence list runs to seventy-odd rows on a real expression. It opens on
+   demand, and inside it the artefacts are grouped, so the chips can drop the
+   type label each was repeating. */
+.lin-summary__head--toggle {
+  width: 100%;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lin-summary__head--toggle:hover .lin-summary__title {
+  color: var(--er-accent);
+}
+
+.lin-group {
+  margin-top: 8px;
+}
+
+.lin-group__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0 4px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lin-group__count {
+  padding: 0 5px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A tablet or a phone cannot drag the resize grip, so the workspace manager
+   stops pretending it is a window there and becomes a full-height sheet — it
+   used to sit half the screen tall with no way to stretch it. */
+@media (max-width: 900px), (pointer: coarse) {
+  .ws-surface {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    height: calc(100dvh - 40px) !important;
+    max-height: calc(100dvh - 40px) !important;
+  }
+}
+
+/* ── Activity bar: one box for every control ─────────────────────
+   The theme switch is shared with the site, where its border sets it apart
+   in a header. In the rail it sits among borderless buttons, so it drops the
+   border and follows their hover and touch size instead of standing out as
+   the one framed, smaller button. */
+.activity-bar .er-theme-switch {
+  border-color: transparent;
+}
+
+.activity-bar .er-theme-switch:hover {
+  border-color: transparent;
+  background: var(--er-surface-2);
+  color: var(--er-text);
+}
+
+@media (pointer: coarse) {
+  .app-shell .activity-bar .er-theme-switch {
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* ── Format structure: keyboard focus ────────────────────────────
+   Rows take focus so ← / → can fold and unfold them. A click already shows
+   the selection band, so the ring appears only for keyboard focus. */
+.fmt-element-row:focus {
+  outline: none;
+}
+
+.fmt-element-row:focus-visible {
+  outline: 2px solid var(--er-accent);
+  outline-offset: -2px;
+}
+
+/* The list itself takes focus only so the arrows keep working after a click on
+   empty space; the ring belongs on the row. */
+.fmt-structure-list:focus {
+  outline: none;
+}
+
+/* Row actions (⋮) in the format structure: out of the way until the row is
+   hovered or selected, or its menu is open; always there on touch. */
+.fmt-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: var(--er-radius-sm);
+  background: transparent;
+  color: var(--er-text-subtle);
+  cursor: pointer;
+  opacity: 0;
+}
+
+/* The inline binding and the unbound marker already push to the right edge;
+   a second auto margin would split the space and pull them to the middle. */
+.fmt-binding-inline + .fmt-row-actions,
+.fmt-unbound-marker + .fmt-row-actions {
+  margin-left: 6px;
+}
+
+/* Mapping rows and datasource rows carry the same ⋮ after their drill-down,
+   count or where-used control; those may already push right. */
+.mm-group-count + .fmt-row-actions,
+.ds-row-where-used + .fmt-row-actions {
+  margin-left: 4px;
+}
+
+.fmt-element-row:hover .fmt-row-actions,
+.fmt-element-row.selected .fmt-row-actions,
+.mm-tree-row:hover .fmt-row-actions,
+.mm-validation-row:hover .fmt-row-actions,
+.mm-binding-row.search-match .fmt-row-actions,
+.ds-row:hover .fmt-row-actions,
+.ds-row-wrap.search-match .fmt-row-actions,
+.fmt-row-actions:focus-visible,
+.fmt-row-actions[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.fmt-row-actions:hover {
+  background: var(--er-surface-3);
+  color: var(--er-text);
+}
+
+@media (pointer: coarse) {
+  .fmt-row-actions {
+    opacity: 1;
+  }
+}
+
+/* ── Model mapping: field labels and the definition switch ── */
+
+/* The model field's label follows its name, as in the F&O designer; the name
+   then only takes the room it needs so the label is not pushed off the row. */
+.mm-binding-name:has(+ .mm-tree-label),
+.mm-tree-branch-name:has(+ .mm-tree-label) {
+  flex: 0 1 auto;
+  max-width: 55%;
+}
+
+.mm-tree-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mm-definition-picker {
+  gap: 4px;
+  color: var(--er-text);
+}
+
+.mm-definition-picker__spacer {
+  display: inline-block;
+  width: 16px;
+}
+
+/* ── Designer tabs: every open tab stays mounted; one (or two, side by side)
+      is visible. The panes share one grid cell per column so a tab moving
+      between the main and the side column is not remounted. ── */
+.designer-tabs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.designer-tabs--split {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.designer-tab-pane {
+  grid-row: 1;
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.designer-tab-pane--side {
+  grid-column: 2;
+  border-left: 1px solid var(--er-border);
+}
+
+/* Hidden, not removed: the scroll position survives, and nothing is laid out
+   again when the tab comes back. */
+.designer-tab-pane--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.designer-tab-pane__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+
+
+
+
+/* Drill-down dialog: pin it as a tab, or open it next to the active tab. */
+.dd-dialog-title__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 12px;
+  font-weight: 400;
+}
+
+/* ── Groups of tabs: each column has its own tab strip (row 1) above the
+      tab shown in it (row 2). The focused group's strip carries an accent
+      rule; whatever is opened next lands in it. A dragged tab drops into
+      either half. ── */
+.designer-tabs {
+  position: relative;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.designer-tab-pane {
+  grid-row: 2;
+}
+
+.designer-group-strip {
+  grid-row: 1;
+  grid-column: 1;
+  min-width: 0;
+}
+
+.designer-group-strip--side {
+  grid-column: 2;
+  border-left: 1px solid var(--er-border);
+}
+
+.designer-group-strip--focused > * {
+  box-shadow: inset 0 2px 0 var(--er-accent);
+}
+
+
+
+
+
+.designer-drop-zones {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  position: relative;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.designer-drop-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 6px;
+  border: 2px dashed transparent;
+  border-radius: var(--er-radius-md);
+  transition: background-color 120ms, border-color 120ms;
+}
+
+.designer-drop-zone--over {
+  border-color: var(--er-accent-border);
+  background: color-mix(in srgb, var(--er-accent) 12%, transparent);
+}
+
+.designer-drop-zone__label {
+  pointer-events: none;
+  padding: 4px 10px;
+  border-radius: var(--er-radius-sm);
+  background: var(--er-surface);
+  border: 1px solid var(--er-border);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+
+.designer-drop-zone--over .designer-drop-zone__label {
+  opacity: 1;
+  color: var(--er-accent);
+  border-color: var(--er-accent-border);
+}
+
+/* A background tab stays mounted but must not show through the one on
+   screen — not even an element that sets `visibility: visible` itself. */
+.designer-tab-pane--hidden * {
+  visibility: hidden !important;
+}
+
+/* Parts of the analysed expression point down at the breakdown their click
+   opens underneath. Nested formulas get no arrow: their answer shows above. */
+.er-expr--leads-below .er-token-ds-segment:not(.er-token-ds-segment--static):not(.er-token-ds-segment--self)::after {
+  content: '↓';
+  font-size: var(--er-text-2xs);
+  margin-left: 4px;
+  opacity: 0.65;
+}
+
+/* Datasource names: the same blue as identifiers everywhere else, and a
+   click target of their own — the name opens the datasource's drill-down. */
+.ds-row-name {
+  color: var(--syn-identifier);
+}
+
+.ds-row-main .ds-row-name--drill {
+  flex: 0 1 auto;
+  display: inline-block;
+  min-width: 0;
+}
+
+.ds-row-main .ds-row-name--drill:hover {
+  color: var(--er-text);
+}
+
+/* Element names on the format's binding cards: identifier blue, as elsewhere. */
+.fmt-bind-card-name {
+  color: var(--syn-identifier);
+}
+
+/* Reduced motion, everywhere: looping pulses (the download progress, the
+   navigation flash) and every transition settle at once. The earlier block
+   only covered the path tooltip. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Drill-down cut off by its depth or node limit: said, not hidden. */
+.dd-truncated {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--er-warning) 40%, transparent);
+  border-radius: var(--er-radius-md);
+  background: color-mix(in srgb, var(--er-warning) 10%, var(--er-surface));
+  color: var(--er-text);
+  font-size: var(--er-text-sm);
+  line-height: 1.45;
+}
+
+.dd-truncated > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--er-warning);
+}
+
+.dd-truncated--floating {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 5;
+  margin: 0;
+  box-shadow: var(--er-shadow-2, 0 2px 8px rgb(0 0 0 / 0.12));
+}
+
+/* Search results come a page at a time; the next page is one click away. */
+.search-panel__more {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px dashed var(--er-border-strong);
+  border-radius: var(--er-radius-md);
+  background: transparent;
+  color: var(--er-accent);
+  font: inherit;
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.search-panel__more:hover {
+  background: var(--er-accent-soft);
+  border-color: var(--er-accent-border);
+}
+
+/* ── Groups: a draggable divider between them, and a stacked layout when the
+      designer is too narrow for two columns (strips on top of each other,
+      only the focused group's tab on screen). ── */
+.designer-split-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 6;
+  width: 7px;
+  margin-left: -3px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.designer-split-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition: background-color 120ms, width 120ms, left 120ms;
+}
+
+.designer-split-handle:hover::after,
+.designer-split-handle:focus-visible::after,
+.designer-split-handle--dragging::after {
+  left: 2px;
+  width: 3px;
+  background: var(--er-accent);
+}
+
+.designer-split-handle:focus-visible {
+  outline: none;
+}
+
+.designer-tabs--split.designer-tabs--narrow {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.designer-tabs--narrow .designer-group-strip--side {
+  grid-row: 2;
+  grid-column: 1;
+  border-left: none;
+}
+
+.designer-tabs--narrow .designer-tab-pane,
+.designer-tabs--narrow .designer-drop-zones {
+  grid-row: 3;
+  grid-column: 1;
+}
+
+.designer-tabs--narrow .designer-tab-pane--side {
+  border-left: none;
+}
+
+.designer-tabs--narrow[data-focused-pane='main'] .designer-tab-pane--side,
+.designer-tabs--narrow[data-focused-pane='side'] .designer-tab-pane--main {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Icons that replaced emoji: they follow the text colour (or the format
+   type's colour) and sit on the text's centre line. */
+.fmt-type-icon,
+.fmt-detail-child__icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.fmt-detail-child__icon {
+  margin-right: 6px;
+}
+
+.fmt-attr-glyph {
+  font-family: var(--er-font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.fmt-transform {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ds-row-where-used {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Keyboard users can reach the where-used button; they should see it too. */
+.ds-row:focus-within .ds-row-where-used,
+.ds-row-where-used:focus-visible {
+  opacity: 1;
+}
+
+/* A formula that opens its drill-down stays inline text: as an inline-block
+   it could not be cut with an ellipsis and wrapped whole onto a clipped
+   second line, leaving only the arrow on the row. */
+.fmt-binding-inline > .dd-trigger-expr {
+  display: inline;
+}
+
+.mm-binding-expr > .dd-trigger-expr,
+.fmt-bind-row-expr > .dd-trigger-expr {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Data model as a list: the records' fields as a tree, filterable, each
+   field opening its drill-down. Rows reuse the datasource list's look. */
+.dm-view-toggle {
+  margin-left: auto;
+}
+
+.dm-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.dm-list__filter {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--er-border);
+}
+
+.dm-list__rows {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 8px 16px;
+}
+
+.dm-list__root + .dm-list__root {
+  margin-top: 12px;
+}
+
+.dm-list__root-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--er-surface);
+  border-bottom: 1px solid var(--er-border);
+  font-weight: 600;
+  color: var(--er-model);
+}
+
+.dm-list__root-label {
+  font-weight: 400;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+}
+
+.dm-list__root-head .ds-row-count {
+  margin-left: auto;
+}
+
+.dm-list__empty {
+  padding: 12px 8px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+}

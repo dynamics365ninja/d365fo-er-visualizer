@@ -1,0 +1,1495 @@
+/* ─── Base aliases + the dark-specific values ───
+   `src/main.tsx` puts `data-theme` on <html> before React mounts, so the bare
+   `:root` only ever applies for the instant before that module runs; the boot
+   styles in index.html paint an OS-correct background for that gap. Which
+   theme the app *starts* in is decided in `src/theme.ts`, not here. */
+:root,
+:root[data-theme='dark'] {
+  --font-display: var(--er-font-display);
+  --font-sans: var(--er-font-sans);
+  /* Single source of truth for the monospace stack — index.html preloads
+     JetBrains Mono, and every `font-family` for code/expressions/GUIDs reads
+     this token. Do not redefine it in a later theme block: those win on
+     specificity and silently swap the font back. */
+  --font-mono: var(--er-font-mono);
+  --bg-primary: var(--er-bg-soft);
+  --bg-secondary: var(--er-surface);
+  --bg-tertiary: var(--er-surface-2);
+  --border-color: var(--er-border);
+  --surface-purple-border: color-mix(in srgb, var(--er-model) 42%, transparent);
+  /* The three ER component kinds — one hue each, shared with the site. */
+  --kind-model: var(--er-model);
+  --kind-mapping: var(--er-mapping);
+  --kind-format: var(--er-format);
+  --format-type-file: var(--er-success);
+  --format-type-xml-element: var(--er-info);
+  --format-type-xml-attribute: var(--er-warning);
+  --format-type-xml-sequence: var(--er-model);
+  --format-type-string: var(--er-danger);
+  --format-type-numeric: var(--er-success);
+  --format-type-datetime: var(--er-warning);
+  --format-type-base64: var(--er-info);
+  --format-type-excel-cell: var(--syn-identifier);
+  --format-type-text-sequence: var(--er-model);
+  --format-type-text-line: var(--er-danger);
+  --format-type-pdf: var(--er-danger);
+  --surface-hover-accent: color-mix(in srgb, var(--er-accent) 13%, transparent);
+  --statusbar-chip-bg: rgba(255, 255, 255, 0.14);
+  --statusbar-chip-border: rgba(255, 255, 255, 0.18);
+  --statusbar-mode-chip-bg: rgba(255, 255, 255, 0.18);
+  --statusbar-validator-ok: #22c55e;
+  --statusbar-validator-issues: #eab308;
+  --landing-grid-primary: color-mix(in srgb, var(--er-accent) 8%, transparent);
+  --landing-grid-secondary: color-mix(in srgb, var(--er-model) 6%, transparent);
+  --landing-grid-line: color-mix(in srgb, var(--er-accent) 12%, transparent);
+  --landing-hero-title-gradient: linear-gradient(135deg, var(--er-accent) 0%, var(--er-model) 100%);
+  --landing-hero-logo-gradient: linear-gradient(135deg, var(--er-accent), var(--er-model));
+  --landing-hero-logo-shadow: 0 4px 24px color-mix(in srgb, var(--er-accent) 42%, transparent);
+  --landing-card-hover-shadow: var(--er-shadow-3);
+  --scrollbar-thumb: var(--er-border-strong);
+  --scrollbar-thumb-hover: var(--er-text-subtle);
+  --shadow-color: var(--er-shadow-color);
+  /* Syntax / semantic colors */
+  --syn-identifier: #9cdcfe;
+  --syn-path: #4fc1ff;
+  --syn-operator: #d4d4d4;
+  --syn-literal: #ce9178;
+  /* Separators and field types come from the text tokens: the fixed greys
+     they used to be fell under 3:1 against the surfaces. */
+  --syn-separator: var(--er-text-subtle);
+  --syn-resolved: #4ec9b0;
+  --syn-field-type: var(--er-text-muted);
+  --syn-calc: #6a9955;
+  /* Graph chrome follows the shared surfaces so designers, panels and the
+     marketing screenshots all read as the same material. */
+  --syn-node-bg: var(--er-surface);
+  --syn-node-border: var(--er-border);
+  --syn-root-header: var(--er-accent-soft);
+  --syn-enum-header: var(--er-format-soft);
+  --syn-record-header: var(--er-surface-2);
+  --syn-edge: var(--er-accent);
+  --syn-edge-label: var(--er-text-subtle);
+  --minimap-bg: var(--er-surface-2);
+  --minimap-node: var(--er-border-strong);
+  color-scheme: dark;
+}
+
+/* Light theme — the neutral/brand aliases above already flip with `--er-*`.
+   Only genuinely light-specific values live here: the code-syntax palette,
+   the graph canvas, and the on-brand status bar chips. */
+:root[data-theme='light'] {
+  --surface-hover-accent: color-mix(in srgb, var(--er-accent) 9%, transparent);
+  --statusbar-chip-bg: rgba(0, 0, 0, 0.32);
+  --statusbar-chip-border: rgba(255, 255, 255, 0.55);
+  --statusbar-mode-chip-bg: rgba(0, 0, 0, 0.38);
+  --statusbar-validator-ok: #86efac;
+  --statusbar-validator-issues: #fde047;
+  --syn-identifier: #0451a5;
+  --syn-path: #005fb8;
+  --syn-operator: #383838;
+  --syn-literal: #a31515;
+  --syn-separator: var(--er-text-subtle);
+  --syn-resolved: #16825d;
+  --syn-field-type: var(--er-text-muted);
+  --syn-calc: #098658;
+  color-scheme: light;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-sans, 'Segoe UI', 'Segoe UI Variable', sans-serif);
+  font-size: var(--er-text-lg);
+  color: var(--er-text);
+  background: var(--bg-primary);
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
+  letter-spacing: 0.01em;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.fatal-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--er-danger) 12%, transparent), transparent 28%),
+    radial-gradient(circle at bottom right, color-mix(in srgb, var(--er-accent) 10%, transparent), transparent 24%),
+    var(--bg-primary);
+}
+
+.fatal-screen__card {
+  width: min(960px, 100%);
+  padding: 28px;
+  border-radius: var(--er-radius-xl);
+  border: 1px solid color-mix(in srgb, var(--er-danger-border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--shadow-color) 45%, transparent);
+}
+
+.fatal-screen__eyebrow {
+  margin-bottom: 10px;
+  color: var(--er-danger);
+  font-size: var(--er-text-sm);
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.fatal-screen__title {
+  margin-bottom: 10px;
+  color: var(--er-text);
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.fatal-screen__text {
+  margin-bottom: 18px;
+  color: var(--er-text-muted);
+  line-height: 1.6;
+}
+
+.fatal-screen__details {
+  overflow: auto;
+  padding: 16px;
+  border-radius: var(--er-radius-lg);
+  background: color-mix(in srgb, var(--bg-tertiary) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+  color: var(--er-danger);
+  font-family: var(--font-mono);
+  font-size: var(--er-text-md);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: var(--er-radius-sm); }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+
+/* Tree node styles — flat VS Code Explorer rows */
+.tree-node {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 3px 8px;
+  font-size: var(--er-text-md);
+  line-height: 1.3;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  border-radius: 0;
+  border: none;
+  position: relative;
+  transition: background 0.12s ease;
+}
+.tree-node:hover {
+  background: var(--er-surface-3);
+}
+.tree-node.selected {
+  background: var(--er-selected);
+  color: var(--er-text);
+}
+
+.tree-node.ancestor {
+  background: transparent;
+  color: var(--er-text);
+}
+.tree-node .icon { margin-right: 2px; flex-shrink: 0; width: 14px; text-align: center; font-size: var(--er-text-md); color: var(--er-text-muted); }
+.tree-node-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 400;
+  /* The name is the row's primary content: keep a floor so the version /
+     kind pills can never squeeze it to zero in a narrow Explorer. */
+  min-width: 5rem;
+  flex: 1 1 auto;
+}
+
+.tree-node-kind-pill {
+  flex-shrink: 0;
+  padding: 0 6px;
+  height: 15px;
+  line-height: 15px;
+  border-radius: var(--er-radius-sm);
+  font-size: var(--er-text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--er-text-muted);
+  background: transparent;
+  border: none;
+}
+
+/* Root configuration rows — subtle, no card */
+.tree-node[data-depth="0"] {
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 0;
+  font-size: var(--er-text-md);
+  font-weight: 600;
+  border-color: transparent;
+  box-shadow: none;
+}
+.tree-node[data-depth="0"] .tree-chevron {
+  opacity: 0.7;
+}
+.tree-node[data-depth="0"]:hover {
+  transform: none;
+}
+
+/* Accent classes: only the kind-pill label gets a subtle colour hint */
+.tree-node-accent-model .tree-node-kind-pill {
+  color: var(--er-info);
+}
+
+.tree-node-accent-mapping .tree-node-kind-pill {
+  color: var(--er-success);
+}
+
+.tree-node-accent-format .tree-node-kind-pill {
+  color: var(--er-warning);
+}
+
+/* Root rows: no tinted background — neutral like VS Code tree */
+.tree-node[data-depth="0"].tree-node-accent-model,
+.tree-node[data-depth="0"].tree-node-accent-mapping,
+.tree-node[data-depth="0"].tree-node-accent-format {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.tree-node[data-depth="0"].tree-node-accent-model:hover,
+.tree-node[data-depth="0"].tree-node-accent-mapping:hover,
+.tree-node[data-depth="0"].tree-node-accent-format:hover {
+  background: var(--er-surface-3);
+  border-color: transparent;
+}
+
+.tree-node[data-depth="0"].tree-node-accent-model,
+.tree-node[data-depth="0"].tree-node-accent-mapping,
+.tree-node[data-depth="0"].tree-node-accent-format {
+  box-shadow: none;
+}
+
+.tree-node.selected.tree-node-accent-model,
+.tree-node.selected.tree-node-accent-mapping,
+.tree-node.selected.tree-node-accent-format {
+  box-shadow: none;
+}
+
+.tree-node.ancestor.tree-node-accent-model,
+.tree-node.ancestor.tree-node-accent-mapping,
+.tree-node.ancestor.tree-node-accent-format {
+  box-shadow: none;
+}
+
+.explorer-tree-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-size: var(--er-text-md);
+  background: transparent;
+}
+
+/* Panel header — title, count and the Explorer's own actions. Expand /
+   collapse used to live both here and in the filter row; one home only. */
+.explorer-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  flex-shrink: 0;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--er-border);
+  background: var(--er-surface);
+}
+
+.explorer-panel-header .explorer-workspace-button {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.explorer-panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--er-font-display);
+  font-size: var(--er-text-lg);
+  font-weight: 600;
+  color: var(--er-text);
+}
+
+.explorer-panel-title svg {
+  color: var(--er-text-muted);
+}
+
+.explorer-panel-spacer {
+  flex: 1;
+}
+
+.explorer-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0 12px;
+}
+
+/* Kind groups read as sections, not as nested cards. */
+.explorer-kind-group {
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
+.explorer-kind-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--er-text-muted);
+}
+
+.explorer-kind-group-header-btn {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.explorer-kind-group-header-btn:hover {
+  background: var(--er-surface-2);
+  color: var(--er-text);
+}
+
+.explorer-kind-group-header-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.explorer-kind-group-chevron {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--er-text-muted);
+}
+
+.explorer-kind-group-body {
+  padding: 5px 0 6px;
+}
+
+.explorer-kind-group-empty {
+  padding: 6px 10px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+}
+
+.explorer-kind-group.collapsed .explorer-kind-group-body {
+  display: none;
+}
+
+/* Group labels carry the shared per-kind hue used across app and site. */
+.explorer-kind-group-model .explorer-kind-group-header { color: var(--er-model); }
+.explorer-kind-group-mapping .explorer-kind-group-header { color: var(--er-mapping); }
+.explorer-kind-group-format .explorer-kind-group-header { color: var(--er-format); }
+.explorer-empty-state {
+  padding: 22px 18px;
+  color: var(--er-text-muted);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.explorer-dropzone {
+  position: relative;
+}
+
+.explorer-dropzone-dragging {
+  background: color-mix(in srgb, var(--er-accent) 10%, transparent);
+}
+
+.explorer-dropzone-overlay {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  padding: 4px 12px;
+  background: var(--er-accent);
+  color: var(--er-accent-contrast);
+  font-weight: 600;
+  font-size: var(--er-text-md);
+  border-radius: var(--er-radius-pill);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  z-index: 5;
+}
+
+.explorer-filter-input {
+  width: 100%;
+  min-width: 0;
+}
+
+/* ── Modern filter field — icon left, clear button inside right ── */
+.filter-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.filter-field__icon {
+  position: absolute;
+  left: 10px;
+  width: 14px;
+  height: 14px;
+  color: var(--er-text-muted);
+  pointer-events: none;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.filter-field:focus-within .filter-field__icon {
+  color: var(--er-accent);
+}
+
+.filter-field__input {
+  width: 100%;
+  padding: 6px 30px 6px 30px;
+  font-size: var(--er-text-md);
+  font-family: var(--font-sans);
+  line-height: 1.4;
+  border-radius: var(--er-radius-lg);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--er-text);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.filter-field__input::placeholder {
+  color: var(--er-text-muted);
+  opacity: 0.7;
+}
+
+.filter-field__input:hover {
+  border-color: color-mix(in srgb, var(--er-accent) 40%, var(--border-color));
+  background: var(--bg-secondary);
+}
+
+.filter-field__input:focus {
+  border-color: var(--er-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--er-accent) 18%, transparent);
+  background: var(--bg-primary);
+}
+
+.filter-field__clear {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--er-radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--er-text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.filter-field__clear svg {
+  width: 10px;
+  height: 10px;
+}
+
+.filter-field__clear:hover {
+  color: var(--er-text);
+  background: color-mix(in srgb, var(--er-text) 10%, transparent);
+}
+
+:root[data-theme='light'] .filter-field__input {
+  background: #ffffff;
+}
+
+:root[data-theme='light'] .filter-field__input:hover {
+  background: var(--bg-secondary);
+}
+
+:root[data-theme='light'] .filter-field__input:focus {
+  background: #ffffff;
+}
+
+/* Legacy compat */
+.panel-filter-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Panel header — VS Code "EXPLORER" style uppercase label */
+
+.explorer-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 8px;
+  border-bottom: 1px solid var(--er-border);
+  background: var(--er-surface);
+}
+
+.config-explorer-toolbar {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 6px 8px 4px;
+}
+
+.explorer-toolbar-filter {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+/* Badge styles.
+   Text stays on `--text-primary` (near-black / near-white): same-hue text on a
+   same-hue soft background was unreadable. The hue lives in the tint and the
+   border instead. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--er-radius-sm);
+  font-size: var(--er-text-sm);
+  font-weight: 500;
+  color: var(--er-text);
+}
+.badge-table { background: var(--er-info-soft); border: 1px solid var(--er-info-border); }
+.badge-enum { background: var(--er-warning-soft); border: 1px solid var(--er-warning-border); }
+.badge-class { background: var(--er-model-soft); border: 1px solid var(--surface-purple-border); }
+.badge-calc { background: var(--er-success-soft); border: 1px solid var(--er-success-border); }
+.badge-param { background: var(--er-danger-soft); border: 1px solid var(--er-danger-border); }
+.badge-export { background: var(--er-success-soft); border: 1px solid var(--er-success-border); }
+.badge-import { background: var(--er-model-soft); border: 1px solid var(--surface-purple-border); }
+.badge-xml { background: var(--er-info-soft); border: 1px solid var(--er-info-border); }
+.badge-csv { background: var(--er-success-soft); border: 1px solid var(--er-success-border); }
+.badge-success { background: var(--er-success-soft); border: 1px solid var(--er-success-border); }
+.badge-info { background: var(--er-info-soft); border: 1px solid var(--er-info-border); }
+
+/* ─── VS Code-style rotating chevron ─── */
+/* Use: <span className={`tree-chevron ${open ? 'open' : ''}`} />              */
+.tree-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--er-text-muted);
+  transition: transform 0.12s ease;
+  user-select: none;
+  font-size: var(--er-text-lg);
+  font-weight: 600;
+  line-height: 1;
+}
+.tree-chevron::before { content: '›'; }
+.tree-chevron.open { transform: rotate(90deg); }
+
+.tree-chevron-placeholder {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* Property grid */
+/* Property rows: label left, value right, hairline between rows — no filled
+   cells or grid gaps pretending to be a spreadsheet. */
+.prop-grid {
+  display: grid;
+  grid-template-columns: minmax(88px, 34%) 1fr;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  overflow: hidden;
+  background: var(--er-surface);
+  font-size: var(--er-text-sm);
+}
+.prop-grid .prop-label {
+  padding: 7px 10px;
+  color: var(--er-text-muted);
+  font-weight: 500;
+  font-size: var(--er-text-sm);
+  line-height: 1.35;
+  border-top: 1px solid var(--er-border);
+}
+.prop-grid .prop-value {
+  padding: 7px 10px;
+  color: var(--er-text);
+  word-break: break-word;
+  min-width: 0;
+  line-height: 1.45;
+  border-top: 1px solid var(--er-border);
+}
+.prop-grid > .prop-label:first-of-type,
+.prop-grid > .prop-label:first-of-type + .prop-value {
+  border-top: none;
+}
+.prop-grid .prop-value.guid {
+  font-family: var(--font-mono);
+  font-size: var(--er-text-xs);
+  color: var(--er-text-muted);
+}
+.prop-grid .prop-value.expression {
+  font-family: var(--font-mono);
+  font-size: var(--er-text-sm);
+  color: var(--syn-literal);
+}
+
+.property-empty {
+  padding: 16px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-md);
+}
+
+.property-empty-card {
+  margin: 12px;
+  border: 1px dashed var(--er-border-strong);
+  border-radius: var(--er-radius-xl);
+  background: var(--er-surface-2);
+  line-height: 1.6;
+}
+
+.property-empty-title {
+  margin-bottom: 6px;
+  color: var(--er-text);
+  font-weight: 600;
+}
+
+.property-inspector {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Inspector header: what this is, where it lives, what you can do with it ── */
+.prop-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-xl);
+  background: var(--er-surface-2);
+  flex-shrink: 0;
+}
+
+/* Name on the left, kind pill pinned to the top-right corner. */
+.prop-head__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.prop-head__top .prop-head__name { min-width: 0; }
+
+.prop-head__kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: var(--er-radius-pill);
+  border: 1px solid var(--er-border);
+  background: var(--er-surface);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  color: var(--er-text-muted);
+  white-space: nowrap;
+}
+
+.prop-head__kind svg { flex-shrink: 0; }
+
+.prop-head__kind--model   { color: var(--er-model);   border-color: color-mix(in srgb, var(--er-model) 38%, transparent); }
+.prop-head__kind--mapping { color: var(--er-mapping); border-color: color-mix(in srgb, var(--er-mapping) 38%, transparent); }
+.prop-head__kind--format  { color: var(--er-format);  border-color: color-mix(in srgb, var(--er-format) 38%, transparent); }
+
+.prop-head__name {
+  margin: 0;
+  font-family: var(--er-font-display);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--er-text);
+  word-break: break-word;
+}
+
+.prop-head__owner {
+  margin: 0;
+  font-size: var(--er-text-sm);
+  color: var(--er-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Actions sit below the property table. */
+.prop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.prop-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--er-radius-md);
+  border: 1px solid var(--er-border);
+  background: var(--er-surface);
+  color: var(--er-text-muted);
+  font-family: inherit;
+  font-size: var(--er-text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.prop-action:hover {
+  background: var(--er-accent-soft);
+  border-color: var(--er-accent-border);
+  color: var(--er-accent);
+}
+
+.property-card {
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  overflow: hidden;
+  background: var(--er-surface);
+}
+
+.property-card-title,
+.property-section-title {
+  display: flex;
+  align-items: center;
+  padding: 7px 10px;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--er-text-muted);
+  background: var(--er-surface-2);
+  border-bottom: 1px solid var(--er-border);
+}
+
+.property-section {
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  overflow: hidden;
+}
+
+.focused-node-tab {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+.focused-node-tab-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.focused-node-tab-icon {
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.focused-node-tab-title {
+  font-weight: 700;
+  color: var(--er-accent);
+}
+
+.focused-node-tab-body {
+  flex: 1;
+  overflow: auto;
+  padding: 10px;
+}
+
+.focused-node-tab-body .property-inspector {
+  padding: 0;
+}
+
+.focused-detail-shell {
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.focused-detail-card {
+  border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
+  border-radius: var(--er-radius-lg);
+  background: color-mix(in srgb, var(--bg-secondary) 65%, transparent);
+  overflow: hidden;
+}
+
+.focused-detail-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-tertiary) 58%, transparent);
+}
+
+.focused-detail-card__title {
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--er-text-muted);
+}
+
+.focused-detail-card__badge {
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: var(--er-radius-pill);
+  border: 1px solid color-mix(in srgb, var(--er-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--er-accent) 10%, transparent);
+}
+
+.focused-detail-grid {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 1px;
+}
+
+.focused-detail-grid__label {
+  padding: 6px 8px;
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  color: var(--er-text-muted);
+  background: color-mix(in srgb, var(--bg-tertiary) 54%, transparent);
+}
+
+.focused-detail-grid__value {
+  padding: 6px 8px;
+  font-size: var(--er-text-sm);
+  background: color-mix(in srgb, var(--bg-primary) 70%, transparent);
+  word-break: break-word;
+}
+
+.focused-detail-empty {
+  padding: 10px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+}
+
+.focused-detail-binding-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.focused-detail-binding-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) 1fr;
+  gap: 8px;
+  padding: 7px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 64%, transparent);
+}
+
+.focused-detail-binding-row:first-child {
+  border-top: none;
+}
+
+.focused-detail-binding-row__path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+}
+
+.focused-detail-binding-row__expr {
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: var(--er-text-sm);
+}
+
+.focused-detail-binding-row__arrow {
+  color: var(--er-text-muted);
+  font-size: var(--er-text-md);
+}
+
+.focused-detail-binding-row__source {
+  grid-column: 1 / -1;
+  font-size: var(--er-text-xs);
+  color: var(--er-text-muted);
+  opacity: 0.85;
+}
+
+.search-panel {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.search-panel * {
+  box-sizing: border-box;
+}
+
+/* ── New flat layout ── */
+
+.search-panel__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 10px 10px 0;
+  gap: 8px;
+}
+
+.search-panel__field {
+  flex-shrink: 0;
+}
+
+.search-panel__kpis {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.search-panel__kpi {
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  color: var(--er-text-muted);
+  background: color-mix(in srgb, var(--er-accent) 10%, var(--bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--er-accent) 18%, var(--border-color));
+  border-radius: var(--er-radius-pill);
+  padding: 2px 9px;
+}
+
+.search-panel__hint {
+  font-size: var(--er-text-sm);
+  color: var(--er-text-muted);
+  line-height: 1.5;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.search-panel__results-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  padding: 4px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.search-panel__results-count {
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  color: var(--er-text-muted);
+  letter-spacing: 0.02em;
+  margin-right: auto;
+}
+
+.search-panel__results-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.search-panel__results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 12px;
+}
+
+.search-panel__empty {
+  font-size: var(--er-text-md);
+  color: var(--er-text-muted);
+  padding: 16px 0;
+  text-align: center;
+}
+
+/* Toolbar row below the search input: meta + expand/collapse actions */
+
+.search-toolbar-row .search-meta,
+.search-toolbar-row .search-section-caption {
+  margin-bottom: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.search-meta,
+.search-section-caption,
+.search-result-secondary,
+.search-empty,
+.search-help {
+  color: var(--er-text-muted);
+}
+
+.search-meta,
+.search-section-caption {
+  font-size: var(--er-text-sm);
+}
+
+.search-section-caption {
+  font-weight: 600;
+  margin-bottom: 4px;
+  padding: 6px 0;
+  background: transparent;
+}
+
+/* ── Search hit card ── */
+.search-hit {
+  display: flex;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  color: var(--er-text);
+  font-family: inherit;
+  font-size: var(--er-text-md);
+  transition: background 0.1s ease, border-color 0.1s ease;
+  min-width: 0;
+}
+
+.search-hit:hover {
+  background: var(--er-surface-2);
+  border-left-color: var(--er-accent);
+}
+
+.search-hit:disabled,
+.search-hit--no-nav {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.search-hit__body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  width: 100%;
+}
+
+.search-hit__row1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Kind tag — one recipe, hue supplied per variant. */
+.search-hit__tag {
+  flex-shrink: 0;
+  font-size: var(--er-text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: var(--er-radius-sm);
+  white-space: nowrap;
+  font-family: inherit;
+  background: var(--er-surface-2);
+  color: var(--er-text-muted);
+  border: 1px solid var(--er-border);
+}
+
+.search-hit__tag--table,
+.search-hit__tag--model     { color: var(--er-model); border-color: color-mix(in srgb, var(--er-model) 38%, transparent); }
+.search-hit__tag--field,
+.search-hit__tag--format    { color: var(--er-mapping); border-color: color-mix(in srgb, var(--er-mapping) 38%, transparent); }
+.search-hit__tag--enum      { color: var(--er-model); border-color: color-mix(in srgb, var(--er-model) 38%, transparent); }
+.search-hit__tag--class,
+.search-hit__tag--edt       { color: var(--er-info); border-color: color-mix(in srgb, var(--er-info) 38%, transparent); }
+.search-hit__tag--formula,
+.search-hit__tag--visibility { color: var(--er-format); border-color: color-mix(in srgb, var(--er-format) 38%, transparent); }
+.search-hit__tag--guid,
+.search-hit__tag--formatting,
+.search-hit__tag--property  { color: var(--er-text-subtle); }
+
+.search-hit__location,
+.wu-ref-leaf {
+  flex: 1 1 auto;
+  /* Keep the identifier readable in a narrow side panel — it is the reason the
+     row exists, so it wins space over the kind tag and the tab hint. */
+  min-width: 6rem;
+  font-family: var(--font-mono);
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--er-text);
+}
+
+.search-hit__expr {
+  font-family: var(--font-mono);
+  font-size: var(--er-text-xs);
+  color: var(--er-text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-hit__arrow {
+  flex-shrink: 0;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-md);
+  opacity: 0;
+  margin-left: auto;
+  transition: opacity 0.1s ease;
+}
+
+.search-hit__tab {
+  flex-shrink: 0;
+  font-size: var(--er-text-2xs);
+  color: var(--er-text-muted);
+  opacity: 0.75;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.search-hit:hover .search-hit__tab {
+  opacity: 0;
+}
+
+.search-hit:hover .search-hit__arrow {
+  opacity: 1;
+}
+
+.badge-tiny {
+  font-size: var(--er-text-2xs);
+  padding: 1px 5px;
+  flex: none;
+}
+
+/* ── Where-Used reference row styles ── */
+.wu-ref-breadcrumb {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--er-text-xs);
+  color: var(--er-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wu-ref-bc-sep {
+  margin: 0 3px;
+  color: var(--er-text-subtle);
+}
+.wu-ref-bc-seg {
+  font-family: var(--font-mono);
+}
+.wu-ref-row--active {
+  background: var(--er-accent-soft) !important;
+  border-left-color: var(--er-accent);
+}
+
+/* ─── Legacy where-used card styles (kept for reference, mostly superseded) ─── */
+
+.badge-tiny {
+  font-size: var(--er-text-2xs);
+  padding: 1px 5px;
+  flex: none;
+}
+
+/* Grouping by config file */
+.search-results {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.search-result-group {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--border-color) 74%, transparent);
+  background: color-mix(in srgb, var(--bg-primary) 78%, transparent);
+  overflow: hidden;
+  /* accent left bar when expanded */
+  border-left: 3px solid color-mix(in srgb, var(--er-accent) 30%, var(--border-color));
+}
+
+.search-result-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 9px;
+  background: color-mix(in srgb, var(--bg-secondary) 86%, transparent);
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+  cursor: pointer;
+  color: var(--er-text);
+  font-size: var(--er-text-sm);
+  font-weight: 700;
+  min-width: 0;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.search-result-group-header[aria-expanded='false'] {
+  border-bottom: none;
+}
+
+.search-result-group-header:hover {
+  background: var(--er-surface-3);
+}
+
+.search-result-group-icon {
+  flex: none;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-lg);
+}
+
+.search-result-group-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+/* Names the data model a mapping binds to, so mappings of unrelated models
+   stay tellable apart once the search reach widens to "All". */
+.search-result-group-model {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: var(--er-radius-sm);
+  border: 1px solid var(--border-subtle, var(--border));
+  background: var(--bg-tertiary);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+}
+
+.search-result-group-count {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: var(--er-radius-sm);
+  background: color-mix(in srgb, var(--er-accent) 18%, var(--bg-tertiary));
+  color: var(--er-text);
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  min-width: 20px;
+  text-align: center;
+}
+
+.search-result-group-body {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Hit categories inside a configuration group ──────────────────
+   One configuration can match as a data source, a binding, an expression
+   and a structural reference at once. Filing the rows under a labelled,
+   colour-marked section makes that mix readable instead of one long list
+   where every row's kind chip has to be read individually. */
+.search-cat {
+  --search-cat-color: var(--er-text-muted);
+  display: flex;
+  flex-direction: column;
+}
+
+.search-cat--structure   { --search-cat-color: var(--er-accent); }
+.search-cat--bindings    { --search-cat-color: var(--er-success); }
+.search-cat--expressions { --search-cat-color: var(--er-model); }
+.search-cat--datasources { --search-cat-color: var(--er-warning); }
+.search-cat--references  { --search-cat-color: #64748b; }
+
+.search-cat__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 3px 12px;
+  background: color-mix(in srgb, var(--search-cat-color) 8%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+}
+
+.search-cat:first-child .search-cat__header {
+  border-top: 0;
+}
+
+.search-cat__marker {
+  width: 3px;
+  align-self: stretch;
+  min-height: 12px;
+  background: var(--search-cat-color);
+}
+
+.search-cat__title {
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--search-cat-color) 78%, var(--er-text));
+}
+
+.search-cat__count {
+  margin-left: auto;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  color: var(--er-text-muted);
+  background: color-mix(in srgb, var(--search-cat-color) 14%, transparent);
+  border-radius: var(--er-radius-sm);
+  padding: 0 6px;
+  line-height: 15px;
+}
+
+.search-cat__rows {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The rows sit inside a tinted section, so indent them to keep the
+   section marker readable as the left edge of the group. */
+.search-cat__rows .search-hit {
+  padding-left: 18px;
+}
+
+/* Tint every row with its section colour so the kind of a hit reads at a
+   glance and the per-row type chip can be dropped. `--search-cat-color` is
+   inherited from the section, and mixing against `transparent` keeps the
+   wash equally light on both themes. The left border is widened to match
+   the section marker, so the two line up into one continuous rail. */
+.search-cat__rows .search-hit {
+  background: color-mix(in srgb, var(--search-cat-color) 7%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--search-cat-color) 32%, transparent);
+}
+
+.search-cat__rows .search-hit:hover {
+  background: color-mix(in srgb, var(--search-cat-color) 17%, transparent);
+  border-left-color: var(--search-cat-color);
+}
+
+/* The tint already separates the rows, so the divider only needs to hint.
+   Specificity has to clear the generic group divider defined further down. */
+.search-result-group-body .search-cat__rows .search-hit + .search-hit {
+  border-top-color: color-mix(in srgb, var(--search-cat-color) 20%, transparent);
+}
+
+/* ── Search reach ─────────────────────────────────────────────────
+   Which configurations the search is allowed to look at, as opposed to
+   the scope toggle above it, which filters by configuration kind. */
+.search-panel__reach {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  padding: 0 0 6px;
+}
+
+/* Pushes the expand slider to the far edge, whatever sits to its left. */
+.search-panel__reach .search-panel__results-actions {
+  margin-left: auto;
+}
+
+.search-panel__reach-note {
+  font-size: var(--er-text-xs);
+  color: var(--er-text-muted);
+  min-width: 0;
+}
+
+/* Divider between items */
+.search-result-group-body .search-hit + .search-hit {
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);
+}
+
+/* Highlight of the matched search term inside results */
+.search-highlight {
+  background: color-mix(in srgb, var(--er-warning-soft) 82%, transparent);
+  color: var(--er-warning, inherit);
+  padding: 0 2px;
+  border-radius: var(--er-radius-sm);
+  font-weight: 700;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--er-warning-border) 60%, transparent);
+}
+
+/* React Flow overrides */
+.react-flow__node { font-size: var(--er-text-md); }
+.react-flow__edge-path { stroke: var(--er-accent); stroke-width: 1.5; }
+
+/* Resizable panel handles — VS Code-style thin */
+[data-panel-group-direction="horizontal"] > [data-resize-handle] {
+  width: 1px;
+  background: var(--border-color);
+  transition: background 0.15s, width 0.15s;
+}
+[data-panel-group-direction="horizontal"] > [data-resize-handle]:hover,
+[data-panel-group-direction="horizontal"] > [data-resize-handle][data-resize-handle-state="drag"] {
+  width: 3px;
+  background: var(--er-accent);
+}
+[data-panel-group-direction="vertical"] > [data-resize-handle] {
+  height: 1px;
+  background: var(--border-color);
+  transition: background 0.15s;
+}
+[data-panel-group-direction="vertical"] > [data-resize-handle]:hover {
+  background: var(--er-accent);
+}
