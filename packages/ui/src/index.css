@@ -8806,3 +8806,54 @@ div.path-tooltip-card {
   visibility: hidden;
   pointer-events: none;
 }
+
+/* Icons that replaced emoji: they follow the text colour (or the format
+   type's colour) and sit on the text's centre line. */
+.fmt-type-icon,
+.fmt-detail-child__icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.fmt-detail-child__icon {
+  margin-right: 6px;
+}
+
+.fmt-attr-glyph {
+  font-family: var(--er-font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.fmt-transform {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ds-row-where-used {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Keyboard users can reach the where-used button; they should see it too. */
+.ds-row:focus-within .ds-row-where-used,
+.ds-row-where-used:focus-visible {
+  opacity: 1;
+}
+
+/* A formula that opens its drill-down stays inline text: as an inline-block
+   it could not be cut with an ellipsis and wrapped whole onto a clipped
+   second line, leaving only the arrow on the row. */
+.fmt-binding-inline > .dd-trigger-expr {
+  display: inline;
+}
+
+.mm-binding-expr > .dd-trigger-expr,
+.fmt-bind-row-expr > .dd-trigger-expr {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

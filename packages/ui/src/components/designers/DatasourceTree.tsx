@@ -1,3 +1,4 @@
+import { SearchRegular } from '@fluentui/react-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../../state/store';
 import { dsPathToExpression } from '../../utils/ds-path';
@@ -270,9 +271,10 @@ function DatasourceTreeRow({ node, ctx, insideMatch }: {
               type="button"
               className="ds-row-where-used"
               onClick={e => { e.stopPropagation(); triggerWhereUsed(ds.name); }}
-              title={locale === 'cs' ? 'Kde je použito' : 'Where used'}
+              title={t.whereUsedAction}
+              aria-label={`${t.whereUsedAction}: ${ds.name}`}
             >
-              🔍
+              <SearchRegular fontSize={14} aria-hidden />
             </button>
           )}
           {ds && ctx.revealInExplorer && <RevealInExplorerMenu onReveal={revealDatasourceInExplorer} />}

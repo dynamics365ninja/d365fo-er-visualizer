@@ -784,7 +784,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // The format goes into the label: the same field drilled down in two
     // formats, side by side, would otherwise be two identical tabs.
     const configName = state.configurations[configIndex]?.solutionVersion.solution.name;
-    const label = `⚲ ${elementName ?? trimmed.split(/[.(]/)[0] ?? trimmed}${configName ? ` · ${configName}` : ''}`.slice(0, 90);
+    const label = `${elementName ?? trimmed.split(/[.(]/)[0] ?? trimmed}${configName ? ` · ${configName}` : ''}`.slice(0, 90);
     const openTabs = state.openTabs.some(t => t.id === id)
       ? state.openTabs
       : [...state.openTabs, { kind: 'drillDown' as const, id, label, configIndex, expression: trimmed, elementName }];

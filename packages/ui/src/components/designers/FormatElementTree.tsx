@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowSyncRegular } from '@fluentui/react-icons';
 import { useAppStore } from '../../state/store';
 import { DrillDownTrigger } from '../DrillDownPanel';
 import { t, useLocale } from '../../i18n';
@@ -12,7 +13,7 @@ import { firstChildRow, flattenVisibleTree, indexFlatRows, type FlatTreeRow } fr
 import { useTreeOpenState } from '../../utils/use-tree-open-state';
 import { useVirtualTree } from '../../utils/use-virtual-tree';
 import { HighlightMatch, ExpressionDetailLink, useNavFlash, RevealInExplorerMenu } from './shared';
-import { getFormatTypeColor, formatTypeIcons } from './format-type';
+import { getFormatTypeColor, FormatElementIcon } from './format-type';
 
 // ── Format Element Tree (virtualized) ──
 
@@ -411,7 +412,7 @@ const FormatElementRow = React.memo(function FormatElementRow({ row, bindingMap,
 
         {/* Type Icon + Badge */}
         <span className="fmt-type-icon" style={{ color: getFormatTypeColor(element.elementType) }}>
-          {formatTypeIcons[element.elementType] ?? '❓'}
+          <FormatElementIcon type={element.elementType} />
         </span>
         {showTechnicalDetails && (
           <span className="fmt-type-badge" style={{
@@ -457,7 +458,7 @@ const FormatElementRow = React.memo(function FormatElementRow({ row, bindingMap,
         {/* Transformation */}
         {transformation && (
           <span className="fmt-transform" title={`${t.propTransform}: ${transformation.expressionAsString}`}>
-            🔄 {transformation.name}
+            <ArrowSyncRegular fontSize={12} aria-hidden /> {transformation.name}
           </span>
         )}
 

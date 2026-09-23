@@ -1,3 +1,4 @@
+import { DocumentPdfRegular, DocumentRegular, DocumentTableRegular, FolderOpenRegular, PanelBottomExpandRegular, PanelTopExpandRegular, ProhibitedRegular, SelectAllOnRegular, TableRegular } from '@fluentui/react-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../state/store';
 import { t, useLocale } from '../../i18n';
@@ -204,7 +205,7 @@ function PdfOutputBadge() {
         whiteSpace: 'nowrap',
       }}
     >
-      📕 PDF
+      <DocumentPdfRegular fontSize={12} aria-hidden /> PDF
     </span>
   );
 }
@@ -415,7 +416,7 @@ function ExcelTemplateGrid({
         fontWeight: 600,
         flexShrink: 0,
       }}>
-        <span style={{ fontSize: 14 }}>📄</span>
+        <DocumentRegular fontSize={14} aria-hidden />
         <span>{t.excelTemplateView}: {filename}</span>
         {pdfOutput && <PdfOutputBadge />}
         <button
@@ -432,7 +433,7 @@ function ExcelTemplateGrid({
           }}
           title={t.excelStructureView}
         >
-          📊 {t.excelStructureView}
+          <TableRegular fontSize={13} aria-hidden /> {t.excelStructureView}
         </button>
         <span style={{ marginLeft: 'auto', fontWeight: 400, fontSize: 11, opacity: 0.8 }}>
           {hoveredRef
@@ -546,7 +547,7 @@ function ExcelTemplateGrid({
                       colSpan={colSpan > 1 ? colSpan : undefined}
                       rowSpan={rowSpan > 1 ? rowSpan : undefined}
                       title={hasBinding
-                        ? `${binding.name}${binding.label ? ` — ${binding.label}` : ''}\n${binding.value}${onElementClick ? `\n🔍 ${t.excelCellGoToStructure}` : ''}`
+                        ? `${binding.name}${binding.label ? ` — ${binding.label}` : ''}\n${binding.value}${onElementClick ? `\n→ ${t.excelCellGoToStructure}` : ''}`
                         : xlsxCell?.value || undefined}
                       onClick={hasBinding && onElementClick ? () => onElementClick(binding.elementId) : undefined}
                       onMouseEnter={() => setHoveredRef(ref)}
@@ -654,7 +655,7 @@ function ExcelTemplateGrid({
         gap: 12,
         flexShrink: 0,
       }}>
-        <span style={{ color: 'var(--er-text-muted)', fontSize: 10 }}>📄 {t.excelTemplateView} · 📊 {t.excelStructureView}</span>
+        <span style={{ color: 'var(--er-text-muted)', fontSize: 10 }}>{t.excelTemplateView} · {t.excelStructureView}</span>
       </div>
 
       {/* Sheet tabs */}
@@ -685,7 +686,7 @@ function ExcelTemplateGrid({
                 transition: 'all 0.15s',
               }}
             >
-              📃 {s.name}
+              <TableRegular fontSize={12} aria-hidden /> {s.name}
             </button>
           ))}
         </div>
@@ -892,7 +893,9 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
           userSelect: 'none',
         }}
       >
-        <span style={{ fontSize: 40 }}>{isDragOver ? (dragInvalid ? '🚫' : '📂') : '📄'}</span>
+        <span style={{ display: 'inline-flex', color: dragInvalid ? 'var(--er-danger)' : 'var(--er-accent)' }} aria-hidden>
+          {isDragOver ? (dragInvalid ? <ProhibitedRegular fontSize={40} /> : <FolderOpenRegular fontSize={40} />) : <DocumentTableRegular fontSize={40} />}
+        </span>
         <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--er-text)', fontWeight: 600 }}>
           {isDragOver
             ? (dragInvalid ? t.excelTemplateDropInvalid : t.excelTemplateDropActive)
@@ -983,7 +986,7 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
         fontWeight: 600,
         flexShrink: 0,
       }}>
-        <span style={{ fontSize: 14 }}>📊</span>
+        <DocumentTableRegular fontSize={14} aria-hidden />
         <span>{direction === ERDirection.Import ? t.excelInput : t.excelOutput} {t.excelWorkbook}</span>
         {pdfOutput && <PdfOutputBadge />}
         {(template || effectiveBase64) && (
@@ -1000,7 +1003,7 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
                 fontWeight: 700,
               }}
             >
-              📊 {t.excelStructureView}
+              <TableRegular fontSize={13} aria-hidden /> {t.excelStructureView}
             </button>
             <button
               onClick={() => setViewMode('template')}
@@ -1015,7 +1018,7 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
                 fontWeight: 400,
               }}
             >
-              📄 {effectiveBase64 ? t.excelTemplateView : t.excelTemplateLoadBtn}
+              <DocumentRegular fontSize={13} aria-hidden /> {effectiveBase64 ? t.excelTemplateView : t.excelTemplateLoadBtn}
             </button>
           </div>
         )}
@@ -1186,7 +1189,7 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
                 transition: 'all 0.15s',
               }}
             >
-              📃 {s.name}
+              <TableRegular fontSize={12} aria-hidden /> {s.name}
             </button>
           ))}
         </div>
@@ -1214,7 +1217,7 @@ function ExcelSectionBlock({ section, onCellClick }: { section: ExcelSectionData
         alignItems: 'center',
         gap: 4,
       }}>
-        {isHeader ? '🔼' : '🔽'} {isHeader ? t.excelHeader : t.excelFooter}
+        {isHeader ? <PanelTopExpandRegular fontSize={12} aria-hidden /> : <PanelBottomExpandRegular fontSize={12} aria-hidden />} {isHeader ? t.excelHeader : t.excelFooter}
       </div>
       <ExcelCellGrid cells={section.cells} onCellClick={onCellClick} />
     </div>
@@ -1238,7 +1241,7 @@ function ExcelRangeBlock({ range, depth, onCellClick, selectedCell }: { range: E
         background: excelPaper.rangeBg,
         borderBottom: `1px solid ${excelPaper.cellBorder}`,
       }}>
-        <span style={{ fontSize: 13 }}>📐</span>
+        <SelectAllOnRegular fontSize={13} aria-hidden />
         <span style={{ fontSize: 12, fontWeight: 600, color: excelPaper.cellText }}>{range.excelRange}</span>
         {range.name !== range.excelRange && (
           <span style={{ fontSize: 11, color: excelPaper.mutedText }}>({range.name})</span>

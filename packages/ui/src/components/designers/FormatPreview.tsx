@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { ArrowDownloadRegular, ArrowUploadRegular, DocumentPdfRegular } from '@fluentui/react-icons';
 import { useAppStore } from '../../state/store';
 import { locale, t } from '../../i18n';
 import { ERDirection, type ERFormatContent, type ERFormatElement } from '@er-visualizer/core';
@@ -75,7 +76,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
   }
 
   if (isPdf && previewRoot === rootElement) {
-    return <div style={{ padding: 16, fontSize: 12, color: 'var(--er-text-muted)' }}>📕 {t.pdfNoSourceComponent}</div>;
+    return <div style={{ padding: 16, fontSize: 12, color: 'var(--er-text-muted)' }}><DocumentPdfRegular fontSize={13} aria-hidden /> {t.pdfNoSourceComponent}</div>;
   }
 
   const showDelimitedTable = (info.label === 'Text / CSV' || info.label === 'Text') && delimitedPreview !== null;
@@ -103,11 +104,13 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
   return (
     <div style={{ padding: 16, overflow: 'auto', height: '100%' }}>
       <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--er-text-muted)' }}>
-        {direction === ERDirection.Import ? `📥 ${t.excelInput}` : `📤 ${t.excelOutput}`} — {t.previewDescription}
+        {direction === ERDirection.Import
+          ? <><ArrowDownloadRegular fontSize={13} aria-hidden /> {t.excelInput}</>
+          : <><ArrowUploadRegular fontSize={13} aria-hidden /> {t.excelOutput}</>} — {t.previewDescription}
       </div>
       {isPdf && (
         <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--er-text-muted)' }}>
-          📕 {t.pdfConvertedFrom(info.label)}
+          <DocumentPdfRegular fontSize={13} aria-hidden /> {t.pdfConvertedFrom(info.label)}
         </div>
       )}
       <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -338,17 +341,17 @@ function generateExcelPreview(root: ERFormatElement, bm: BindingMap, options: Pr
   const walk = (el: ERFormatElement, depth: number) => {
     const indent = '  '.repeat(depth);
     if (el.elementType === 'ExcelFile') {
-      lines.push(`📊 ${t.excelWorkbook}`);
+      lines.push(`${t.excelWorkbook}`);
       for (const child of el.children) walk(child, depth + 1);
     } else if (el.elementType === 'ExcelSheet') {
-      lines.push(`${indent}📃 ${t.excelSheet}: "${el.name}"`);
+      lines.push(`${indent}${t.excelSheet}: "${el.name}"`);
       for (const child of el.children) walk(child, depth + 1);
     } else if (el.elementType === 'ExcelRange' || el.elementType === 'ExcelHeader' || el.elementType === 'ExcelFooter') {
-      const sectionLabel = el.elementType === 'ExcelHeader' ? `🔼 ${t.excelHeader}` : el.elementType === 'ExcelFooter' ? `🔽 ${t.excelFooter}` : `📐 ${t.excelRange}`;
+      const sectionLabel = el.elementType === 'ExcelHeader' ? `${t.excelHeader}` : el.elementType === 'ExcelFooter' ? `${t.excelFooter}` : `${t.excelRange}`;
       lines.push(`${indent}${sectionLabel}: ${el.name}`);
       for (const child of el.children) walk(child, depth + 1);
     } else if (el.elementType === 'ExcelCell') {
-      lines.push(`${indent}📎 ${t.excelCell}: ${el.name} = ${previewValue(el, bm, options)}`);
+      lines.push(`${indent}${t.excelCell}: ${el.name} = ${previewValue(el, bm, options)}`);
     } else {
       lines.push(`${indent}${formatTypeLabelFor(el.elementType, options.showTechnicalDetails)}: ${el.name}`);
       for (const child of el.children) walk(child, depth + 1);

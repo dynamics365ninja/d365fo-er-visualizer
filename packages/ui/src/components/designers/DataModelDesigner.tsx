@@ -8,7 +8,7 @@ import {
   type Edge,
   Position,
 } from '@xyflow/react';
-import { DataBarVerticalFilled } from '@fluentui/react-icons';
+import { BoxRegular, DataBarVerticalFilled, HomeRegular, TextCaseTitleRegular } from '@fluentui/react-icons';
 import { useAppStore, resolveDeepExpression } from '../../state/store';
 import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
@@ -191,8 +191,8 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
                 alignItems: 'center',
                 gap: 6,
               }}>
-                <span style={{ fontSize: 14 }}>
-                  {container.isRoot ? '🏠' : container.isEnum ? '🔤' : '📦'}
+                <span style={{ display: 'inline-flex' }} aria-hidden>
+                  {container.isRoot ? <HomeRegular fontSize={14} /> : container.isEnum ? <TextCaseTitleRegular fontSize={14} /> : <BoxRegular fontSize={14} />}
                 </span>
                 <span>{container.name}</span>
                 {container.isRoot && (
