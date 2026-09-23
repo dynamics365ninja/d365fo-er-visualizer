@@ -1469,3 +1469,26 @@ div.path-tooltip-card {
   background: color-mix(in srgb, var(--er-border-strong) 80%, transparent);
   pointer-events: none;
 }
+
+/* ── Datasource lists, virtualized per group: each row is positioned on its
+      own, so it indents by its depth and draws the rail the nested
+      `.ds-row-children` boxes drew (8px in, 2px wide, every 22px). ── */
+.ds-flat-row {
+  display: flow-root;
+  padding-left: calc(var(--ds-depth, 0) * 22px);
+}
+
+.ds-flat-row:not([data-depth='0'])::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 8px;
+  width: calc(var(--ds-depth, 0) * 22px);
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--border-color) 0 2px,
+    transparent 2px 22px
+  );
+  pointer-events: none;
+}
