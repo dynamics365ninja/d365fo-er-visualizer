@@ -243,7 +243,7 @@ export function countModelUsageIntents(nodes: readonly ModelUsageNode[]): Record
 }
 
 /** Field lookup by path below the descriptor's root container. */
-function indexDataModel(model: ERDataModel, descriptor: string): (segments: readonly string[]) => ERDataContainerItem | undefined {
+export function indexDataModel(model: ERDataModel, descriptor: string): (segments: readonly string[]) => ERDataContainerItem | undefined {
   const lookup = containerLookup(model);
   const root = lookup(descriptor);
 

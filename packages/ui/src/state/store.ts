@@ -86,10 +86,12 @@ export type { OpenTab } from './navigation';
 export { openDesignerTabsForFormats, remapIdAfterConfigRemoval } from './navigation';
 export {
   activeMappingDefinitionLabel,
+  getMappingDefinitions,
   getScopedMappingDefinitions,
   relatedMappingDefinitionLabels,
   selectMappingDefinition,
 } from './mapping-definitions';
+export { mappingDefinitionLabel } from '@er-visualizer/core';
 export type { DeepDatasourceInfo, DeepResolutionResult } from './expression-resolution';
 export { parseDottedPath, resolveDeepExpression } from './expression-resolution';
 export type { WhereUsedEntry } from './where-used';
@@ -148,6 +150,17 @@ export interface AppState {
   explorerMutedSelectionId: string | null;
   openTabs: OpenTab[];
   activeTabId: string | null;
+  /**
+   * File path of the format whose tab was active last. Switching to a model
+   * mapping (or data model) tab keeps it, so the mapping still opens on the
+   * definition that format binds to rather than on whichever loaded first.
+   */
+  lastActiveFormatPath: string | null;
+  /**
+   * Tab shown to the right of the active one, for comparing two of them (say,
+   * the drill-downs of one field in two formats). `null` when not split.
+   */
+  splitTabId: string | null;
   searchQuery: string;
   searchResults: any[];
   searchPanelMode: 'search' | 'where-used';
@@ -200,9 +213,13 @@ export interface AppState {
   endFnoIngest: () => void;
   selectNode: (nodeId: string | null, options?: { revealInExplorer?: boolean }) => void;
   openTab: (id: string, label: string, configIndex: number) => void;
-  openDrillDownTab: (expression: string, configIndex: number, elementName?: string) => void;
+  /** `side` opens the drill-down next to the active tab instead of in its place. */
+  openDrillDownTab: (expression: string, configIndex: number, elementName?: string, options?: { side?: boolean }) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
+  /** Show tab `id` to the right of the active tab. */
+  openTabToSide: (id: string) => void;
+  closeSplit: () => void;
   rebuildDerivedState: () => void;
   setShowTechnicalDetails: (show: boolean) => void;
   setFnoIngestStatus: (status: string) => void;
@@ -260,7 +277,7 @@ export interface AppState {
    * Resolve a datasource name from an expression string (e.g. "CompanyInfo" from binding expr).
    * Returns { configIndex, datasourceName, treeNodeId } or null.
    */
-  resolveDatasource: (expressionOrName: string, fromConfigIndex: number) => ResolvedDatasource | null;
+  resolveDatasource: (expressionOrName: string, fromConfigIndex: number, scopeConfigIndex?: number | null) => ResolvedDatasource | null;
   /**
    * Find a binding tree node for a given model path in a mapping config.
    */
@@ -278,13 +295,13 @@ export interface AppState {
    * to find the actual datasource (table, enum, class).
    * Returns the mapping binding, resolved datasource, and full chain.
    */
-  resolveModelPath: (modelDotPath: string) => ResolvedModelPath | null;
+  resolveModelPath: (modelDotPath: string, fromConfigIndex?: number | null) => ResolvedModelPath | null;
   /**
    * Bindings that live *under* a model path. A container such as
    * `model.InvoiceLines` often carries no binding of its own — what fills it is
    * only visible through the bindings of the fields inside it.
    */
-  findModelPathBindings: (modelDotPath: string) => ModelPathBinding[];
+  findModelPathBindings: (modelDotPath: string, fromConfigIndex?: number | null) => ModelPathBinding[];
   /**
    * Where-used: find all occurrences of a table / enum / class name across all loaded configs.
    * Returns a flat list of trace links from the entity → datasource → model binding → format element.
@@ -317,6 +334,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   explorerMutedSelectionId: null,
   openTabs: [],
   activeTabId: null,
+  lastActiveFormatPath: null,
+  splitTabId: null,
   searchQuery: '',
   searchResults: [],
   searchPanelMode: 'search',
@@ -490,6 +509,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }));
 
     const activeTabId = remapIdAfterConfigRemoval(state.activeTabId, index);
+    const splitTabId = remapIdAfterConfigRemoval(state.splitTabId, index);
     const selectedNodeId = remapIdAfterConfigRemoval(state.selectedNodeId, index);
     const selectedNode = selectedNodeId ? findNodeById(treeNodes, selectedNodeId) : null;
     const navigationHistory = remapNavigationStackAfterRemoval(state.navigationHistory, index);
@@ -506,6 +526,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       warnings,
       openTabs,
       activeTabId: nextActiveTabId,
+      splitTabId: splitTabId && splitTabId !== nextActiveTabId && openTabs.some(tab => tab.id === splitTabId) ? splitTabId : null,
       selectedNodeId: selectedNode?.id ?? null,
       selectedNode,
       navigationHistory,
@@ -605,6 +626,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       warnings,
       openTabs: [],
       activeTabId: null,
+      splitTabId: null,
       selectedNodeId: null,
       selectedNode: null,
       navigationHistory: [],
@@ -666,8 +688,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   closeTab: (id: string) => {
     const state = get();
     const newTabs = state.openTabs.filter(t => t.id !== id);
+    const splitTabId = state.splitTabId === id ? null : state.splitTabId;
+    // The side pane is already on screen; the main pane takes another tab
+    // first and only falls back to it when nothing else is open.
+    const others = newTabs.filter(t => t.id !== splitTabId);
     const newActive = state.activeTabId === id
-      ? (newTabs.length > 0 ? newTabs[newTabs.length - 1].id : null)
+      ? (others.length > 0 ? others[others.length - 1].id : (newTabs[newTabs.length - 1]?.id ?? null))
       : state.activeTabId;
     // A closed tab is not somewhere Back/Forward should return to.
     const navigationHistory = pruneNavigationStack(state.navigationHistory, id);
@@ -675,6 +701,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       openTabs: newTabs,
       activeTabId: newActive,
+      splitTabId: splitTabId === newActive ? null : splitTabId,
       navigationHistory,
       navigationForward,
       canNavigateBack: navigationHistory.length > 0,
@@ -682,24 +709,42 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 
-  openDrillDownTab: (expression: string, configIndex: number, elementName?: string) => {
+  openDrillDownTab: (expression: string, configIndex: number, elementName?: string, options?: { side?: boolean }) => {
     const trimmed = expression.trim();
     if (!trimmed) return;
     const id = `drilldown:${configIndex}:${elementName ?? ''}:${trimmed}`;
-    const label = `⚲ ${elementName ?? trimmed.split(/[.(]/)[0] ?? trimmed}`.slice(0, 60);
     const state = get();
-    if (!state.openTabs.find(t => t.id === id)) {
-      set({
-        openTabs: [
-          ...state.openTabs,
-          { kind: 'drillDown', id, label, configIndex, expression: trimmed, elementName },
-        ],
-        activeTabId: id,
-      });
+    // The format goes into the label: the same field drilled down in two
+    // formats, side by side, would otherwise be two identical tabs.
+    const configName = state.configurations[configIndex]?.solutionVersion.solution.name;
+    const label = `⚲ ${elementName ?? trimmed.split(/[.(]/)[0] ?? trimmed}${configName ? ` · ${configName}` : ''}`.slice(0, 90);
+    const openTabs = state.openTabs.some(t => t.id === id)
+      ? state.openTabs
+      : [...state.openTabs, { kind: 'drillDown' as const, id, label, configIndex, expression: trimmed, elementName }];
+    // Beside the active tab, unless that is this very drill-down (or there is none).
+    if (options?.side && state.activeTabId && state.activeTabId !== id) {
+      set({ openTabs, splitTabId: id });
     } else {
-      set({ activeTabId: id });
+      set({ openTabs, activeTabId: id });
     }
   },
+
+  openTabToSide: (id: string) => {
+    const state = get();
+    if (!state.openTabs.some(t => t.id === id)) return;
+    if (id !== state.activeTabId) {
+      set({ splitTabId: id });
+      return;
+    }
+    // The active tab moves to the side; the main pane takes the tab before it.
+    const others = state.openTabs.filter(t => t.id !== id);
+    if (others.length === 0) return;
+    const index = state.openTabs.findIndex(t => t.id === id);
+    const main = state.openTabs[index - 1] ?? others[others.length - 1];
+    set({ splitTabId: id, activeTabId: main.id });
+  },
+
+  closeSplit: () => set({ splitTabId: null }),
 
   setActiveTab: (id: string) => {
     const state = get();
@@ -729,6 +774,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedNode,
       openTabs,
       activeTabId,
+      splitTabId: openTabs.some(tab => tab.id === state.splitTabId) ? state.splitTabId : null,
       canNavigateBack: state.navigationHistory.length > 0,
     });
   },
@@ -993,6 +1039,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         warnings: [],
         openTabs: [],
         activeTabId: null,
+        splitTabId: null,
         selectedNodeId: null,
         selectedNode: null,
         navigationHistory: [],
@@ -1056,8 +1103,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  resolveDatasource: (expressionOrName: string, fromConfigIndex: number) =>
-    resolveDatasource(get(), expressionOrName, fromConfigIndex),
+  resolveDatasource: (expressionOrName: string, fromConfigIndex: number, scopeConfigIndex?: number | null) =>
+    resolveDatasource(get(), expressionOrName, fromConfigIndex, scopeConfigIndex),
 
   resolveBinding: (modelPath: string, fromConfigIndex: number) =>
     resolveBinding(get(), modelPath, fromConfigIndex),
@@ -1068,9 +1115,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   findBindingNode: (modelPath: string, configIndex: number) =>
     findBindingNode(get(), modelPath, configIndex),
 
-  resolveModelPath: (modelDotPath: string) => resolveModelPath(get(), modelDotPath),
+  resolveModelPath: (modelDotPath: string, fromConfigIndex?: number | null) =>
+    resolveModelPath(get(), modelDotPath, fromConfigIndex),
 
-  findModelPathBindings: (modelDotPath: string) => findModelPathBindings(get(), modelDotPath),
+  findModelPathBindings: (modelDotPath: string, fromConfigIndex?: number | null) =>
+    findModelPathBindings(get(), modelDotPath, fromConfigIndex),
 
   whereUsed: (entityName: string): WhereUsedEntry[] => {
     if (!entityName.trim()) return [];
@@ -1087,6 +1136,35 @@ export const useAppStore = create<AppState>((set, get) => ({
       : {}
   )),
 }));
+
+/** Index of the format whose tab was active last, or `null` when it is no longer loaded. */
+export function lastActiveFormatIndex(state: Pick<AppState, 'configurations' | 'lastActiveFormatPath'>): number | null {
+  if (!state.lastActiveFormatPath) return null;
+  const index = state.configurations.findIndex(
+    cfg => cfg.filePath === state.lastActiveFormatPath && cfg.content.kind === 'Format',
+  );
+  return index >= 0 ? index : null;
+}
+
+// Remember the last format tab. Every action that moves `activeTabId` (tab
+// clicks, navigation, Back/Forward, closing a tab) goes through here, so no
+// single one of them has to know about it.
+useAppStore.subscribe((state, prev) => {
+  // Activating the tab on the side swaps the two panes rather than showing it
+  // twice — whichever way it was activated (tab strip, navigation, Back).
+  if (state.splitTabId && state.splitTabId === state.activeTabId) {
+    const previous = prev.activeTabId;
+    const keep = previous && previous !== state.activeTabId && state.openTabs.some(t => t.id === previous);
+    useAppStore.setState({ splitTabId: keep ? previous : null });
+    return;
+  }
+  if (state.activeTabId === prev.activeTabId && state.configurations === prev.configurations) return;
+  const tab = state.openTabs.find(t => t.id === state.activeTabId);
+  const config = tab ? state.configurations[tab.configIndex] : undefined;
+  if (config?.content.kind === 'Format' && config.filePath !== state.lastActiveFormatPath) {
+    useAppStore.setState({ lastActiveFormatPath: config.filePath });
+  }
+});
 
 // Mirror F&O download lifecycle events into the structured ingest log so the
 // download dialog can show every configuration (explicit or auto-resolved).

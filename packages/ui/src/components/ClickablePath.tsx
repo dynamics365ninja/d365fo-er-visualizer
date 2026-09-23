@@ -96,9 +96,9 @@ function SmartSegment({ segment, configIndex, interactive, highlight }: {
   const resolve = useCallback(() => buildPathTooltip(segment, {
     deep: path => resolveDeepExpression(path, configurations, configIndex),
     datasource: name => resolveDatasource(name, configIndex),
-    modelPath: path => resolveModelPath(path),
+    modelPath: path => resolveModelPath(path, configIndex),
     datasourceNode: (ds, ci) => findDatasourceNode(ds.name, ci, ds.parentPath),
-    bindingsBelow: path => findModelPathBindings(path).length,
+    bindingsBelow: path => findModelPathBindings(path, configIndex).length,
   }), [segment, configurations, configIndex, resolveDatasource, resolveModelPath, findModelPathBindings, findDatasourceNode]);
 
   const handleMouseEnter = useCallback((event: React.MouseEvent<HTMLSpanElement>) => {

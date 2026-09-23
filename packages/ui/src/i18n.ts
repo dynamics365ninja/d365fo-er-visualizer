@@ -260,6 +260,8 @@ export interface Translations {
   lineagePeekClose: string;
   lineageStageOrigin: string;
   lineageStageModelPath: string;
+  lineageModelDefinition: string;
+  lineageModelDefinitionTitle: string;
   lineageStageMapping: string;
   lineageStageSource: string;
   lineageStageFormula: string;
@@ -614,6 +616,13 @@ export interface Translations {
   kindFormat: string;
   nodeTypeLabel: (type: string) => string;
   closeTab: (label: string) => string;
+  splitOpenBeside: string;
+  splitClose: string;
+  splitToggle: string;
+  splitToggleHint: string;
+  drillPinAsTab: string;
+  drillOpenBeside: string;
+  drillOpenBesideHint: string;
   notificationsLabel: string;
   drillOpenAsTab: string;
   // Model designer badges, text preview, error boundary areas
@@ -863,6 +872,8 @@ const cs: Translations = {
   lineagePeekClose: 'Zpět na celý výraz',
   lineageStageOrigin: 'Výraz formátu',
   lineageStageModelPath: 'Cesta v modelu',
+  lineageModelDefinition: 'Definice',
+  lineageModelDefinitionTitle: 'Definice mapování modelu, ve které byla cesta vyhodnocena',
   lineageStageMapping: 'Vazba v mapování modelu',
   lineageStageSource: 'Datový zdroj',
   lineageStageFormula: 'Vypočtené pole',
@@ -1229,6 +1240,13 @@ const cs: Translations = {
     section: 'Sekce',
   } as Record<string, string>)[type] ?? type,
   closeTab: (label: string) => `Zavřít ${label}`,
+  splitOpenBeside: 'Otevřít vedle',
+  splitClose: 'Zavřít zobrazení vedle',
+  splitToggle: 'Vedle sebe',
+  splitToggleHint: 'Zobrazit předchozí záložku vedle aktivní (porovnání dvou záložek)',
+  drillPinAsTab: 'Připnout do záložky',
+  drillOpenBeside: 'Otevřít vedle',
+  drillOpenBesideHint: 'Otevřít rozpad jako záložku vedle aktivní záložky, pro porovnání',
   notificationsLabel: 'Oznámení',
   drillOpenAsTab: 'Otevřít jako záložku',
   // Model designer badges, text preview, error boundary areas
@@ -1482,6 +1500,8 @@ const en: Translations = {
   lineagePeekClose: 'Back to the whole expression',
   lineageStageOrigin: 'Format expression',
   lineageStageModelPath: 'Model path',
+  lineageModelDefinition: 'Definition',
+  lineageModelDefinitionTitle: 'Model mapping definition the path was resolved in',
   lineageStageMapping: 'Binding in model mapping',
   lineageStageSource: 'Data source',
   lineageStageFormula: 'Calculated field',
@@ -1846,6 +1866,13 @@ const en: Translations = {
     section: 'Section',
   } as Record<string, string>)[type] ?? type,
   closeTab: (label: string) => `Close ${label}`,
+  splitOpenBeside: 'Open to the side',
+  splitClose: 'Close the side view',
+  splitToggle: 'Side by side',
+  splitToggleHint: 'Show the previous tab next to the active one (to compare two tabs)',
+  drillPinAsTab: 'Pin as tab',
+  drillOpenBeside: 'Open to the side',
+  drillOpenBesideHint: 'Open the drill-down as a tab next to the active tab, to compare',
   notificationsLabel: 'Notifications',
   drillOpenAsTab: 'Open as tab',
   // Model designer badges, text preview, error boundary areas

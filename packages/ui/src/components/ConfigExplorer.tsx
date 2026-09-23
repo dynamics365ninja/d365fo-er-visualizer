@@ -32,7 +32,7 @@ import { treeArrowAction } from '../utils/tree-keyboard';
 import { flattenVisibleTree, indexFlatRows, type FlatTreeRow } from '../utils/flat-tree';
 import { useTreeOpenState } from '../utils/use-tree-open-state';
 import { useVirtualTree } from '../utils/use-virtual-tree';
-import { useAppStore, type TreeNode } from '../state/store';
+import { useAppStore, lastActiveFormatIndex, type TreeNode } from '../state/store';
 import { ERDirection } from '@er-visualizer/core';
 import type { ERConfiguration } from '@er-visualizer/core';
 import { buildExplorerModelGroups, getDisplayVersion, type ExplorerModelGroup } from '../utils/model-hierarchy';
@@ -377,6 +377,7 @@ export function ConfigExplorer() {
   );
   const activeTabId = useAppStore(s => s.activeTabId);
   const openTabs = useAppStore(s => s.openTabs);
+  const lastFormatIndex = useAppStore(lastActiveFormatIndex);
   const storeSelectedNodeId = useAppStore(s => s.selectedNodeId);
   const explorerMutedSelectionId = useAppStore(s => s.explorerMutedSelectionId);
   // A muted selection (walking the format designer's structure) neither
@@ -425,14 +426,16 @@ export function ConfigExplorer() {
 
   // The mapping definition / model root the *active* format binds to. Computed
   // here (not while the tree is built) so switching designer tabs re-points the
-  // highlight instead of freezing on whichever format loaded first.
+  // highlight instead of freezing on whichever format loaded first. On a
+  // mapping or model tab the format that was active last still decides.
   const activeScopeNodeIds = useMemo(() => {
     const activeConfigIndex = openTabs.find(tab => tab.id === activeTabId)?.configIndex ?? null;
     return collectActiveScopeNodeIds(
       storeTreeNodes,
-      getActiveFormatDescriptors(configurations, activeConfigIndex),
+      getActiveFormatDescriptors(configurations, activeConfigIndex)
+        ?? getActiveFormatDescriptors(configurations, lastFormatIndex),
     );
-  }, [storeTreeNodes, configurations, openTabs, activeTabId]);
+  }, [storeTreeNodes, configurations, openTabs, activeTabId, lastFormatIndex]);
 
   const toggleKind = useCallback((kind: ConfigKind) => {
     setKindFilter(prev => {

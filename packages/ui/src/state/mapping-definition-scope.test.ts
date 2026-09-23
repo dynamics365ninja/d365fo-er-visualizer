@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseERConfiguration } from '@er-visualizer/core';
 import { useAppStore } from './store';
-import { getScopedMappingDefinitions, relatedMappingDefinitionLabels } from './store';
+import { getScopedMappingDefinitions, relatedMappingDefinitionLabels, selectMappingDefinition } from './store';
 import { buildExpressionTree } from '../components/DrillDownPanel';
 
 /**
@@ -200,6 +200,55 @@ describe('mapping definition scope', () => {
     expect(hits.length).toBeGreaterThan(1);
     expect(new Set(hits.map((r: any) => r.sourceDefinition)))
       .toEqual(new Set(['SalesInvoice', 'TMSCommercialInvoice']));
+  });
+
+  // Two formats of one mapping: "every loaded format" names both descriptors,
+  // so the drill-down of the second one used to resolve in the first one's
+  // definition until the first format was closed.
+  it('resolves a model path in the definition of the format the drill-down came from', () => {
+    const configurations = [
+      parseERConfiguration(FORMAT_XML, 'format.xml'),
+      parseERConfiguration(MAPPING_XML, 'mapping.xml'),
+      parseERConfiguration(
+        FORMAT_XML.replace('DataContainerDescriptorName="SalesInvoice"', 'DataContainerDescriptorName="TMSCommercialInvoice"')
+          .replace('Name="Sales invoice (Excel)"', 'Name="Commercial invoice (Excel)"'),
+        'format-tms.xml',
+      ),
+    ] as any[];
+    useAppStore.setState({ configurations } as any);
+    const store = useAppStore.getState();
+
+    for (const [configIndex, dpClass, definition] of [
+      [0, 'SalesInvoiceDP', 'SalesInvoice'],
+      [2, 'TmsCommercialInvoiceDP', 'TMSCommercialInvoice'],
+    ] as const) {
+      const tree = buildExpressionTree({
+        expression: 'model.InvoiceBase.DocumentDate',
+        configIndex,
+        configurations,
+        resolveModelPath: store.resolveModelPath,
+        resolveDatasource: store.resolveDatasource,
+        findModelPathBindings: store.findModelPathBindings,
+      });
+      const nodes = flatten(tree);
+      expect(nodes.map(n => n.sublabel ?? '').join('\n')).toContain(dpClass);
+      // The model-path row names the definition it was resolved in.
+      expect(nodes.find(n => n.badge === 'model')?.definition).toBe(definition);
+    }
+  });
+
+  it('opens a mapping on the definition of the format given as scope', () => {
+    const configurations = [
+      parseERConfiguration(FORMAT_XML, 'format.xml'),
+      parseERConfiguration(MAPPING_XML, 'mapping.xml'),
+      parseERConfiguration(
+        FORMAT_XML.replace('DataContainerDescriptorName="SalesInvoice"', 'DataContainerDescriptorName="TMSCommercialInvoice"'),
+        'format-tms.xml',
+      ),
+    ] as any[];
+    const version = configurations[1].content.version;
+    expect(selectMappingDefinition(version, configurations, 0).dataContainerDescriptor).toBe('SalesInvoice');
+    expect(selectMappingDefinition(version, configurations, 2).dataContainerDescriptor).toBe('TMSCommercialInvoice');
   });
 
   it('reports a shared expression against the definition the format binds to', () => {
