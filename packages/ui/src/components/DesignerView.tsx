@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppsListDetailRegular,
   ArrowEnterRegular,
@@ -9,9 +9,10 @@ import {
   DocumentFilled,
   CheckmarkCircleRegular,
   ArrowSyncRegular,
-  DismissRegular,
 } from '@fluentui/react-icons';
-import { useAppStore, selectMappingDefinition, lastActiveFormatIndex, getMappingDefinitions, type OpenTab } from '../state/store';
+import { useAppStore, selectMappingDefinition, lastActiveFormatIndex, getMappingDefinitions, isSplitView, type DesignerPane, type OpenTab } from '../state/store';
+import { draggedTabId, isTabDrag } from '../utils/tab-drag';
+import { TabStrip } from './TabBar';
 import { ClickablePath } from './ClickablePath';
 import { DrillDownBody, DrillDownTrigger } from './DrillDownPanel';
 import { PropertyInspector } from './PropertyInspector';
@@ -89,11 +90,33 @@ export function DesignerView() {
   const treeNodes = useAppStore(s => s.treeNodes);
   const selectedNode = useAppStore(s => s.selectedNode);
   const formatIndex = useAppStore(lastActiveFormatIndex);
-  const closeSplit = useAppStore(s => s.closeSplit);
+  const focusedPane = useAppStore(s => s.focusedPane);
+  const focusPane = useAppStore(s => s.focusPane);
+  const moveTabToPane = useAppStore(s => s.moveTabToPane);
+  const draggingTabId = useAppStore(s => s.draggingTabId);
+  const setDraggingTab = useAppStore(s => s.setDraggingTab);
+  const splitView = useAppStore(isSplitView);
+  const [dropZone, setDropZone] = useState<DesignerPane | null>(null);
   const coarse = useCoarsePointer();
   const openHint = coarse ? t.openInExplorerTouch : t.openInExplorer;
 
   useEffect(() => { pruneTabViewState(tabs.map(tb => tb.id)); }, [tabs]);
+
+  // A drag that ends anywhere — dropped outside, cancelled with Esc — takes
+  // the drop zones down with it.
+  useEffect(() => {
+    if (!draggingTabId) {
+      setDropZone(null);
+      return;
+    }
+    const end = () => setDraggingTab(null);
+    window.addEventListener('dragend', end);
+    window.addEventListener('drop', end);
+    return () => {
+      window.removeEventListener('dragend', end);
+      window.removeEventListener('drop', end);
+    };
+  }, [draggingTabId, setDraggingTab]);
 
   /* What each tab was focused on while it was on screen. A tab in the
      background keeps that focus instead of following the selection around —
@@ -133,16 +156,29 @@ export function DesignerView() {
     );
   }
 
-  const split = Boolean(splitTabId && splitTabId !== activeTabId && tabs.some(tab => tab.id === splitTabId));
+  const split = splitView && tabs.some(tab => tab.id === splitTabId);
+  const dropZones: DesignerPane[] = ['main', 'side'];
+  const groups: DesignerPane[] = split ? ['main', 'side'] : ['main'];
 
-  /* Every open tab stays mounted; only the active one (and the one on the
-     side) is visible. Switching tabs used to unmount the designer, so a filter,
-     the scroll position or an opened branch were gone on the way back. */
+  /* Every open tab stays mounted; only the one shown in each group is
+     visible. Switching tabs used to unmount the designer, so a filter, the
+     scroll position or an opened branch were gone on the way back. Each group
+     has its own tab strip above its column, as in an IDE. */
   return (
     <div className={`designer-tabs${split ? ' designer-tabs--split' : ''}`}>
+      {groups.map(pane => (
+        <div
+          key={`strip-${pane}`}
+          className={`designer-group-strip designer-group-strip--${pane}${split && focusedPane === pane ? ' designer-group-strip--focused' : ''}`}
+          onPointerDownCapture={split ? () => focusPane(pane) : undefined}
+        >
+          <TabStrip pane={pane} />
+        </div>
+      ))}
       {tabs.map(tab => {
         const slot = tab.id === activeTabId ? 'main' : (split && tab.id === splitTabId ? 'side' : 'hidden');
         const live = slot !== 'hidden';
+        const focused = split && slot === focusedPane;
         const tabNode = findTreeNodeById(treeNodes, tab.id);
         if (live) {
           focusByTab.current.set(tab.id, selectedNode?.configIndex === tab.configIndex ? selectedNode : tabNode);
@@ -151,24 +187,14 @@ export function DesignerView() {
         return (
           <section
             key={tab.id}
-            className={`designer-tab-pane designer-tab-pane--${slot}`}
+            className={`designer-tab-pane designer-tab-pane--${slot}${focused ? ' designer-tab-pane--focused' : ''}`}
             aria-hidden={live ? undefined : true}
             inert={live ? undefined : true}
+            // Whatever is picked next — an explorer node, a search hit, a
+            // drill-down — opens in the group the user last worked in.
+            onPointerDownCapture={split && live ? () => focusPane(slot as DesignerPane) : undefined}
+            onFocusCapture={split && live ? () => focusPane(slot as DesignerPane) : undefined}
           >
-            {slot === 'side' && (
-              <header className="designer-tab-pane__head">
-                <span className="designer-tab-pane__title" title={tab.label}>{tab.label}</span>
-                <button
-                  type="button"
-                  className="designer-tab-pane__close"
-                  onClick={closeSplit}
-                  title={t.splitClose}
-                  aria-label={t.splitClose}
-                >
-                  <DismissRegular fontSize={12} />
-                </button>
-              </header>
-            )}
             <div className="designer-tab-pane__body">
               <TabContent
                 tab={tab}
@@ -182,6 +208,36 @@ export function DesignerView() {
           </section>
         );
       })}
+      {draggingTabId && (
+        <div className="designer-drop-zones">
+          {dropZones.map(zone => (
+            <div
+              key={zone}
+              className={`designer-drop-zone${dropZone === zone ? ' designer-drop-zone--over' : ''}`}
+              onDragOver={e => {
+                if (!isTabDrag(e)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (dropZone !== zone) setDropZone(zone);
+              }}
+              onDragLeave={() => setDropZone(current => (current === zone ? null : current))}
+              onDrop={e => {
+                const id = draggedTabId(e);
+                if (!id) return;
+                e.preventDefault();
+                moveTabToPane(id, zone);
+                setDraggingTab(null);
+              }}
+            >
+              <span className="designer-drop-zone__label">
+                {split
+                  ? (zone === 'main' ? t.splitMoveLeft : t.splitMoveRight)
+                  : (zone === 'main' ? t.splitOpenLeft : t.splitOpenRight)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

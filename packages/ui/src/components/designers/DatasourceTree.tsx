@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { TextBulletListTreeRegular } from '@fluentui/react-icons';
 import { useAppStore } from '../../state/store';
 import { dsPathToExpression } from '../../utils/ds-path';
 import { ancestorPathKeys, buildDatasourceTree, filterDatasources, keysWithDeclaredDescendants, type DatasourceModel, type DatasourceTree, type DatasourceTreeFilter, type DatasourceTreeNode } from '../../utils/datasource-tree';
@@ -237,7 +236,21 @@ function DatasourceTreeRow({ node, ctx, insideMatch }: {
               {fieldTypeLabel(field.type)}
             </span>
           )}
-          <span className="ds-row-name">{node.name}</span>
+          {declared ? (
+            // The name opens the datasource's drill-down — its formula and
+            // what it reads — addressed by its full path, so a `$Split_Note`
+            // under one record never opens its namesake.
+            <DrillDownTrigger
+              expression={dsPathToExpression(ds.parentPath ? `${ds.parentPath}/${ds.name}` : ds.name)}
+              configIndex={ctx.configIndex}
+              elementName={ds.name}
+              className="ds-row-name ds-row-name--drill"
+            >
+              {node.name}
+            </DrillDownTrigger>
+          ) : (
+            <span className="ds-row-name">{node.name}</span>
+          )}
           {/* What a row is, or what it reads, stays on the name line — one line
               per row keeps a record of a few hundred fields browsable. */}
           <span className="ds-row-meta" title={targetLabel ?? undefined}>
@@ -250,21 +263,6 @@ function DatasourceTreeRow({ node, ctx, insideMatch }: {
           {node.declaredCount > 0 && (
             <span className="ds-row-count" title={t.dsNestedCount(node.declaredCount)}>
               {node.declaredCount}
-            </span>
-          )}
-          {declared && ds.calculatedField?.expressionAsString && (
-            // The breakdown of this very field — addressed by its full path, so
-            // a `$Split_Note` under one record never opens its namesake.
-            <span style={{ display: 'contents' }} onClick={event => event.stopPropagation()}>
-              <DrillDownTrigger
-                expression={dsPathToExpression(ds.parentPath ? `${ds.parentPath}/${ds.name}` : ds.name)}
-                configIndex={ctx.configIndex}
-                elementName={ds.name}
-                className="mm-binding-drill"
-                label={t.drillCollapsibleLabel}
-              >
-                <TextBulletListTreeRegular fontSize={16} aria-hidden="true" />
-              </DrillDownTrigger>
             </span>
           )}
           {declared && (

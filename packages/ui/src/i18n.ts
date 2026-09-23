@@ -617,9 +617,12 @@ export interface Translations {
   nodeTypeLabel: (type: string) => string;
   closeTab: (label: string) => string;
   splitOpenBeside: string;
-  splitClose: string;
-  splitToggle: string;
-  splitToggleHint: string;
+  splitOpenLeft: string;
+  splitOpenRight: string;
+  splitMoveLeft: string;
+  splitMoveRight: string;
+  splitCloseSideGroup: string;
+  splitCloseMainGroup: string;
   drillPinAsTab: string;
   drillOpenBeside: string;
   drillOpenBesideHint: string;
@@ -1241,9 +1244,12 @@ const cs: Translations = {
   } as Record<string, string>)[type] ?? type,
   closeTab: (label: string) => `Zavřít ${label}`,
   splitOpenBeside: 'Otevřít vedle',
-  splitClose: 'Zavřít zobrazení vedle',
-  splitToggle: 'Vedle sebe',
-  splitToggleHint: 'Zobrazit předchozí záložku vedle aktivní (porovnání dvou záložek)',
+  splitOpenLeft: 'Otevřít vlevo',
+  splitOpenRight: 'Otevřít vpravo',
+  splitMoveLeft: 'Přesunout do levé skupiny',
+  splitMoveRight: 'Přesunout do pravé skupiny',
+  splitCloseSideGroup: 'Zavřít pravou skupinu (její záložky se přesunou doleva)',
+  splitCloseMainGroup: 'Zavřít levou skupinu (její záložky se přesunou doprava)',
   drillPinAsTab: 'Připnout do záložky',
   drillOpenBeside: 'Otevřít vedle',
   drillOpenBesideHint: 'Otevřít rozpad jako záložku vedle aktivní záložky, pro porovnání',
@@ -1867,9 +1873,12 @@ const en: Translations = {
   } as Record<string, string>)[type] ?? type,
   closeTab: (label: string) => `Close ${label}`,
   splitOpenBeside: 'Open to the side',
-  splitClose: 'Close the side view',
-  splitToggle: 'Side by side',
-  splitToggleHint: 'Show the previous tab next to the active one (to compare two tabs)',
+  splitOpenLeft: 'Open on the left',
+  splitOpenRight: 'Open on the right',
+  splitMoveLeft: 'Move to the left group',
+  splitMoveRight: 'Move to the right group',
+  splitCloseSideGroup: 'Close the right group (its tabs move to the left)',
+  splitCloseMainGroup: 'Close the left group (its tabs move to the right)',
   drillPinAsTab: 'Pin as tab',
   drillOpenBeside: 'Open to the side',
   drillOpenBesideHint: 'Open the drill-down as a tab next to the active tab, to compare',

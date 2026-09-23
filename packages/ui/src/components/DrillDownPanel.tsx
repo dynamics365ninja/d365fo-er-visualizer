@@ -676,15 +676,20 @@ interface ExpressionViewProps {
   onSegment?: (label: string, prefixExpression: string, configIndex: number) => void;
   /** Normalised name of the part currently opened, so it can be marked. */
   activeSegment?: string | null;
+  /**
+   * The click opens its answer right below this expression, so the parts
+   * point down at it. Elsewhere the answer lands out of sight of the arrow.
+   */
+  leadsBelow?: boolean;
 }
 
-function ExpressionView({ expr, configIndex, onSegment, activeSegment }: ExpressionViewProps) {
+function ExpressionView({ expr, configIndex, onSegment, activeSegment, leadsBelow }: ExpressionViewProps) {
   const tokens = useMemo(() => tokenizeERExpr(prettifyERExpr(expr)), [expr]);
   const configurations = useAppStore(s => s.configurations);
   const labels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
 
   return (
-    <div className="er-expr">
+    <div className={`er-expr${leadsBelow ? ' er-expr--leads-below' : ''}`}>
       {tokens.map((tok, idx) => {
         if (tok.kind === 'label') {
           const resolved = resolveLabel(tok.raw, labels);
@@ -1260,6 +1265,7 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
                   configIndex={configIndex}
                   onSegment={handleSegment}
                   activeSegment={activeSegment}
+                  leadsBelow
                 />
               </div>
 

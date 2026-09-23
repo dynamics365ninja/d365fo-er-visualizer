@@ -402,7 +402,9 @@ const FormatElementRow = React.memo(function FormatElementRow({ row, bindingMap,
             if (!hasChildren) return;
             onSetExpanded(element.id, filter ? !manuallyExpanded : !isExpanded);
           }}
-          style={{ visibility: hasChildren ? 'visible' : 'hidden' }}
+          // Only ever hide: an explicit `visible` would show through a
+          // hidden (background) designer tab, which stays mounted.
+          style={hasChildren ? undefined : { visibility: 'hidden' }}
         >
           <span className={`tree-chevron ${isExpanded ? 'open' : ''}`} />
         </span>
