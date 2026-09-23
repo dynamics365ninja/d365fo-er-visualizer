@@ -3,9 +3,15 @@
  * talks to, and the Connect / Disconnect, edit and remove actions per row.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
   Spinner,
   Caption1,
   Caption2,
@@ -66,6 +72,8 @@ export const ProfilesCard: React.FC<ProfilesCardProps> = ({
 }) => {
   const styles = useFnoPanelStyles();
   const pushToast = useAppStore(s => s.pushToast);
+  // Removing a profile also drops its saved sign-in, so it asks first.
+  const [pendingRemoval, setPendingRemoval] = useState<FnoConnection | null>(null);
 
   // ── Connection state derived values ──────────────────────────────────────
   const connDotClass =
@@ -224,7 +232,7 @@ export const ProfilesCard: React.FC<ProfilesCardProps> = ({
                       appearance="subtle"
                       icon={<DeleteRegular />}
                       aria-label={t.fnoRemoveProfile}
-                      onClick={e => { e.stopPropagation(); handleRemoveProfile(p.id); }}
+                      onClick={e => { e.stopPropagation(); setPendingRemoval(p); }}
                     />
                   </Tooltip>
                 </div>
@@ -233,6 +241,31 @@ export const ProfilesCard: React.FC<ProfilesCardProps> = ({
           })}
         </div>
       )}
+      <Dialog
+        open={pendingRemoval !== null}
+        modalType="alert"
+        onOpenChange={(_, d) => { if (!d.open) setPendingRemoval(null); }}
+      >
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>{t.fnoRemoveProfileConfirmTitle(pendingRemoval?.displayName || pendingRemoval?.envUrl || '')}</DialogTitle>
+            <DialogContent>{t.fnoRemoveProfileConfirmBody}</DialogContent>
+            <DialogActions>
+              <Button appearance="secondary" onClick={() => setPendingRemoval(null)}>{t.cancel}</Button>
+              <Button
+                appearance="primary"
+                icon={<DeleteRegular />}
+                onClick={() => {
+                  if (pendingRemoval) handleRemoveProfile(pendingRemoval.id);
+                  setPendingRemoval(null);
+                }}
+              >
+                {t.fnoRemoveProfile}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
     </div>
   );
 };

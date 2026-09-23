@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { ERConfiguration, ERLabel } from '@er-visualizer/core';
 import { parseERConfigurations, GUIDRegistry } from '@er-visualizer/core';
-import { locale } from '../i18n';
+import { locale, t } from '../i18n';
 import { useFnoSession } from './fno-session';
 import { clearHarvestedLabels } from '../utils/label-resolver';
 import { onFnoDownloadEvent } from '../fno/session';
@@ -108,6 +108,8 @@ export interface Toast {
   createdAt: number;
   /** Optional action to show inside the toast (e.g. "Retry"). */
   action?: { label: string; onClick: () => void };
+  /** How long a non-error toast stays up; defaults to 6 s. */
+  durationMs?: number;
 }
 
 export type FnoIngestItemStatus = 'queued' | 'downloading' | 'done' | 'empty' | 'failed' | 'skipped';
@@ -173,6 +175,11 @@ export interface AppState {
    * Always `'main'` when not split.
    */
   focusedPane: DesignerPane;
+  /**
+   * Stops the running F&O download, while one runs. The download overlay
+   * covers the F&O browser that started it, so the overlay offers it too.
+   */
+  cancelFnoIngest: (() => void) | null;
   /** Tab being dragged from a tab strip; the groups show drop zones meanwhile. */
   draggingTabId: string | null;
   searchQuery: string;
@@ -222,6 +229,8 @@ export interface AppState {
   /** Close a configuration and offer an undo toast that re-opens it from the cache. */
   closeConfigurationWithUndo: (index: number) => void;
   removeAllConfigurations: () => void;
+  /** Close every configuration, with an "Undo" toast that reopens the cached ones. */
+  closeAllConfigurationsWithUndo: () => void;
   beginFnoIngest: (items: Array<Pick<FnoIngestItem, 'key' | 'name' | 'kind' | 'explicit'>>) => void;
   updateFnoIngestItem: (item: Pick<FnoIngestItem, 'key' | 'name' | 'kind'> & Partial<FnoIngestItem>) => void;
   endFnoIngest: () => void;
@@ -359,6 +368,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   lastActiveFormatPath: null,
   splitTabId: null,
   sideTabIds: [],
+  cancelFnoIngest: null,
   focusedPane: 'main',
   draggingTabId: null,
   searchQuery: '',
@@ -508,7 +518,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const message = e instanceof Error ? e.message : String(e);
       const fileName = filePath.split(/[\\/]/).pop() ?? filePath;
       get().pushToast({ kind: 'error', message: locale === 'cs' ? `Chyba při načítání ${fileName}: ${message}` : `Failed to load ${fileName}: ${message}` });
-      throw e;
+      throw markErrorReported(e);
     }
   },
 
@@ -569,6 +579,33 @@ export const useAppStore = create<AppState>((set, get) => ({
     const after = get();
     if (after.searchQuery.trim()) after.executeSearch();
     if (after.whereUsedQuery.trim()) after.executeWhereUsed();
+  },
+
+  closeAllConfigurationsWithUndo: () => {
+    const state = get();
+    const closed = state.configurations.map(cfg => ({
+      path: cfg.filePath,
+      name: cfg.solutionVersion.solution.name || cfg.filePath.split(/[\\/]/).pop() || cfg.filePath,
+    }));
+    if (closed.length === 0) return;
+    const reopenable = closed.filter(({ path }) =>
+      state.cachedPaths.has(path) || state.recentFiles.some(r => r.path === path && r.bundlePath));
+    get().removeAllConfigurations();
+    get().pushToast({
+      kind: 'info',
+      message: t.workspaceClosedAll(closed.length),
+      durationMs: UNDO_WINDOW_MS,
+      action: reopenable.length > 0
+        ? {
+            label: t.workspaceUndoCloseAll,
+            onClick: () => {
+              void (async () => {
+                for (const { path, name } of reopenable) await get().loadCachedFile(path, name);
+              })();
+            },
+          }
+        : undefined,
+    });
   },
 
   closeConfigurationWithUndo: (index: number) => {
@@ -1012,7 +1049,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const entry: Toast = { id, createdAt: Date.now(), ...toast };
     set({ toasts: [...get().toasts, entry] });
-    // Auto-dismiss after 6s for non-error kinds.
+    // Auto-dismiss non-error kinds (after 6 s unless the toast says otherwise).
     if (toast.kind !== 'error') {
       if (typeof window !== 'undefined') {
         window.setTimeout(() => {
@@ -1020,7 +1057,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           if (current.some(t => t.id === id)) {
             set({ toasts: current.filter(t => t.id !== id) });
           }
-        }, 6000);
+        }, toast.durationMs ?? 6000);
       }
     }
     return id;
@@ -1034,17 +1071,60 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   // ─── Recent files ───
+  // Removing from history also drops the cached copy, so the file could not
+  // be reopened without the disk. Both are undoable: the cache is deleted only
+  // once the toast offering "Undo" is gone.
   removeRecentFile: (path: string) => {
-    const next = saveRecentFiles(get().recentFiles.filter(r => r.path !== path));
-    const nextCachedPaths = new Set(get().cachedPaths);
+    const state = get();
+    const index = state.recentFiles.findIndex(r => r.path === path);
+    const entry = state.recentFiles[index];
+    const wasCached = state.cachedPaths.has(path);
+    const next = saveRecentFiles(state.recentFiles.filter(r => r.path !== path));
+    const nextCachedPaths = new Set(state.cachedPaths);
     nextCachedPaths.delete(path);
     set({ recentFiles: next, cachedPaths: nextCachedPaths });
-    void deleteFileContent(path);
+    if (!entry) {
+      void deleteFileContent(path);
+      return;
+    }
+    const pending = scheduleUndoable(() => { void deleteFileContent(path); });
+    get().pushToast({
+      kind: 'info',
+      message: t.historyFileRemoved(entry.solutionName ?? entry.name),
+      durationMs: UNDO_WINDOW_MS,
+      action: {
+        label: t.undo,
+        onClick: () => {
+          if (!pending.cancel()) return;
+          const current = get().recentFiles.filter(r => r.path !== path);
+          const restored = [...current.slice(0, index), entry, ...current.slice(index)];
+          const cachedPaths = new Set(get().cachedPaths);
+          if (wasCached) cachedPaths.add(path);
+          set({ recentFiles: saveRecentFiles(restored), cachedPaths });
+        },
+      },
+    });
   },
   clearRecentFiles: () => {
+    const state = get();
+    const previousFiles = state.recentFiles;
+    const previousCached = state.cachedPaths;
+    if (previousFiles.length === 0) return;
     saveRecentFiles([]);
     set({ recentFiles: [], cachedPaths: new Set<string>() });
-    void clearAllFileContent();
+    const pending = scheduleUndoable(() => { void clearAllFileContent(); });
+    get().pushToast({
+      kind: 'info',
+      message: t.historyFilesCleared(previousFiles.length),
+      durationMs: UNDO_WINDOW_MS,
+      action: {
+        label: t.undo,
+        onClick: () => {
+          if (!pending.cancel()) return;
+          set({ recentFiles: saveRecentFiles(previousFiles), cachedPaths: new Set(previousCached) });
+        },
+      },
+    });
   },
   reloadRecentFile: async (path: string) => {
     const entry = get().recentFiles.find(r => r.path === path);
@@ -1060,8 +1140,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ recentSessions: next });
   },
   clearRecentSessions: () => {
+    const previous = get().recentSessions;
+    if (previous.length === 0) return;
     saveRecentSessions([]);
     set({ recentSessions: [] });
+    get().pushToast({
+      kind: 'info',
+      message: t.historySessionsCleared(previous.length),
+      durationMs: UNDO_WINDOW_MS,
+      action: {
+        label: t.undo,
+        onClick: () => set({ recentSessions: saveRecentSessions(previous) }),
+      },
+    });
   },
   loadRecentSession: async (id: string, options?: { replace?: boolean }) => {
     const session = get().recentSessions.find(s => s.id === id);
@@ -1305,6 +1396,35 @@ export function normalizeGroups(state: GroupState, previousMainTab: string | nul
   if (!splitTabId) focusedPane = 'main';
 
   return { openTabs: state.openTabs, activeTabId, splitTabId, sideTabIds, focusedPane };
+}
+
+/** How long an "Undo" toast stays up; the undone work runs only after it. */
+const UNDO_WINDOW_MS = 10_000;
+
+/**
+ * Run `work` once the undo window has passed, unless cancelled first.
+ * `cancel()` answers whether it got there in time.
+ */
+function scheduleUndoable(work: () => void): { cancel: () => boolean } {
+  let done = false;
+  const timer = setTimeout(() => { done = true; work(); }, UNDO_WINDOW_MS + 500);
+  return {
+    cancel: () => {
+      if (done) return false;
+      done = true;
+      clearTimeout(timer);
+      return true;
+    },
+  };
+}
+
+/**
+ * Tag an error the store has already shown in a toast, so the caller that
+ * catches it does not report the same failure a second time.
+ */
+function markErrorReported(error: unknown): unknown {
+  if (error instanceof Error) (error as Error & { reported?: boolean }).reported = true;
+  return error;
 }
 
 /** Index of the format whose tab was active last, or `null` when it is no longer loaded. */

@@ -1,7 +1,8 @@
 import React from 'react';
 import { useAppStore } from '../state/store';
 import { ClickablePath } from './ClickablePath';
-import { ERDirection, getFormatElementDataType, getFormatElementExcelRange } from '@er-visualizer/core';
+import { buildFormatBindingPresentation, getFormatBindingDisplayLabel, type NormalizedFormatBinding } from '../utils/format-binding-display';
+import { ERDirection, getFormatElementDataType, getFormatElementExcelRange, type ERFormatContent } from '@er-visualizer/core';
 import { getEnumTypeLabel } from '../utils/enum-display';
 import { getConsultantBindingLabel, getConsultantDataTypeLabel, getNodeDisplayName } from '../utils/consultant-labels';
 import { resolveLabel, buildLabelPool, looksLikeLabelRef } from '../utils/label-resolver';
@@ -437,7 +438,33 @@ function TransformationValue({ transformationId, configIndex, showTechnicalDetai
   return <>{name ?? t.propTransformUnnamed}</>;
 }
 
+/**
+ * Bindings per format element, built once per format: the inspector asks for
+ * one element at a time, and the presentation walks the whole format.
+ */
+const formatBindingPresentations = new WeakMap<object, ReturnType<typeof buildFormatBindingPresentation>>();
+
+function useFormatElementBindings(configIndex: number, elementId: string | undefined): NormalizedFormatBinding[] {
+  const config = useAppStore(s => s.configurations[configIndex]);
+  return React.useMemo(() => {
+    if (!elementId || config?.content.kind !== 'Format') return [];
+    const content = config.content as ERFormatContent;
+    let presentation = formatBindingPresentations.get(content);
+    if (!presentation) {
+      presentation = buildFormatBindingPresentation(
+        content.formatVersion.format.rootElement,
+        content.formatMappingVersion.formatMapping.bindings,
+      );
+      formatBindingPresentations.set(content, presentation);
+    }
+    return presentation.bindingMap.get(elementId) ?? [];
+  }, [config, elementId]);
+}
+
 function FormatElementProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
+  // What the element is bound to is the first question about it, so the
+  // bindings lead the grid.
+  const bindings = useFormatElementBindings(configIndex, data?.id);
   const excelRange = getFormatElementExcelRange(data);
   const labelRef = data.attributes?.['Label'];
   const dataType = getFormatElementDataType(data);
@@ -445,13 +472,19 @@ function FormatElementProps({ data, configIndex, showTechnicalDetails }: { data:
   // at all for a structural `Void` element.
   const dataTypeLabel = showTechnicalDetails ? dataType : getConsultantDataTypeLabel(dataType);
   const items: [string, React.ReactNode, string?][] = [];
+  for (const binding of bindings) {
+    items.push([
+      showTechnicalDetails ? getFormatBindingDisplayLabel(binding) : getConsultantBindingLabel(binding),
+      <ClickablePath expression={binding.expressionAsString} configIndex={configIndex} mode="binding-expr" />,
+    ]);
+  }
+  if (bindings.length === 0 && !showTechnicalDetails) items.push([t.propBindings, t.propNotBound]);
   if (labelRef) items.push([t.propLabel, <LabelValue labelRef={labelRef} configIndex={configIndex} />]);
   if (dataTypeLabel) items.push([t.propDataType, dataTypeLabel]);
   if (excelRange) items.push([t.propExcelRange, excelRange]);
   items.push([t.propChildren, `${data.children?.length ?? 0}`]);
   if (showTechnicalDetails) {
-    items.unshift(['GUID', data.id, 'guid']);
-    items.splice(1, 0, [t.propType, data.elementType]);
+    items.unshift(['GUID', data.id, 'guid'], [t.propType, data.elementType]);
   }
   if (showTechnicalDetails && data.encoding) items.push([t.propEncoding, data.encoding]);
   if (showTechnicalDetails && data.maximalLength) items.push([t.propMaxLen, String(data.maximalLength)]);

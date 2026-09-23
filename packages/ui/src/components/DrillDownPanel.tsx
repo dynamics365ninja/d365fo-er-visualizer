@@ -49,6 +49,7 @@ import {
   PersonRegular,
   FolderRegular,
   ChevronRightRegular,
+  WarningRegular,
 } from '@fluentui/react-icons';
 import { useAppStore, resolveDeepExpression, selectMappingDefinition, getScopedMappingDefinitions } from '../state/store';
 import { locale, t, getLocale, useLocale, type Locale } from '../i18n';
@@ -1246,6 +1247,7 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
           )}
         </header>
         <p className="lin-summary__hint">{t.lineageHint}</p>
+        {tree.truncated && <TruncatedNotice />}
 
         <ul className="lin-tree">
           <li className="lin-node">
@@ -1588,9 +1590,24 @@ interface TreeExprNode {
   leafType?: 'table' | 'enum' | 'class';
   /** Model-path rows: the mapping definition the path was resolved in. */
   definition?: string;
+  /**
+   * Root only: the walk hit its depth or node limit, so some branches are
+   * missing. The views say so — a silently shorter list reads as complete.
+   */
+  truncated?: boolean;
 }
 
 type TreeLabelMode = 'compact' | 'full';
+
+/** Said wherever a drill-down tree was cut off by its depth or node limit. */
+function TruncatedNotice({ floating = false }: { floating?: boolean }) {
+  return (
+    <p className={`dd-truncated${floating ? ' dd-truncated--floating' : ''}`} role="note">
+      <WarningRegular fontSize={14} aria-hidden />
+      <span>{t.drillTruncated}</span>
+    </p>
+  );
+}
 
 /**
  * Calculated fields chain deeply — `$InvoiceDate` → `$CustInvoiceJour` → `CustInvoiceJour`
@@ -1624,6 +1641,8 @@ interface TreeBuildContext {
   locale: Locale;
   /** Remaining node budget, decremented as nodes are produced. */
   budget: number;
+  /** Set once a branch is cut off by the depth or node limit. */
+  truncated?: boolean;
 }
 
 function buildTreeNode(
@@ -1635,7 +1654,11 @@ function buildTreeNode(
   depth = 0,
 ): TreeExprNode | null {
   const visitKey = `${configIndex}::${expression}`;
-  if (visited.has(visitKey) || depth > MAX_TREE_DEPTH || ctx.budget <= 0) return null;
+  if (visited.has(visitKey)) return null;
+  if (depth > MAX_TREE_DEPTH || ctx.budget <= 0) {
+    ctx.truncated = true;
+    return null;
+  }
   visited.add(visitKey);
   ctx.budget -= 1;
 
@@ -1904,7 +1927,13 @@ function buildDsNode(
     dsNode.badge = 'groupby';
     dsNode.sublabel = listToGroup || undefined;
     if (listToGroup) expandExpression(dsNode, dsPathToExpression(listToGroup), 'ds-grp-ref', configIndex);
-  } else if (ds.calculatedField?.expressionAsString && depth < MAX_CALC_DEPTH) {
+  } else if (ds.calculatedField?.expressionAsString && depth >= MAX_CALC_DEPTH) {
+    // Too deep to follow: keep the formula on the row and say the chain stops here.
+    ctx.truncated = true;
+    dsNode.badge = 'calc';
+    dsNode.kind = 'calcfield';
+    dsNode.sublabel = ds.calculatedField.expressionAsString;
+  } else if (ds.calculatedField?.expressionAsString) {
     const calcExpr: string = ds.calculatedField.expressionAsString;
     dsNode.badge = 'calc';
     dsNode.kind = 'calcfield';
@@ -2063,6 +2092,7 @@ export function buildExpressionTree(options: {
 
   const dsTokens = uniqueDsTokens(tokenizeERExpr(expression));
   let rootChildren: TreeExprNode[] = [];
+  let truncated = false;
 
   if (dsTokens.length === 0) {
     // No DS refs found – show single "unresolved" leaf
@@ -2087,6 +2117,7 @@ export function buildExpressionTree(options: {
       if (child) rootChildren.push(child);
     });
     rootChildren = dedupeTreeChildren(rootChildren);
+    truncated = Boolean(ctx.truncated);
   }
 
   return {
@@ -2097,6 +2128,7 @@ export function buildExpressionTree(options: {
     expression,
     configIndex,
     children: rootChildren,
+    ...(truncated ? { truncated } : {}),
   };
 }
 
@@ -2574,6 +2606,7 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill, i
 
   return (
     <div className="ddt-canvas">
+      {rootNode.truncated && <TruncatedNotice floating />}
       {effectiveLabelMode !== labelMode && showTechnicalDetails && (
         <div className="ddt-auto-compact-hint">
           {locale === 'cs'

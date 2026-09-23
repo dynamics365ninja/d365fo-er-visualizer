@@ -734,7 +734,8 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
                           appearance="transparent"
                           size="small"
                           icon={<DismissRegular />}
-                          aria-label={t.dismiss}
+                          aria-label={t.removeFromHistory}
+                          title={t.removeFromHistory}
                           onClick={() => removeRecentSession(session.id)}
                         />
                       </div>
@@ -785,7 +786,8 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
                           appearance="transparent"
                           size="small"
                           icon={<DismissRegular />}
-                          aria-label={t.dismiss}
+                          aria-label={t.removeFromHistory}
+                          title={t.removeFromHistory}
                           onClick={() => removeRecentFile(rf.path)}
                         />
                       </div>

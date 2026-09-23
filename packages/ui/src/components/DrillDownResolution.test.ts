@@ -283,3 +283,37 @@ describe('drill-down into a calculated field nested under the data model', () =>
     expect(nodes.map(n => n.label)).toContain('CustInvoiceJour');
   });
 });
+
+describe('drill-down limits', () => {
+  // `$A0` → `$A1` → … : a chain of calculated fields deeper than the walk follows.
+  const chain = (name: string) => {
+    const n = Number(name.replace(/\D/g, ''));
+    return { datasource: { name, calculatedField: { expressionAsString: `'$A${n + 1}'` } } };
+  };
+  const flatten = (node: any): any[] => [node, ...node.children.flatMap(flatten)];
+
+  it('says when the tree was cut off', () => {
+    const tree = buildExpressionTree({
+      expression: "'$A0'",
+      configIndex: 0,
+      configurations: [],
+      resolveModelPath: () => null,
+      resolveDatasource: (name: string) => (/^\$A\d+$/.test(name) ? chain(name) : null),
+    });
+    expect(tree.truncated).toBe(true);
+    // The last row still carries its formula.
+    const last = flatten(tree).at(-1);
+    expect(last.sublabel).toMatch(/^'\$A\d+'$/);
+  });
+
+  it('does not flag a tree that fits', () => {
+    const tree = buildExpressionTree({
+      expression: "'$A0'",
+      configIndex: 0,
+      configurations: [],
+      resolveModelPath: () => null,
+      resolveDatasource: (name: string) => (name === '$A0' ? { datasource: { name, tableInfo: { tableName: 'CustTable' } } } : null),
+    });
+    expect(tree.truncated).toBeUndefined();
+  });
+});

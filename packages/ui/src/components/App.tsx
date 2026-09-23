@@ -51,6 +51,7 @@ import { ActivityBar } from './ActivityBar';
 import { TouchTitleTooltip } from './TouchTitleTooltip';
 import { useCompactLayout, useStackedLayout } from '../utils/responsive';
 import { matchWorkspaceShortcut } from '../utils/workspace-shortcuts';
+import { isSearchInputFocused, requestSearchFocus } from '../utils/search-focus';
 import { t, useLocale } from '../i18n';
 
 // ────────────────────────── styles ──────────────────────────
@@ -432,8 +433,15 @@ export function App() {
     // panel group; they are kept verbatim so the desktop split does not move.
     : showLeft && showRight ? 56 : showLeft || showRight ? 78 : 100;
 
-  const toggleSearch = useCallback(() => {
+  /* From the keyboard (Ctrl+F), an open panel whose box does not have the
+     cursor gets it back instead of closing; a click on the activity bar
+     toggles as before. Opening always puts the cursor in the box. */
+  const toggleSearch = useCallback((fromShortcut = false) => {
     if (showRight && rightTab === 'search') {
+      if (fromShortcut && !isSearchInputFocused()) {
+        requestSearchFocus();
+        return;
+      }
       setShowRight(false);
       setRightFullscreen(false);
     } else {
@@ -441,11 +449,16 @@ export function App() {
       setSearchPanelMode('search');
       setShowRight(true);
       if (isCompactRef.current) setShowLeft(false);
+      requestSearchFocus();
     }
   }, [showRight, rightTab, setSearchPanelMode]);
 
-  const toggleWhereUsed = useCallback(() => {
+  const toggleWhereUsed = useCallback((fromShortcut = false) => {
     if (showRight && rightTab === 'where-used') {
+      if (fromShortcut && !isSearchInputFocused()) {
+        requestSearchFocus();
+        return;
+      }
       setShowRight(false);
       setRightFullscreen(false);
     } else {
@@ -453,12 +466,14 @@ export function App() {
       setSearchPanelMode('where-used');
       setShowRight(true);
       if (isCompactRef.current) setShowLeft(false);
+      requestSearchFocus();
     }
   }, [showRight, rightTab, setSearchPanelMode]);
 
   const handleRightTabChange = useCallback((tab: 'properties' | 'search' | 'where-used') => {    setRightTab(tab);
     if (tab === 'search') setSearchPanelMode('search');
     else if (tab === 'where-used') setSearchPanelMode('where-used');
+    if (tab !== 'properties') requestSearchFocus();
   }, [setSearchPanelMode]);
 
   const toggleProperties = useCallback(() => {
@@ -484,14 +499,16 @@ export function App() {
       const target = e.target as HTMLElement | null;
       const inEditable = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || (target as HTMLElement).isContentEditable);
 
-      if (inEditable) return;
-
       const shortcut = matchWorkspaceShortcut(e);
       if (!shortcut) return;
+      // Inside the search box, Ctrl+F (or the where-used shortcut) still
+      // closes the panel; every other field keeps its keys.
+      const inSearchBox = !!target && target.dataset.searchInput === 'true';
+      if (inEditable && !(inSearchBox && (shortcut === 'search' || shortcut === 'whereUsed'))) return;
       e.preventDefault();
       switch (shortcut) {
-        case 'search': toggleSearch(); break;
-        case 'whereUsed': toggleWhereUsed(); break;
+        case 'search': toggleSearch(true); break;
+        case 'whereUsed': toggleWhereUsed(true); break;
         case 'explorer': toggleExplorer(); break;
         case 'properties': toggleProperties(); break;
         case 'back': navigateBack(); break;
@@ -536,8 +553,8 @@ export function App() {
         whereUsedActive={showRight && rightTab === 'where-used'}
         onToggleLeft={toggleExplorer}
         onToggleRight={toggleProperties}
-        onToggleSearch={toggleSearch}
-        onToggleWhereUsed={toggleWhereUsed}
+        onToggleSearch={() => toggleSearch()}
+        onToggleWhereUsed={() => toggleWhereUsed()}
         onGoHome={() => { setShowLanding(true); }}
       />
       <div className={styles.workarea}>
@@ -736,23 +753,23 @@ function RightPanel({
         <div className={styles.rightTabSpacer} />
         <div className={styles.rightTabActions}>
           {!hideSizeToggle && (
-            <Tooltip content={fullscreen ? t.collapse : t.expand} relationship="label" withArrow>
+            <Tooltip content={fullscreen ? t.panelRestore : t.panelMaximize} relationship="label" withArrow>
               <Button
                 appearance="subtle"
                 size="small"
                 icon={fullscreen ? <ArrowMinimizeRegular /> : <ExpandUpRightRegular />}
                 onClick={fullscreen ? onCollapse : onExpand}
-                aria-label={fullscreen ? t.collapse : t.expand}
+                aria-label={fullscreen ? t.panelRestore : t.panelMaximize}
               />
             </Tooltip>
           )}
-          <Tooltip content={t.dismiss} relationship="label" withArrow>
+          <Tooltip content={t.panelClose} relationship="label" withArrow>
             <Button
               appearance="subtle"
               size="small"
               icon={<DismissRegular />}
               onClick={onClose}
-              aria-label={t.dismiss}
+              aria-label={t.panelClose}
             />
           </Tooltip>
         </div>
