@@ -1393,6 +1393,149 @@ describe('parseERConfiguration', () => {
     `);
     expect(negateExpression).toMatchObject({ kind: 'UnaryOp', operator: 'Negate' });
   });
+
+  it('keeps expression arguments of different element types in document order', () => {
+    const expression = parseFirstBindingExpression(`
+      <ERExpressionStringConcatenate>
+        <Contents.>
+          <ERExpressionStringConstant Value="a" />
+          <ERExpressionStringItemValue ItemPath="x/y" />
+          <ERExpressionStringConstant Value="b" />
+        </Contents.>
+      </ERExpressionStringConcatenate>
+    `);
+
+    expect(expression).toMatchObject({
+      kind: 'StringOp',
+      operator: 'Concatenate',
+      arguments: [
+        { kind: 'Constant', value: 'a' },
+        { kind: 'ItemValue', itemPath: 'x/y' },
+        { kind: 'Constant', value: 'b' },
+      ],
+    });
+  });
+
+  it('keeps whitespace in attribute values', () => {
+    const expression = parseFirstBindingExpression(`
+      <ERExpressionStringConcatenate>
+        <Contents.>
+          <ERExpressionStringConstant Value=" " />
+          <ERExpressionStringConstant Value=" - " />
+        </Contents.>
+      </ERExpressionStringConcatenate>
+    `);
+
+    expect(expression).toMatchObject({
+      arguments: [{ value: ' ' }, { value: ' - ' }],
+    });
+  });
+
+  it('keeps attribute-less expression elements and pairs CASE branches in order', () => {
+    const expression = parseFirstBindingExpression(`
+      <ERExpressionGenericCase>
+        <Contents.>
+          <ERExpressionIntItemValue ItemPath="k" />
+          <ERExpressionIntConstant Value="1" />
+          <ERExpressionDateSessionToday />
+          <ERExpressionIntConstant Value="2" />
+          <ERExpressionDateNull/>
+        </Contents.>
+      </ERExpressionGenericCase>
+    `);
+
+    expect(expression).toMatchObject({
+      kind: 'Case',
+      cases: [
+        { when: { value: 1 }, then: { kind: 'DateOp', operator: 'SessionToday' } },
+        { when: { value: 2 }, then: { kind: 'Constant', dataType: 'DateNull' } },
+      ],
+    });
+    expect(parseFirstBindingExpression('<ERExpressionDateSessionToday/>'))
+      .toMatchObject({ kind: 'DateOp', operator: 'SessionToday' });
+  });
+
+  it('decodes entities once and leaves out-of-range character references alone', () => {
+    expect(parseFirstBindingExpression('<ERExpressionStringConstant Value="&amp;lt;b&amp;gt; &amp;amp;" />'))
+      .toMatchObject({ value: '&lt;b&gt; &amp;' });
+    expect(parseFirstBindingExpression('<ERExpressionStringConstant Value="x&#x110000;y" />'))
+      .toMatchObject({ value: 'x&#x110000;y' });
+  });
+
+  it('keeps format elements of different types in document order', () => {
+    const xml = buildSolutionEnvelope(`
+      <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Format>
+          <ERTextFormat ID.="{FORMAT}" Name="Ordered format">
+            <Root>
+              <ERTextFormatFileComponent ID.="{FILE}" Name="Report.xml">
+                <Contents.>
+                  <ERTextFormatXMLElement ID.="{HEADER}" Name="Header" />
+                  <ERTextFormatXMLSequence ID.="{LINES}" Name="Lines" />
+                  <ERTextFormatXMLElement ID.="{FOOTER}" Name="Footer" />
+                  <ERTextFormatString ID.="{UNNAMED}" Name="" />
+                </Contents.>
+              </ERTextFormatFileComponent>
+            </Root>
+          </ERTextFormat>
+        </Format>
+      </ERFormatVersion>
+      <ERFormatMappingVersion ID.="{FORMAT-MAP},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERFormatMapping ID.="{FORMAT-MAP}" Format="{FORMAT}" FormatVersion="{FORMAT},1" Name="Ordered format mapping" />
+        </Mapping>
+      </ERFormatMappingVersion>
+    `, { contentRefIds: ['{FORMAT}', '{FORMAT-MAP}'] });
+
+    const config = parseERConfiguration(xml, 'ordered-format.xml');
+    if (config.content.kind !== 'Format') {
+      throw new Error('Expected format content');
+    }
+
+    const names = config.content.formatVersion.format.rootElement.children.map(child => child.name);
+    // The unnamed element falls back to its type instead of a blank label.
+    expect(names).toEqual(['Header', 'Lines', 'Footer', 'String']);
+  });
+
+  it('finds an Excel template nested deeper than eight levels', () => {
+    const nest = (depth: number, inner: string): string => depth === 0
+      ? inner
+      : `<ERTextFormatSequence ID.="{SEQ-${depth}}" Name="Level ${depth}"><Contents.>${nest(depth - 1, inner)}</Contents.></ERTextFormatSequence>`;
+    const xml = buildSolutionEnvelope(`
+      <ERFormatVersion ID.="{FORMAT},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Format>
+          <ERTextFormat ID.="{FORMAT}" Name="Deep template">
+            <Root>
+              <ERTextFormatFolderComponent ID.="{FOLDER}" Name="Folder">
+                <Contents.>
+                  ${nest(6, `
+                    <ERTextFormatExcelFileComponent ID.="{XLSX}" Name="Report">
+                      <Template>
+                        <ERTextFormatExcelTemplate Filename="Deep.xlsx">
+                          <Contents.>UEsDBBQ=</Contents.>
+                        </ERTextFormatExcelTemplate>
+                      </Template>
+                    </ERTextFormatExcelFileComponent>`)}
+                </Contents.>
+              </ERTextFormatFolderComponent>
+            </Root>
+          </ERTextFormat>
+        </Format>
+      </ERFormatVersion>
+      <ERFormatMappingVersion ID.="{FORMAT-MAP},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERFormatMapping ID.="{FORMAT-MAP}" Format="{FORMAT}" FormatVersion="{FORMAT},1" Name="Deep template mapping" />
+        </Mapping>
+      </ERFormatMappingVersion>
+    `, { contentRefIds: ['{FORMAT}', '{FORMAT-MAP}'] });
+
+    const config = parseERConfiguration(xml, 'deep-template.xml');
+    if (config.content.kind !== 'Format') {
+      throw new Error('Expected format content');
+    }
+
+    expect(config.content.formatVersion.format.template).toEqual({ filename: 'Deep.xlsx', base64: 'UEsDBBQ=' });
+  });
 });
 
 describe('parseERConfigurations', () => {

@@ -47,17 +47,23 @@ import type { ERExpression } from '../types/expressions.js';
 
 // ─── XML Parser configuration ───
 
+// fast-xml-parser's default object output groups same-named siblings under
+// one key, which loses the order of mixed siblings: `Header, Lines, Footer`
+// came back as `Header, Footer, Lines`, and `CONCATENATE("a", x, "b")` as
+// `"a", "b", x`. The parser therefore runs in `preserveOrder` mode and
+// `buildNode` folds its output into the familiar object shape, recording each
+// node's children in document order for `orderedChildren`.
 const xmlParserOptions = {
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   allowBooleanAttributes: true,
   parseAttributeValue: false, // keep as strings
-  trimValues: true,
-  processEntities: false, // handled in sanitizeAndDecode to also cover numeric refs and strip unsafe keys in one pass
-  isArray: (name: string) => {
-    // Elements that should always be arrays
-    return arrayElements.has(name);
-  },
+  parseTagValue: false, // text too: a base64 payload must never become a number
+  // `trimValues` also trims attribute values, which turned the separator in
+  // `CONCATENATE(a, " ", b)` into an empty string. `buildNode` trims text only.
+  trimValues: false,
+  processEntities: false, // decoded in buildNode to also cover numeric refs in one pass
+  preserveOrder: true,
 };
 
 // Keys that must never be copied from parsed data to prevent prototype pollution.
@@ -81,8 +87,9 @@ const arrayElements = new Set([
   'ERNamedTextTransformation',
 ]);
 
-function createParser() {
-  return new XMLParser(xmlParserOptions);
+function parseXmlDocument(xml: string): Record<string, unknown> {
+  const ordered = new XMLParser(xmlParserOptions).parse(xml) as OrderedEntry[];
+  return buildNode(ordered, undefined) as Record<string, unknown>;
 }
 
 // ─── Utility helpers ───
@@ -112,31 +119,85 @@ function getContentsArray(node: any, childName: string): any[] {
  * constructs inside ER expressions (e.g. `&quot;` inside a raw formula string).
  */
 function decodeXmlEntities(val: string): string {
-  return val
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
+  if (!val.includes('&')) return val;
+  // One pass, so the `&` a decoded `&amp;` yields is never decoded again:
+  // `&amp;lt;` is the literal text `&lt;`, not `<`.
+  return val.replace(/&(?:#x([0-9a-fA-F]+)|#(\d+)|(amp|lt|gt|quot|apos));/g, (match, hex, dec, named) => {
+    if (named) return NAMED_ENTITIES[named];
+    const codePoint = hex ? parseInt(hex, 16) : parseInt(dec, 10);
+    // An out-of-range reference stays as written instead of failing the file.
+    return codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : match;
+  });
+}
+
+const NAMED_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+
+/** One entry of fast-xml-parser's `preserveOrder` output: an element or a text run. */
+type OrderedEntry = Record<string, unknown> & { ':@'?: Record<string, unknown> };
+
+/** Children of each node `buildNode` produced, as `[elementName, child]` in document order. */
+const CHILD_ORDER = new WeakMap<object, Array<[string, any]>>();
+
+/**
+ * Folds one element of the `preserveOrder` output into the shape the rest of
+ * the parser reads: attributes as `@_Name` keys, children grouped by element
+ * name (an array once a name repeats, or always for `arrayElements`), text as
+ * `#text`, a text-only element as its string and an empty one as `''`.
+ * Along the way it decodes XML entities and drops
+ * __proto__/constructor/prototype keys to neutralise prototype-pollution
+ * attempts via crafted element or attribute names.
+ */
+function buildNode(entries: OrderedEntry[], attributes: Record<string, unknown> | undefined): unknown {
+  const node: Record<string, unknown> = Object.create(null);
+  let hasAttributes = false;
+  for (const [key, value] of Object.entries(attributes ?? {})) {
+    if (UNSAFE_PROTO_KEYS.has(key.slice(2))) continue;
+    node[key] = typeof value === 'string' ? decodeXmlEntities(value) : value;
+    hasAttributes = true;
+  }
+
+  const order: Array<[string, any]> = [];
+  let text = '';
+  for (const entry of entries) {
+    if ('#text' in entry) {
+      text += String(entry['#text']).trim();
+      continue;
+    }
+    const name = Object.keys(entry).find(key => key !== ':@');
+    if (!name || UNSAFE_PROTO_KEYS.has(name) || name === '#__proto__') continue;
+    const child = buildNode(entry[name] as OrderedEntry[], entry[':@']);
+    const existing = node[name];
+    if (existing === undefined) {
+      node[name] = arrayElements.has(name) ? [child] : child;
+    } else if (Array.isArray(existing)) {
+      existing.push(child);
+    } else {
+      node[name] = [existing, child];
+    }
+    order.push([name, child]);
+  }
+
+  if (order.length === 0 && !hasAttributes) return decodeXmlEntities(text);
+  if (text) node['#text'] = decodeXmlEntities(text);
+  CHILD_ORDER.set(node, order);
+  return node;
 }
 
 /**
- * Single-pass traversal that (a) decodes XML entities inside string values and
- * (b) strips any __proto__/constructor/prototype keys from parsed objects to
- * neutralise prototype-pollution attempts via crafted attribute names.
+ * The child elements of `node` as `[elementName, child]` pairs in document
+ * order; attributes and text are left out. Nodes the parser did not produce
+ * (synthesized envelopes) fall back to key order.
  */
-function sanitizeAndDecode(obj: any): any {
-  if (typeof obj === 'string') return decodeXmlEntities(obj);
-  if (obj == null || typeof obj !== 'object') return obj;
-  if (Array.isArray(obj)) return obj.map(sanitizeAndDecode);
-  const result: Record<string, unknown> = Object.create(null);
-  for (const key of Object.keys(obj)) {
-    if (UNSAFE_PROTO_KEYS.has(key)) continue;
-    result[key] = sanitizeAndDecode(obj[key]);
+function orderedChildren(node: any): Array<[string, any]> {
+  if (!node || typeof node !== 'object') return [];
+  const recorded = CHILD_ORDER.get(node);
+  if (recorded) return recorded;
+  const children: Array<[string, any]> = [];
+  for (const [key, value] of Object.entries(node)) {
+    if (key.startsWith('@_') || key === '#text') continue;
+    for (const item of asArray(value)) children.push([key, item]);
   }
-  return result;
+  return children;
 }
 
 // ─── Public API ───
@@ -505,9 +566,7 @@ function buildConfiguration(
 }
 
 function resolveSolutionRoot(xml: string, filePath: string): any {
-  const parser = createParser();
-  const rawDoc = parser.parse(xml);
-  const doc = sanitizeAndDecode(rawDoc);
+  const doc = parseXmlDocument(xml);
   let root = (doc as Record<string, unknown>)['ERSolutionVersion'];
   if (!root) {
     // F&O custom-service downloads (GetEffectiveFormatMappingByID etc.)
@@ -1480,7 +1539,9 @@ function findExcelTemplate(node: any, depth = 0): { filename: string; base64?: s
 }
 
 function collectExcelTemplates(node: any, depth = 0, out: Array<{ filename: string; base64?: string }> = []): Array<{ filename: string; base64?: string }> {
-  if (!node || typeof node !== 'object' || depth > 8) return out;
+  // Every element and every `Contents.` wrapper is a level, so a template
+  // under folder > file > sheet components easily sits deeper than 8.
+  if (!node || typeof node !== 'object' || depth > 64) return out;
   // Two element names seen in the wild:
   // ERTextFormatExcelTemplate (reference-only or older embedded style)
   // ERTextFormatExcelFileComponentTemplate (newer embedded style inside ExcelFileComponent)
@@ -1495,15 +1556,11 @@ function collectExcelTemplates(node: any, depth = 0, out: Array<{ filename: stri
       out.push({ filename, base64 });
     }
   }
-  // Search children
-  for (const [key, val] of Object.entries(node)) {
-    if (key.startsWith('@_') || key === '#text') continue;
-    const items = Array.isArray(val) ? val : [val];
-    for (const item of items) {
-      collectExcelTemplates(item, depth + 1, out);
-      // Also check inside Contents. sub-nodes
-      collectExcelTemplates(item?.['Contents.'], depth + 2, out);
-    }
+  // Search children. `Contents.` is an ordinary child key here, so it needs no
+  // separate descent (that walked every subtree twice and collected duplicates).
+  for (const [key, item] of orderedChildren(node)) {
+    if (key === 'ERTextFormatExcelTemplate' || key === 'ERTextFormatExcelFileComponentTemplate') continue;
+    collectExcelTemplates(item, depth + 1, out);
   }
   return out;
 }
@@ -1513,12 +1570,9 @@ function parseRootFormatElement(rootNode: any): ERFormatElement {
     return { id: '', name: 'Unknown', elementType: 'Unknown', children: [], attributes: {} };
   }
 
-  for (const [key, value] of Object.entries(rootNode)) {
-    if (key.startsWith('@_') || key === '#text') continue;
+  for (const [key, firstNode] of orderedChildren(rootNode)) {
     const elementType = formatElementTypeMap[key];
     if (!elementType) continue;
-
-    const firstNode = asArray(value)[0];
     if (firstNode) {
       return parseFormatElement(firstNode, elementType);
     }
@@ -1537,18 +1591,17 @@ function parseFormatElement(node: any, type: ERFormatElementType): ERFormatEleme
 
   if (contentsNode) {
     // Parse child format elements
-    for (const [key, val] of Object.entries(contentsNode)) {
-      if (key.startsWith('@_') || key === '#text') continue;
+    const warned = new Set<string>();
+    for (const [key, child] of orderedChildren(contentsNode)) {
       const elementType = formatElementTypeMap[key];
-      if (!elementType) {
+      if (!elementType && !warned.has(key)) {
         // Unknown component type: keep the node (name, attributes, children)
         // as `Unknown` instead of dropping the whole subtree silently.
+        warned.add(key);
         pushParseWarning(`Unknown format element type '${key}' kept as 'Unknown'`);
       }
-      for (const child of asArray(val)) {
-        if (child === null || typeof child !== 'object') continue;
-        children.push(parseFormatElement(child, elementType ?? 'Unknown'));
-      }
+      if (child === null || typeof child !== 'object') continue;
+      children.push(parseFormatElement(child, elementType ?? 'Unknown'));
     }
   }
 
@@ -1556,10 +1609,11 @@ function parseFormatElement(node: any, type: ERFormatElementType): ERFormatEleme
     id: getAttr(node, 'ID.') ?? '',
     // Excel components carry no `Name`; the designer shows the named range /
     // sheet name instead, so fall back to those before the bare type label.
+    // `||`, not `??`: an empty `Name=""` falls back too.
     name: getAttr(node, 'Name')
-      ?? getAttr(node, 'ExcelRange')
-      ?? getAttr(node, 'ExcelSheetName')
-      ?? type,
+      || getAttr(node, 'ExcelRange')
+      || getAttr(node, 'ExcelSheetName')
+      || type,
     elementType: type,
     encoding: getAttr(node, 'Encoding'),
     maximalLength: getAttr(node, 'MaximalLength')
@@ -1675,8 +1729,7 @@ function parseExpression(exprContainer: any): ERExpression | undefined {
 
   // The Expression element wraps the actual expression node
   // Find the first child element that is an expression type
-  for (const [key, val] of Object.entries(exprContainer)) {
-    if (key.startsWith('@_') || key === '#text') continue;
+  for (const [key, val] of orderedChildren(exprContainer)) {
     const parsed = parseExpressionNode(key, val);
     if (parsed) return parsed;
   }
@@ -1689,12 +1742,9 @@ function parseExpressionChildren(node: any): ERExpression[] {
   const contentsNode = getContents(node);
   if (!contentsNode) return children;
 
-  for (const [key, value] of Object.entries(contentsNode)) {
-    if (key.startsWith('@_')) continue;
-    for (const item of asArray(value)) {
-      const parsed = parseExpressionNode(key, item);
-      if (parsed) children.push(parsed);
-    }
+  for (const [key, item] of orderedChildren(contentsNode)) {
+    const parsed = parseExpressionNode(key, item);
+    if (parsed) children.push(parsed);
   }
 
   return children;
@@ -1708,7 +1758,9 @@ function defaultConstant(dataType: 'String' | 'Int' | 'Real' | 'Boolean' | 'Date
 }
 
 function parseExpressionNode(elementName: string, node: any): ERExpression | undefined {
-  if (!node) return undefined;
+  // An attribute-less element such as `<ERExpressionDateSessionToday/>` parses
+  // to '' — a real node, not a missing one.
+  if (node == null) return undefined;
 
   // Item values
   if (elementName.match(/^ERExpression(String|Real|Int|Int64|Boolean|Enum|Date|DateTime|List|Container|DataContainer)ItemValue$/)) {
@@ -2037,14 +2089,11 @@ function parseExpressionNode(elementName: string, node: any): ERExpression | und
 
   if (typeof node === 'object' && node !== null) {
     for (const [k, v] of Object.entries(node)) {
-      if (k.startsWith('@_')) {
-        attrs[k.slice(2)] = String(v);
-      } else if (k !== '#text') {
-        for (const item of asArray(v)) {
-          const parsed = parseExpressionNode(k, item);
-          if (parsed) children.push(parsed);
-        }
-      }
+      if (k.startsWith('@_')) attrs[k.slice(2)] = String(v);
+    }
+    for (const [k, item] of orderedChildren(node)) {
+      const parsed = parseExpressionNode(k, item);
+      if (parsed) children.push(parsed);
     }
   }
 

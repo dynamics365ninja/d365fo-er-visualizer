@@ -48,8 +48,83 @@ export interface CrossRefEntry {
   sourceContext: string; // human-readable description
 }
 
+/**
+ * The all-zero id the parser gives a component whose download came without
+ * the `ERSolutionVersion` envelope. Every such download shares it, so it
+ * identifies nothing and is never registered.
+ */
+const PLACEHOLDER_GUID = /^\{?0{8}-0{4}-0{4}-0{4}-0{12}\}?(,\d+)?$/;
+
+/**
+ * Names an ER formula starts a data path with — `'Sales invoice'` in
+ * `'Sales invoice'.Lines.Amount`, `model` in `model.X`. A name counts only
+ * when a `.` follows it, and only the first segment of a dotted path is a
+ * reference: the rest are fields of it. String literals ("file.xml") and
+ * numbers (1.5) are skipped; quoted names keep their spaces and non-ASCII
+ * letters.
+ */
+export function formulaReferenceRoots(expr: string): string[] {
+  const roots: string[] = [];
+  const identStart = /[\p{L}_$#@]/u;
+  const identPart = /[\p{L}\p{N}_$#@]/u;
+  let i = 0;
+  let afterDot = false;
+
+  // A quoted token with `''` / `""` doubling as the escape for the quote.
+  const readQuoted = (quote: string): string => {
+    let value = '';
+    i++;
+    while (i < expr.length) {
+      if (expr[i] === quote) {
+        if (expr[i + 1] === quote) { value += quote; i += 2; continue; }
+        i++;
+        break;
+      }
+      value += expr[i++];
+    }
+    return value;
+  };
+
+  while (i < expr.length) {
+    const ch = expr[i];
+    let name: string | undefined;
+    if (ch === '"') {
+      readQuoted('"');
+      afterDot = false;
+      continue;
+    } else if (ch === "'") {
+      name = readQuoted("'");
+    } else if (/[0-9]/.test(ch)) {
+      while (i < expr.length && /[0-9.eE]/.test(expr[i])) i++;
+      afterDot = false;
+      continue;
+    } else if (identStart.test(ch)) {
+      const start = i;
+      while (i < expr.length && identPart.test(expr[i])) i++;
+      name = expr.slice(start, i);
+    } else {
+      // Whitespace inside `a. b` keeps the path going; anything else ends it.
+      if (!/\s/.test(ch)) afterDot = false;
+      i++;
+      continue;
+    }
+
+    let j = i;
+    while (j < expr.length && /\s/.test(expr[j])) j++;
+    const startsPath = expr[j] === '.';
+    if (startsPath && !afterDot && name) roots.push(name);
+    afterDot = startsPath;
+    if (startsPath) i = j + 1;
+  }
+  return roots;
+}
+
 export class GUIDRegistry {
-  private entries = new Map<string, GUIDEntry>();
+  /**
+   * Every component registered under a GUID. A derived format reuses the
+   * element ids of its base, so with both loaded one id belongs to two files.
+   */
+  private entries = new Map<string, GUIDEntry[]>();
   private crossRefs: CrossRefEntry[] = [];
   /** Secondary index: normalized target → cross-refs. Built lazily, invalidated on mutation. */
   private targetIndex: Map<string, CrossRefEntry[]> | null = null;
@@ -67,17 +142,38 @@ export class GUIDRegistry {
   }
 
   register(entry: GUIDEntry): void {
-    if (entry.guid) {
-      this.entries.set(entry.guid.toLowerCase(), entry);
+    if (!entry.guid || PLACEHOLDER_GUID.test(entry.guid)) return;
+    const key = entry.guid.toLowerCase();
+    const bucket = this.entries.get(key);
+    if (!bucket) {
+      this.entries.set(key, [entry]);
+      return;
     }
+    // Re-registering the same component (same file, same kind) replaces it.
+    const existing = bucket.findIndex(e => e.configFilePath === entry.configFilePath && e.kind === entry.kind);
+    if (existing >= 0) bucket[existing] = entry; else bucket.push(entry);
   }
 
-  lookup(guid: string): GUIDEntry | undefined {
-    return this.entries.get(guid.toLowerCase());
+  /**
+   * The component registered under `guid`. When several files carry it (a
+   * derived format and its base), the one in `preferredConfigPath` wins;
+   * otherwise the most recently indexed one.
+   */
+  lookup(guid: string, preferredConfigPath?: string): GUIDEntry | undefined {
+    const bucket = this.entries.get(guid.toLowerCase());
+    if (!bucket) return undefined;
+    return (preferredConfigPath !== undefined
+      ? bucket.find(e => e.configFilePath === preferredConfigPath)
+      : undefined) ?? bucket[bucket.length - 1];
+  }
+
+  /** Every component registered under `guid`, in indexing order. */
+  lookupAll(guid: string): GUIDEntry[] {
+    return this.entries.get(guid.toLowerCase())?.slice() ?? [];
   }
 
   getAllEntries(): GUIDEntry[] {
-    return Array.from(this.entries.values());
+    return Array.from(this.entries.values()).flat();
   }
 
   addCrossRef(ref: CrossRefEntry): void {
@@ -395,14 +491,10 @@ export class GUIDRegistry {
   private indexExpressionString(expr: string, fp: string, component: string, context: string): void {
     if (!expr) return;
 
-    // Extract table/datasource references from expressions
-    // Pattern: 'DatasourceName'.FieldPath or DatasourceName.FieldPath
-    const refPattern = /['"]?(\w+)['"]?\.\w+/g;
-    let match;
-    while ((match = refPattern.exec(expr)) !== null) {
-      // Only add formula-level references
+    // Datasource references: the head of every 'Datasource'.Field.Path.
+    for (const root of formulaReferenceRoots(expr)) {
       this.addCrossRef({
-        target: match[1],
+        target: root,
         targetType: 'Formula',
         sourceConfigPath: fp,
         sourceComponent: component,
