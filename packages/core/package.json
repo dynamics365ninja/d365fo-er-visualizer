@@ -12,12 +12,12 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "fast-xml-parser": "^4.5.1",
+    "fast-xml-parser": "^5.11.1",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "@types/uuid": "^10.0.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.1.0",
-    "@types/uuid": "^10.0.0"
+    "vitest": "^3.2.7"
   }
 }
