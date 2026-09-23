@@ -26,7 +26,9 @@ import {
   FolderRegular,
   AppsListDetailRegular,
   AddRegular,
+  SearchRegular,
 } from '@fluentui/react-icons';
+import { whereUsedQueryFor } from '../utils/where-used-query';
 import { locale, t, useLocale } from '../i18n';
 import { treeArrowAction } from '../utils/tree-keyboard';
 import { flattenVisibleTree, indexFlatRows, type FlatTreeRow } from '../utils/flat-tree';
@@ -707,14 +709,23 @@ export function ConfigExplorer() {
   const navRef = React.useRef({ allRows, allRowIndex });
   navRef.current = { allRows, allRowIndex };
 
-  /** WAI-ARIA tree keys: arrows walk and fold, Home / End jump, Enter / Space select. */
+  /**
+   * WAI-ARIA tree keys: arrows walk and fold, Home / End jump, Space selects,
+   * Enter opens — what a double-click does.
+   */
   const handleRowKeyDown = useCallback((id: string, event: React.KeyboardEvent<HTMLDivElement>) => {
     const { allRows: rows, allRowIndex: index } = navRef.current;
     const at = index.get(id);
     if (at == null) return;
     const row = rows[at];
 
-    if (event.key === 'Enter' || event.key === ' ') {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      selectNode(id);
+      handleExplorerDoubleClick(row.node);
+      return;
+    }
+    if (event.key === ' ') {
       event.preventDefault();
       selectNode(id);
       return;
@@ -741,7 +752,7 @@ export function ConfigExplorer() {
       const target = rows[at + (action === 'previous' ? -1 : 1)];
       if (target) selectNode(target.id);
     }
-  }, [selectNode, setOpen]);
+  }, [selectNode, setOpen, handleExplorerDoubleClick]);
 
   const treeContext = useMemo<ExplorerTreeContextValue>(() => ({
     blockRows,
@@ -1186,9 +1197,11 @@ interface TreeNodeRowProps {
 const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded, hasChildren, posInSet, setSize, isTabStop, selectedId, selectedPathIds, showTechnicalDetails, version, onSelect, onToggle, onRowKeyDown, onDoubleClick, onCloseConfiguration, inKindGroup }: TreeNodeRowProps) {
   const displayName = getNodeDisplayName(node, showTechnicalDetails);
 
-  const handleClick = useCallback(() => {
+  const handleClick = useCallback((event: React.MouseEvent) => {
     onSelect(node.id);
-    if (hasChildren) onToggle(node.id, !expanded);
+    // The second click of a double-click opens the node; folding the row
+    // back as well made it flicker shut on every open.
+    if (hasChildren && event.detail < 2) onToggle(node.id, !expanded);
   }, [node.id, hasChildren, expanded, onSelect, onToggle]);
 
   const handleDoubleClick = useCallback(() => {
@@ -1237,11 +1250,13 @@ const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded,
   const parentClass = hasChildren ? 'tree-node-parent' : '';
   const kindLabel = inKindGroup ? getExplorerKindPillInGroup(node) : getExplorerKindLabel(node);
   const canCloseConfiguration = depth === 0 && node.configIndex != null && node.type === 'file';
+  const whereUsedQuery = whereUsedQueryFor(node);
+  const triggerWhereUsed = useAppStore(s => s.triggerWhereUsed);
   // Double-tap is unreliable on touch (it competes with the platform's own
   // zoom gesture), so on a coarse pointer every node that responds to a
   // double-click gets an explicit menu entry instead.
   const coarse = useCoarsePointer();
-  const showRowMenu = canCloseConfiguration || (coarse && node.configIndex != null);
+  const showRowMenu = canCloseConfiguration || Boolean(whereUsedQuery) || (coarse && node.configIndex != null);
 
   return (
     <div
@@ -1300,6 +1315,11 @@ const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded,
               >
                 {t.explorerOpenInTab}
               </MenuItem>
+              {whereUsedQuery && (
+                <MenuItem icon={<SearchRegular />} onClick={() => triggerWhereUsed(whereUsedQuery)}>
+                  {t.whereUsedAction}
+                </MenuItem>
+              )}
               {canCloseConfiguration && (
                 <MenuItem
                   icon={<DeleteRegular />}

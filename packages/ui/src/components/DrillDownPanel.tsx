@@ -1366,8 +1366,12 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
   );
 }
 
-/** Delay before a single click opens the dialog — long enough to detect a double-click. */
-const DRILL_TRIGGER_CLICK_DELAY_MS = 250;
+/**
+ * The dialog opens on the first click. A second click this soon after lands
+ * on the dialog's backdrop; it is the second half of a double-click, which
+ * opens the drill-down as a tab instead.
+ */
+const DRILL_DOUBLE_CLICK_MS = 450;
 
 /** Smallest useful drill-down dialog — below this the outline stops being readable. */
 const DRILL_DIALOG_MIN_W = 420;
@@ -1401,9 +1405,9 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
   const openDrillDownTab = useAppStore(s => s.openDrillDownTab);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dialogViewMode, setDialogViewMode] = useState<'workbench' | 'tree'>('workbench');
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Touch has no reliable double-tap of its own, and waiting for one only adds
-  // lag; the dialog's own "open as tab" button covers that path instead.
+  const openedAtRef = useRef(0);
+  // Touch has no double-tap of its own; the dialog's "open as tab" button
+  // covers that path instead.
   const coarse = useCoarsePointer();
   const { surfaceRef, size: dialogSize, startResize, resetSize } = useResizableDialog(
     {
@@ -1413,10 +1417,6 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
     },
     isDialogOpen,
   );
-
-  React.useEffect(() => () => {
-    if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
-  }, []);
 
   React.useEffect(() => {
     if (!isDialogOpen) return;
@@ -1436,13 +1436,9 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
   const openAsTab = () => openDrillDownTab(trimmedExpr, configIndex, elementName);
   const openBeside = () => openDrillDownTab(trimmedExpr, configIndex, elementName, { side: true });
 
-  // A modal opened on the first click would swallow the second one, so the
-  // single-click open is deferred briefly and cancelled by a double-click.
-  const cancelPendingOpen = () => {
-    if (clickTimerRef.current) {
-      clearTimeout(clickTimerRef.current);
-      clickTimerRef.current = null;
-    }
+  const openDialog = () => {
+    openedAtRef.current = Date.now();
+    setIsDialogOpen(true);
   };
 
   return (
@@ -1454,44 +1450,43 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
         onClick={(e) => {
           e.stopPropagation();
           if (e.ctrlKey || e.metaKey) {
-            cancelPendingOpen();
             openAsTab();
             return;
           }
-          if (coarse) {
-            cancelPendingOpen();
-            setIsDialogOpen(true);
+          if (e.detail > 1) {
+            // Second click of a double-click that still reached the trigger.
+            setIsDialogOpen(false);
+            openAsTab();
             return;
           }
-          if (e.detail > 1) return; // second click of a double-click
-          cancelPendingOpen();
-          clickTimerRef.current = setTimeout(() => {
-            clickTimerRef.current = null;
-            setIsDialogOpen(true);
-          }, DRILL_TRIGGER_CLICK_DELAY_MS);
-        }}
-        onDoubleClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          cancelPendingOpen();
-          setIsDialogOpen(false);
-          openAsTab();
+          openDialog();
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
+            e.stopPropagation();
             if (e.shiftKey || e.ctrlKey || e.metaKey) openAsTab();
-            else setIsDialogOpen(true);
+            else openDialog();
           }
         }}
         aria-label={label}
-        title={label
-          ? (coarse ? label : `${label} · ${locale === 'cs' ? 'dvojklik otevře záložku' : 'double-click opens a tab'}`)
-          : (coarse ? t.drillClickToToggle : `${t.drillClickToToggle} · ${t.drillOpenAsTab}`)}
+        aria-haspopup="dialog"
+        title={[label ?? t.drillTriggerHint, coarse ? null : t.drillTriggerTabHint].filter(Boolean).join(' · ')}
       >
         {children}
       </span>
-      <Dialog open={isDialogOpen} onOpenChange={(_, d) => setIsDialogOpen(d.open)} modalType="modal">
+      <Dialog
+        open={isDialogOpen}
+        onOpenChange={(_, d) => {
+          if (!d.open && d.type === 'backdropClick' && Date.now() - openedAtRef.current < DRILL_DOUBLE_CLICK_MS && !coarse) {
+            setIsDialogOpen(false);
+            openAsTab();
+            return;
+          }
+          setIsDialogOpen(d.open);
+        }}
+        modalType="modal"
+      >
         <DialogSurface
           ref={surfaceRef}
           className="dd-dialog-surface dd-dialog-surface--resizable"

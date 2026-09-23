@@ -472,9 +472,18 @@ const FormatElementRow = React.memo(function FormatElementRow({ row, bindingMap,
         })}
 
         {/* Main Binding — the original formula shown inline */}
+        {/* The formula opens its drill-down, as everywhere else; "Show in
+            Explorer" lives in the row's ⋮ menu. */}
         {mainBinding && (
-          <span className="fmt-binding-inline" onClick={e => e.stopPropagation()}>
-            ← <ExpressionDetailLink expression={mainBinding.expressionAsString} configIndex={configIndex} highlight={filter} />
+          <span className="fmt-binding-inline">
+            ←{' '}
+            <DrillDownTrigger
+              expression={mainBinding.expressionAsString}
+              configIndex={configIndex}
+              elementName={element.name}
+            >
+              <ExpressionDetailLink expression={mainBinding.expressionAsString} configIndex={configIndex} interactive={false} highlight={filter} />
+            </DrillDownTrigger>
           </span>
         )}
 

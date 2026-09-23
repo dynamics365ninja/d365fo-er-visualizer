@@ -13,6 +13,64 @@ import {
 import { useAppStore, selectMappingDefinition, lastActiveFormatIndex, getMappingDefinitions, isSplitView, type DesignerPane, type OpenTab } from '../state/store';
 import { draggedTabId, isTabDrag } from '../utils/tab-drag';
 import { TabStrip } from './TabBar';
+import { SPLIT_MAX, SPLIT_MIN, useIsNarrow, useSplitRatio } from '../utils/split-ratio';
+
+/**
+ * Below this width two groups side by side are too narrow to read; the strips
+ * stack and only the focused group's tab is shown.
+ */
+const NARROW_SPLIT_WIDTH = 720;
+
+/**
+ * The draggable divider between the two groups. Arrow keys move it by 5 %,
+ * a double-click puts it back in the middle.
+ */
+function SplitHandle({ ratio, onChange, container }: {
+  ratio: number;
+  onChange: (ratio: number) => void;
+  container: HTMLElement | null;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const ratioAt = (clientX: number) => {
+    const rect = container?.getBoundingClientRect();
+    return rect && rect.width > 0 ? (clientX - rect.left) / rect.width : ratio;
+  };
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={t.splitResize}
+      aria-valuemin={Math.round(SPLIT_MIN * 100)}
+      aria-valuemax={Math.round(SPLIT_MAX * 100)}
+      aria-valuenow={Math.round(ratio * 100)}
+      tabIndex={0}
+      title={t.splitResize}
+      className={`designer-split-handle${dragging ? ' designer-split-handle--dragging' : ''}`}
+      style={{ left: `${ratio * 100}%` }}
+      onPointerDown={e => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        setDragging(true);
+      }}
+      onPointerMove={e => { if (dragging) onChange(ratioAt(e.clientX)); }}
+      onPointerUp={e => {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        setDragging(false);
+      }}
+      onPointerCancel={() => setDragging(false)}
+      onDoubleClick={() => onChange(0.5)}
+      onKeyDown={e => {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          onChange(ratio + (e.key === 'ArrowLeft' ? -0.05 : 0.05));
+        } else if (e.key === 'Home' || e.key === 'End') {
+          e.preventDefault();
+          onChange(e.key === 'Home' ? SPLIT_MIN : SPLIT_MAX);
+        }
+      }}
+    />
+  );
+}
 import { ClickablePath } from './ClickablePath';
 import { DrillDownBody, DrillDownTrigger } from './DrillDownPanel';
 import { PropertyInspector } from './PropertyInspector';
@@ -97,6 +155,10 @@ export function DesignerView() {
   const setDraggingTab = useAppStore(s => s.setDraggingTab);
   const splitView = useAppStore(isSplitView);
   const [dropZone, setDropZone] = useState<DesignerPane | null>(null);
+  const [splitRatio, setSplitRatio] = useSplitRatio();
+  // Callback ref: the grid mounts only once a tab is open.
+  const [gridEl, setGridEl] = useState<HTMLDivElement | null>(null);
+  const narrow = useIsNarrow(gridEl, NARROW_SPLIT_WIDTH);
   const coarse = useCoarsePointer();
   const openHint = coarse ? t.openInExplorerTouch : t.openInExplorer;
 
@@ -165,7 +227,17 @@ export function DesignerView() {
      scroll position or an opened branch were gone on the way back. Each group
      has its own tab strip above its column, as in an IDE. */
   return (
-    <div className={`designer-tabs${split ? ' designer-tabs--split' : ''}`}>
+    <div
+      ref={setGridEl}
+      className={`designer-tabs${split ? ' designer-tabs--split' : ''}${split && narrow ? ' designer-tabs--narrow' : ''}`}
+      data-focused-pane={split ? focusedPane : undefined}
+      style={split && !narrow
+        ? { gridTemplateColumns: `minmax(0, ${splitRatio}fr) minmax(0, ${1 - splitRatio}fr)` }
+        : undefined}
+    >
+      {split && !narrow && (
+        <SplitHandle ratio={splitRatio} onChange={setSplitRatio} container={gridEl} />
+      )}
       {groups.map(pane => (
         <div
           key={`strip-${pane}`}
@@ -178,6 +250,8 @@ export function DesignerView() {
       {tabs.map(tab => {
         const slot = tab.id === activeTabId ? 'main' : (split && tab.id === splitTabId ? 'side' : 'hidden');
         const live = slot !== 'hidden';
+        // Stacked (narrow) split: only the focused group's tab is on screen.
+        const onScreen = live && !(split && narrow && slot !== focusedPane);
         const focused = split && slot === focusedPane;
         const tabNode = findTreeNodeById(treeNodes, tab.id);
         if (live) {
@@ -188,8 +262,8 @@ export function DesignerView() {
           <section
             key={tab.id}
             className={`designer-tab-pane designer-tab-pane--${slot}${focused ? ' designer-tab-pane--focused' : ''}`}
-            aria-hidden={live ? undefined : true}
-            inert={live ? undefined : true}
+            aria-hidden={onScreen ? undefined : true}
+            inert={onScreen ? undefined : true}
             // Whatever is picked next — an explorer node, a search hit, a
             // drill-down — opens in the group the user last worked in.
             onPointerDownCapture={split && live ? () => focusPane(slot as DesignerPane) : undefined}
@@ -209,7 +283,13 @@ export function DesignerView() {
         );
       })}
       {draggingTabId && (
-        <div className="designer-drop-zones">
+        <div
+          className="designer-drop-zones"
+          // The halves line up with the groups, whatever their ratio.
+          style={split && !narrow
+            ? { gridTemplateColumns: `minmax(0, ${splitRatio}fr) minmax(0, ${1 - splitRatio}fr)` }
+            : undefined}
+        >
           {dropZones.map(zone => (
             <div
               key={zone}

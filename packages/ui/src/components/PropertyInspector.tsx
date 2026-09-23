@@ -16,7 +16,9 @@ import {
   DocumentFilled,
   CheckmarkCircleRegular,
   ArrowSyncRegular,
+  SearchRegular,
 } from '@fluentui/react-icons';
+import { whereUsedQueryFor } from '../utils/where-used-query';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -150,6 +152,7 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
   const configurations = useAppStore(s => s.configurations);
   const treeNodes = useAppStore(s => s.treeNodes);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
+  const triggerWhereUsed = useAppStore(s => s.triggerWhereUsed);
   const coarse = useCoarsePointer();
   const node = nodeOverride ?? selectedNode;
   const configIndex = node?.configIndex ?? 0;
@@ -179,6 +182,10 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
               <span className="property-empty-tip-key">Ctrl+J</span>
               <span className="property-empty-tip-label">{t.properties}</span>
             </div>
+            <div className="property-empty-tip">
+              <span className="property-empty-tip-key">Ctrl+U</span>
+              <span className="property-empty-tip-label">{t.whereUsedAction}</span>
+            </div>
           </div>
         )}
       </div>
@@ -193,6 +200,7 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
   // A configuration's root row is the explorer's top level — revealing it
   // would only re-select what is already in view.
   const isTreeRoot = treeNodes.some(root => root.id === node.id);
+  const whereUsedQuery = whereUsedQueryFor(node);
 
   return (
     <div className="property-inspector">
@@ -234,6 +242,17 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
             <AppsListDetailRegular fontSize={13} />
             {t.propRevealInExplorer}
           </button>
+          {whereUsedQuery && (
+            <button
+              type="button"
+              className="prop-action"
+              onClick={() => triggerWhereUsed(whereUsedQuery)}
+              title={`${t.whereUsedAction} (Ctrl+U)`}
+            >
+              <SearchRegular fontSize={13} />
+              {t.whereUsedAction}
+            </button>
+          )}
         </div>
       )}
     </div>
