@@ -1,7 +1,11 @@
 import { getElectronApi } from '../fno/electron-bridge';
 import { locale } from '../i18n';
 
-type LoadXmlFile = (xml: string, filePath: string) => void;
+/**
+ * `false` means the file parsed but was not loaded (a newer version of the
+ * same configuration is already open — the store says so in a toast).
+ */
+type LoadXmlFile = (xml: string, filePath: string) => boolean | void;
 
 export type FileLoadResult = {
   loaded: number;
@@ -22,8 +26,7 @@ async function ingestXmlFiles(
     }
 
     try {
-      loadXmlFile(file.content, file.name);
-      loaded++;
+      if (loadXmlFile(file.content, file.name) !== false) loaded++;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`${file.name}: ${message}`);

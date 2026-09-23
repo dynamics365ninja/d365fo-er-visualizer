@@ -13,6 +13,7 @@ import { buildFormatBindingPresentation } from '../utils/format-binding-display'
 import { dsPathToExpression } from '../utils/ds-path';
 import { countDeclaredDatasources } from '../utils/datasource-tree';
 import { useFnoSession } from './fno-session';
+import { clearHarvestedLabels } from '../utils/label-resolver';
 import { onFnoDownloadEvent } from '../fno/session';
 import { formatReferencedModelIds, mappingDefinitionLabel } from '../utils/model-hierarchy';
 import { FnoEmptyContentError } from '@er-visualizer/fno-client';
@@ -128,15 +129,73 @@ export interface ConfigWarning {
   nodeId?: string;
 }
 
-function loadJSON<T>(key: string, fallback: T): T {
+/**
+ * Read a persisted JSON value and hand it to `sanitize`, which has to turn
+ * whatever is stored — another build's shape, `"null"`, a hand-edited value —
+ * into a valid `T`. Parse failures fall back to `fallback`.
+ */
+/** Shortest free-text query `executeSearch` runs; shorter ones yield no results. */
+export const MIN_SEARCH_QUERY_LENGTH = 2;
+
+function loadJSON<T>(key: string, fallback: T, sanitize: (value: unknown) => T): T {
   if (typeof window === 'undefined') return fallback;
   try {
     const raw = window.localStorage.getItem(key);
     if (!raw) return fallback;
-    return JSON.parse(raw) as T;
+    return sanitize(JSON.parse(raw));
   } catch {
     return fallback;
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const RECENT_FILE_KINDS: ReadonlySet<unknown> = new Set(['DataModel', 'ModelMapping', 'Format']);
+
+/**
+ * Keep the persisted recent-file entries that are usable: a non-array value
+ * yields `[]`, entries without a string `path` are dropped, and optional
+ * fields of the wrong type are removed rather than trusted.
+ */
+export function sanitizeRecentFiles(value: unknown): RecentFile[] {
+  if (!Array.isArray(value)) return [];
+  const files: RecentFile[] = [];
+  for (const item of value) {
+    if (!isRecord(item) || typeof item.path !== 'string' || !item.path) continue;
+    const file: RecentFile = {
+      path: item.path,
+      name: typeof item.name === 'string' ? item.name : (item.path.split(/[\\/]/).pop() ?? item.path),
+      openedAt: typeof item.openedAt === 'number' && Number.isFinite(item.openedAt) ? item.openedAt : 0,
+    };
+    if (RECENT_FILE_KINDS.has(item.kind)) file.kind = item.kind as RecentFile['kind'];
+    if (typeof item.solutionName === 'string') file.solutionName = item.solutionName;
+    if (typeof item.version === 'string') file.version = item.version;
+    if (typeof item.modelId === 'string') file.modelId = item.modelId;
+    if (typeof item.solutionId === 'string') file.solutionId = item.solutionId;
+    if (item.source === 'file' || item.source === 'fno') file.source = item.source;
+    if (typeof item.bundlePath === 'string') file.bundlePath = item.bundlePath;
+    files.push(file);
+  }
+  return files;
+}
+
+/** Same as `sanitizeRecentFiles` for sessions; a session left with no files is dropped. */
+export function sanitizeRecentSessions(value: unknown): RecentSession[] {
+  if (!Array.isArray(value)) return [];
+  const sessions: RecentSession[] = [];
+  for (const item of value) {
+    if (!isRecord(item) || typeof item.id !== 'string') continue;
+    const files = sanitizeRecentFiles(item.files);
+    if (files.length === 0) continue;
+    sessions.push({
+      id: item.id,
+      openedAt: typeof item.openedAt === 'number' && Number.isFinite(item.openedAt) ? item.openedAt : 0,
+      files,
+    });
+  }
+  return sessions;
 }
 
 /**
@@ -344,16 +403,44 @@ interface NavigationSnapshot {
   selectedNodeId: string | null;
 }
 
-function remapTreeNodeIdAfterRemoval(nodeId: string | null, removedIndex: number): string | null {
-  if (!nodeId) return null;
-  const match = nodeId.match(/^cfg-(\d+)(.*)$/);
-  if (!match) return nodeId;
+/**
+ * Shift a tab or tree-node id past the removal of configuration
+ * `removedIndex`. Both id shapes carry the config index: tree nodes and node
+ * tabs are `cfg-N…`, drill-down tabs are `drilldown:N:…`. Returns `null` for
+ * an id that belonged to the removed configuration; ids of any other shape are
+ * returned unchanged.
+ */
+export function remapIdAfterConfigRemoval(id: string | null, removedIndex: number): string | null {
+  if (!id) return null;
+  const match = id.match(/^(cfg-|drilldown:)(\d+)(.*)$/s);
+  if (!match) return id;
 
-  const currentIndex = parseInt(match[1], 10);
-  const suffix = match[2] ?? '';
+  const [, prefix, indexText, suffix] = match;
+  const currentIndex = parseInt(indexText, 10);
   if (currentIndex === removedIndex) return null;
-  if (currentIndex < removedIndex) return nodeId;
-  return `cfg-${currentIndex - 1}${suffix}`;
+  if (currentIndex < removedIndex) return id;
+  return `${prefix}${currentIndex - 1}${suffix}`;
+}
+
+/**
+ * Remap a back/forward stack after a configuration is removed. A snapshot
+ * that pointed into the removed configuration (by tab or by selection) is
+ * dropped — going "back" into a closed config has nowhere to land.
+ */
+function remapNavigationStackAfterRemoval(
+  stack: NavigationSnapshot[],
+  removedIndex: number,
+): NavigationSnapshot[] {
+  const remapped: NavigationSnapshot[] = [];
+  for (const snapshot of stack) {
+    const activeTabId = remapIdAfterConfigRemoval(snapshot.activeTabId, removedIndex);
+    const selectedNodeId = remapIdAfterConfigRemoval(snapshot.selectedNodeId, removedIndex);
+    if (snapshot.activeTabId && !activeTabId) continue;
+    if (snapshot.selectedNodeId && !selectedNodeId) continue;
+    if (!activeTabId && !selectedNodeId) continue;
+    remapped.push({ activeTabId, selectedNodeId });
+  }
+  return remapped;
 }
 
 // ─── App State ───
@@ -410,7 +497,12 @@ export interface AppState {
   /** Set of file paths whose XML content is currently cached in IndexedDB. */
   cachedPaths: Set<string>;
   warnings: ConfigWarning[];
-  whereUsedTrigger: { query: string; version: number } | null;
+  /**
+   * One-shot "run where-used for this" request. `consumed` is set once the
+   * search panel has run it, so a later remount of the panel does not replay
+   * a stale query.
+   */
+  whereUsedTrigger: { query: string; version: number; consumed: boolean } | null;
 
   /** Global F&O download progress label, empty when idle. */
   fnoIngestStatus: string;
@@ -421,7 +513,11 @@ export interface AppState {
   requestLanding: (tab: 'local' | 'remote') => void;
 
   // Actions
-  loadXmlFile: (xml: string, filePath: string, options?: { source?: 'file' | 'fno' }) => void;
+  /**
+   * Parse and merge an ER export. Returns `false` when nothing was loaded
+   * because a newer version of the same configuration is already open.
+   */
+  loadXmlFile: (xml: string, filePath: string, options?: { source?: 'file' | 'fno' }) => boolean;
   removeConfiguration: (index: number) => void;
   /** Close a configuration and offer an undo toast that re-opens it from the cache. */
   closeConfigurationWithUndo: (index: number) => void;
@@ -544,6 +640,8 @@ export interface AppState {
    */
   whereUsed: (entityName: string) => WhereUsedEntry[];
   triggerWhereUsed: (query: string) => void;
+  /** Mark where-used trigger `version` as handled (no-op for any other version). */
+  consumeWhereUsedTrigger: (version: number) => void;
 }
 
 // ─── Where-Used types ───
@@ -882,15 +980,30 @@ function normalizeSolutionId(id: string | undefined): string {
 }
 
 /**
- * Parse a configuration version string to a single comparable integer.
- * Handles both simple integers ("68") and multi-part versions ("1.68.1234").
- * Returns 0 when the version is empty or unparseable so that a config
- * without version info is treated as oldest and can be replaced.
+ * Compare two configuration version strings segment by segment, numerically.
+ * Handles both simple integers ("68") and multi-part versions ("68.12",
+ * "1.68.1234") — "68.12" sorts before "68.13", and a missing trailing segment
+ * counts as 0. An empty or unparseable version is treated as oldest so that a
+ * config without version info can be replaced. Returns a negative number when
+ * `a` is older than `b`, positive when newer, and 0 when equal.
  */
-function parseVersionForComparison(version: string | undefined | null): number {
-  if (!version) return 0;
-  const match = version.match(/\d+/);
-  return match ? parseInt(match[0], 10) : 0;
+export function compareConfigVersions(
+  a: string | undefined | null,
+  b: string | undefined | null,
+): number {
+  const left = versionSegments(a);
+  const right = versionSegments(b);
+  const length = Math.max(left.length, right.length);
+  for (let i = 0; i < length; i++) {
+    const diff = (left[i] ?? 0) - (right[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+function versionSegments(version: string | undefined | null): number[] {
+  if (!version) return [];
+  return (String(version).match(/\d+/g) ?? []).map(part => parseInt(part, 10));
 }
 
 /**
@@ -932,11 +1045,11 @@ function mergeConfiguration(
     : -1;
   if (byGuidIdx < 0) return [...configs, config];
 
-  const existingVersion = parseVersionForComparison(
+  const versionOrder = compareConfigVersions(
+    config.solutionVersion.publicVersionNumber,
     configs[byGuidIdx].solutionVersion.publicVersionNumber,
   );
-  const newVersion = parseVersionForComparison(config.solutionVersion.publicVersionNumber);
-  if (newVersion < existingVersion) return null;
+  if (versionOrder < 0) return null;
   // Replace in-place so configIndex references in openTabs stay valid.
   return configs.map((c, i) => (i === byGuidIdx ? config : c));
 }
@@ -1112,8 +1225,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   canNavigateForward: false,
   toasts: [],
   explorerExpandCommand: { mode: 'default', version: 0 },
-  recentFiles: loadJSON<RecentFile[]>(RECENT_FILES_STORAGE_KEY, []),
-  recentSessions: loadJSON<RecentSession[]>(RECENT_SESSIONS_STORAGE_KEY, []),
+  recentFiles: loadJSON(RECENT_FILES_STORAGE_KEY, [], sanitizeRecentFiles),
+  recentSessions: loadJSON(RECENT_SESSIONS_STORAGE_KEY, [], sanitizeRecentSessions),
   cachedPaths: new Set<string>(),
   warnings: [],
   whereUsedTrigger: null,
@@ -1135,7 +1248,21 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (candidate === config && merged) primaryAdded = true;
       }
       // Every candidate was superseded by an already-loaded newer version.
-      if (newConfigs === state.configurations && !primaryAdded) return;
+      if (newConfigs === state.configurations && !primaryAdded) {
+        const fileName = filePath.split(/[\\/]/).pop() ?? filePath;
+        const loadedVersion = state.configurations.find(c =>
+          c.content.kind === config.content.kind
+          && normalizeSolutionId(c.solutionVersion.solution.id) === normalizeSolutionId(config.solutionVersion.solution.id),
+        )?.solutionVersion.publicVersionNumber;
+        const version = config.solutionVersion.publicVersionNumber;
+        get().pushToast({
+          kind: 'info',
+          message: locale === 'cs'
+            ? `${fileName} (verze ${version}) nebyl načten – již je otevřena novější verze${loadedVersion ? ` ${loadedVersion}` : ''}.`
+            : `${fileName} (version ${version}) was not loaded — a newer version${loadedVersion ? ` ${loadedVersion}` : ''} is already open.`,
+        });
+        return false;
+      }
 
       const { registry, treeNodes, warnings } = buildDerivedState(newConfigs);
 
@@ -1169,14 +1296,31 @@ export const useAppStore = create<AppState>((set, get) => ({
         ),
       );
 
-      // Persist full XML to IndexedDB (best effort).
-      void saveFileContent(filePath, xml);
-      const nextCachedPaths = new Set(state.cachedPaths);
-      nextCachedPaths.add(filePath);
-      // Extracts are reachable through the outer file's cache entry.
-      for (const entry of newEntries) {
-        if (entry.bundlePath) nextCachedPaths.add(entry.path);
-      }
+      // Persist full XML to IndexedDB (best effort). Only a write that landed
+      // makes the file reopenable — a quota or private-mode failure must not
+      // offer a "Reopen" that then finds nothing.
+      void saveFileContent(filePath, xml).then(saved => {
+        if (saved === false) return;
+        const current = get();
+        // The entry may have been removed from the recent list meanwhile.
+        if (!current.recentFiles.some(r => r.path === filePath)) return;
+        const nextCachedPaths = new Set(current.cachedPaths);
+        nextCachedPaths.add(filePath);
+        // Extracts are reachable through the outer file's cache entry.
+        for (const entry of newEntries) {
+          if (entry.bundlePath) nextCachedPaths.add(entry.path);
+        }
+        set({ cachedPaths: nextCachedPaths });
+      });
+
+      // The tree was rebuilt, so a selection held from before points at stale
+      // objects (or a node that no longer exists) — re-resolve it by id.
+      const selectedNode = state.selectedNodeId ? findNodeById(treeNodes, state.selectedNodeId) : null;
+      const selection = {
+        ...state,
+        selectedNodeId: selectedNode ? state.selectedNodeId : null,
+        selectedNode,
+      };
 
       set({
         configurations: newConfigs,
@@ -1185,9 +1329,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         warnings,
         recentFiles: nextRecent,
         recentSessions: nextSessions,
-        cachedPaths: nextCachedPaths,
-        ...openDesignerTabsForFormats(state, parsed, newConfigs, treeNodes),
+        ...openDesignerTabsForFormats(selection, parsed, newConfigs, treeNodes),
       });
+      return true;
     } catch (e) {
       console.error('Failed to parse ER configuration:', e);
       // Dump the first 500 chars of the payload + its top-level element
@@ -1227,31 +1371,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const openTabs: OpenTab[] = state.openTabs
       .filter(tab => tab.configIndex !== index)
-      .map(tab => {
-        const newConfigIndex = tab.configIndex > index ? tab.configIndex - 1 : tab.configIndex;
-        if (tab.kind === 'drillDown') {
-          return {
-            ...tab,
-            configIndex: newConfigIndex,
-            id: `drilldown:${newConfigIndex}:${tab.elementName ?? ''}:${tab.expression}`,
-          };
-        }
-        return {
-          ...tab,
-          id: remapTreeNodeIdAfterRemoval(tab.id, index) ?? tab.id,
-          configIndex: newConfigIndex,
-        };
-      });
+      .map(tab => ({
+        ...tab,
+        id: remapIdAfterConfigRemoval(tab.id, index) ?? tab.id,
+        configIndex: tab.configIndex > index ? tab.configIndex - 1 : tab.configIndex,
+      }));
 
-    const activeTabId = remapTreeNodeIdAfterRemoval(state.activeTabId, index);
-    const selectedNodeId = remapTreeNodeIdAfterRemoval(state.selectedNodeId, index);
+    const activeTabId = remapIdAfterConfigRemoval(state.activeTabId, index);
+    const selectedNodeId = remapIdAfterConfigRemoval(state.selectedNodeId, index);
     const selectedNode = selectedNodeId ? findNodeById(treeNodes, selectedNodeId) : null;
-    const navigationHistory = state.navigationHistory
-      .map(snapshot => ({
-        activeTabId: remapTreeNodeIdAfterRemoval(snapshot.activeTabId, index),
-        selectedNodeId: remapTreeNodeIdAfterRemoval(snapshot.selectedNodeId, index),
-      }))
-      .filter(snapshot => snapshot.activeTabId != null || snapshot.selectedNodeId != null);
+    const navigationHistory = remapNavigationStackAfterRemoval(state.navigationHistory, index);
+    const navigationForward = remapNavigationStackAfterRemoval(state.navigationForward, index);
 
     const nextActiveTabId = activeTabId && openTabs.some(tab => tab.id === activeTabId)
       ? activeTabId
@@ -1267,9 +1397,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedNodeId: selectedNode?.id ?? null,
       selectedNode,
       navigationHistory,
-      navigationForward: [],
+      navigationForward,
       canNavigateBack: navigationHistory.length > 0,
-      canNavigateForward: false,
+      canNavigateForward: navigationForward.length > 0,
       recentSessions: nextRecentSessions,
     });
     // Search / where-used results carry config indices that just shifted —
@@ -1379,6 +1509,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       recentSessions: nextRecentSessions,
     });
     useFnoSession.getState().clearSelection();
+    // Labels harvested for this workspace must not leak into the next one,
+    // which may come from another F&O environment.
+    clearHarvestedLabels();
   },
 
   selectNode: (nodeId: string | null, options?: { revealInExplorer?: boolean }) => {
@@ -1424,7 +1557,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     const newActive = state.activeTabId === id
       ? (newTabs.length > 0 ? newTabs[newTabs.length - 1].id : null)
       : state.activeTabId;
-    set({ openTabs: newTabs, activeTabId: newActive });
+    // A closed tab is not somewhere Back/Forward should return to.
+    const navigationHistory = pruneNavigationStack(state.navigationHistory, id);
+    const navigationForward = pruneNavigationStack(state.navigationForward, id);
+    set({
+      openTabs: newTabs,
+      activeTabId: newActive,
+      navigationHistory,
+      navigationForward,
+      canNavigateBack: navigationHistory.length > 0,
+      canNavigateForward: navigationForward.length > 0,
+    });
   },
 
   openDrillDownTab: (expression: string, configIndex: number, elementName?: string) => {
@@ -1548,7 +1691,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   executeSearch: () => {
     const state = get();
-    if (!state.searchQuery.trim()) {
+    // A single character matches nearly every cross-reference, and each hit
+    // is resolved and rendered by the panel — not worth it for a query that
+    // is almost certainly still being typed.
+    if (state.searchQuery.trim().length < MIN_SEARCH_QUERY_LENGTH) {
       set({ searchResults: [] });
       return;
     }
@@ -1645,30 +1791,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
     const forward = [...state.navigationForward, currentSnapshot].slice(-50);
 
+    // Skip entries whose tab and node are both gone; landing on nothing would
+    // turn Back into a no-op the user has to press again.
     while (history.length > 0) {
-      const snapshot = history.pop()!;
-      const selectedNode = snapshot.selectedNodeId ? findNodeById(state.treeNodes, snapshot.selectedNodeId) : null;
-
-      let openTabs = state.openTabs;
-      let activeTabId = snapshot.activeTabId;
-
-      if (activeTabId && !openTabs.some(tab => tab.id === activeTabId)) {
-        if (selectedNode?.configIndex != null) {
-          const label = selectedNode.type === 'file'
-            ? selectedNode.name
-            : `${state.configurations[selectedNode.configIndex]?.solutionVersion.solution.name ?? selectedNode.name} • ${selectedNode.name}`;
-          openTabs = [...openTabs, { id: selectedNode.id, label, configIndex: selectedNode.configIndex }];
-          activeTabId = selectedNode.id;
-        } else {
-          activeTabId = openTabs[openTabs.length - 1]?.id ?? null;
-        }
-      }
-
+      const target = resolveNavigationSnapshot(state, history.pop()!);
+      if (!target) continue;
       set({
-        openTabs,
-        activeTabId,
-        selectedNodeId: selectedNode?.id ?? null,
-        selectedNode,
+        ...target,
         navigationHistory: history,
         navigationForward: forward,
         canNavigateBack: history.length > 0,
@@ -1684,36 +1813,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     if (state.navigationForward.length === 0) return;
     const forward = [...state.navigationForward];
-    const snapshot = forward.pop()!;
     const currentSnapshot: NavigationSnapshot = {
       activeTabId: state.activeTabId,
       selectedNodeId: state.selectedNodeId,
     };
     const history = [...state.navigationHistory, currentSnapshot].slice(-50);
-    const selectedNode = snapshot.selectedNodeId ? findNodeById(state.treeNodes, snapshot.selectedNodeId) : null;
 
-    let openTabs = state.openTabs;
-    let activeTabId = snapshot.activeTabId;
-    if (activeTabId && !openTabs.some(tab => tab.id === activeTabId)) {
-      if (selectedNode?.configIndex != null) {
-        const label = selectedNode.type === 'file'
-          ? selectedNode.name
-          : `${state.configurations[selectedNode.configIndex]?.solutionVersion.solution.name ?? selectedNode.name} • ${selectedNode.name}`;
-        openTabs = [...openTabs, { id: selectedNode.id, label, configIndex: selectedNode.configIndex }];
-        activeTabId = selectedNode.id;
-      }
+    while (forward.length > 0) {
+      const target = resolveNavigationSnapshot(state, forward.pop()!);
+      if (!target) continue;
+      set({
+        ...target,
+        navigationHistory: history,
+        navigationForward: forward,
+        canNavigateBack: history.length > 0,
+        canNavigateForward: forward.length > 0,
+      });
+      return;
     }
 
-    set({
-      openTabs,
-      activeTabId,
-      selectedNodeId: selectedNode?.id ?? null,
-      selectedNode,
-      navigationHistory: history,
-      navigationForward: forward,
-      canNavigateBack: history.length > 0,
-      canNavigateForward: forward.length > 0,
-    });
+    set({ navigationForward: [], canNavigateForward: false });
   },
 
   // ─── Toasts ───
@@ -1799,6 +1918,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // mapping or format never closes an already-loaded data model. Only an
     // explicit "replace" clears the workspace first.
     if (options?.replace) {
+      clearHarvestedLabels();
       set({
         configurations: [],
         registry: new GUIDRegistry(),
@@ -1825,8 +1945,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     for (const { path, content } of available) {
       if (!content) continue;
       try {
-        get().loadXmlFile(content, path);
-        loaded++;
+        if (get().loadXmlFile(content, path)) loaded++;
       } catch {
         // loadXmlFile already surfaces a toast on parse failure.
       }
@@ -1864,8 +1983,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       return false;
     }
     try {
-      get().loadXmlFile(content, contentPath, { source: entry?.source });
-      return true;
+      return get().loadXmlFile(content, contentPath, { source: entry?.source });
     } catch {
       return false;
     }
@@ -2334,8 +2452,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   triggerWhereUsed: (query) => set(state => ({
-    whereUsedTrigger: { query, version: (state.whereUsedTrigger?.version ?? 0) + 1 },
+    whereUsedTrigger: { query, version: (state.whereUsedTrigger?.version ?? 0) + 1, consumed: false },
   })),
+
+  consumeWhereUsedTrigger: (version) => set(state => (
+    state.whereUsedTrigger && state.whereUsedTrigger.version === version && !state.whereUsedTrigger.consumed
+      ? { whereUsedTrigger: { ...state.whereUsedTrigger, consumed: true } }
+      : {}
+  )),
 }));
 
 // Mirror F&O download lifecycle events into the structured ingest log so the
@@ -2362,7 +2486,11 @@ onFnoDownloadEvent(event => {
 if (typeof window !== 'undefined') {
   void listCachedPaths().then(paths => {
     if (paths.length === 0) return;
-    useAppStore.setState({ cachedPaths: new Set(paths) });
+    // Merge rather than replace: a file loaded before this resolves has
+    // already added its own path, and the startup listing may predate it.
+    const merged = new Set(useAppStore.getState().cachedPaths);
+    for (const path of paths) merged.add(path);
+    useAppStore.setState({ cachedPaths: merged });
   });
 }
 
@@ -2651,6 +2779,42 @@ function pushNavigationHistory(
   return [...state.navigationHistory, currentSnapshot].slice(-50);
 }
 
+/**
+ * Where a back/forward snapshot lands in the current state. A snapshot whose
+ * tab was closed reopens it from the selected node when that node still
+ * exists; `null` means neither the tab nor the node is left and the snapshot
+ * should be skipped.
+ */
+function resolveNavigationSnapshot(
+  state: Pick<AppState, 'openTabs' | 'treeNodes' | 'configurations'>,
+  snapshot: NavigationSnapshot,
+): Pick<AppState, 'openTabs' | 'activeTabId' | 'selectedNodeId' | 'selectedNode'> | null {
+  const selectedNode = snapshot.selectedNodeId ? findNodeById(state.treeNodes, snapshot.selectedNodeId) : null;
+  let openTabs = state.openTabs;
+  let activeTabId = snapshot.activeTabId;
+
+  if (activeTabId && !openTabs.some(tab => tab.id === activeTabId)) {
+    if (selectedNode?.configIndex == null) return null;
+    const label = selectedNode.type === 'file'
+      ? selectedNode.name
+      : `${state.configurations[selectedNode.configIndex]?.solutionVersion.solution.name ?? selectedNode.name} • ${selectedNode.name}`;
+    if (!openTabs.some(tab => tab.id === selectedNode.id)) {
+      openTabs = [...openTabs, { id: selectedNode.id, label, configIndex: selectedNode.configIndex }];
+    }
+    activeTabId = selectedNode.id;
+  } else if (!activeTabId && !selectedNode) {
+    return null;
+  }
+
+  return { openTabs, activeTabId, selectedNodeId: selectedNode?.id ?? null, selectedNode };
+}
+
+/** Drop the snapshots of a back/forward stack that sat on tab `tabId`. */
+function pruneNavigationStack(stack: NavigationSnapshot[], tabId: string): NavigationSnapshot[] {
+  const pruned = stack.filter(snapshot => snapshot.activeTabId !== tabId);
+  return pruned.length === stack.length ? stack : pruned;
+}
+
 function isSameNavigationSnapshot(left: NavigationSnapshot, right: NavigationSnapshot): boolean {
   return left.activeTabId === right.activeTabId && left.selectedNodeId === right.selectedNodeId;
 }
@@ -2836,9 +3000,10 @@ export interface DeepResolutionResult {
 
 /**
  * Parse a dotted expression path handling quoted segments like ReportFields.'$Field'
- * Returns array of segment names (without quotes).
+ * Returns array of segment names (without quotes); a doubled quote inside a
+ * quoted segment stands for one literal quote ('Customer''s name').
  */
-function parseDottedPath(expr: string): string[] {
+export function parseDottedPath(expr: string): string[] {
   const segments: string[] = [];
   let current = '';
   let inQuote = false;
@@ -2847,7 +3012,11 @@ function parseDottedPath(expr: string): string[] {
   for (let i = 0; i < expr.length; i++) {
     const ch = expr[i];
     if (inQuote) {
-      if (ch === quoteChar) {
+      if (ch === quoteChar && expr[i + 1] === quoteChar) {
+        // A doubled quote is an escaped one: 'Customer''s name'.
+        current += ch;
+        i++;
+      } else if (ch === quoteChar) {
         inQuote = false;
       } else {
         current += ch;

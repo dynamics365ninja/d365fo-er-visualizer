@@ -14,10 +14,44 @@ function loadProfiles(): FnoConnection[] {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as FnoConnection[];
+    return sanitizeProfiles(JSON.parse(raw));
   } catch {
     return [];
   }
+}
+
+/**
+ * Keep the persisted profiles the connect panel can work with: a non-array
+ * value yields `[]`, entries without a string `id` and `envUrl` are dropped,
+ * and optional fields of the wrong type are removed.
+ */
+export function sanitizeProfiles(value: unknown): FnoConnection[] {
+  if (!Array.isArray(value)) return [];
+  const profiles: FnoConnection[] = [];
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) continue;
+    const entry = item as Record<string, unknown>;
+    if (typeof entry.id !== 'string' || !entry.id) continue;
+    if (typeof entry.envUrl !== 'string' || !entry.envUrl) continue;
+    const profile: FnoConnection = {
+      id: entry.id,
+      displayName: typeof entry.displayName === 'string' ? entry.displayName : entry.envUrl,
+      envUrl: entry.envUrl,
+      createdAt: isFiniteNumber(entry.createdAt) ? entry.createdAt : 0,
+    };
+    if (typeof entry.tenantId === 'string') profile.tenantId = entry.tenantId;
+    if (typeof entry.clientId === 'string') profile.clientId = entry.clientId;
+    if (isFiniteNumber(entry.lastUsedAt)) profile.lastUsedAt = entry.lastUsedAt;
+    if (Array.isArray(entry.extraRoots)) {
+      profile.extraRoots = entry.extraRoots.filter((root): root is string => typeof root === 'string');
+    }
+    profiles.push(profile);
+  }
+  return profiles;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 function saveProfiles(profiles: FnoConnection[]): void {

@@ -225,6 +225,18 @@ export function registerHarvestedLabels(labels: readonly ERLabel[]): number {
 }
 
 /**
+ * Empty the harvested pool. The pool belongs to the workspace: once every
+ * configuration is closed, the next download may come from a different F&O
+ * environment, whose label ids must not pick up texts from the previous one.
+ */
+export function clearHarvestedLabels(): void {
+  if (harvestedLabels.length === 0) return;
+  harvestedLabels.length = 0;
+  harvestedKeys.clear();
+  labelPoolCache = new WeakMap();
+}
+
+/**
  * Label texts a configuration can resolve: its own table first, then every other
  * loaded configuration. Only the format response carries the dictionary, so a
  * data model resolved against its own table alone shows raw `@GER_...` ids.
