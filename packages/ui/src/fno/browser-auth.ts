@@ -5,7 +5,6 @@
 
 import {
   PublicClientApplication,
-  InteractionRequiredAuthError,
   BrowserAuthError,
   LogLevel,
   type Configuration,

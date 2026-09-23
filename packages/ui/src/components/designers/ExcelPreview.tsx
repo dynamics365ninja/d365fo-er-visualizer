@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../state/store';
-import { locale, t } from '../../i18n';
+import { t, useLocale } from '../../i18n';
 import { ERDirection, type ERFormatElement, type ERLabel } from '@er-visualizer/core';
-import { resolveLabel, buildLabelPool } from '../../utils/label-resolver';
+import { resolveLabel, buildLabelPool, labelLanguageTag } from '../../utils/label-resolver';
 import { useTabState } from '../../utils/tab-view-state';
 import { parseXlsxBase64, colToLetter, type XlsxWorkbook, type XlsxCell as XlsxCellType, type XlsxMerge, type XlsxArea, type XlsxDrawing, type XlsxAnchorPoint } from '../../utils/xlsx-parser';
 import { type BindingMap, type PreviewRenderOptions, isSamplePlaceholder, previewValue } from './preview-values';
@@ -37,13 +37,13 @@ interface ExcelCellData {
   label?: string;
 }
 
-function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLabel[], options: PreviewRenderOptions = { placeholderMode: 'sample' }): ExcelSheetData[] {
+function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLabel[], options: PreviewRenderOptions = { placeholderMode: 'sample' }, labelLang?: string): ExcelSheetData[] {
   const sheets: ExcelSheetData[] = [];
 
   const resolveCellLabel = (el: ERFormatElement): string | undefined => {
     const labelRef = el.attributes?.['Label'];
     if (!labelRef) return undefined;
-    const resolved = resolveLabel(labelRef, labels);
+    const resolved = resolveLabel(labelRef, labels, labelLang);
     return resolved?.localized ?? resolved?.enUs ?? undefined;
   };
 
@@ -155,7 +155,7 @@ const excelColors = {
 };
 
 // ── Build cell-address → binding map from format tree ──
-function buildCellBindingMap(root: ERFormatElement, bm: BindingMap, labels?: ERLabel[], options: PreviewRenderOptions = { placeholderMode: 'sample' }): Map<string, { value: string; name: string; label?: string; elementId: string }> {
+function buildCellBindingMap(root: ERFormatElement, bm: BindingMap, labels?: ERLabel[], options: PreviewRenderOptions = { placeholderMode: 'sample' }, labelLang?: string): Map<string, { value: string; name: string; label?: string; elementId: string }> {
   const map = new Map<string, { value: string; name: string; label?: string; elementId: string }>();
   const walk = (el: ERFormatElement) => {
     if (el.elementType === 'ExcelCell') {
@@ -163,7 +163,7 @@ function buildCellBindingMap(root: ERFormatElement, bm: BindingMap, labels?: ERL
       const labelRef = el.attributes?.['Label'];
       let label: string | undefined;
       if (labelRef && labels) {
-        const resolved = resolveLabel(labelRef, labels);
+        const resolved = resolveLabel(labelRef, labels, labelLang);
         label = resolved?.enUs ?? resolved?.localized ?? undefined;
       }
       map.set(addr.toUpperCase(), { value: previewValue(el, bm, options), name: el.name, label, elementId: el.id });
@@ -232,7 +232,9 @@ function ExcelTemplateGrid({
   /** Cell the pointer is over — drives the highlight of the cell and its named area. */
   const [hoveredRef, setHoveredRef] = useState<string | null>(null);
   const previewOptions = useMemo<PreviewRenderOptions>(() => ({ placeholderMode: 'sample' }), []);
-  const cellBindings = useMemo(() => buildCellBindingMap(rootElement, bindingMap, labels, previewOptions), [rootElement, bindingMap, labels, previewOptions]);
+  // Cell labels are resolved in the app's language, so a switch re-resolves them.
+  const labelLang = labelLanguageTag(useLocale());
+  const cellBindings = useMemo(() => buildCellBindingMap(rootElement, bindingMap, labels, previewOptions, labelLang), [rootElement, bindingMap, labels, previewOptions, labelLang]);
 
   const sheetName = workbook.sheets[Math.min(activeSheet, workbook.sheets.length - 1)]?.name;
 
@@ -724,7 +726,9 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
   const configurations = useAppStore(s => s.configurations);
   const labels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
   const previewOptions = useMemo<PreviewRenderOptions>(() => ({ placeholderMode: 'sample' }), []);
-  const sheets = useMemo(() => collectExcelSheets(rootElement, bindingMap, labels, previewOptions), [rootElement, bindingMap, labels, previewOptions, locale]);
+  // Cell labels are resolved in the app's language, so a switch re-resolves them.
+  const labelLang = labelLanguageTag(useLocale());
+  const sheets = useMemo(() => collectExcelSheets(rootElement, bindingMap, labels, previewOptions, labelLang), [rootElement, bindingMap, labels, previewOptions, labelLang]);
   const [activeSheet, setActiveSheet] = useTabState(tabId, 'excel.sheet', 0);
   const [selectedCell, setSelectedCell] = useState<ExcelCellData | null>(null);
   // Default to template view when template is available (even filename-only — shows drop zone)

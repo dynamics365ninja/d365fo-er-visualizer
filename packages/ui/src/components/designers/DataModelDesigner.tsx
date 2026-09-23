@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -127,6 +127,12 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Selection follows navigation only: the focus effect below reads the
+  // containers through a ref, so a rebuilt model (same focusNode) does not
+  // snap the selection back over one the user has made since.
+  const containersRef = useRef(dm.containers);
+  useEffect(() => { containersRef.current = dm.containers; }, [dm.containers]);
+
   useEffect(() => {
     if (focusNode?.type === 'container' && focusNode.data?.id) {
       setSelectedId(focusNode.data.id);
@@ -136,7 +142,7 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
       const m = focusNode.id.match(/-container-(\d+)-field-/);
       if (m) {
         const ci = parseInt(m[1], 10);
-        const container = dm.containers[ci];
+        const container = containersRef.current[ci];
         if (container?.id) setSelectedId(container.id);
       }
     }

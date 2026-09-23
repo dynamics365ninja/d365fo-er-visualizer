@@ -18,7 +18,7 @@ const IDENTIFIER = String.raw`(?:[A-Za-z_$#][\w$#]*|'(?:[^']|'')*')`;
 const PATH_CHAIN = new RegExp(String.raw`(?<![\w$#.'])(@(?=\s*\.)|${IDENTIFIER})((?:\s*\.\s*${IDENTIFIER})*)`, 'g');
 const SEGMENT = new RegExp(IDENTIFIER, 'g');
 /** String literals and label references: `"a.b"`, `@"GER_LABEL:X"`, `@GER_LABEL:X`. */
-const NON_PATH_TEXT = /@?"(?:[^"]|"")*"|@[A-Za-z_]\w*:[\w.\-]+/g;
+const NON_PATH_TEXT = /@?"(?:[^"]|"")*"|@[A-Za-z_]\w*:[\w.-]+/g;
 
 const unquote = (segment: string) => (segment.startsWith("'") ? segment.slice(1, -1).replace(/''/g, "'") : segment);
 

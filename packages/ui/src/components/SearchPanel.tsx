@@ -270,7 +270,7 @@ export function SearchPanel() {
   // not as a catalogue of what the box accepts; the query itself rides along
   // as a secondary line so the mapping stays learnable.
   const searchExamples = useMemo<ExamplePreset[]>(() => {
-    const cs = locale === 'cs';
+    const cs = currentLocale === 'cs';
     const section = cs
       ? { mapping: 'Odkud se berou data', calc: 'Výpočty a podmínky', output: 'Podoba výstupu' }
       : { mapping: 'Where the data comes from', calc: 'Calculations and conditions', output: 'Shape of the output' };
@@ -288,7 +288,7 @@ export function SearchPanel() {
   }, [currentLocale]);
 
   const whereUsedExamples = useMemo<ExamplePreset[]>(() => {
-    const cs = locale === 'cs';
+    const cs = currentLocale === 'cs';
     const section = cs
       ? { impact: 'Dopad změny', trace: 'Dohledání hodnoty' }
       : { impact: 'Impact of a change', trace: 'Tracing a value' };
@@ -320,7 +320,7 @@ export function SearchPanel() {
     setMode('search');
     setSearchQuery(value);
     executeSearch();
-  }, [executeSearch, setSearchQuery]);
+  }, [executeSearch, setSearchQuery, setMode]);
 
   const applyWhereUsedExample = useCallback((value: string) => {
     setMode('where-used');
@@ -630,7 +630,6 @@ export function SearchPanel() {
                           <SearchResultsGrouped
                             results={capped}
                             nodeByResult={navigableSearch.nodeByResult}
-                            totalCount={totalNested}
                             query={searchQuery}
                             expandSignal={searchExpandSignal}
                             configurations={configurations}
@@ -778,7 +777,6 @@ export function SearchPanel() {
 function SearchResultsGrouped({
   results,
   nodeByResult,
-  totalCount,
   query,
   expandSignal,
   configurations,
@@ -789,7 +787,6 @@ function SearchResultsGrouped({
   results: SearchResultEntry[];
   /** Tree node for each result, resolved once by the panel. */
   nodeByResult: Map<SearchResultEntry, TreeNode>;
-  totalCount: number;
   query: string;
   expandSignal: { version: number; expanded: boolean };
   configurations: ERConfiguration[];

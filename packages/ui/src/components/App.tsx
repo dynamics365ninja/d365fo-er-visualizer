@@ -52,7 +52,7 @@ import { ActivityBar } from './ActivityBar';
 import { TouchTitleTooltip } from './TouchTitleTooltip';
 import { useCompactLayout, useStackedLayout } from '../utils/responsive';
 import { matchWorkspaceShortcut } from '../utils/workspace-shortcuts';
-import { t, locale, useLocale } from '../i18n';
+import { t, useLocale } from '../i18n';
 
 // ────────────────────────── styles ──────────────────────────
 
@@ -363,13 +363,9 @@ export function App() {
   const treeNodes = useAppStore(s => s.treeNodes);
   const openTabs = useAppStore(s => s.openTabs);
   const activeTabId = useAppStore(s => s.activeTabId);
-  const cycleTheme = useAppStore(s => s.cycleTheme);
-  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
-  const setShowTechnicalDetails = useAppStore(s => s.setShowTechnicalDetails);
   const navigateBack = useAppStore(s => s.navigateBack);
   const navigateForward = useAppStore(s => s.navigateForward);
   const rebuildDerivedState = useAppStore(s => s.rebuildDerivedState);
-  const requestExplorerExpand = useAppStore(s => s.requestExplorerExpand);
   const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
   const whereUsedTrigger = useAppStore(s => s.whereUsedTrigger);
   const setSearchPanelMode = useAppStore(s => s.setSearchPanelMode);

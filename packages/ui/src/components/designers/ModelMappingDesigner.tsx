@@ -62,6 +62,9 @@ function buildBindingTree(bindings: any[]): BindingTreeNode[] {
   return roots;
 }
 
+/** Shared by every mapping without validations, so the filter memo stays stable. */
+const NO_VALIDATIONS: any[] = [];
+
 /** Every ancestor path of `path`, outermost first. */
 function bindingAncestorKeys(path: string): string[] {
   const segments = path.split('/');
@@ -104,7 +107,7 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
     // the row the user came from simply was not there.
     if (focusNode.type === 'validation') setView('validations');
     if (focusNode.type === 'datasource') setView('datasources');
-  }, [focusNode]);
+  }, [focusNode, setView]);
 
   useEffect(() => {
     if (!focusValidationPath) return;
@@ -135,7 +138,7 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
   const bindingTree = useMemo(() => {
     // 1. Deduplicate by path
     const seen = new Set<string>();
-    const deduped: typeof mm.bindings = [];
+    const deduped: any[] = [];
     for (const b of mm.bindings) {
       if (!seen.has(b.path)) {
         seen.add(b.path);
@@ -231,7 +234,7 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
 
   const totalShown = bindingTree.reduce((n, g) => n + g.count, 0);
 
-  const validations: any[] = mm.validations ?? [];
+  const validations: any[] = mm.validations ?? NO_VALIDATIONS;
   const filteredValidations = useMemo(() => {
     if (!filter) return validations;
     const lower = filter.toLowerCase();

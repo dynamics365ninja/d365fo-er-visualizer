@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useReducer, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useState, type RefObject } from 'react';
 import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual';
 import { withPinnedIndexes } from './flat-tree';
 
@@ -53,12 +53,14 @@ export function useVirtualTree({ rows, scrollRef, containerRef, estimateSize, pi
     return () => observer.disconnect();
   }, [scrollRef, measureMargin, count]);
 
-  const pinnedKey = (pinned ?? []).join(',');
+  // Keyed on the pinned values, not the array the caller builds each render:
+  // a new extractor is what makes the virtualizer recompute its indexes, so it
+  // must change exactly when the values do.
+  const pinnedKey = (pinned ?? []).filter((i): i is number => i != null).join(',');
+  const pinnedIndexes = useMemo(() => (pinnedKey ? pinnedKey.split(',').map(Number) : []), [pinnedKey]);
   const rangeExtractor = useCallback(
-    (range: Range) => withPinnedIndexes(defaultRangeExtractor(range), pinned ?? [], range.count),
-    // Keyed on the pinned values, not the array: a new extractor is what
-    // makes the virtualizer recompute its indexes.
-    [pinnedKey],
+    (range: Range) => withPinnedIndexes(defaultRangeExtractor(range), pinnedIndexes, range.count),
+    [pinnedIndexes],
   );
 
   // Stable per row list: a new key function makes the virtualizer rebuild

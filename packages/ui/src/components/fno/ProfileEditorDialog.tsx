@@ -129,7 +129,7 @@ export function useProfileEditor(
       message: editorTarget ? t.fnoProfileUpdated(profile.displayName) : t.fnoProfileSaved(profile.displayName),
     });
     setEditor(null);
-  }, [canSave, editorTarget, profileName, envUrl, upsert, pushToast, activeProfileId]);
+  }, [canSave, editorTarget, profileName, envUrl, upsert, activeProfileId, setActiveProfileId, pushToast]);
 
   return {
     editor: {

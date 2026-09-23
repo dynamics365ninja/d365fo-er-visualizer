@@ -90,7 +90,7 @@ function harvestLabels(component: ErConfigSummary, xml: string): void {
 /** Structural fingerprint of a downloaded payload, for the debug recorder. */
 function describePayload(xml: string): Record<string, unknown> {
   const directions = new Set<string>();
-  for (const m of xml.matchAll(/([A-Za-z]*Direction)\s*=\s*"([^"]{0,80})"/g)) {
+  for (const m of xml.matchAll(/\b([A-Za-z]*Direction)\s*=\s*"([^"]{0,80})"/g)) {
     directions.add(`${m[1]}=${m[2]}`);
     if (directions.size >= 4) break;
   }

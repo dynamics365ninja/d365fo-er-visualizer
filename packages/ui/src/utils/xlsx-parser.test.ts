@@ -15,7 +15,6 @@ import {
   decodeXmlEntities,
   XlsxTooLargeError,
   type XlsxWorkbook,
-  type XlsxCellStyle,
 } from './xlsx-parser.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

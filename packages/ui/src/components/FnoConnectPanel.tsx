@@ -151,7 +151,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     // Leaving the dialog open on a profile that no longer exists would silently
     // turn an edit into a create.
     forgetProfile(id);
-  }, [remove, activeProfileId, forgetProfile]);
+  }, [remove, activeProfileId, setActiveProfileId, forgetProfile]);
 
   /**
    * Sign in and list solutions. `silentOnly` never opens a popup or redirects
@@ -204,7 +204,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     } finally {
       setLoadingSolutions(false);
     }
-  }, [activeProfile, markUsed, pushToast]);
+  }, [activeProfile, markUsed, pushToast, setConnState, setLoadingSolutions, setSolutions]);
 
   // Finish a sign-in that went through the full-page redirect fallback (tablets
   // and any browser that blocks the popup). The redirect reloads the SPA, so
@@ -234,7 +234,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     redirectResumedRef.current = true;
     clearRedirectPending();
     void handleConnect({ silentOnly: true });
-  }, [profiles, activeProfileId, activeProfile, handleConnect]);
+  }, [profiles, activeProfileId, activeProfile, handleConnect, setActiveProfileId]);
 
   const handleRetryWithRoot = useCallback(async () => {
     if (!activeProfile) return;
@@ -264,7 +264,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     } finally {
       setLoadingSolutions(false);
     }
-  }, [activeProfile, customRoot, pushToast, upsert]);
+  }, [activeProfile, customRoot, pushToast, setLoadingSolutions, setSolutions, upsert]);
 
   const handleDisconnect = useCallback(async () => {
     if (!activeProfile) return;
@@ -367,7 +367,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // A newer request owns the spinner now.
       if (requestSeq === listRequestSeqRef.current) setLoadingComponents(false);
     }
-  }, [activeProfile, solutions, pushToast, clearSearch]);
+  }, [activeProfile, clearSearch, setActiveSolution, setSolutionPath, solutions, setLoadingComponents, setComponents, setAllDataModelsSeen, setSolutions, setRootDataModelByPath, setDataModelChain, pushToast]);
 
   /** Drill one level deeper: treat the clicked component as a sub-solution
    *  and list its children. Works because the ER tree in F&O is a single
@@ -411,7 +411,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // A newer request owns the spinner now.
       if (requestSeq === listRequestSeqRef.current) setLoadingComponents(false);
     }
-  }, [activeProfile, solutions, pushToast, dataModelChain, solutionPath, clearSearch]);
+  }, [activeProfile, clearSearch, setSolutionPath, solutionPath, setActiveSolution, dataModelChain, setDataModelChain, setLoadingComponents, setComponents, setAllDataModelsSeen, solutions, setSolutions, pushToast]);
 
   /** Pop back one level in the solution breadcrumb. */
   const handleBack = useCallback(async () => {
@@ -482,7 +482,7 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
       // A newer request owns the spinner now.
       if (requestSeq === listRequestSeqRef.current) setLoadingComponents(false);
     }
-  }, [activeProfile, solutions, solutionPath, dataModelChain, pushToast, clearSearch]);
+  }, [activeProfile, clearSearch, solutionPath, setSolutionPath, setActiveSolution, dataModelChain, setDataModelChain, setLoadingComponents, setComponents, solutions, setAllDataModelsSeen, setSolutions, pushToast]);
 
   // Search results take over the right panel while a search is active; the
   // type dropdown and the text filter then narrow the hits instead of the

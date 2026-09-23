@@ -39,7 +39,7 @@ import { buildExplorerModelGroups, getDisplayVersion, type ExplorerModelGroup } 
 import { getNodeDisplayName, isXmlNamespaceDeclaration } from '../utils/consultant-labels';
 import { getActiveFormatDescriptors, collectActiveScopeNodeIds } from '../utils/active-format-scope';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
-import { buildLabelPool, labelDisplayText, looksLikeLabelRef } from '../utils/label-resolver';
+import { buildLabelPool, labelDisplayText, labelLanguageTag, looksLikeLabelRef } from '../utils/label-resolver';
 import { useCoarsePointer } from '../utils/responsive';
 import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../utils/filter-suggestions';
 import { FilterField } from './FilterField';
@@ -1201,7 +1201,7 @@ const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded,
     : (typeof node.data?.label === 'string' ? node.data.label : undefined);
   const resolvedLabel = React.useMemo(() => {
     if (!rawLabel || node.configIndex == null) return undefined;
-    const text = labelDisplayText(rawLabel, buildLabelPool(configurations, node.configIndex));
+    const text = labelDisplayText(rawLabel, buildLabelPool(configurations, node.configIndex), labelLanguageTag(activeLocale));
     if (!text || text === node.name) return undefined;
     // An unresolved reference is noise, not information — hide it.
     if (looksLikeLabelRef(rawLabel) && text === rawLabel) return undefined;

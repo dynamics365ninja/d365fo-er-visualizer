@@ -164,15 +164,23 @@ export function SlidingTabs<TId extends string>({ tabs, activeId, onChange }: {
   const btnRefs = useRef<Map<TId, HTMLButtonElement>>(new Map());
   const [thumbRect, setThumbRect] = useState<{ left: number; width: number } | null>(null);
 
-  // Re-measure on every render (tab labels can change width — e.g. counts, locale,
-  // technical-details toggle), but bail out of the state update when the measured
-  // rect is unchanged so this can never trigger an infinite render loop.
+  // Measure when the active tab or the tab set changes, and again whenever a
+  // tab button resizes — labels change width with counts, the language and the
+  // technical-details toggle, and a wider tab shifts every tab after it. The
+  // state update bails out when the rect is unchanged, so it cannot loop.
   useLayoutEffect(() => {
-    const btn = btnRefs.current.get(activeId);
-    if (!btn) return;
-    const next = { left: btn.offsetLeft, width: btn.offsetWidth };
-    setThumbRect(prev => (prev && prev.left === next.left && prev.width === next.width) ? prev : next);
-  });
+    const measure = () => {
+      const btn = btnRefs.current.get(activeId);
+      if (!btn) return;
+      const next = { left: btn.offsetLeft, width: btn.offsetWidth };
+      setThumbRect(prev => (prev && prev.left === next.left && prev.width === next.width) ? prev : next);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    btnRefs.current.forEach(btn => observer.observe(btn));
+    return () => observer.disconnect();
+  }, [activeId, tabs]);
 
   useEffect(() => {
     const handleResize = () => {

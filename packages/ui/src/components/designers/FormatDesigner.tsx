@@ -6,7 +6,7 @@ import { formatReferencedModelIds, normGuid } from '../../utils/model-hierarchy'
 import { countDeclaredDatasources, findModelForDescriptor, type DatasourceModel } from '../../utils/datasource-tree';
 import { ExpandCollapseSlider } from '../ExpandCollapseSlider';
 import { FilterField } from '../FilterField';
-import { locale, t } from '../../i18n';
+import { t, useLocale } from '../../i18n';
 import { buildFormatBindingPresentation } from '../../utils/format-binding-display';
 import {
   BINDING_INTENT_ORDER,
@@ -18,8 +18,8 @@ import {
 } from '../../utils/format-binding-sections';
 import { buildFormatTreeIndex, type FormatTreeIndex } from '../../utils/format-tree-filter';
 import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../../utils/filter-suggestions';
-import { ERDirection, type ERConfiguration, type ERDataModelContent, type ERDatasource, type ERModelMappingContent, type ERFormatContent } from '@er-visualizer/core';
-import { resolveLabel, buildLabelPool } from '../../utils/label-resolver';
+import { ERDirection, type ERConfiguration, type ERDataModelContent, type ERDatasource, type ERModelMappingContent, type ERFormatContent, type ERFormatTransformation } from '@er-visualizer/core';
+import { resolveLabel, buildLabelPool, labelLanguageTag } from '../../utils/label-resolver';
 import { useCompactLayout } from '../../utils/responsive';
 import { useTabState } from '../../utils/tab-view-state';
 import { findTreeNodeByMatch, SlidingTabs, datasourceFocusKey, collectDatasourceTerms, EMPTY_STRING_SET } from './shared';
@@ -71,6 +71,10 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
   const treeNodes = useAppStore(s => s.treeNodes);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const configurations = useAppStore(s => s.configurations);
+  // Model labels and the view tabs' tooltips are memoized in the app's
+  // language, so a switch has to recompute them.
+  const activeLocale = useLocale();
+  const labelLang = labelLanguageTag(activeLocale);
   // Below ~900px the tabs, the three tools and the filter no longer fit on one
   // toolbar line, so the tools move up into the header, which has slack there.
   const toolsInHeader = useCompactLayout();
@@ -120,7 +124,7 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
       setView('datasources');
       return;
     }
-  }, [focusNode]);
+  }, [focusNode, setView]);
 
   const bindingPresentation = useMemo(
     () => buildFormatBindingPresentation(rootElement, fmtMap.bindings),
@@ -130,7 +134,7 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
 
   // Transformation lookup: GUID → transformation
   const transformationMap = useMemo(() => {
-    const map = new Map<string, typeof fmt.transformations[0]>();
+    const map = new Map<string, ERFormatTransformation>();
     for (const t of fmt.transformations) {
       map.set(t.id, t);
     }
@@ -238,9 +242,9 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
 
   const modelLabels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
   const modelFieldLabel = useCallback((node: ModelUsageNode): string | undefined => {
-    const resolved = resolveLabel(node.field?.label, modelLabels);
+    const resolved = resolveLabel(node.field?.label, modelLabels, labelLang);
     return resolved?.localized ?? resolved?.enUs;
-  }, [modelLabels, locale]);
+  }, [modelLabels, labelLang]);
 
   /* Data sources: a `model` datasource shows the structure of the data model
      it enters through its own descriptor, preferring the model it names. */
@@ -254,9 +258,9 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
     return model ? { model, descriptor } : null;
   }, [loadedModels, fc]);
   const modelLabelFor = useCallback((labelRef: string | undefined): string | undefined => {
-    const resolved = resolveLabel(labelRef, modelLabels);
+    const resolved = resolveLabel(labelRef, modelLabels, labelLang);
     return resolved?.localized ?? resolved?.enUs;
-  }, [modelLabels, locale]);
+  }, [modelLabels, labelLang]);
 
   // The text filter matches a model path, its field label, its mapping
   // expression or an element that reads it; a match keeps its subtree.
@@ -389,7 +393,9 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
     if (!focusBindingElementId) return;
     const timer = setTimeout(() => focusedBindingCardRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
     return () => clearTimeout(timer);
-  }, [focusNode]);
+    // focusNode, not only the id: navigating to the same element again is a new
+    // request to bring its card into view.
+  }, [focusNode, focusBindingElementId]);
 
   // One pass over the element tree answers the filter / binding / ancestry
   // questions for every row; see FormatTreeIndex.
@@ -445,35 +451,35 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
       {
         id: 'structure',
         label: `${t.structure} (${stats.totalElements})`,
-        title: locale === 'cs' ? 'Hierarchická struktura prvků formátu s vazbami na datový model' : 'Hierarchical structure of format elements with data model bindings',
+        title: activeLocale === 'cs' ? 'Hierarchická struktura prvků formátu s vazbami na datový model' : 'Hierarchical structure of format elements with data model bindings',
       },
       {
         id: 'bindings',
         label: `${t.bindings} (${shownBindingCount})`,
-        title: locale === 'cs'
+        title: activeLocale === 'cs'
           ? 'Vazby podle účelu — přímé hodnoty, výpočty, podmínky, texty — v pořadí, v jakém soubor vzniká'
           : 'Bindings by intent — direct values, calculations, conditions, texts — in the order the file is built',
       },
       {
         id: 'datasources',
         label: `${t.dataSources} (${stats.datasources})`,
-        title: locale === 'cs' ? 'Datové zdroje mapování — tabulky, výčty, třídy a vypočítaná pole' : 'Mapping data sources — tables, enums, classes and calculated fields',
+        title: activeLocale === 'cs' ? 'Datové zdroje mapování — tabulky, výčty, třídy a vypočítaná pole' : 'Mapping data sources — tables, enums, classes and calculated fields',
       },
       {
         id: 'preview',
         label: t.previewLabel,
-        title: locale === 'cs' ? 'Náhled generovaného výstupu ve správném formátu' : 'Preview of generated output in the correct format',
+        title: activeLocale === 'cs' ? 'Náhled generovaného výstupu ve správném formátu' : 'Preview of generated output in the correct format',
       },
     ];
     if (fc.embeddedModelMappingVersions.length > 0) {
       tabs.push({
         id: 'embedded-mapping',
-        label: `${locale === 'cs' ? 'Mapování' : 'Mapping'} (${fc.embeddedModelMappingVersions.length})`,
-        title: locale === 'cs' ? 'Mapování modelu zabudované přímo v importním formátu' : 'Model mapping embedded directly in the import format',
+        label: `${activeLocale === 'cs' ? 'Mapování' : 'Mapping'} (${fc.embeddedModelMappingVersions.length})`,
+        title: activeLocale === 'cs' ? 'Mapování modelu zabudované přímo v importním formátu' : 'Model mapping embedded directly in the import format',
       });
     }
     return tabs;
-  }, [stats.totalElements, stats.datasources, shownBindingCount, fc.direction, fc.embeddedModelMappingVersions.length]);
+  }, [stats.totalElements, stats.datasources, shownBindingCount, fc.embeddedModelMappingVersions.length, activeLocale]);
 
   /* Expand/collapse. Rendered either in the toolbar next to the filter
      (desktop, unchanged) or up in the header — below ~900px the tabs, this and
@@ -696,7 +702,7 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
               : bindingSections.map(section => {
                   const collapsed = isBindingSectionCollapsed(section.key);
                   const count = section.entries.reduce((n, entry) => n + entry.bindings.length, 0);
-                  const unresolvedName = locale === 'cs' ? 'Prvky mimo strukturu formátu' : 'Elements outside the format structure';
+                  const unresolvedName = activeLocale === 'cs' ? 'Prvky mimo strukturu formátu' : 'Elements outside the format structure';
                   const toggle = () => toggleBindingSection(section.key);
                   return (
                     <div key={section.key} className="mm-group">

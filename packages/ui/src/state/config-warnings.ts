@@ -19,7 +19,7 @@ export interface ConfigWarning {
  * `-(model.A + model.B)` starts at `model`, not at `-`.
  */
 export function expressionRootToken(expr: string): string {
-  return expr.trim().replace(/^[\s+\-(]+/, '').split(/[.(\[]/)[0].trim();
+  return expr.trim().replace(/^[\s+\-(]+/, '').split(/[.([]/)[0].trim();
 }
 
 /**

@@ -7,7 +7,7 @@ import { getBindingCategoryLabel, getConsultantBindingLabel, isXmlNamespaceDecla
 import { getFormatBindingCategoryLabel, getFormatBindingDisplayLabel, groupFormatBindingsByCategory } from '../../utils/format-binding-display';
 import { type FormatTreeIndex } from '../../utils/format-tree-filter';
 import { getFormatElementExcelRange, type ERLabel } from '@er-visualizer/core';
-import { resolveLabel, buildLabelPool } from '../../utils/label-resolver';
+import { resolveLabel, buildLabelPool, labelLanguageTag } from '../../utils/label-resolver';
 import { firstChildRow, flattenVisibleTree, indexFlatRows, type FlatTreeRow } from '../../utils/flat-tree';
 import { useTreeOpenState } from '../../utils/use-tree-open-state';
 import { useVirtualTree } from '../../utils/use-virtual-tree';
@@ -269,6 +269,9 @@ export function FormatStructureTree({ rootElement, scrollRef, bindingMap, transf
   );
 }
 
+/** Shared by every unbound row, so the row's binding memos stay stable. */
+const NO_BINDINGS: any[] = [];
+
 interface FormatElementRowProps {
   row: FlatTreeRow<any>;
   bindingMap: Map<string, any[]>;
@@ -302,7 +305,7 @@ const FormatElementRow = React.memo(function FormatElementRow({ row, bindingMap,
   // listens for one itself.
   const activeLocale = useLocale();
 
-  const bindings = bindingMap.get(element.id) ?? [];
+  const bindings = bindingMap.get(element.id) ?? NO_BINDINGS;
   const bindingCategories = useMemo(() => groupFormatBindingsByCategory(bindings), [bindings]);
   const mainBinding = bindings.find(b => b.bindingCategory === 'data');
   const conditionalBindings = bindings.filter(b => b.bindingCategory !== 'data');
@@ -310,7 +313,7 @@ const FormatElementRow = React.memo(function FormatElementRow({ row, bindingMap,
 
   // Resolve label for this element
   const labelRef = element.attributes?.['Label'];
-  const resolvedLabel = useMemo(() => resolveLabel(labelRef, labels), [labelRef, labels, activeLocale]);
+  const resolvedLabel = useMemo(() => resolveLabel(labelRef, labels, labelLanguageTag(activeLocale)), [labelRef, labels, activeLocale]);
   // An unresolved reference is only an id — worth showing in the technical view alone.
   const labelText = resolvedLabel?.localized ?? resolvedLabel?.enUs ?? (showTechnicalDetails && resolvedLabel?.id ? resolvedLabel.id : undefined);
   const excelRange = getFormatElementExcelRange(element);
