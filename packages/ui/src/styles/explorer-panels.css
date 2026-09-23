@@ -925,18 +925,6 @@
   border-color: var(--er-border);
 }
 
-.ws-row[style*="--ws-depth: 1"]::before,
-.ws-row[style*="--ws-depth: 2"]::before,
-.ws-row[style*="--ws-depth: 3"]::before {
-  content: '';
-  position: absolute;
-  left: calc(4px + (var(--ws-depth, 1) - 1) * 18px + 9px);
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--er-border);
-}
-
 .ws-subhead {
   padding: 10px 8px 2px;
   list-style: none;
