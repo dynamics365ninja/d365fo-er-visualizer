@@ -1,9 +1,12 @@
 import { app, BrowserWindow, ipcMain, dialog, nativeTheme } from 'electron';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { registerFnoIpc } from './fno/ipc.js';
 
 const isDev = !app.isPackaged;
+
+const DEV_SERVER_ORIGIN = 'http://localhost:5173';
 
 function resolveRendererEntry(): string {
   const candidates = [
@@ -22,6 +25,38 @@ function resolveRendererEntry(): string {
   }
 
   return entry;
+}
+
+let rendererEntryUrl: string | null = null;
+
+/** `file://` URL of the packaged renderer document, resolved once. */
+function getRendererEntryUrl(): string {
+  rendererEntryUrl ??= pathToFileURL(resolveRendererEntry()).href;
+  return rendererEntryUrl;
+}
+
+/**
+ * True when `raw` is the app's own renderer document: the Vite dev server in
+ * development, otherwise exactly the renderer entry file — not any file:// URL,
+ * which would let a navigated-to local page drive the IPC surface. Query and
+ * hash are ignored (the SPA may use them); the path must match.
+ */
+function isTrustedRendererUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (isDev) return url.origin === DEV_SERVER_ORIGIN;
+  if (url.protocol !== 'file:') return false;
+  url.search = '';
+  url.hash = '';
+  const expected = getRendererEntryUrl();
+  // Windows paths are case-insensitive, and drive letters vary in case.
+  return process.platform === 'win32'
+    ? url.href.toLowerCase() === expected.toLowerCase()
+    : url.href === expected;
 }
 
 function createWindow() {
@@ -60,7 +95,10 @@ function createWindow() {
     console.error(`[electron] preload failed to load: ${preloadPath}`, error);
   });
 
-  // Strict Content-Security-Policy for packaged renderer. Dev uses Vite HMR so we relax slightly.
+  // Content-Security-Policy as a response header. This only reaches responses
+  // that have headers — the Vite dev server. The packaged renderer loads over
+  // file://, where this hook never fires; there the <meta> CSP that `vite
+  // build` writes into index.html (packages/ui/vite.config.ts) is the policy.
   win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     const csp = isDev
       ? "default-src 'self' http://localhost:5173 ws://localhost:5173; script-src 'self' 'unsafe-inline' http://localhost:5173; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' http://localhost:5173 ws://localhost:5173 https://login.microsoftonline.com https://*.dynamics.com;"
@@ -73,27 +111,24 @@ function createWindow() {
     });
   });
 
-  // Block navigation to external URLs and popups.
+  // Block navigation anywhere but the renderer itself (a reload), and popups.
   win.webContents.on('will-navigate', (event, url) => {
-    const allowed = isDev && url.startsWith('http://localhost:5173');
-    if (!allowed && !url.startsWith('file://')) {
-      event.preventDefault();
-    }
+    if (!isTrustedRendererUrl(url)) event.preventDefault();
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   if (isDev) {
-    win.loadURL('http://localhost:5173');
+    win.loadURL(DEV_SERVER_ORIGIN);
     win.webContents.openDevTools();
   } else {
-    win.loadFile(resolveRendererEntry());
+    win.loadURL(getRendererEntryUrl());
   }
 
   return win;
 }
 
 app.whenReady().then(() => {
-  registerFnoIpc();
+  registerFnoIpc({ isTrustedRendererUrl });
   createWindow();
 
   app.on('activate', () => {
@@ -106,7 +141,11 @@ app.on('window-all-closed', () => {
 });
 
 // IPC: Open file dialog
-ipcMain.handle('open-file-dialog', async () => {
+ipcMain.handle('open-file-dialog', async event => {
+  const senderUrl = event.senderFrame?.url;
+  if (!senderUrl || !isTrustedRendererUrl(senderUrl)) {
+    throw new Error('File dialog is only available to the application window');
+  }
   const result = await dialog.showOpenDialog({
     filters: [{ name: 'XML Files', extensions: ['xml'] }],
     properties: ['openFile', 'multiSelections'],

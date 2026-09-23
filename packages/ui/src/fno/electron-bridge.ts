@@ -14,12 +14,16 @@ export interface ElectronFnoRequest {
   body?: string;
   /** Content-Type header for the request body. */
   contentType?: string;
+  /** Id `fnoAbort` uses to cancel this request in the main process. */
+  requestId?: string;
 }
 
 export interface ElectronFnoResponse {
   status: number;
   statusText: string;
   headers: Record<string, string>;
+  /** Parsed body of a 2xx JSON response (`null` when empty). Absent when the
+   * body is not JSON or the status is not 2xx — `bodyText` carries it then. */
   json?: unknown;
   binaryBase64?: string;
   bodyText?: string;
@@ -51,6 +55,8 @@ export interface ElectronAPI {
     logout: (conn: ElectronFnoAuthConnection) => Promise<boolean>;
   };
   fnoRequest?: (payload: ElectronFnoRequest) => Promise<ElectronFnoResponse>;
+  /** Abort the `fnoRequest` with this `requestId`. Absent on older shells. */
+  fnoAbort?: (requestId: string) => void;
 }
 
 declare global {

@@ -17,10 +17,16 @@ import { DEFAULT_SEED_MODELS } from './seed-models';
 /** Per-session cache of service operation names. Key: `${envUrl}::${servicePath}`. */
 const _serviceOpsCache = new Map<string, string[]>();
 
+/** Discovery GETs still in flight, keyed like `_serviceOpsCache`. Concurrent
+ * callers (e.g. every seed probe in `listSolutions` when the cache is cold)
+ * share one request instead of each issuing its own. */
+const _serviceOpsInFlight = new Map<string, Promise<string[]>>();
+
 /** Drop cached service-operation discovery results. Call after switching or
  * re-provisioning an environment; tests use it to stay isolated. */
 export function clearServiceOpsCache(): void {
   _serviceOpsCache.clear();
+  _serviceOpsInFlight.clear();
 }
 
 /** Stable service-path constants (group + service). */
@@ -62,7 +68,21 @@ export const ER_STORAGE_OPS_BY_TYPE: Record<ErComponentType, readonly string[]> 
   Unknown: ['GetEffectiveFormatMappingByID', 'GetModelMappingByID', 'GetDataModelByIDAndRevision'],
 };
 
-/** Invoke an F&O custom service operation via `POST /api/services/<path>/<op>`. */
+/** Statuses F&O uses for throttling / temporary unavailability. Worth a retry. */
+const RETRYABLE_STATUSES: ReadonlySet<number> = new Set([429, 503]);
+/** Retries after the first attempt, so at most four requests per call. */
+const MAX_SERVICE_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 500;
+/** Upper bound for any single wait, including a server-sent `Retry-After`. */
+const MAX_RETRY_DELAY_MS = 30_000;
+
+/**
+ * Invoke an F&O custom service operation via `POST /api/services/<path>/<op>`.
+ *
+ * Throttling (429) and temporary unavailability (503) are retried with
+ * exponential backoff, honouring `Retry-After` when the transport exposes it.
+ * Waits end early when `signal` aborts.
+ */
 export async function callErService<T = unknown>(
   transport: FnoTransport,
   conn: FnoConnection,
@@ -73,7 +93,87 @@ export async function callErService<T = unknown>(
   signal?: AbortSignal,
 ): Promise<T> {
   const url = `${normalizeEnvUrl(conn.envUrl)}/api/services/${servicePath}/${operation}`;
-  return transport.postJson<T>(url, token, body ?? {}, signal);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await transport.postJson<T>(url, token, body ?? {}, signal);
+    } catch (err) {
+      if (
+        !(err instanceof FnoHttpError) ||
+        !RETRYABLE_STATUSES.has(err.status) ||
+        attempt >= MAX_SERVICE_RETRIES ||
+        signal?.aborted
+      ) {
+        throw err;
+      }
+      await delay(retryDelayMs(err, attempt), signal);
+    }
+  }
+}
+
+/** Wait before retry `attempt` (0-based): `Retry-After` if present, else backoff with jitter. */
+function retryDelayMs(err: FnoHttpError, attempt: number): number {
+  const header = err.headers?.['retry-after']?.trim();
+  if (header) {
+    const seconds = Number(header);
+    const ms = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(header) - Date.now();
+    if (Number.isFinite(ms)) return Math.min(Math.max(ms, 0), MAX_RETRY_DELAY_MS);
+  }
+  const backoff = RETRY_BASE_DELAY_MS * 2 ** attempt + Math.random() * RETRY_BASE_DELAY_MS;
+  return Math.min(backoff, MAX_RETRY_DELAY_MS);
+}
+
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
+}
+
+/** `setTimeout` as a promise that rejects with the abort reason when `signal` fires. */
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortReason(signal));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(abortReason(signal as AbortSignal));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/** True for a cancellation — either an aborted `signal` or an `AbortError` thrown by fetch/IPC. */
+function isAbort(err: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return true;
+  return err instanceof Error && err.name === 'AbortError';
+}
+
+/**
+ * Run `fn` over `items` with at most `limit` calls in flight. The first
+ * rejection stops workers from picking up further items and is rethrown.
+ */
+async function forEachWithConcurrency<T>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  let failed = false;
+  const worker = async (): Promise<void> => {
+    while (!failed && next < items.length) {
+      const item = items[next++];
+      try {
+        await fn(item);
+      } catch (err) {
+        failed = true;
+        throw err;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
 }
 
 /** List service names in an F&O service group (used for diagnostics). */
@@ -152,12 +252,24 @@ export async function listServiceOperations(
   const cacheKey = `${normalizeEnvUrl(conn.envUrl)}::${servicePath}`;
   const cached = _serviceOpsCache.get(cacheKey);
   if (cached) return cached;
+  const inFlight = _serviceOpsInFlight.get(cacheKey);
+  if (inFlight) return inFlight;
   const url = `${normalizeEnvUrl(conn.envUrl)}/api/services/${servicePath}`;
-  const buffer = await transport.getBinary(url, token, signal);
-  const text = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(buffer));
-  const ops = extractOperationNames(text);
-  if (ops.length > 0) _serviceOpsCache.set(cacheKey, ops);
-  return ops;
+  const request = (async () => {
+    const buffer = await transport.getBinary(url, token, signal);
+    const text = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(buffer));
+    const ops = extractOperationNames(text);
+    if (ops.length > 0) _serviceOpsCache.set(cacheKey, ops);
+    return ops;
+  })();
+  _serviceOpsInFlight.set(cacheKey, request);
+  try {
+    return await request;
+  } finally {
+    // Only the owner clears the slot; a `clearServiceOpsCache` in between
+    // may already have dropped or replaced it.
+    if (_serviceOpsInFlight.get(cacheKey) === request) _serviceOpsInFlight.delete(cacheKey);
+  }
 }
 
 /** Parse operation names from a service discovery response. Accepts XML and JSON. */
@@ -320,6 +432,9 @@ function truncate(s: string, max: number): string {
   return `${s.slice(0, max)}… [+${s.length - max} chars]`;
 }
 
+/** Seed-model probes in flight at once in `listSolutions`. */
+const LIST_SOLUTIONS_PROBE_CONCURRENCY = 6;
+
 /**
  * Enumerate ER solutions by probing `getFormatSolutionsSubHierarchy` for every known
  * root DataModel name in parallel. The X++ implementation recurses, so one call
@@ -416,10 +531,13 @@ export async function listSolutions(
   // Track the last probe error so we can report it if every probe fails.
   let lastProbeError: FnoHttpError | null = null;
 
-  // Run all probes IN PARALLEL. The API is fully recursive so each probe
-  // returns the entire sub-tree — no BFS needed.
-  await Promise.all(
-    allProbes.map(async parent => {
+  // Run the probes in parallel, capped so ~135 seed models do not hit F&O's
+  // throttling all at once. The API is fully recursive so each probe returns
+  // the entire sub-tree — no BFS needed.
+  await forEachWithConcurrency(
+    allProbes,
+    LIST_SOLUTIONS_PROBE_CONCURRENCY,
+    async parent => {
       probesTried.push(parent);
       try {
         let operation: string;
@@ -464,7 +582,7 @@ export async function listSolutions(
           throw err;
         }
       }
-    }),
+    },
   );
 
   // If every probe failed, propagate the last error.
@@ -534,6 +652,13 @@ export async function listSolutions(
 }
 
 /**
+ * Statuses `listComponents` treats as "no children": no matching operation /
+ * rejected parameter (400/404), or the X++ exception F&O raises for an
+ * unknown parent solution (500).
+ */
+const EMPTY_CHILDREN_STATUSES: ReadonlySet<number> = new Set([400, 404, 500]);
+
+/**
  * Enumerate configuration components inside a single solution.
  * One `getFormatSolutionsSubHierarchy` call returns the complete sub-tree
  * because X++ recurses into DerivedSolutions.
@@ -578,6 +703,12 @@ export async function listComponents(
         : [];
       return { rows: unwrapServiceArray<RawErComponentRow>(raw, operation), rawTopLevelKeys };
     } catch (err) {
+      // Only "this parent has nothing / the operation does not take it" is an
+      // empty result. Cancellation, rejected credentials, throttling and
+      // transport failures must reach the caller — an empty list would read
+      // as "this solution has no configurations".
+      if (isAbort(err, signal)) throw err;
+      if (!(err instanceof FnoHttpError) || !EMPTY_CHILDREN_STATUSES.has(err.status)) throw err;
       console.warn('[fno-client] listComponents fetchChildren failed', { parentName, err });
       return { rows: [], rawTopLevelKeys: [] };
     }
@@ -1072,10 +1203,12 @@ export function relabelDownload(
     const tagEnd = trimmed.indexOf('>');
     const openTag = trimmed.slice(0, tagEnd + 1);
     const attr = ` Name="${escapeXmlAttr(name)}"`;
+    // Replacer functions, not strings: a name containing `$&`, `$1` or `$'`
+    // would otherwise be expanded as a replacement pattern.
     xml =
       (/\sName="[^"]*"/i.test(openTag)
-        ? openTag.replace(/\sName="[^"]*"/i, attr)
-        : openTag.replace(/^<\s*ErFnoBundle/i, `<ErFnoBundle${attr}`)) + trimmed.slice(tagEnd + 1);
+        ? openTag.replace(/\sName="[^"]*"/i, () => attr)
+        : openTag.replace(/^<\s*ErFnoBundle/i, () => `<ErFnoBundle${attr}`)) + trimmed.slice(tagEnd + 1);
   } else {
     xml = injectNameHint(trimmed, name, version);
   }
@@ -1440,7 +1573,9 @@ function injectNameHint(
   const attrs = `Name="${escaped}"${versionAttr}${idAttr}${baseAttr}`;
   if (/^<\s*ErFnoBundle[\s>]/i.test(trimmed)) {
     // Splice the attributes into the opening tag.
-    return trimmed.replace(/^<\s*ErFnoBundle(\s|>)/i, `<ErFnoBundle ${attrs}$1`);
+    // Replacer function: `attrs` carries the user-visible name, whose `$`
+    // sequences must stay literal.
+    return trimmed.replace(/^<\s*ErFnoBundle(\s|>)/i, (_m, sep: string) => `<ErFnoBundle ${attrs}${sep}`);
   }
   return `<ErFnoBundle ${attrs}>${trimmed}</ErFnoBundle>`;
 }

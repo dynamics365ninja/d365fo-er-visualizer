@@ -9,4 +9,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     logout: (conn: unknown) => ipcRenderer.invoke('fno:auth:logout', conn),
   },
   fnoRequest: (payload: unknown) => ipcRenderer.invoke('fno:request', payload),
+  // Cancels the in-flight `fnoRequest` carrying the same `requestId`.
+  fnoAbort: (requestId: string) => ipcRenderer.send('fno:abort', requestId),
 });

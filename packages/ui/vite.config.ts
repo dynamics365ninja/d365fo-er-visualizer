@@ -1,12 +1,56 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 
 const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
 
+/**
+ * Content-Security-Policy for built output. index.html carries the dev policy
+ * (inline scripts for React Refresh, `ws:` + localhost:5173 for HMR); a build
+ * swaps in this one. It is the policy that actually applies in the packaged
+ * Electron shell, which loads over file:// where the main process' response
+ * header hook never fires, and in the web deployment under /app.
+ *
+ * No inline or remote script, no dev-server origins. connect-src keeps the
+ * Entra endpoints MSAL talks to and the F&O host families; the web app reaches
+ * F&O through the same-origin /api/fno proxy and Electron through IPC, so the
+ * F&O entries are defence in depth rather than a requirement.
+ */
+const PRODUCTION_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  // The boot `<style>` in index.html and runtime style attributes (React Flow,
+  // Fluent) need inline styles.
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob:",
+  "connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://login.windows.net " +
+    'https://*.operations.dynamics.com https://*.cloudax.dynamics.com https://*.axcloud.dynamics.com https://*.sandbox.ax.dynamics.com',
+  "frame-src 'self' https://login.microsoftonline.com https://login.microsoft.com",
+  "form-action 'self' https://login.microsoftonline.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+].join('; ') + ';';
+
+const CSP_META = /(<meta\s+http-equiv="Content-Security-Policy"\s+content=")[^"]*(")/i;
+
+function productionCsp(): Plugin {
+  return {
+    name: 'er-production-csp',
+    apply: 'build',
+    transformIndexHtml(html) {
+      if (!CSP_META.test(html)) {
+        // Fail loudly: shipping without a CSP must not happen silently.
+        throw new Error('er-production-csp: no Content-Security-Policy <meta> found in index.html');
+      }
+      return html.replace(CSP_META, (_m, open: string, close: string) => `${open}${PRODUCTION_CSP}${close}`);
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), productionCsp()],
   // Relative by default so the Electron shell can load the build over file://.
   // The web deployment stages the SPA under /app on the marketing site and
   // sets APP_BASE=/app/ so assets resolve from any URL under that path.
@@ -31,6 +75,15 @@ export default defineConfig({
       '/api/fno': {
         target: process.env.FNO_DEV_PROXY_TARGET ?? 'http://localhost:3000',
         changeOrigin: true,
+        // The proxy refuses callers whose Origin is not its own. The browser
+        // sees this call as same-origin (the Vite server), so present it to
+        // the target as such rather than as a foreign localhost:5173 origin.
+        configure: proxy => {
+          const targetOrigin = new URL(process.env.FNO_DEV_PROXY_TARGET ?? 'http://localhost:3000').origin;
+          proxy.on('proxyReq', proxyReq => {
+            if (proxyReq.getHeader('origin')) proxyReq.setHeader('origin', targetOrigin);
+          });
+        },
       },
     },
     watch: {

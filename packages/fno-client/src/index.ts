@@ -2,6 +2,7 @@
 export * from './types';
 export * from './path-key';
 export * from './auth';
+export * from './http';
 export {
   listSolutions,
   listComponents,
