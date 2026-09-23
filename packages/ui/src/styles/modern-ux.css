@@ -1,0 +1,532 @@
+/* ═══════════════════════════════════════════════════════════════
+   MODERN UX LAYER — global micro-interactions, scrollbars, polish
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Custom scrollbars ─────────────────────────────────────────── */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--er-radius-sm);
+  transition: background 200ms ease;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ── Right panel tab strip ─────────────────────────────────────── */
+/* The right panel tab strip uses Griffel makeStyles; no plain CSS needed */
+
+/* ── Panel slide-in animations ─────────────────────────────────── */
+
+/* ── Interactive element transitions ───────────────────────────── */
+/* Clickable path elements */
+.clickable-path-segment {
+  transition: color 120ms ease, text-decoration-color 120ms ease;
+}
+
+/* ── Designer empty state enhancement ──────────────────────────── */
+.designer-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+}
+
+/* Enhanced empty state */
+.property-empty-icon-stack {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 8px;
+}
+
+.property-empty-hint {
+  font-size: var(--er-text-md);
+  color: var(--er-text-muted);
+  opacity: 0.7;
+  line-height: 1.4;
+  text-align: center;
+  max-width: 180px;
+}
+
+/* ── Tab bar improvement ─────────────────────────────────────────── */
+/* Animated active tab bottom border */
+[role="tab"] {
+  transition: color 140ms ease, background-color 140ms ease, border-bottom-color 140ms ease;
+}
+
+/* ── Focus ring polish ──────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--er-accent);
+  outline-offset: 2px;
+  border-radius: var(--er-radius-sm);
+}
+
+/* ── Tooltip animation ──────────────────────────────────────────── */
+[data-popper-placement] {
+  animation: tooltip-appear 100ms ease;
+}
+@keyframes tooltip-appear {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ── Panel header tab strip colors ─────────────────────────────── */
+
+/* ── Explorer section collapse animation ───────────────────────── */
+.explorer-kind-group-body {
+  animation: panel-body-in 150ms ease;
+}
+@keyframes panel-body-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Wu-ref-row interaction polish ─────────────────────────────── */
+.wu-ref-row--active {
+  animation: ref-row-activate 200ms ease;
+}
+@keyframes ref-row-activate {
+  0%   { background-color: transparent; }
+  40%  { background-color: color-mix(in srgb, var(--er-accent) 20%, transparent); }
+  100% { background-color: color-mix(in srgb, var(--er-accent) 10%, transparent); }
+}
+
+/* Datasource row where-used button */
+.ds-row-where-used {
+  opacity: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--er-radius-sm);
+  font-size: var(--er-text-sm);
+  color: var(--er-text-muted);
+  transition: opacity 0.12s;
+  margin-left: 4px;
+}
+.ds-row:hover .ds-row-where-used,
+.ds-row-wrap:hover .ds-row-where-used {
+  opacity: 1;
+}
+.ds-row-where-used:hover {
+  background: var(--er-surface-3);
+  color: var(--er-text);
+}
+
+/* ── Explorer hierarchy view ── */
+.explorer-hierarchy-view .explorer-model-hierarchy-group {
+  margin-bottom: 4px;
+}
+.explorer-orphan-section {
+  margin-top: 8px;
+}
+.explorer-orphan-header {
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--er-text-muted);
+  padding: 4px 12px 2px;
+  opacity: 0.7;
+}
+
+/* ── PropertyInspector empty state tips ── */
+.property-empty-tips {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  max-width: 200px;
+}
+.property-empty-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--er-text-xs);
+}
+.property-empty-tip-key {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: var(--er-radius-sm);
+  background: rgba(128,128,128,0.18);
+  border: 1px solid rgba(128,128,128,0.28);
+  font-family: var(--font-mono);
+  font-size: var(--er-text-2xs);
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--er-text);
+}
+.property-empty-tip-label {
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+}
+
+/* ─── Drill-Down Tree View (ReactFlow canvas) ──────────────────────────────── */
+
+.ddt-canvas {
+  /* flex:1 works because dd-panel is now display:flex flex-direction:column */
+  flex: 1 1 0;
+  min-height: 380px;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+/* The tree needs the vertical room, so the header shrinks to the essentials. */
+.dd-panel--tree .dd-hero {
+  padding: 6px 10px;
+}
+
+.ddt-auto-compact-hint {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 4;
+  border: 1px solid color-mix(in srgb, var(--er-accent) 58%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  color: var(--er-text);
+  border-radius: var(--er-radius-pill);
+  padding: 4px 10px;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dd-panel--tab   > .ddt-canvas,
+.dd-panel--dialog > .ddt-canvas {
+  min-height: 520px;
+}
+
+/* ── Tree node card ─────────────────────────────────────────── */
+
+.ddt-node {
+  background: var(--ddt-bg, var(--bg-secondary));
+  border: 1.5px solid var(--ddt-border, var(--border-color));
+  border-radius: var(--er-radius-lg);
+  padding: 0;
+  overflow: hidden;
+  font-family: var(--font-sans, inherit);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.12s;
+  width: 100%;
+}
+
+.react-flow__node.ddt-node-wrap--dim .ddt-node {
+  opacity: 0.58;
+}
+
+.react-flow__node.ddt-node-wrap--path .ddt-node {
+  opacity: 0.94;
+}
+
+.react-flow__node.ddt-node-wrap--selected .ddt-node,
+.ddt-node--selected {
+  border-color: var(--er-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--er-accent) 55%, transparent), 0 6px 20px color-mix(in srgb, var(--er-accent) 24%, transparent);
+  opacity: 1;
+}
+
+.ddt-node--clickable {
+  cursor: pointer;
+}
+
+.ddt-node--clickable:hover {
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--er-accent) 28%, transparent);
+  border-color: var(--er-accent);
+  transform: translateY(-2px);
+}
+
+.ddt-node__head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px 4px;
+  background: color-mix(in srgb, var(--ddt-bg, var(--bg-secondary)) 78%, black 6%);
+  border-bottom: 1px solid color-mix(in srgb, var(--ddt-border, var(--border-color)) 72%, transparent);
+}
+
+.ddt-node__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ddt-fg, var(--er-text));
+  opacity: 0.85;
+  font-size: var(--er-text-lg);
+}
+
+.ddt-node__badge {
+  /* Same uppercase micro-label as .dd-workbench__panel-head. Size stays under
+     the 13px icon that sets the head's line box, so estimateTreeNodeHeight()
+     in DrillDownPanel.tsx keeps holding. */
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--ddt-fg, var(--er-text-muted));
+  opacity: 0.8;
+}
+
+.ddt-node__pin {
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ddt-fg, var(--er-text));
+  opacity: 0.5;
+}
+
+.ddt-node__label {
+  font-size: var(--er-text-md);
+  font-weight: 600;
+  color: var(--ddt-fg, var(--er-text));
+  padding: 6px 10px 2px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.ddt-node__sub {
+  font-size: var(--er-text-xs);
+  font-family: var(--font-mono, monospace);
+  color: color-mix(in srgb, var(--ddt-fg, var(--er-text-muted)) 72%, transparent);
+  padding: 0 10px 5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ddt-node--compact .ddt-node__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ddt-node--compact .ddt-node__sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ddt-node__drill-hint {
+  font-size: var(--er-text-2xs);
+  color: var(--er-accent);
+  padding: 2px 10px 6px;
+  letter-spacing: 0.3px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.ddt-node--clickable:hover .ddt-node__drill-hint {
+  opacity: 1;
+}
+
+.ddt-node__actions {
+  display: flex;
+  gap: 5px;
+  flex-wrap: nowrap;
+  padding: 4px 10px 8px;
+}
+
+.ddt-node__action {
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  color: var(--er-text);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  border-radius: var(--er-radius-md);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.ddt-node__action:hover {
+  border-color: color-mix(in srgb, var(--er-accent) 58%, transparent);
+  background: color-mix(in srgb, var(--er-accent) 16%, transparent);
+}
+
+/* ── Root node accent ───────────────────────────────────────── */
+
+.ddt-node--root {
+  border-width: 2px;
+}
+
+.ddt-node--root .ddt-node__label {
+  font-size: var(--er-text-sm);
+  font-family: var(--font-mono, monospace);
+  font-weight: 500;
+}
+
+/* ── Leaf node ──────────────────────────────────────────────── */
+
+.ddt-node--table .ddt-node__head,
+.ddt-node--leaf.ddt-node--table .ddt-node__head {
+  background: color-mix(in srgb, var(--er-success-soft) 80%, transparent);
+}
+
+.ddt-node--enum .ddt-node__head {
+  background: color-mix(in srgb, var(--er-warning-soft) 80%, transparent);
+}
+
+.ddt-node--class .ddt-node__head {
+  background: color-mix(in srgb, var(--er-accent) 12%, transparent);
+}
+
+/* ── View toggle (tab switcher, pinned top-right of hero) ────── */
+
+/* Push the toggle to the far right of dd-hero__top */
+.dd-hero__top .dd-view-toggle {
+  margin-left: auto;
+}
+
+.dd-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--er-radius-lg);
+  background: color-mix(in srgb, var(--bg-primary) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  flex-shrink: 0;
+}
+
+.dd-view-toggle__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: none;
+  border-radius: var(--er-radius-md);
+  background: transparent;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+
+.dd-view-toggle__btn:hover {
+  background: color-mix(in srgb, var(--er-surface-3) 80%, transparent);
+  color: var(--er-text);
+}
+
+.dd-view-toggle__btn.is-active {
+  background: var(--er-accent);
+  color: #fff;
+}
+
+.dd-view-toggle__label {
+  /* hide on very small panels */
+  display: inline;
+}
+
+.dd-tree-debug-toggle {
+  margin-left: 8px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+  color: var(--er-text-muted);
+  border-radius: var(--er-radius-lg);
+  padding: 4px 10px;
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dd-tree-debug-toggle:hover {
+  border-color: color-mix(in srgb, var(--er-accent) 58%, transparent);
+  color: var(--er-text);
+}
+
+.dd-tree-label-toggle {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--er-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+}
+
+.dd-tree-label-toggle__btn {
+  border: none;
+  background: transparent;
+  color: var(--er-text-muted);
+  border-radius: var(--er-radius-md);
+  padding: 4px 10px;
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dd-tree-label-toggle__btn:hover {
+  color: var(--er-text);
+  background: color-mix(in srgb, var(--er-surface-3) 80%, transparent);
+}
+
+.dd-tree-label-toggle__btn.is-active {
+  background: var(--er-accent);
+  color: #fff;
+}
+
+.dd-tree-debug-toggle.is-active {
+  border-color: color-mix(in srgb, var(--er-accent) 72%, transparent);
+  background: color-mix(in srgb, var(--er-accent) 18%, transparent);
+  color: var(--er-text);
+}
+
+/* Override ReactFlow controls position inside the tree canvas */
+.ddt-canvas .react-flow__controls {
+  bottom: 10px;
+  left: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+  border-radius: var(--er-radius-lg);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--shadow-color) 45%, transparent);
+}
+
+.ddt-canvas .react-flow__controls-button {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 95%, transparent);
+  color: var(--er-text);
+  fill: var(--er-text);
+}
+
+.ddt-canvas .react-flow__controls-button:first-child {
+  border-top: none;
+}
+
+.ddt-canvas .react-flow__controls-button:hover {
+  background: color-mix(in srgb, var(--er-surface-3) 90%, transparent);
+}
+
+.ddt-canvas .react-flow__controls-button:focus-visible {
+  outline: 1px solid var(--er-accent);
+  outline-offset: -1px;
+  z-index: 1;
+}
+
+.ddt-canvas .react-flow__controls-button svg {
+  color: currentColor;
+  fill: currentColor;
+  stroke: currentColor;
+}

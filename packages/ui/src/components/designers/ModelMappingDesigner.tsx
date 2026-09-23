@@ -11,11 +11,13 @@ import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
 import { ExpandCollapseSlider } from '../ExpandCollapseSlider';
 import { FilterField } from '../FilterField';
-import { locale, t, useLocale } from '../../i18n';
+import { t, useLocale } from '../../i18n';
 import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../../utils/filter-suggestions';
 import { useTabState } from '../../utils/tab-view-state';
 import { findTreeNodeByMatch, DesignerHint, SlidingTabs, datasourceFocusKey, collectDatasourceTerms, EMPTY_STRING_SET, RevealInExplorerMenu } from './shared';
 import { type GroupedDatasourceListHandle, GroupedDatasourceList } from './DatasourceTree';
+import { flattenVisibleTree } from '../../utils/flat-tree';
+import { useVirtualTree } from '../../utils/use-virtual-tree';
 
 // ─── Mapping Designer ───
 
@@ -99,11 +101,9 @@ function DefinitionStat({ mapping, definitions, technical, onPick }: {
   onPick: (index: number) => void;
 }) {
   const title = technical
-    ? (locale === 'cs'
-      ? 'Definice mapování (DataContainerDescriptor — kořenový kontejner datového modelu)'
-      : 'Mapping definition (DataContainerDescriptor — root container of the data model)')
-    : (locale === 'cs' ? 'Definice mapování' : 'Mapping definition');
-  const text = <>{locale === 'cs' ? 'Definice' : 'Definition'}: {definitionDisplayName(mapping, technical)}</>;
+    ? t.mmDefinitionTitleTechnical
+    : t.mmDefinitionTitle;
+  const text = <>{t.mmDefinition}: {definitionDisplayName(mapping, technical)}</>;
   if (definitions.length < 2) return <span className="fmt-stat" title={title}>{text}</span>;
 
   return (
@@ -112,7 +112,7 @@ function DefinitionStat({ mapping, definitions, technical, onPick }: {
         <button
           type="button"
           className="fmt-stat fmt-stat-btn mm-definition-picker"
-          title={locale === 'cs' ? `${title} — kliknutím přepnete` : `${title} — click to switch`}
+          title={t.mmClickToSwitch(title)}
         >
           {text}
           <ChevronDownRegular fontSize={12} aria-hidden />
@@ -200,6 +200,7 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
   const focusBindingPath: string | undefined = focusNode?.type === 'binding' ? focusNode.data?.path : undefined;
   const focusValidationPath: string | undefined = focusNode?.type === 'validation' ? focusNode.data?.path : undefined;
   const bindingScrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollPaneRef = useRef<HTMLDivElement | null>(null);
   const validationScrollRef = useRef<HTMLDivElement | null>(null);
   const dsListRef = useRef<GroupedDatasourceListHandle>(null);
 
@@ -231,8 +232,10 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
   }, [focusValidationPath]);
 
   useEffect(() => {
+    // The virtualized binding list scrolls itself (VirtualBindingTree); this
+    // only covers the rare case of the row being on screen already.
     if (!focusBindingPath) return;
-    const timer = setTimeout(() => bindingScrollRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
+    const timer = setTimeout(() => bindingScrollRef.current?.scrollIntoView({ block: 'nearest' }), 250);
     return () => clearTimeout(timer);
   }, [focusBindingPath]);
 
@@ -390,7 +393,7 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
       <div className="fmt-header">
         <span className="fmt-header-title">
           <LinkFilled fontSize={15} />
-          {locale === 'cs' ? 'Mapování modelu' : 'Model mapping'}
+          {t.mmDesignerTitle}
         </span>
         <div className="fmt-header-stats">
           {(mm.dataContainerDescriptor || mm.name) && (
@@ -402,9 +405,7 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
             />
           )}
         </div>
-        <DesignerHint text={locale === 'cs'
-          ? 'Klikni na řádek pro vlastnosti, na lupu pro rozpad výrazu'
-          : 'Click a row for properties, the magnifier for the expression drill-down'}
+        <DesignerHint text={t.mmDesignerHint}
         />
       </div>
       <div className="fmt-toolbar">
@@ -473,27 +474,22 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
       </div>
 
       {/* Content */}
-      <div className="designer-scroll-pane">
+      <div className="designer-scroll-pane" ref={scrollPaneRef}>
         {view === 'bindings' && (
           bindingTree.length === 0
-            ? <div style={{ color: 'var(--text-secondary)', fontSize: 12, padding: 12 }}>{t.noResults}</div>
-            : <div className="mm-tree" role="tree">
-                {bindingTree.map(node => (
-                  <BindingTreeRows
-                    key={node.key}
-                    node={node}
-                    depth={0}
-                    collapsed={effectiveCollapsedGroups}
-                    onToggle={toggleGroup}
-                    configIndex={configIndex}
-                    focusBindingPath={focusBindingPath}
-                    flashBindingPath={flashBindingPath}
-                    focusRef={bindingScrollRef}
-                    onSelectBinding={selectBindingByPath}
-                    onRevealBinding={revealBindingInExplorer}
-                  />
-                ))}
-              </div>
+            ? <div style={{ color: 'var(--er-text-muted)', fontSize: 12, padding: 12 }}>{t.noResults}</div>
+            : <VirtualBindingTree
+                roots={bindingTree}
+                scrollRef={scrollPaneRef}
+                collapsed={effectiveCollapsedGroups}
+                onToggle={toggleGroup}
+                configIndex={configIndex}
+                focusBindingPath={focusBindingPath}
+                flashBindingPath={flashBindingPath}
+                focusRef={bindingScrollRef}
+                onSelectBinding={selectBindingByPath}
+                onRevealBinding={revealBindingInExplorer}
+              />
         )}
 
         {view === 'datasources' && (
@@ -502,7 +498,7 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
 
         {view === 'validations' && (
           filteredValidations.length === 0
-            ? <div style={{ color: 'var(--text-secondary)', fontSize: 12, padding: 12 }}>
+            ? <div style={{ color: 'var(--er-text-muted)', fontSize: 12, padding: 12 }}>
                 {validations.length === 0 ? t.mappingNoValidations : t.noResults}
               </div>
             : <div className="mm-validation-list">
@@ -552,7 +548,7 @@ function ValidationRow({ validation, configIndex, focused, focusRef, onSelect, o
         {rules.length > 1 && (
           <span
             className="mm-group-count"
-            title={locale === 'cs' ? `Počet pravidel: ${rules.length}` : `Number of rules: ${rules.length}`}
+            title={t.mmRuleCount(rules.length)}
           >{rules.length}</span>
         )}
         {onReveal && <RevealInExplorerMenu onReveal={() => onReveal(validation.path)} />}
@@ -604,16 +600,108 @@ function ValidationExpression({ label, expression, configIndex, elementName }: {
   );
 }
 
+/** Rows of the binding tree kept mounted around the viewport; the rest are measured stand-ins. */
+const BINDING_ROW_ESTIMATE = 58;
+
 /**
- * One level of the model-mapping binding hierarchy. Container levels render as
- * collapsible branches, bound levels additionally render their expression and
- * the drill-down trigger, so a node that is both keeps a single row.
+ * The model-mapping binding hierarchy, flattened and virtualized: a mapping
+ * with thousands of bindings used to mount every row (each with its formula)
+ * on "Expand all". The indentation rails the nested markup used to draw come
+ * from each row now (see `.mm-flat-row` in the styles).
  */
-function BindingTreeRows({
-  node, depth, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding, onRevealBinding,
+function VirtualBindingTree({
+  roots, scrollRef, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding, onRevealBinding,
+}: {
+  roots: BindingTreeNode[];
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  collapsed: ReadonlySet<string>;
+  onToggle: (key: string) => void;
+  configIndex: number;
+  focusBindingPath?: string;
+  flashBindingPath: string | null;
+  focusRef: React.MutableRefObject<HTMLDivElement | null>;
+  onSelectBinding: (path: string) => void;
+  onRevealBinding?: (path: string) => void;
+}) {
+  const rows = useMemo(() => flattenVisibleTree<BindingTreeNode>(roots, {
+    getId: node => node.key,
+    getChildren: node => node.children,
+    isExpanded: node => !collapsed.has(node.key),
+  }), [roots, collapsed]);
+  const focusIndex = useMemo(
+    () => (focusBindingPath ? rows.findIndex(row => row.id === focusBindingPath) : -1),
+    [rows, focusBindingPath],
+  );
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { virtualizer, scrollMargin } = useVirtualTree({
+    rows,
+    scrollRef,
+    containerRef,
+    estimateSize: BINDING_ROW_ESTIMATE,
+    // The focused binding stays mounted, so it can be flashed and kept in view.
+    pinned: [focusIndex >= 0 ? focusIndex : null],
+  });
+
+  // Bring a binding selected elsewhere (explorer, search, where-used) into
+  // view — once per selection, by index: its position is only an estimate
+  // until the rows above it have been measured.
+  const scrolledToRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusBindingPath) { scrolledToRef.current = null; return; }
+    if (focusIndex < 0 || scrolledToRef.current === focusBindingPath || !virtualizer.scrollElement) return;
+    scrolledToRef.current = focusBindingPath;
+    virtualizer.scrollToIndex(focusIndex, { align: 'center' });
+  }, [focusBindingPath, focusIndex, virtualizer]);
+
+  return (
+    <div className="mm-tree" role="tree">
+      <div ref={containerRef} style={{ position: 'relative', height: virtualizer.getTotalSize() }}>
+        {virtualizer.getVirtualItems().map(item => {
+          const row = rows[item.index];
+          if (!row) return null;
+          return (
+            <div
+              key={item.key}
+              data-index={item.index}
+              ref={virtualizer.measureElement}
+              className="mm-flat-row"
+              data-depth={row.depth}
+              style={{
+                position: 'absolute', top: 0, left: 0, width: '100%',
+                transform: `translateY(${item.start - scrollMargin}px)`,
+                ['--mm-depth' as string]: row.depth,
+              }}
+            >
+              <BindingTreeRow
+                node={row.node}
+                level={row.depth + 1}
+                collapsed={collapsed}
+                onToggle={onToggle}
+                configIndex={configIndex}
+                focusBindingPath={focusBindingPath}
+                flashBindingPath={flashBindingPath}
+                focusRef={focusRef}
+                onSelectBinding={onSelectBinding}
+                onRevealBinding={onRevealBinding}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One row of the model-mapping binding hierarchy. Container levels are
+ * collapsible branches; bound levels also show their expression, which opens
+ * the drill-down, so a node that is both keeps a single row.
+ */
+function BindingTreeRow({
+  node, level, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding, onRevealBinding,
 }: {
   node: BindingTreeNode;
-  depth: number;
+  level: number;
   collapsed: ReadonlySet<string>;
   onToggle: (key: string) => void;
   configIndex: number;
@@ -639,69 +727,49 @@ function BindingTreeRows({
   ].filter(Boolean).join(' ');
 
   return (
-    <div className="mm-tree-node" style={{ ['--mm-depth' as string]: depth }}>
-      <div
-        className={classes}
-        role="treeitem"
-        aria-expanded={hasChildren ? !isCollapsed : undefined}
-        ref={isFocused ? focusRef : null}
-        onClick={() => {
-          if (binding) onSelectBinding(node.key);
-          else if (hasChildren) onToggle(node.key);
-        }}
-      >
-        <div className="mm-tree-head">
-          {hasChildren ? (
-            <button
-              type="button"
-              className={`mm-tree-toggle ${isCollapsed ? '' : 'open'}`}
-              aria-label={node.name}
-              onClick={e => { e.stopPropagation(); onToggle(node.key); }}
-            >
-              <span className={`tree-chevron ${isCollapsed ? '' : 'open'}`} />
-            </button>
-          ) : (
-            <span className="mm-tree-toggle mm-tree-toggle--leaf" aria-hidden />
-          )}
-          <span className={binding ? 'mm-binding-name' : 'mm-tree-branch-name'}>{node.name}</span>
-          {node.label && node.label !== node.name && (
-            <span className="mm-tree-label" title={node.label}>{node.label}</span>
-          )}
-          {hasChildren && (
-            <span
-              className="mm-group-count"
-              title={locale === 'cs' ? `Počet vazeb v této větvi: ${node.count}` : `Number of bindings in this branch: ${node.count}`}
-            >{node.count}</span>
-          )}
-          {binding && onRevealBinding && <RevealInExplorerMenu onReveal={() => onRevealBinding(node.key)} />}
-        </div>
-        {binding && (
-          <div className="mm-binding-expr">
-            <span className="mm-binding-arrow" aria-hidden>←</span>
-            {/* The formula opens its drill-down, as in the format and datasource views. */}
-            <DrillDownTrigger expression={binding.expressionAsString} configIndex={configIndex} elementName={node.name}>
-              <ClickablePath expression={binding.expressionAsString} configIndex={configIndex} mode="binding-expr" interactive={false} />
-            </DrillDownTrigger>
-          </div>
+    <div
+      className={classes}
+      role="treeitem"
+      aria-level={level}
+      aria-expanded={hasChildren ? !isCollapsed : undefined}
+      ref={isFocused ? focusRef : null}
+      onClick={() => {
+        if (binding) onSelectBinding(node.key);
+        else if (hasChildren) onToggle(node.key);
+      }}
+    >
+      <div className="mm-tree-head">
+        {hasChildren ? (
+          <button
+            type="button"
+            className={`mm-tree-toggle ${isCollapsed ? '' : 'open'}`}
+            aria-label={node.name}
+            onClick={e => { e.stopPropagation(); onToggle(node.key); }}
+          >
+            <span className={`tree-chevron ${isCollapsed ? '' : 'open'}`} />
+          </button>
+        ) : (
+          <span className="mm-tree-toggle mm-tree-toggle--leaf" aria-hidden />
         )}
+        <span className={binding ? 'mm-binding-name' : 'mm-tree-branch-name'}>{node.name}</span>
+        {node.label && node.label !== node.name && (
+          <span className="mm-tree-label" title={node.label}>{node.label}</span>
+        )}
+        {hasChildren && (
+          <span
+            className="mm-group-count"
+            title={t.mmBranchBindingCount(node.count)}
+          >{node.count}</span>
+        )}
+        {binding && onRevealBinding && <RevealInExplorerMenu onReveal={() => onRevealBinding(node.key)} />}
       </div>
-      {hasChildren && !isCollapsed && (
-        <div className="mm-tree-children" role="group">
-          {node.children.map(child => (
-            <BindingTreeRows
-              key={child.key}
-              node={child}
-              depth={depth + 1}
-              collapsed={collapsed}
-              onToggle={onToggle}
-              configIndex={configIndex}
-              focusBindingPath={focusBindingPath}
-              flashBindingPath={flashBindingPath}
-              focusRef={focusRef}
-              onSelectBinding={onSelectBinding}
-              onRevealBinding={onRevealBinding}
-            />
-          ))}
+      {binding && (
+        <div className="mm-binding-expr">
+          <span className="mm-binding-arrow" aria-hidden>←</span>
+          {/* The formula opens its drill-down, as in the format and datasource views. */}
+          <DrillDownTrigger expression={binding.expressionAsString} configIndex={configIndex} elementName={node.name}>
+            <ClickablePath expression={binding.expressionAsString} configIndex={configIndex} mode="binding-expr" interactive={false} />
+          </DrillDownTrigger>
         </div>
       )}
     </div>

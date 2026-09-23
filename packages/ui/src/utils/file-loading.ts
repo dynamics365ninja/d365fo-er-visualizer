@@ -1,5 +1,5 @@
 import { getElectronApi } from '../fno/electron-bridge';
-import { locale } from '../i18n';
+import { t } from '../i18n';
 
 /**
  * `false` means the file parsed but was not loaded (a newer version of the
@@ -21,7 +21,7 @@ async function ingestXmlFiles(
 
   for (const file of files) {
     if (!file.name.toLowerCase().endsWith('.xml')) {
-      errors.push(`${file.name} – ${locale === 'cs' ? 'není XML soubor' : 'is not an XML file'}`);
+      errors.push(`${file.name} – ${t.fileNotXml}`);
       continue;
     }
 

@@ -1,52 +1,21 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { SearchRegular } from '@fluentui/react-icons';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualTree } from '../../utils/use-virtual-tree';
 import { useAppStore } from '../../state/store';
 import { dsPathToExpression } from '../../utils/ds-path';
 import { ancestorPathKeys, buildDatasourceTree, filterDatasources, keysWithDeclaredDescendants, type DatasourceModel, type DatasourceTree, type DatasourceTreeFilter, type DatasourceTreeNode } from '../../utils/datasource-tree';
 import { DrillDownTrigger } from '../DrillDownPanel';
-import { locale, t } from '../../i18n';
+import { t } from '../../i18n';
 import { getConsultantFieldTypeLabel } from '../../utils/consultant-labels';
 import { type ERDatasource } from '@er-visualizer/core';
 import { enumLabelFor, EMPTY_STRING_SET, RevealInExplorerMenu, fieldTypeLabel } from './shared';
 
 function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): string {
   if (showTechnicalDetails) {
-    return dsGroupLabels[locale === 'cs' ? 'cs' : 'en'][type] ?? type;
+    return t.dsGroupLabelsTechnical[type] ?? type;
   }
 
-  const csLabels: Record<string, string> = {
-    Table: 'Tabulky',
-    CalculatedField: 'Vypočtené hodnoty',
-    Class: 'Logika',
-    Object: 'Objekty',
-    Enum: 'Hodnoty',
-    ModelEnum: 'Hodnoty',
-    FormatEnum: 'Hodnoty',
-    ImportFormat: 'Importní formát',
-    UserParameter: 'Parametry',
-    GroupBy: 'Seskupená data',
-    Container: 'Kontejnery',
-    Join: 'Spojení',
-    DataModel: 'Datový model',
-    Values: 'Hodnoty',
-  };
-  const enLabels: Record<string, string> = {
-    Table: 'Tables',
-    CalculatedField: 'Calculated values',
-    Class: 'Logic',
-    Object: 'Objects',
-    Enum: 'Values',
-    ModelEnum: 'Values',
-    FormatEnum: 'Values',
-    ImportFormat: 'Import format',
-    UserParameter: 'Parameters',
-    GroupBy: 'Grouped data',
-    Container: 'Containers',
-    Join: 'Joins',
-    DataModel: 'Data model',
-    Values: 'Values',
-  };
-  const labels = locale === 'cs' ? csLabels : enLabels;
-  return labels[type] ?? (locale === 'cs' ? 'Ostatní' : 'Other');
+  return t.dsGroupLabelsConsultant[type] ?? t.groupOther;
 }
 
 /** Datasource types the consultant view names; the rest share one "Other" group. */
@@ -106,11 +75,9 @@ interface DatasourceListContext {
   revealInExplorer: boolean;
 }
 
-function DatasourceTreeRow({ node, ctx, insideMatch }: {
+function DatasourceTreeRow({ node, ctx }: {
   node: DatasourceTreeNode;
   ctx: DatasourceListContext;
-  /** A match at or above this row — its children are shown unfiltered. */
-  insideMatch: boolean;
 }) {
   const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
@@ -120,17 +87,9 @@ function DatasourceTreeRow({ node, ctx, insideMatch }: {
   const field = node.field;
   const declared = Boolean(ds && !ds.implicit);
   const isDirectTarget = ctx.focusKey === node.key;
-  const matched = Boolean(ctx.filter?.matched.has(node.key));
   const expandable = ctx.tree.hasChildren(node);
   const expanded = expandable && ctx.isExpanded(node.key);
-  const rowRef = React.useRef<HTMLDivElement>(null);
 
-  // Scroll into view when this row IS the direct target
-  useEffect(() => {
-    if (isDirectTarget && rowRef.current) {
-      rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }, [isDirectTarget]);
   const groupByFields = ds?.groupByInfo?.groupedFields ?? [];
   const aggregatedFields = ds?.groupByInfo?.aggregations ?? [];
   const [showGroupedFields, setShowGroupedFields] = useState(groupByFields.length > 0 && groupByFields.length <= 6);
@@ -182,26 +141,22 @@ function DatasourceTreeRow({ node, ctx, insideMatch }: {
   } else if (ds.importFormatInfo) {
     targetLabel = showTechnicalDetails
       ? ds.importFormatInfo.formatGuid
-      : (locale === 'cs' ? 'Importní formát' : 'Import format');
+      : t.dsImportFormat;
   } else if (ds.groupByInfo) {
     targetLabel = ds.groupByInfo.listToGroup
       ? (showTechnicalDetails
           ? `list: ${ds.groupByInfo.listToGroup}`
-          : `${locale === 'cs' ? 'Seskupení podle' : 'Grouped by'}: ${ds.groupByInfo.listToGroup.split('/').pop()}`)
+          : `${t.dsGroupedBy}: ${ds.groupByInfo.listToGroup.split('/').pop()}`)
       : null;
   } else if (ds.modelInfo) {
     const descriptor = ds.modelInfo.dataContainerDescriptorName || null;
     targetLabel = node.container ? descriptor : [descriptor, `(${t.dsModelNotLoaded})`].filter(Boolean).join(' ');
   }
 
-  const children = expanded
-    ? ctx.tree.childrenOf(node).filter(child =>
-        !ctx.filter || insideMatch || matched || ctx.filter.matched.has(child.key) || ctx.filter.ancestors.has(child.key))
-    : [];
   const rowKind = declared ? '' : ds ? ' ds-row-structural' : ' ds-row-field';
 
   return (
-    <div className={`ds-row-wrap${isDirectTarget ? ' search-match' : ''}`} ref={rowRef}>
+    <div className={`ds-row-wrap${isDirectTarget ? ' search-match' : ''}`}>
       <div
         className={`ds-row${rowKind}`}
         title={declared ? node.path.join('/') : `${field ? t.dsModelField : t.dsImplicitType}: ${node.path.join('/')}`}
@@ -270,9 +225,10 @@ function DatasourceTreeRow({ node, ctx, insideMatch }: {
               type="button"
               className="ds-row-where-used"
               onClick={e => { e.stopPropagation(); triggerWhereUsed(ds.name); }}
-              title={locale === 'cs' ? 'Kde je použito' : 'Where used'}
+              title={t.whereUsedAction}
+              aria-label={`${t.whereUsedAction}: ${ds.name}`}
             >
-              🔍
+              <SearchRegular fontSize={14} aria-hidden />
             </button>
           )}
           {ds && ctx.revealInExplorer && <RevealInExplorerMenu onReveal={revealDatasourceInExplorer} />}
@@ -355,56 +311,114 @@ function DatasourceTreeRow({ node, ctx, insideMatch }: {
           </div>
         </div>
       )}
-      {/* Nested children (indented) */}
-      {children.length > 0 && (
-        <div className="ds-row-children">
-          {children.map((child, i) => (
-            // Definitions do repeat a datasource path; the index keeps both rows.
-            <DatasourceTreeRow key={`${child.key}#${i}`} node={child} ctx={ctx} insideMatch={insideMatch || matched} />
-          ))}
-        </div>
-      )}
     </div>
   );
+}
+
+/** One shown datasource row of a group: the node and how deep it sits. */
+interface FlatDatasourceRow {
+  id: string;
+  node: DatasourceTreeNode;
+  depth: number;
+}
+
+/**
+ * A group's rows in display order — every open branch walked, with the same
+ * filter rule the nested rows used: below a match everything shows, elsewhere
+ * only matches and the paths to them.
+ */
+function flattenDatasourceRows(roots: DatasourceTreeNode[], ctx: DatasourceListContext): FlatDatasourceRow[] {
+  const out: FlatDatasourceRow[] = [];
+  const visit = (nodes: DatasourceTreeNode[], depth: number, insideMatch: boolean, parentId: string) => {
+    nodes.forEach((node, i) => {
+      // Definitions do repeat a datasource path; the index keeps both rows apart.
+      const id = `${parentId}/${node.key}#${i}`;
+      out.push({ id, node, depth });
+      if (!ctx.tree.hasChildren(node) || !ctx.isExpanded(node.key)) return;
+      const matched = Boolean(ctx.filter?.matched.has(node.key));
+      const children = ctx.tree.childrenOf(node).filter(child =>
+        !ctx.filter || insideMatch || matched || ctx.filter.matched.has(child.key) || ctx.filter.ancestors.has(child.key));
+      visit(children, depth + 1, insideMatch || matched, id);
+    });
+  };
+  visit(roots, 0, false, '');
+  return out;
+}
+
+const DATASOURCE_ROW_ESTIMATE = 34;
+
+/**
+ * One group's rows, virtualized: a format's datasources opened with "Expand
+ * all" used to mount ~850 rows at once. The group header above stays in the
+ * normal flow, so it still sticks while its rows scroll.
+ */
+function DatasourceGroupRows({ items, ctx, scrollRef }: {
+  items: DatasourceTreeNode[];
+  ctx: DatasourceListContext;
+  scrollRef: React.RefObject<HTMLElement | null>;
+}) {
+  const rows = useMemo(() => flattenDatasourceRows(items, ctx), [items, ctx]);
+  const focusIndex = useMemo(
+    () => (ctx.focusKey ? rows.findIndex(row => row.node.key === ctx.focusKey) : -1),
+    [rows, ctx.focusKey],
+  );
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { virtualizer, scrollMargin } = useVirtualTree({
+    rows,
+    scrollRef,
+    containerRef,
+    estimateSize: DATASOURCE_ROW_ESTIMATE,
+    pinned: [focusIndex >= 0 ? focusIndex : null],
+  });
+
+  // The datasource the tab was opened for comes into view once it is shown.
+  const scrolledToRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ctx.focusKey) { scrolledToRef.current = null; return; }
+    if (focusIndex < 0 || scrolledToRef.current === ctx.focusKey || !virtualizer.scrollElement) return;
+    scrolledToRef.current = ctx.focusKey;
+    virtualizer.scrollToIndex(focusIndex, { align: 'center' });
+  }, [ctx.focusKey, focusIndex, virtualizer]);
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', height: virtualizer.getTotalSize() }}>
+      {virtualizer.getVirtualItems().map(item => {
+        const row = rows[item.index];
+        if (!row) return null;
+        return (
+          <div
+            key={item.key}
+            data-index={item.index}
+            ref={virtualizer.measureElement}
+            className="ds-flat-row"
+            data-depth={row.depth}
+            style={{
+              position: 'absolute', top: 0, left: 0, width: '100%',
+              transform: `translateY(${item.start - scrollMargin}px)`,
+              ['--ds-depth' as string]: row.depth,
+            }}
+          >
+            <DatasourceTreeRow node={row.node} ctx={ctx} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The nearest ancestor that scrolls vertically — the pane the list lives in. */
+function findScrollParent(element: HTMLElement | null): HTMLElement | null {
+  for (let el = element?.parentElement ?? null; el; el = el.parentElement) {
+    const overflowY = getComputedStyle(el).overflowY;
+    if (overflowY === 'auto' || overflowY === 'scroll') return el;
+  }
+  return null;
 }
 
 // ── Grouped Datasource List ──
 
 // The data model leads: in a format, calculated fields hang off its records.
 const dsGroupOrder = ['DataModel', 'Table', 'CalculatedField', 'Class', 'Object', 'Enum', 'ModelEnum', 'FormatEnum', 'Values', 'UserParameter', 'GroupBy', 'Container', 'Join', 'Other'];
-/** Group titles in the technical view, one per raw datasource type. */
-const dsGroupLabels: Record<'cs' | 'en', Record<string, string>> = {
-  cs: {
-    Table: 'Tabulky',
-    CalculatedField: 'Vypočtená pole',
-    Class: 'Třídy',
-    Object: 'Objekty',
-    Enum: 'Výčty AX',
-    ModelEnum: 'Výčty datového modelu',
-    FormatEnum: 'Výčty formátu',
-    ImportFormat: 'Importní formáty',
-    UserParameter: 'Uživatelské parametry',
-    GroupBy: 'Seskupení',
-    Container: 'Kontejnery',
-    Join: 'Spojení',
-    DataModel: 'Datový model',
-  },
-  en: {
-    Table: 'Tables',
-    CalculatedField: 'Calculated Fields',
-    Class: 'Classes',
-    Object: 'Objects',
-    Enum: 'Ax Enums',
-    ModelEnum: 'Data model Enums',
-    FormatEnum: 'Format enums',
-    ImportFormat: 'Import formats',
-    UserParameter: 'User Parameters',
-    GroupBy: 'Group By',
-    Container: 'Containers',
-    Join: 'Joins',
-    DataModel: 'Data model',
-  },
-};
 
 export interface GroupedDatasourceListHandle {
   expandAll: () => void;
@@ -516,12 +530,17 @@ export const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandl
 
   const effectiveCollapsedGroups = filterState ? EMPTY_STRING_SET : collapsedGroups;
 
+  // The rows are virtualized against the pane that scrolls them.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => { scrollRef.current = findScrollParent(rootRef.current); });
+
   if (groups.length === 0) {
-    return <div style={{ color: 'var(--text-secondary)', fontSize: 12, padding: 12 }}>{t.noResults}</div>;
+    return <div style={{ color: 'var(--er-text-muted)', fontSize: 12, padding: 12 }}>{t.noResults}</div>;
   }
 
   return (
-    <div>
+    <div ref={rootRef}>
       {groups.map(([type, items]) => {
         const isCollapsed = effectiveCollapsedGroups.has(type);
         return (
@@ -534,9 +553,7 @@ export const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandl
               <span className="ds-group-label">{getDatasourceGroupLabel(type, showTechnicalDetails)}</span>
               <span className="ds-group-count">{items.length}</span>
             </div>
-            {!isCollapsed && items.map((node, i) => (
-              <DatasourceTreeRow key={`${node.key}#${i}`} node={node} ctx={ctx} insideMatch={false} />
-            ))}
+            {!isCollapsed && <DatasourceGroupRows items={items} ctx={ctx} scrollRef={scrollRef} />}
           </div>
         );
       })}

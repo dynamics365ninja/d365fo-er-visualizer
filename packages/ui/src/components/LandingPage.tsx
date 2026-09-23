@@ -421,6 +421,8 @@ function marketingHomeHref(): string {
 export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const styles = useStyles();
   const currentLocale = useLocale();
+  // eslint-disable-next-line no-restricted-syntax -- which language button is pressed, not text
+  const isCs = currentLocale === 'cs';
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
   const configs = useAppStore(s => s.configurations);
   const recentFiles = useAppStore(s => s.recentFiles);
@@ -519,21 +521,21 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
           </a>
           <div className={styles.langSwitch} aria-label={t.language} role="group">
             <Button
-              appearance={currentLocale === 'cs' ? 'primary' : 'subtle'}
+              appearance={isCs ? 'primary' : 'subtle'}
               size="small"
               className={styles.langButton}
               onClick={() => setLocale('cs')}
-              aria-pressed={currentLocale === 'cs'}
+              aria-pressed={isCs}
               title={t.languageCzech}
             >
               CZ
             </Button>
             <Button
-              appearance={currentLocale === 'en' ? 'primary' : 'subtle'}
+              appearance={isCs ? 'subtle' : 'primary'}
               size="small"
               className={styles.langButton}
               onClick={() => setLocale('en')}
-              aria-pressed={currentLocale === 'en'}
+              aria-pressed={!isCs}
               title={t.languageEnglish}
             >
               EN

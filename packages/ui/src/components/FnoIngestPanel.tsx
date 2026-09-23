@@ -13,11 +13,11 @@ import { useAppStore, type FnoIngestItem, type FnoIngestProgress } from '../stat
 import { DependencyKindIcon, dependencyKindLabel } from './DependencyPromptDialog';
 
 const INGEST_STEPS = [
-  { key: 'prepare', cs: 'Příprava', en: 'Preparing' },
-  { key: 'dm', cs: 'Datové modely', en: 'Data models' },
-  { key: 'fm', cs: 'Formáty a mapování', en: 'Formats & mappings' },
-  { key: 'mm', cs: 'Mapování modelů', en: 'Model mappings' },
-  { key: 'finalize', cs: 'Dokončení', en: 'Finalizing' },
+  { key: 'prepare' },
+  { key: 'dm' },
+  { key: 'fm' },
+  { key: 'mm' },
+  { key: 'finalize' },
 ] as const;
 
 /** Map the free-text ingest status onto one of the five pipeline phases. */
@@ -73,7 +73,7 @@ export function FnoIngestPanel({ variant = 'overlay', onClose }: {
   /** Rendered as a Close button once the batch has finished. */
   onClose?: () => void;
 }) {
-  const loc = useLocale();
+  useLocale(); // re-render on a language switch; `t` is read at render time
   const status = useAppStore(s => s.fnoIngestStatus);
   const progress = useAppStore(s => s.fnoIngestProgress);
   const cancelIngest = useAppStore(s => s.cancelFnoIngest);
@@ -117,7 +117,7 @@ export function FnoIngestPanel({ variant = 'overlay', onClose }: {
           return (
             <li key={s.key} className={`fno-ingest__step fno-ingest__step--${state}`}>
               <span className="fno-ingest__step-dot" />
-              <span className="fno-ingest__step-label">{loc === 'cs' ? s.cs : s.en}</span>
+              <span className="fno-ingest__step-label">{t.fnoIngestSteps[s.key]}</span>
             </li>
           );
         })}

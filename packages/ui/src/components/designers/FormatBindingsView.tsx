@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { type ModelUsageNode } from '../../utils/format-model-usage';
 import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
-import { locale, t } from '../../i18n';
+import { t } from '../../i18n';
 import { getConsultantBindingLabel } from '../../utils/consultant-labels';
 import { getFormatBindingDisplayLabel, groupFormatBindingsByCategory, type NormalizedFormatBinding, type NormalizedFormatBindingGroup } from '../../utils/format-binding-display';
 import {
@@ -45,23 +45,18 @@ export function ModelUsageView({
   onOpenMapping: (configIndex: number) => void;
   empty: React.ReactNode;
 }) {
-  const cs = locale === 'cs';
-  const fieldsWord = cs
-    ? (stats.fields >= 1 && stats.fields <= 4 ? 'pole' : 'polí')
-    : (stats.fields === 1 ? 'field' : 'fields');
-
   return (
     <>
       <div className="fmt-model-summary">
         <span>
-          {cs ? 'Formát čte ' : 'The format reads '}
+          {t.fbReadsPrefix}
           <strong>{stats.fields}</strong>
-          {cs ? ` ${fieldsWord} modelu` : ` model ${fieldsWord}`}
+          {t.fbReadsSuffix(stats.fields)}
         </span>
         {mapping
           ? (
             <span>
-              {cs ? 'Mapování: ' : 'Mapping: '}
+              {t.fbMappingPrefix}
               <button type="button" className="fmt-model-summary-link" onClick={() => onOpenMapping(mapping.configIndex)}>
                 {mapping.name}
               </button>
@@ -69,18 +64,16 @@ export function ModelUsageView({
           )
           : (
             <span className="fmt-model-summary-warning">
-              {cs
-                ? `Mapování pro ${descriptor || 'datový model'} není načtené`
-                : `No model mapping loaded for ${descriptor || 'the data model'}`}
+              {t.fbMappingNotLoadedFor(descriptor)}
             </span>
           )}
         {mapping && stats.unmapped > 0 && (
           <span className="fmt-model-summary-warning">
-            {cs ? `${stats.unmapped} bez vazby v mapování` : `${stats.unmapped} without a mapping binding`}
+            {t.fbUnmappedCount(stats.unmapped)}
           </span>
         )}
         {!dataModelLoaded && (
-          <span>{cs ? 'Popisky polí se ukážou po načtení datového modelu' : 'Load the data model to see field labels'}</span>
+          <span>{t.fbLoadModelForLabels}</span>
         )}
         {mapping && (
           <button
@@ -88,11 +81,11 @@ export function ModelUsageView({
             className={`fmt-bind-intent-chip fmt-bind-intent--condition fmt-model-unmapped-toggle ${onlyUnmapped ? 'active' : ''}`}
             aria-pressed={onlyUnmapped}
             disabled={stats.unmapped === 0 && !onlyUnmapped}
-            title={cs ? 'Jen pole, která formát čte a mapování neplní' : 'Only fields the format reads and the mapping never fills'}
+            title={t.fbOnlyUnmappedHint}
             onClick={() => onOnlyUnmappedChange(!onlyUnmapped)}
           >
             <span className="fmt-bind-intent-dot" aria-hidden="true" />
-            <span>{cs ? 'Jen bez vazby' : 'Unmapped only'}</span>
+            <span>{t.fbOnlyUnmapped}</span>
             <span className="fmt-bind-intent-count">{stats.unmapped}</span>
           </button>
         )}
@@ -100,7 +93,7 @@ export function ModelUsageView({
 
       {tree.length === 0
         ? (onlyUnmapped
-            ? <div className="fmt-bind-empty">{cs ? 'Každé pole, které formát čte, má vazbu v mapování.' : 'Every field the format reads has a mapping binding.'}</div>
+            ? <div className="fmt-bind-empty">{t.fbAllFieldsMapped}</div>
             : empty)
         : (
           <div className="mm-tree" role="tree">
@@ -138,7 +131,6 @@ function ModelUsageTreeRows({ node, depth, mappingConfigIndex, isCollapsed, onTo
   onOpenElement: (elementId: string) => void;
 }) {
   const [showAllUsages, setShowAllUsages] = useState(false);
-  const cs = locale === 'cs';
   const hasChildren = node.children.length > 0;
   const collapsed = hasChildren && isCollapsed(node.key);
   const used = node.usages.length > 0;
@@ -180,14 +172,14 @@ function ModelUsageTreeRows({ node, depth, mappingConfigIndex, isCollapsed, onTo
           {hasChildren && node.unmappedCount > 0 && (
             <span
               className="fmt-model-unmapped-badge"
-              title={cs ? `Bez vazby v mapování v této větvi: ${node.unmappedCount}` : `Without a mapping binding in this branch: ${node.unmappedCount}`}
+              title={t.fbBranchUnmappedCount(node.unmappedCount)}
             >
               {node.unmappedCount}
             </span>
           )}
           <span
             className="mm-group-count"
-            title={cs ? `Použití ve formátu: ${node.usageCount}` : `Uses in the format: ${node.usageCount}`}
+            title={t.fbUsageCount(node.usageCount)}
           >
             {node.usageCount}
           </span>
@@ -195,7 +187,7 @@ function ModelUsageTreeRows({ node, depth, mappingConfigIndex, isCollapsed, onTo
 
         {used && (
           <div className="fmt-model-body">
-            <span className="fmt-model-line-label">{cs ? 'Mapování' : 'Mapping'}</span>
+            <span className="fmt-model-line-label">{t.fbLineMapping}</span>
             {node.mapping ? (
               <div className="mm-binding-expr">
                 <span className="mm-binding-arrow" aria-hidden>←</span>
@@ -206,17 +198,17 @@ function ModelUsageTreeRows({ node, depth, mappingConfigIndex, isCollapsed, onTo
             ) : node.unmapped ? (
               <span
                 className="fmt-model-missing"
-                title={cs ? 'Mapování toto pole neplní, formát tu dostane prázdnou hodnotu.' : 'The mapping never fills this field, so the format gets an empty value here.'}
+                title={t.fbFieldNeverFilledHint}
               >
-                {cs ? 'Bez vazby v mapování' : 'No mapping binding'}
+                {t.fbNoMappingBinding}
               </span>
             ) : !node.mappingLoaded ? (
-              <span className="fmt-model-muted">{cs ? 'Mapování není načtené' : 'Mapping not loaded'}</span>
+              <span className="fmt-model-muted">{t.fbMappingNotLoaded}</span>
             ) : (
-              <span className="fmt-model-muted">{cs ? 'Záznam — vazby mají jeho pole' : 'Record — its fields carry the bindings'}</span>
+              <span className="fmt-model-muted">{t.fbRecordFieldsBound}</span>
             )}
 
-            <span className="fmt-model-line-label">{cs ? 'Formát' : 'Format'}</span>
+            <span className="fmt-model-line-label">{t.fbLineFormat}</span>
             <div className="fmt-model-usages">
               {usages.map((usage, i) => {
                 const property = usage.binding.bindingCategory === 'data'
@@ -238,7 +230,7 @@ function ModelUsageTreeRows({ node, depth, mappingConfigIndex, isCollapsed, onTo
               })}
               {node.usages.length > usages.length && (
                 <button type="button" className="fmt-model-summary-link fmt-model-usage-more" onClick={() => setShowAllUsages(true)}>
-                  {cs ? `+${node.usages.length - usages.length} dalších` : `+${node.usages.length - usages.length} more`}
+                  {t.fbMoreUsages(node.usages.length - usages.length)}
                 </button>
               )}
             </div>
@@ -274,22 +266,21 @@ export function BindingIntentBar({ layout, onLayoutChange, counts, active, onCha
   active: readonly BindingIntent[];
   onChange: (next: readonly BindingIntent[]) => void;
 }) {
-  const cs = locale === 'cs';
   const layouts: Array<{ id: 'format' | 'model'; label: string; title: string }> = [
     {
       id: 'format',
-      label: cs ? 'Podle formátu' : 'By format',
-      title: cs ? 'Vazby v pořadí, v jakém soubor vzniká' : 'Bindings in the order the file is built',
+      label: t.fbLayoutByFormat,
+      title: t.fbLayoutByFormatHint,
     },
     {
       id: 'model',
-      label: cs ? 'Podle modelu' : 'By model',
-      title: cs ? 'Pole datového modelu, která formát čte, a co je plní v mapování' : 'Data model fields the format reads, and what fills them in the mapping',
+      label: t.fbLayoutByModel,
+      title: t.fbLayoutByModelHint,
     },
   ];
   return (
-    <div className="fmt-bind-intent-bar" role="toolbar" aria-label={cs ? 'Uspořádání a filtr vazeb' : 'Bindings layout and filter'}>
-      <div className="fmt-bind-layout" role="radiogroup" aria-label={cs ? 'Uspořádání vazeb' : 'Bindings layout'}>
+    <div className="fmt-bind-intent-bar" role="toolbar" aria-label={t.fbToolbarAria}>
+      <div className="fmt-bind-layout" role="radiogroup" aria-label={t.fbLayoutAria}>
         {layouts.map(option => (
           <button
             key={option.id}
@@ -344,9 +335,9 @@ export function BindingListEmpty({ filter, counts, active, onShowAll }: {
   const hiddenList = hidden.map(intent => `${getBindingIntentLabel(intent)} (${counts[intent]})`).join(', ');
   return (
     <div className="fmt-bind-empty">
-      <span>{locale === 'cs' ? `Ve vybraných typech vazeb nic není. Skryté: ${hiddenList}.` : `Nothing in the selected binding types. Hidden: ${hiddenList}.`}</span>
+      <span>{t.fbNothingInSelectedTypes(hiddenList)}</span>
       <button type="button" className="fmt-bind-intent-chip" onClick={onShowAll}>
-        {locale === 'cs' ? 'Zobrazit vše' : 'Show all'}
+        {t.fbShowAll}
       </button>
     </div>
   );
@@ -387,7 +378,7 @@ export function FormatElementBindingGroup({ row, bindings, focused, cardRef, con
         {hiddenCount > 0 && (
           <span
             className="fmt-bind-card-count"
-            title={locale === 'cs' ? `Další vazby prvku skryté filtrem: ${hiddenCount}` : `More bindings of this element hidden by the filter: ${hiddenCount}`}
+            title={t.fbHiddenByFilter(hiddenCount)}
           >
             +{hiddenCount}
           </span>

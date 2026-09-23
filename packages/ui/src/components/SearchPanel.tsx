@@ -9,7 +9,7 @@ import {
 import { useAppStore, focusedTabId, relatedMappingDefinitionLabels, MIN_SEARCH_QUERY_LENGTH } from '../state/store';
 import type { TreeNode } from '../state/store';
 import type { ERConfiguration } from '@er-visualizer/core';
-import { locale, t, useLocale } from '../i18n';
+import { t, useLocale } from '../i18n';
 import { getConsultantFormatTypeLabel } from '../utils/consultant-labels';
 import { getFormatTypeThemeColor } from '../utils/theme-colors';
 import { relatedConfigIndices, relatedContainerRules, hitPassesContainerRule, type ScopeContainerRule } from '../utils/model-hierarchy';
@@ -279,36 +279,35 @@ export function SearchPanel() {
   // not as a catalogue of what the box accepts; the query itself rides along
   // as a secondary line so the mapping stays learnable.
   const searchExamples = useMemo<ExamplePreset[]>(() => {
-    const cs = currentLocale === 'cs';
-    const section = cs
-      ? { mapping: 'Odkud se berou data', calc: 'Výpočty a podmínky', output: 'Podoba výstupu' }
-      : { mapping: 'Where the data comes from', calc: 'Calculations and conditions', output: 'Shape of the output' };
+    const section = t.searchExampleSections;
+    const label = t.searchExamplePresets;
     return [
-      { query: 'model.', label: cs ? 'Co všechno čte z datového modelu' : 'Everything read from the data model', category: section.mapping },
-      { query: 'CompanyInfo', label: cs ? 'Kde se používají údaje o firmě' : 'Where company details are used', category: section.mapping },
-      { query: '@GER_LABEL', label: cs ? 'Odkud pocházejí popisky' : 'Where labels come from', category: section.mapping },
-      { query: 'ROUND', label: cs ? 'Kde se zaokrouhlují částky' : 'Where amounts get rounded', category: section.calc },
-      { query: 'IF(', label: cs ? 'Podmíněná logika ve výrazech' : 'Conditional logic in expressions', category: section.calc },
-      { query: 'CalculatedTotal', label: cs ? 'Počítaná pole a mezisoučty' : 'Calculated fields and subtotals', category: section.calc },
-      { query: 'DATETIMEFORMAT', label: cs ? 'Formátování data a času' : 'Date and time formatting', category: section.output },
-      { query: 'NUMBERFORMAT', label: cs ? 'Formátování čísel' : 'Number formatting', category: section.output },
-      { query: 'CONCATENATE', label: cs ? 'Skládání textových hodnot' : 'Text values being pieced together', category: section.output },
+      { query: 'model.', label: label.model, category: section.mapping },
+      { query: 'CompanyInfo', label: label.companyInfo, category: section.mapping },
+      { query: '@GER_LABEL', label: label.labels, category: section.mapping },
+      { query: 'ROUND', label: label.round, category: section.calc },
+      { query: 'IF(', label: label.conditional, category: section.calc },
+      { query: 'CalculatedTotal', label: label.calculated, category: section.calc },
+      { query: 'DATETIMEFORMAT', label: label.dateFormat, category: section.output },
+      { query: 'NUMBERFORMAT', label: label.numberFormat, category: section.output },
+      { query: 'CONCATENATE', label: label.concatenate, category: section.output },
     ];
+    // `t` is swapped on a language switch; currentLocale is what tells the memo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentLocale]);
 
   const whereUsedExamples = useMemo<ExamplePreset[]>(() => {
-    const cs = currentLocale === 'cs';
-    const section = cs
-      ? { impact: 'Dopad změny', trace: 'Dohledání hodnoty' }
-      : { impact: 'Impact of a change', trace: 'Tracing a value' };
+    const section = t.whereUsedExampleSections;
+    const label = t.whereUsedExamplePresets;
     return [
-      { query: 'TaxTrans', label: cs ? 'Co se rozbije při změně tabulky' : 'What breaks if a table changes', category: section.impact },
-      { query: 'NoYesEnum', label: cs ? 'Kde se opírám o výčtový typ' : 'Where an enum is relied on', category: section.impact },
-      { query: 'TaxCodeGroupLookup', label: cs ? 'Kde se používá lookup' : 'Where a lookup is used', category: section.impact },
-      { query: 'ReportingCurrency', label: cs ? 'Kde se uplatní parametr' : 'Where a parameter takes effect', category: section.trace },
-      { query: 'ledgerAccount', label: cs ? 'Odkud se plní účet' : 'What fills the ledger account', category: section.trace },
-      { query: 'CalculatedTotal', label: cs ? 'Co stojí za počítaným polem' : 'What sits behind a calculated field', category: section.trace },
+      { query: 'TaxTrans', label: label.table, category: section.impact },
+      { query: 'NoYesEnum', label: label.enumType, category: section.impact },
+      { query: 'TaxCodeGroupLookup', label: label.lookup, category: section.impact },
+      { query: 'ReportingCurrency', label: label.parameter, category: section.trace },
+      { query: 'ledgerAccount', label: label.ledgerAccount, category: section.trace },
+      { query: 'CalculatedTotal', label: label.calculated, category: section.trace },
     ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentLocale]);
 
   const handleSearch = useCallback(() => {
@@ -591,25 +590,23 @@ export function SearchPanel() {
                         <span
                           className="search-panel__results-count"
                           title={capped.length < totalNested
-                            ? (locale === 'cs'
-                              ? `Zobrazeno prvních ${capped.length} z ${totalNested}`
-                              : `Showing first ${capped.length} of ${totalNested}`)
+                            ? t.searchShowingFirst(capped.length, totalNested)
                             : undefined}
                         >
                           {capped.length < totalNested
                             ? `${capped.length} / ${totalNested}`
                             : t.searchResultCount(totalNested)}
                         </span>
-                        <div className="search-scope-toggle" role="group" aria-label={locale === 'cs' ? 'Oblast výsledků' : 'Scope'}>
+                        <div className="search-scope-toggle" role="group" aria-label={t.searchScopeResultsAria}>
                           {(['all', 'format', 'mapping', 'model'] as const).map(s => (
                             <button key={s} type="button"
                               className={`search-scope-toggle__btn ${searchScope === s ? 'active' : ''}`}
                               onClick={() => setSearchScope(s)}
                             >
-                              {s === 'all' ? (locale === 'cs' ? 'Vše' : 'All')
-                                : s === 'format' ? (locale === 'cs' ? 'Formát' : 'Format')
-                                : s === 'mapping' ? (locale === 'cs' ? 'Mapování' : 'Mappings')
-                                : (locale === 'cs' ? 'Model' : 'Model')}
+                              {s === 'all' ? t.searchScopeAll
+                                : s === 'format' ? t.searchScopeFormat
+                                : s === 'mapping' ? t.searchScopeMapping
+                                : t.searchScopeModel}
                             </button>
                           ))}
                         </div>
@@ -683,9 +680,7 @@ export function SearchPanel() {
               trimmedCurrentQuery.length < MIN_SEARCH_QUERY_LENGTH
                 ? (
                   <p className="search-panel__hint">
-                    {locale === 'cs'
-                      ? `Zadejte alespoň ${MIN_SEARCH_QUERY_LENGTH} znaky.`
-                      : `Type at least ${MIN_SEARCH_QUERY_LENGTH} characters.`}
+                    {t.searchMinChars(MIN_SEARCH_QUERY_LENGTH)}
                   </p>
                 )
                 : <div className="search-panel__empty">{t.noResults}</div>
@@ -714,22 +709,22 @@ export function SearchPanel() {
                 <>
                   <div className="search-panel__results-bar">
                     <span className="search-panel__results-count">{t.found(totalVisible)}</span>
-                    <div className="search-scope-toggle" role="group" aria-label={locale === 'cs' ? 'Oblast použití' : 'Scope'}>
+                    <div className="search-scope-toggle" role="group" aria-label={t.whereUsedScopeAria}>
                       {(['all', 'mapping', 'format'] as const).map(s => (
                         <button key={s} type="button"
                           className={`search-scope-toggle__btn ${whereUsedScope === s ? 'active' : ''}`}
                           onClick={() => setWhereUsedScope(s)}
                         >
-                          {s === 'all' ? (locale === 'cs' ? 'Vše' : 'All')
-                            : s === 'mapping' ? (locale === 'cs' ? 'Mapování' : 'Mappings')
-                            : (locale === 'cs' ? 'Formát' : 'Format')}
+                          {s === 'all' ? t.searchScopeAll
+                            : s === 'mapping' ? t.searchScopeMapping
+                            : t.searchScopeFormat}
                         </button>
                       ))}
                     </div>
                   </div>
                   <div className="search-panel__reach">
                     {relatedFilter && (
-                      <div className="search-scope-toggle" role="group" aria-label={locale === 'cs' ? 'Rozsah hledání' : 'Search reach'}>
+                      <div className="search-scope-toggle" role="group" aria-label={t.searchReachAria}>
                         <button
                           type="button"
                           className={`search-scope-toggle__btn ${relatedOnly ? 'active' : ''}`}
@@ -875,14 +870,14 @@ function SearchResultsGrouped({
 }
 
 /** Maps a format binding propertyName to a human label + CSS kind key. */
-function formatBindingLabel(prop: string, cs: boolean, showTechnicalDetails: boolean): { label: string; labelKind: string } {
+function formatBindingLabel(prop: string, showTechnicalDetails: boolean): { label: string; labelKind: string } {
   const p = prop.trim().toLowerCase();
-  if (!p) return { label: cs ? 'Výraz formátu' : 'Format expression', labelKind: 'formula' };
+  if (!p) return { label: t.searchLblFormatExpression, labelKind: 'formula' };
   if (['enabled', 'visible', 'disabled', 'printable', 'active'].includes(p))
-    return { label: cs ? 'Viditelnost' : 'Visibility', labelKind: 'visibility' };
+    return { label: t.searchLblVisibility, labelKind: 'visibility' };
   if (['format', 'encoding', 'transformation', 'locale', 'separator', 'decimalseparator', 'groupseparator', 'mask'].includes(p))
-    return { label: cs ? `Formátování` : `Formatting`, labelKind: 'formatting' };
-  return { label: showTechnicalDetails ? prop : (cs ? 'Vlastnost' : 'Property'), labelKind: 'property' };
+    return { label: t.searchLblFormatting, labelKind: 'formatting' };
+  return { label: showTechnicalDetails ? prop : t.searchLblProperty, labelKind: 'property' };
 }
 
 type HitCategory = 'structure' | 'bindings' | 'expressions' | 'datasources' | 'references';
@@ -922,23 +917,22 @@ function parseSearchHit(
   const ctx = result.sourceContext ?? '';
   const comp = result.sourceComponent ?? '';
   const tgt  = result.target ?? '';
-  const cs   = locale === 'cs';
 
   // ── Datasource usages ── show the matched *value* as primary, source as secondary
   if (/^Datasource ".+" uses table "/.test(ctx)) {
-    return { label: cs ? 'Tabulka' : 'Table', labelKind: 'table', category: 'datasources', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
+    return { label: t.searchLblTable, labelKind: 'table', category: 'datasources', location: tgt, expression: t.searchExprSource(comp), tab: 'datasources' };
   }
   if (/^Datasource ".+" uses enum "/.test(ctx)) {
-    return { label: cs ? 'Výčet' : 'Enum', labelKind: 'enum', category: 'datasources', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
+    return { label: t.searchLblEnum, labelKind: 'enum', category: 'datasources', location: tgt, expression: t.searchExprSource(comp), tab: 'datasources' };
   }
   if (/^Datasource ".+" uses class "/.test(ctx)) {
-    return { label: cs ? 'Třída' : 'Class', labelKind: 'class', category: 'datasources', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
+    return { label: t.searchLblClass, labelKind: 'class', category: 'datasources', location: tgt, expression: t.searchExprSource(comp), tab: 'datasources' };
   }
   if (/^User parameter ".+" uses EDT "/.test(ctx)) {
-    return { label: showTechnicalDetails ? 'EDT' : (cs ? 'Parametr' : 'Parameter'), labelKind: 'edt', category: 'datasources', location: tgt, expression: cs ? `parametr: ${comp}` : `param: ${comp}`, tab: 'datasources' };
+    return { label: showTechnicalDetails ? 'EDT' : t.searchLblParameter, labelKind: 'edt', category: 'datasources', location: tgt, expression: t.searchExprParam(comp), tab: 'datasources' };
   }
   if (ctx.startsWith('Selected field in datasource "')) {
-    return { label: cs ? 'Pole' : 'Field', labelKind: 'field', category: 'datasources', location: tgt, expression: cs ? `zdroj: ${comp}` : `source: ${comp}`, tab: 'datasources' };
+    return { label: t.searchLblField, labelKind: 'field', category: 'datasources', location: tgt, expression: t.searchExprSource(comp), tab: 'datasources' };
   }
 
   // ── Model binding: "Binding: path = expr" ─────────────────────────
@@ -947,7 +941,7 @@ function parseSearchHit(
     const eq   = rest.indexOf(' = ');
     const path = eq >= 0 ? rest.slice(0, eq) : rest;
     const expr = eq >= 0 ? rest.slice(eq + 3) : '';
-    return { label: cs ? 'Vazba' : 'Binding', labelKind: 'binding', category: 'bindings', location: path, expression: expr, tab: 'bindings' as const };
+    return { label: t.searchLblBinding, labelKind: 'binding', category: 'bindings', location: path, expression: expr, tab: 'bindings' as const };
   }
 
   // ── Formula inside binding: "Binding for path: expr" ──────────────
@@ -956,7 +950,7 @@ function parseSearchHit(
     const col  = rest.indexOf(':');
     const path = col >= 0 ? rest.slice(0, col).trim() : rest;
     const expr = col >= 0 ? rest.slice(col + 1).trim() : '';
-    return { label: cs ? 'Výraz' : 'Expression', labelKind: 'formula', category: 'expressions', location: path, expression: expr, tab: 'bindings' as const };
+    return { label: t.searchLblExpression, labelKind: 'formula', category: 'expressions', location: path, expression: expr, tab: 'bindings' as const };
   }
 
   // ── Format binding expression (optionally with [PropName]) ────────
@@ -965,7 +959,7 @@ function parseSearchHit(
     // Extract optional property name from "Format binding [PropName] expression"
     const propMatch = ctx.match(/Format binding \[([^\]]+)\] expression/);
     const prop = propMatch?.[1] ?? '';
-    const { label, labelKind } = formatBindingLabel(prop, cs, showTechnicalDetails);
+    const { label, labelKind } = formatBindingLabel(prop, showTechnicalDetails);
     return { label, labelKind, category: 'bindings' as const, location: comp, expression: expr, tab: 'bindings' as const };
   }
 
@@ -975,7 +969,7 @@ function parseSearchHit(
     const resolved = registry.lookup(tgt, result.sourceConfigPath);
     const propMatch = ctx.match(/Format binding \[([^\]]+)\] to component/);
     const prop = propMatch?.[1] ?? '';
-    const { label, labelKind } = formatBindingLabel(prop, cs, showTechnicalDetails);
+    const { label, labelKind } = formatBindingLabel(prop, showTechnicalDetails);
     return {
       label,
       labelKind,
@@ -989,44 +983,44 @@ function parseSearchHit(
   // ── Calculated field ──────────────────────────────────────────────
   if (ctx.startsWith('Calculated field expression:')) {
     const expr = ctx.slice('Calculated field expression:'.length).trim();
-    return { label: cs ? 'Výpočet' : 'Calc. field', labelKind: 'formula', category: 'expressions', location: comp, expression: expr, tab: 'datasources' as const };
+    return { label: t.searchLblCalcField, labelKind: 'formula', category: 'expressions', location: comp, expression: expr, tab: 'datasources' as const };
   }
 
   // ── TypeDescriptor ────────────────────────────────────────────────
   if (ctx === 'TypeDescriptor reference in model field') {
     // The target is the TypeDescriptor's GUID — nothing to read for a consultant.
-    return { label: cs ? 'Typ pole' : 'Field type', labelKind: 'field', category: 'structure', location: comp, expression: showTechnicalDetails ? tgt : '', tab: 'structure' as const };
+    return { label: t.searchLblFieldType, labelKind: 'field', category: 'structure', location: comp, expression: showTechnicalDetails ? tgt : '', tab: 'structure' as const };
   }
 
   // ── Structural references ─────────────────────────────────────────
   if (ctx === 'Model mapping references data model') {
-    return { label: cs ? 'Model' : 'Model ref', labelKind: 'model', category: 'references', location: comp, expression: '', tab: null };
+    return { label: t.searchLblModelRef, labelKind: 'model', category: 'references', location: comp, expression: '', tab: null };
   }
   if (ctx === 'Base model reference') {
-    return { label: cs ? 'Základ' : 'Base ref', labelKind: 'model', category: 'references', location: comp, expression: '', tab: null };
+    return { label: t.searchLblBaseRef, labelKind: 'model', category: 'references', location: comp, expression: '', tab: null };
   }
   if (ctx === 'Format mapping references format definition') {
-    return { label: cs ? 'Formát' : 'Format ref', labelKind: 'format', category: 'references', location: comp, expression: '', tab: null };
+    return { label: t.searchLblFormatRef, labelKind: 'format', category: 'references', location: comp, expression: '', tab: null };
   }
 
   // ── Generic formula: "context label: expr" ────────────────────────
   if (result.targetType === 'Formula') {
     const col  = ctx.indexOf(':');
     const expr = col >= 0 ? ctx.slice(col + 1).trim() : ctx;
-    return { label: cs ? 'Výraz' : 'Expression', labelKind: 'formula', category: 'expressions', location: comp, expression: expr, tab: 'datasources' as const };
+    return { label: t.searchLblExpression, labelKind: 'formula', category: 'expressions', location: comp, expression: expr, tab: 'datasources' as const };
   }
 
   // ── GUID fallback ─────────────────────────────────────────────────
   // Registry kinds ("MappingVersion", "FormatElement") and bare GUIDs are
   // internals; the consultant view calls them references.
-  const referenceLabel = cs ? 'Odkaz' : 'Reference';
+  const referenceLabel = t.searchLblReference;
   if (result.targetType === 'GUID') {
     const resolved = registry.lookup(tgt, result.sourceConfigPath);
     return {
       label: showTechnicalDetails ? (resolved?.kind ?? 'GUID') : referenceLabel,
       labelKind: 'guid',
       category: 'references' as const,
-      location: resolved?.name ?? (showTechnicalDetails ? tgt : (cs ? 'Nerozpoznaný odkaz' : 'Unresolved reference')),
+      location: resolved?.name ?? (showTechnicalDetails ? tgt : t.searchLblUnresolvedRef),
       expression: '',
       tab: null,
     };
@@ -1044,9 +1038,7 @@ function parseSearchHit(
 }
 
 function kindLabel(kind: string): string {
-  if (kind === 'Format') return locale === 'cs' ? 'Formát' : 'Format';
-  if (kind === 'ModelMapping') return locale === 'cs' ? 'Mapování' : 'Model Mapping';
-  if (kind === 'DataModel') return locale === 'cs' ? 'Model' : 'Data Model';
+  if (kind === 'Format' || kind === 'ModelMapping' || kind === 'DataModel') return t.searchKindLabels[kind];
   return kind;
 }
 
@@ -1187,13 +1179,12 @@ function SearchResultCard({
 
   if (!targetNode) return null;
 
-  const cs = locale === 'cs';
   // The destination tab is already implied by the section the row sits in, so
   // only spell it out when it says something the section header does not.
   const tabLabel = hit.tab === hit.category ? null
-    : hit.tab === 'structure' ? (cs ? 'Struktura' : 'Structure')
-    : hit.tab === 'bindings' ? (cs ? 'Vazby' : 'Bindings')
-    : hit.tab === 'datasources' ? (cs ? 'Datové zdroje' : 'Data Sources')
+    : hit.tab === 'structure' ? t.searchCatStructure
+    : hit.tab === 'bindings' ? t.searchCatBindings
+    : hit.tab === 'datasources' ? t.searchTabDatasources
     : null;
 
   // Structure, binding and expression rows carry a tag that restates their
@@ -1254,11 +1245,7 @@ type Reference = {
 };
 
 function toLocalizedBindingKind(label: string): string {
-  if (locale !== 'cs') return label;
-  const trimmed = label.trim().toLowerCase();
-  if (trimmed === 'binding') return 'Vazba';
-  if (trimmed.startsWith('binding ')) return `Vazba ${label.slice('binding'.length).trim()}`;
-  return label;
+  return t.searchLocalizeBindingKind(label);
 }
 
 /** Which section a where-used reference belongs to — see
@@ -1277,13 +1264,14 @@ function referenceCategoryLabel(category: ReferenceCategory): string {
  *  rows apart. */
 function toLocalizedRefKind(ref: Reference, showTechnicalDetails: boolean): string {
   if (ref.kind === 'formatElement') return showTechnicalDetails ? ref.kindLabel : getConsultantFormatTypeLabel(ref.kindLabel);
-  const cs = locale === 'cs';
-  switch (ref.kindLabel.trim().toLowerCase()) {
-    case 'calc': return cs ? 'Výpočet' : 'Calculated';
-    case 'param': return cs ? 'Parametr' : 'Parameter';
-    case 'agg': return cs ? 'Agregace' : 'Aggregation';
-    case 'validation': return cs ? 'Validace' : 'Validation';
-    case 'message': return cs ? 'Zpráva' : 'Message';
+  const kindCode = ref.kindLabel.trim().toLowerCase();
+  switch (kindCode) {
+    case 'calc':
+    case 'param':
+    case 'agg':
+    case 'validation':
+    case 'message':
+      return t.searchRefKindLabels[kindCode];
     default: return toLocalizedBindingKind(ref.kindLabel);
   }
 }

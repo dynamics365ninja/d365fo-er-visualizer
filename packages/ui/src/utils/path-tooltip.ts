@@ -1,4 +1,4 @@
-import { locale, t } from '../i18n';
+import { t } from '../i18n';
 import { formatEnumDisplayName } from './enum-display';
 
 /**
@@ -152,7 +152,6 @@ export interface PathTooltipResolvers {
   bindingsBelow?: (dottedPath: string) => number;
 }
 
-const cs = () => locale === 'cs';
 const SIMPLE_NAME = /^[A-Za-z_$#@][\w$#@]*$/;
 const quote = (name: string) => (SIMPLE_NAME.test(name) ? name : `'${name}'`);
 
@@ -199,16 +198,16 @@ function datasourceTip(
   const rows = describeDatasource(ds);
 
   if (deep?.nestedDs && deep.rootDs && deep.nestedDs !== deep.rootDs) {
-    rows.push({ icon: 'branch', label: cs() ? 'Uvnitř' : 'Inside', value: deep.rootDs.name, mono: true });
+    rows.push({ icon: 'branch', label: t.pathTipInside, value: deep.rootDs.name, mono: true });
   }
   if (deep) {
     const ownTable = ds.tableInfo?.tableName;
     const tables = unique(deep.involvedDatasources.map(d => d?.tableName)).filter(name => name !== ownTable);
     const classes = unique(deep.involvedDatasources.map(d => d?.className)).filter(name => name !== ds.classInfo?.className);
-    if (tables.length > 0) rows.push({ icon: 'table', label: cs() ? 'Čte tabulky' : 'Reads tables', value: tables.join(', '), mono: true, muted: true });
-    if (classes.length > 0) rows.push({ icon: 'class', label: cs() ? 'Volá třídy' : 'Calls classes', value: classes.join(', '), mono: true, muted: true });
+    if (tables.length > 0) rows.push({ icon: 'table', label: t.pathTipReadsTables, value: tables.join(', '), mono: true, muted: true });
+    if (classes.length > 0) rows.push({ icon: 'class', label: t.pathTipCallsClasses, value: classes.join(', '), mono: true, muted: true });
     if (deep.calculatedFieldChain.length > 0) {
-      rows.push({ icon: 'calc', label: cs() ? 'Přes vypočtená pole' : 'Via calculated fields', value: String(deep.calculatedFieldChain.length), muted: true });
+      rows.push({ icon: 'calc', label: t.pathTipViaCalcFields, value: String(deep.calculatedFieldChain.length), muted: true });
     }
   }
 
@@ -220,7 +219,7 @@ function datasourceTip(
     path,
     activeIndex,
     rows,
-    navigation: treeNodeId ? { treeNodeId, hint: cs() ? 'Kliknutím přejít na zdroj' : 'Click to open the data source' } : null,
+    navigation: treeNodeId ? { treeNodeId, hint: t.pathTipOpenDatasource } : null,
   };
 }
 
@@ -233,13 +232,13 @@ function fieldTip(
   resolvers: PathTooltipResolvers,
 ): PathTooltipData {
   const member = fieldPath.join('.');
-  const rows: PathTooltipRow[] = [{ icon: rowIconFor(ds), label: cs() ? 'Zdroj' : 'Source', value: ds.name, mono: true }];
+  const rows: PathTooltipRow[] = [{ icon: rowIconFor(ds), label: t.pathTipSource, value: ds.name, mono: true }];
   if (ds.tableInfo) {
-    rows.push({ icon: 'table', label: cs() ? 'Pole tabulky' : 'Table field', value: `${ds.tableInfo.tableName}.${member}`, mono: true });
+    rows.push({ icon: 'table', label: t.pathTipTableField, value: `${ds.tableInfo.tableName}.${member}`, mono: true });
   } else if (ds.classInfo) {
-    rows.push({ icon: 'class', label: cs() ? 'Člen třídy' : 'Class member', value: `${ds.classInfo.className}.${member}`, mono: true });
+    rows.push({ icon: 'class', label: t.pathTipClassMember, value: `${ds.classInfo.className}.${member}`, mono: true });
   } else if (ds.enumInfo) {
-    rows.push({ icon: 'enum', label: cs() ? 'Hodnota výčtu' : 'Enum value', value: `${formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo)}.${member}`, mono: true });
+    rows.push({ icon: 'enum', label: t.pathTipEnumValue, value: `${formatEnumDisplayName(ds.enumInfo.enumName, ds.enumInfo)}.${member}`, mono: true });
   } else if (ds.calculatedField) {
     rows.push({ icon: 'calc', label: t.expression, value: ds.calculatedField.expressionAsString ?? '', mono: true });
   } else if (datasourceTypeLabel(ds)) {
@@ -249,12 +248,12 @@ function fieldTip(
   const treeNodeId = resolvers.datasourceNode(ds, configIndex);
   return {
     kind: 'field',
-    eyebrow: cs() ? 'Pole datového zdroje' : 'Data source field',
+    eyebrow: t.pathTipDatasourceField,
     title: path[activeIndex],
     path,
     activeIndex,
     rows,
-    navigation: treeNodeId ? { treeNodeId, hint: cs() ? 'Kliknutím přejít na zdroj' : 'Click to open the data source' } : null,
+    navigation: treeNodeId ? { treeNodeId, hint: t.pathTipOpenDatasource } : null,
   };
 }
 
@@ -275,7 +274,7 @@ function modelFieldTip(names: string[], path: string[], activeIndex: number, res
   const rows: PathTooltipRow[] = [];
   const bindingsBelow = exact ? 0 : (resolvers.bindingsBelow?.(dotted) ?? 0);
   if (result && exact) {
-    rows.push({ icon: 'link', label: cs() ? 'Vazba v mapování' : 'Mapping binding', value: result.binding.expressionAsString ?? '', mono: true });
+    rows.push({ icon: 'link', label: t.pathTipMappingBinding, value: result.binding.expressionAsString ?? '', mono: true });
     if (result.datasource) {
       rows.push(...describeDatasource(result.datasource).map(row => (row.label === t.expression ? { ...row, label: t.pathCalcField } : row)));
     }
@@ -283,22 +282,22 @@ function modelFieldTip(names: string[], path: string[], activeIndex: number, res
     // A record: nothing binds it as a whole, its fields are bound one by one.
     rows.push({
       icon: 'branch',
-      label: cs() ? 'Záznam' : 'Record',
-      value: cs() ? `Vazby mají jeho pole (${bindingsBelow})` : `Its fields carry the bindings (${bindingsBelow})`,
+      label: t.pathTipRecord,
+      value: t.pathTipRecordFieldsBound(bindingsBelow),
       muted: true,
     });
   } else if (result) {
     rows.push({
       icon: 'link',
-      label: cs() ? 'Nejbližší vazba' : 'Nearest binding',
+      label: t.pathTipNearestBinding,
       value: `${bindingNames.join('.')} ← ${result.binding.expressionAsString ?? ''}`,
       mono: true,
       muted: true,
     });
   } else {
     rows.push({
-      label: cs() ? 'Mapování' : 'Mapping',
-      value: cs() ? 'Žádná vazba v načtených mapováních' : 'No binding in the loaded mappings',
+      label: t.pathTipMapping,
+      value: t.pathTipNoBinding,
       muted: true,
     });
   }
@@ -306,12 +305,12 @@ function modelFieldTip(names: string[], path: string[], activeIndex: number, res
   const treeNodeId = exact ? (result!.bindingTreeNodeId ?? result!.datasourceTreeNodeId) : null;
   return {
     kind: 'model-field',
-    eyebrow: cs() ? 'Pole datového modelu' : 'Data model field',
+    eyebrow: t.pathTipModelField,
     title: names[names.length - 1] ?? path[activeIndex],
     path,
     activeIndex,
     rows,
-    navigation: treeNodeId ? { treeNodeId, hint: cs() ? 'Kliknutím přejít na vazbu' : 'Click to open the binding' } : null,
+    navigation: treeNodeId ? { treeNodeId, hint: t.pathTipOpenBinding } : null,
   };
 }
 
@@ -322,7 +321,7 @@ function describeDatasource(ds: any): PathTooltipRow[] {
   if (ds.calculatedField) return [{ icon: 'calc', label: t.expression, value: ds.calculatedField.expressionAsString ?? '', mono: true }];
   if (ds.userParamInfo) return [{ label: t.propEdt, value: ds.userParamInfo.extendedDataTypeName ?? ds.name }];
   if (ds.modelInfo?.dataContainerDescriptorName) {
-    return [{ label: cs() ? 'Kořen modelu' : 'Model root', value: ds.modelInfo.dataContainerDescriptorName, mono: true }];
+    return [{ label: t.pathTipModelRoot, value: ds.modelInfo.dataContainerDescriptorName, mono: true }];
   }
   return [];
 }
@@ -332,8 +331,8 @@ function datasourceTypeLabel(ds: any): string {
   if (ds.enumInfo) return t.pathEnum;
   if (ds.classInfo) return t.pathClass;
   if (ds.calculatedField) return t.pathCalcField;
-  if (ds.type === 'DataModel') return cs() ? 'Datový model' : 'Data model';
-  if (ds.type === 'UserParameter') return cs() ? 'Uživatelský parametr' : 'User parameter';
+  if (ds.type === 'DataModel') return t.pathTipDataModel;
+  if (ds.type === 'UserParameter') return t.pathTipUserParameter;
   return ds.type && ds.type !== 'Unknown' ? String(ds.type) : '';
 }
 

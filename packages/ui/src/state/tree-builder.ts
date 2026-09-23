@@ -10,7 +10,7 @@ import type {
   ERFormatContent,
 } from '@er-visualizer/core';
 import { getFormatElementExcelRange } from '@er-visualizer/core';
-import { locale } from '../i18n';
+import { t } from '../i18n';
 import { buildFormatBindingPresentation } from '../utils/format-binding-display';
 import { countDeclaredDatasources } from '../utils/datasource-tree';
 import { mappingDefinitionLabel } from '../utils/model-hierarchy';
@@ -116,101 +116,23 @@ const dsTypeIcons: Record<string, string> = {
 
 const dsGroupOrder = ['DataModel', 'Table', 'CalculatedField', 'Class', 'Enum', 'ModelEnum', 'FormatEnum', 'ImportFormat', 'UserParameter', 'GroupBy', 'Container', 'Join', 'Object'];
 function getDsGroupLabels(): Record<string, string> {
-  return locale === 'cs'
-    ? {
-        DataModel: 'Datový model',
-        Table: 'Tabulky',
-        CalculatedField: 'Výpočtová pole',
-        Class: 'Třídy',
-        Enum: 'AX výčty',
-        ModelEnum: 'Výčty datového modelu',
-        FormatEnum: 'Výčty formátu',
-        ImportFormat: 'Importní formáty',
-        UserParameter: 'Uživatelské parametry',
-        GroupBy: 'Seskupení',
-        Container: 'Kontejnery',
-        Join: 'Spojení',
-        Object: 'Objekty',
-      }
-    : {
-        DataModel: 'Data model',
-        Table: 'Tables',
-        CalculatedField: 'Calculated Fields',
-        Class: 'Classes',
-        Enum: 'Ax Enums',
-        ModelEnum: 'Data model Enums',
-        FormatEnum: 'Format enums',
-        ImportFormat: 'Import formats',
-        UserParameter: 'User Parameters',
-        GroupBy: 'Group By',
-        Container: 'Containers',
-        Join: 'Joins',
-        Object: 'Objects',
-      };
+  return t.treeDsGroupLabels;
 }
 
 function getDataModelSectionLabels(): { roots: string; enums: string; records: string } {
-  return locale === 'cs'
-    ? {
-        roots: 'Definice modelu',
-        enums: 'Výčtové typy',
-        records: 'Záznamy',
-      }
-    : {
-        roots: 'Model Definitions',
-        enums: 'Enumerations',
-        records: 'Records',
-      };
+  return t.treeDataModelSections;
 }
 
 function getMappingSectionLabels(): { title: string; dataSources: string; bindings: string; validations: string } {
-  return locale === 'cs'
-    ? {
-        title: 'Mapování',
-        dataSources: 'Datové zdroje',
-        bindings: 'Vazby',
-        validations: 'Validace',
-      }
-    : {
-        title: 'Mapping',
-        dataSources: 'Data Sources',
-        bindings: 'Bindings',
-        validations: 'Validations',
-      };
+  return t.treeMappingSections;
 }
 
 function getFormatSectionLabels(): { outputStructure: string; modelMappings: string; enumerations: string; transformations: string; dataSources: string; bindings: string; noBindings: string } {
-  return locale === 'cs'
-    ? {
-        outputStructure: 'Výstupní struktura',
-        modelMappings: 'Mapování modelu',
-        enumerations: 'Výčty',
-        transformations: 'Transformace',
-        dataSources: 'Datové zdroje',
-        bindings: 'Vazby',
-        noBindings: 'bez vazeb',
-      }
-    : {
-        outputStructure: 'Output Structure',
-        modelMappings: 'Model Mappings',
-        enumerations: 'Enumerations',
-        transformations: 'Transformations',
-        dataSources: 'Data Sources',
-        bindings: 'Bindings',
-        noBindings: 'no bindings',
-      };
+  return t.treeFormatSections;
 }
 
 function getGroupBySectionLabels(): { groupedBy: string; aggregated: string } {
-  return locale === 'cs'
-    ? {
-        groupedBy: 'Seskupeno podle',
-        aggregated: 'Agregace',
-      }
-    : {
-        groupedBy: 'Grouped By',
-        aggregated: 'Aggregated',
-      };
+  return t.treeGroupBySections;
 }
 
 function groupDatasourceNodes(dsNodes: TreeNode[], prefix: string): TreeNode[] {
@@ -348,7 +270,7 @@ function groupBindingNodes(bindingNodes: TreeNode[], prefix: string): TreeNode[]
     return bindingNodes;
   }
 
-  const fallbackLabel = locale === 'cs' ? 'Ostatní' : 'Other';
+  const fallbackLabel = t.groupOther;
   const root = createBindingGroupNode();
 
   for (const bindingNode of bindingNodes) {
@@ -599,7 +521,7 @@ export function buildTreeForConfig(config: ERConfiguration, index: number, allCo
       const usedDefinition = embeddedDefinitions.length > 1
         ? orderMappingDefinitions(embeddedDefinitions, ownDescriptors)[0]
         : null;
-      const usedSuffix = locale === 'cs' ? '  ✓ použito načteným formátem' : '  ✓ used by loaded format';
+      const usedSuffix = t.treeEmbeddedMappingUsedSuffix;
       return embeddedDefinitions.map((definition, di) => {
         const node = buildMappingTree(definition, `${prefix}-embedded-mapping-${embeddedIndex}-${di}`, index, version.number, allConfigurations);
         if (usedDefinition && definition === usedDefinition) {

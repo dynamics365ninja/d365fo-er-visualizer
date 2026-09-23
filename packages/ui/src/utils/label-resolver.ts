@@ -20,6 +20,7 @@ function normalizeLang(lang: string): string {
 
 /** Label language tag for an app locale. */
 export function labelLanguageTag(locale: Locale): string {
+  // eslint-disable-next-line no-restricted-syntax -- maps to an ER label language tag, not text
   return locale === 'cs' ? 'cs' : 'en-us';
 }
 

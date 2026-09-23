@@ -3,6 +3,7 @@
  * class or datasource name, structurally or as text inside expressions.
  */
 import type { ERFormatContent } from '@er-visualizer/core';
+import { t } from '../i18n';
 import { mappingDefinitionLabel } from '../utils/model-hierarchy';
 import {
   getAllFormatDescriptorNames,
@@ -410,7 +411,7 @@ function collectExpressionTextMatches(state: WorkspaceTrees, query: string): Whe
     entityName: trimmed,
     entityType: 'TextMatch',
     datasource: {
-      name: `"${trimmed}" (výskyty ve výrazech)`,
+      name: t.whereUsedTextMatchName(trimmed),
       configIndex: 0,
       configName: '',
       kind: 'ModelMapping',

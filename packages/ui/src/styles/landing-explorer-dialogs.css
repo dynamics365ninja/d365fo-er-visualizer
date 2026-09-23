@@ -1,0 +1,584 @@
+/* ════════════════════════════════════════════════════════════
+   Modern landing look — floating orbs, dot grid, shimmer text
+   Inspired by awesome-sharepoint (Sandeep-FED)
+   ════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Font tokens come from the `--er-*` chain (see top of file) — redefining
+     them here with literals used to win on specificity in light theme. */
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/* ─── Enhanced ConfigExplorer ─────────────────────────────────────────── */
+
+.explorer-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.explorer-kind-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  height: 22px;
+  border-radius: var(--er-radius-pill);
+  border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.explorer-kind-chip-label {
+  display: none;
+}
+
+.explorer-kind-chip:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--er-accent) 48%, var(--border-color));
+  background: color-mix(in srgb, var(--er-accent) 10%, var(--bg-secondary));
+  color: var(--er-text);
+  transform: translateY(-1px);
+}
+
+.explorer-kind-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.explorer-kind-chip.active {
+  color: var(--er-text);
+  border-color: color-mix(in srgb, var(--er-accent) 60%, transparent);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--er-accent) 22%, var(--bg-secondary)),
+    color-mix(in srgb, var(--er-model) 18%, var(--bg-secondary)));
+  box-shadow: 0 2px 6px -2px color-mix(in srgb, var(--er-accent) 40%, transparent);
+}
+
+.explorer-kind-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+}
+
+.explorer-kind-chip.active .explorer-kind-chip-icon {
+  opacity: 1;
+}
+
+.explorer-kind-chip--model.active { border-color: color-mix(in srgb, var(--er-info-border) 80%, transparent); }
+.explorer-kind-chip--mapping.active { border-color: color-mix(in srgb, var(--er-success-border) 80%, transparent); }
+.explorer-kind-chip--format.active { border-color: color-mix(in srgb, var(--er-warning-border) 80%, transparent); }
+
+.explorer-result-info {
+  padding: 0 2px;
+  font-size: var(--er-text-xs);
+  font-weight: 500;
+  color: var(--er-text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* Group header as button with chevron */
+.explorer-kind-group-header-btn {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: background 140ms ease;
+}
+
+.explorer-kind-group-header-btn:hover {
+  background: color-mix(in srgb, var(--bg-tertiary) 45%, transparent);
+}
+
+.explorer-kind-group-header-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.explorer-kind-group-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  opacity: 0.75;
+}
+
+.explorer-kind-group.collapsed .explorer-kind-group-header-btn {
+  border-bottom-color: transparent !important;
+}
+
+/* Version pill on root config nodes */
+.tree-node-version-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 15px;
+  padding: 0 5px;
+  flex-shrink: 0;
+  border-radius: var(--er-radius-sm);
+  font-size: var(--er-text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--er-accent) 85%, var(--er-text));
+  background: color-mix(in srgb, var(--er-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--er-accent) 30%, transparent);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, 'JetBrains Mono', monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Quick actions button (kebab) */
+.tree-node-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--er-radius-md);
+  background: transparent;
+  color: var(--er-text-muted);
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.tree-node:hover .tree-node-actions,
+.tree-node.selected .tree-node-actions,
+.tree-node-actions[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.tree-node-actions:hover {
+  background: color-mix(in srgb, var(--er-accent) 18%, transparent);
+  color: var(--er-text);
+}
+
+/* ─── Multi-language label value (PropertyInspector) ─────────────────── */
+.label-value {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.label-value__id {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, 'JetBrains Mono', monospace);
+  font-size: var(--er-text-sm);
+  color: var(--er-text);
+  word-break: break-all;
+}
+
+.label-value__translations {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px;
+  border-left: 2px solid color-mix(in srgb, var(--er-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--bg-tertiary) 40%, transparent);
+  border-radius: 0 6px 6px 0;
+}
+
+.label-value__translation {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1.35;
+}
+
+.label-value__lang {
+  flex-shrink: 0;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, 'JetBrains Mono', monospace);
+  font-size: var(--er-text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--er-accent) 80%, var(--er-text-muted));
+  min-width: 38px;
+}
+
+.label-value__text {
+  color: var(--er-text-muted);
+  font-size: var(--er-text-md);
+  word-break: break-word;
+}
+
+/* ─── Drill-down collapsible trigger + tab host ──────────────────────── */
+
+.dd-collapsible__trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  color: var(--er-text);
+  font-size: var(--er-text-md);
+  cursor: pointer;
+  text-align: left;
+  user-select: none;
+}
+
+.dd-collapsible__trigger:hover {
+  background: rgba(3, 131, 135, 0.06);
+}
+
+.dd-collapsible.is-open .dd-collapsible__trigger {
+  border-bottom: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.18));
+}
+
+.dd-collapsible__label {
+  font-weight: 600;
+  color: var(--er-text);
+}
+
+.dd-collapsible__trigger::after {
+  content: '';
+  margin-left: auto;
+}
+
+/* ─── Clickable expression trigger ─────────────────────────────────────── */
+.dd-trigger-expr {
+  display: inline-block;
+  cursor: pointer;
+  border-radius: var(--er-radius-sm);
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+  outline: none;
+}
+
+.dd-trigger-expr:hover {
+  background: color-mix(in srgb, var(--er-accent) 12%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--er-accent) 55%, transparent);
+}
+
+.dd-trigger-expr:focus-visible {
+  background: color-mix(in srgb, var(--er-accent) 12%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--er-accent) 45%, transparent);
+}
+
+.fmt-binding-detail-row .dd-trigger-expr,
+.fmt-detail-binding .dd-trigger-expr {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.fmt-binding-formula > .dd-trigger-expr,
+.fmt-detail-binding > div > .dd-trigger-expr {
+  display: block;
+  width: 100%;
+}
+
+.drilldown-tab-host {
+  height: 100%;
+  overflow: auto;
+  padding: 0;
+  background: var(--bg-primary, transparent);
+  display: flex;
+  flex-direction: column;
+}
+
+.dd-panel--tab {
+  flex: 1;
+  margin: 0;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  border-bottom: none;
+  box-shadow: none;
+}
+
+.dd-panel--tab .dd-hero {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* ─── Drill-down Dialog ─────────────────────────────────────────────── */
+.dd-dialog-surface {
+  max-width: min(99vw, 99dvw) !important;
+  width: min(99vw, 99dvw);
+  max-height: min(99vh, 99dvh) !important;
+  height: min(99vh, 99dvh);
+}
+
+/* The drill-down dialog is dragged to size by the user via the bottom-right
+   grip. CSS `resize` is not used: Fluent's own surface styles are injected
+   after ours and reset `resize`/`overflow` on DialogSurface. The surface is a
+   native <dialog>, which is already a positioned containing block, so the grip
+   anchors to it without overriding `position`. */
+/* The corner grab handle, shared by every resizable dialog.
+   It used to be an 18px square drawn right into the corner — a target you had
+   to hunt for and could miss by two pixels. The drawn corner stays modest; the
+   element around it is 34px, so the pointer finds it well before the eye has
+   to. Hidden where a drag is impossible anyway (see the touch rules that turn
+   dialogs into full-height sheets). */
+.dialog-resize-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 34px;
+  height: 34px;
+  z-index: 5;
+  cursor: nwse-resize;
+  touch-action: none;
+  color: var(--er-text-subtle);
+}
+
+.dialog-resize-grip::before {
+  content: '';
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 15px;
+  height: 15px;
+  background:
+    linear-gradient(135deg, transparent 0 42%, currentColor 42% 58%, transparent 58% 100%),
+    linear-gradient(135deg, transparent 0 66%, currentColor 66% 82%, transparent 82% 100%);
+  opacity: 0.7;
+  transition: opacity 120ms ease;
+}
+
+.dialog-resize-grip:hover,
+.dialog-resize-grip:active {
+  color: var(--er-accent);
+}
+
+.dialog-resize-grip:hover::before,
+.dialog-resize-grip:active::before {
+  opacity: 1;
+}
+
+/* A drag needs a pointer; on touch the dialogs fill the screen instead. */
+@media (pointer: coarse) {
+  .dialog-resize-grip {
+    display: none;
+  }
+}
+
+/* Keep the grip clear of the dialog's own content. */
+.dd-dialog-surface--resizable .dd-dialog-body {
+  padding-bottom: 10px !important;
+}
+
+.dd-dialog-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 0 !important;
+  position: relative;
+}
+
+.dd-dialog-titlebar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 10px 56px 8px 16px !important;
+}
+
+.dd-dialog-close {
+  position: absolute !important;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+}
+
+.dd-dialog-content {
+  padding: 0 !important;
+  max-height: none;
+  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.dd-dialog-content > .dd-panel--dialog {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.dd-dialog-surface .fui-DialogActions {
+  flex: 0 0 auto;
+  padding: 8px 16px 12px !important;
+}
+
+.dd-dialog-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--er-text);
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.35;
+}
+
+.dd-dialog-title__name {
+  color: var(--er-text);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.dd-panel--dialog {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.dd-panel--dialog .dd-frame-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.dd-panel--dialog .dd-hero {
+  border-radius: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Keep Fluent icons inline with adjacent text in dep/step titles */
+.dd-dep-section-title,
+.dd-formula__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dd-hero__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dd-validation-summary {
+  margin-top: 8px;
+  border: 1px solid color-mix(in srgb, var(--ui-stroke-1, var(--border-color)) 82%, transparent);
+  border-radius: var(--er-radius-lg);
+  background: color-mix(in srgb, var(--ui-surface-1, var(--bg-secondary)) 72%, transparent);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dd-validation-summary__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dd-validation-summary__title {
+  font-size: var(--er-text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.dd-validation-summary__meta {
+  font-size: var(--er-text-sm);
+  color: var(--er-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dd-validation-summary__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dd-validation-summary__rule {
+  border: 1px solid color-mix(in srgb, var(--ui-stroke-2, var(--border-color)) 72%, transparent);
+  border-radius: var(--er-radius-md);
+  background: color-mix(in srgb, var(--ui-surface-0, var(--bg-primary)) 82%, transparent);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dd-validation-summary__rule-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dd-validation-summary__rule-index {
+  font-size: var(--er-text-sm);
+  font-weight: 700;
+  color: var(--er-text-muted);
+}
+
+.dd-validation-summary__rule-action {
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  border-radius: var(--er-radius-pill);
+  padding: 1px 8px;
+  border: 1px solid color-mix(in srgb, var(--er-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--er-accent) 11%, transparent);
+}
+
+.dd-validation-summary__expr-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dd-validation-summary__expr-label {
+  font-size: var(--er-text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--er-text-muted);
+}
+
+/* ─── Dialog / popup backdrop blur ─── */
+/* Fluent UI v9 renders the modal overlay via DialogSurface::before.
+   Apply a subtle blur so the app behind a dialog (drill-down, workspace
+   manager, etc.) feels visually receded. */
+[class*="fui-DialogSurface"]::before {
+  backdrop-filter: blur(6px) saturate(0.9);
+  -webkit-backdrop-filter: blur(6px) saturate(0.9);
+  background-color: var(--er-scrim) !important;
+  transition: backdrop-filter 160ms ease, background-color 160ms ease;
+}

@@ -29,7 +29,7 @@ import {
   SearchRegular,
 } from '@fluentui/react-icons';
 import { whereUsedQueryFor } from '../utils/where-used-query';
-import { locale, t, useLocale } from '../i18n';
+import { t, useLocale } from '../i18n';
 import { treeArrowAction } from '../utils/tree-keyboard';
 import { flattenVisibleTree, indexFlatRows, type FlatTreeRow } from '../utils/flat-tree';
 import { useTreeOpenState } from '../utils/use-tree-open-state';
@@ -73,9 +73,7 @@ function getExplorerNodeAccentClass(node: TreeNode): string {
 
 function getExplorerKindLabel(node: TreeNode): string | null {
   const kind = getConfigurationKind(node);
-  const labels = locale === 'cs'
-    ? { DataModel: 'Model', ModelMapping: 'Mapování', Format: 'Formát', model: 'Model', mapping: 'Mapování', format: 'Formát' }
-    : { DataModel: 'Model', ModelMapping: 'Mapping', Format: 'Format', model: 'Model', mapping: 'Mapping', format: 'Format' };
+  const labels = t.explorerKindPills;
 
   if (kind === 'Format' && node.data?.content?.kind === 'Format') {
     return `${labels.Format} • ${getFormatDirectionLabel(node.data.content.direction)}`;
@@ -111,11 +109,7 @@ function getConfigurationKind(node: TreeNode): 'DataModel' | 'ModelMapping' | 'F
 }
 
 function getExplorerGroupLabel(kind: 'DataModel' | 'ModelMapping' | 'Format'): string {
-  if (locale === 'cs') {
-    return kind === 'DataModel' ? 'Datové modely' : kind === 'ModelMapping' ? 'Mapování modelu' : 'Formáty';
-  }
-
-  return kind === 'DataModel' ? 'Data Models' : kind === 'ModelMapping' ? 'Model Mappings' : 'Formats';
+  return t.explorerGroupLabels[kind];
 }
 
 /**
@@ -124,10 +118,7 @@ function getExplorerGroupLabel(kind: 'DataModel' | 'ModelMapping' | 'Format'): s
  * label stays on the chip's tooltip.
  */
 function getExplorerChipLabel(kind: 'DataModel' | 'ModelMapping' | 'Format'): string {
-  if (locale === 'cs') {
-    return kind === 'DataModel' ? 'Modely' : kind === 'ModelMapping' ? 'Mapování' : 'Formáty';
-  }
-  return kind === 'DataModel' ? 'Models' : kind === 'ModelMapping' ? 'Mappings' : 'Formats';
+  return t.explorerChipLabels[kind];
 }
 
 function getExplorerGroupAccent(kind: 'DataModel' | 'ModelMapping' | 'Format'): string {

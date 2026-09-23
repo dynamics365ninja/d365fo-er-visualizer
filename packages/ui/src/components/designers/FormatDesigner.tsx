@@ -451,34 +451,34 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
       {
         id: 'structure',
         label: `${t.structure} (${stats.totalElements})`,
-        title: activeLocale === 'cs' ? 'Hierarchická struktura prvků formátu s vazbami na datový model' : 'Hierarchical structure of format elements with data model bindings',
+        title: t.fmtTabStructureTitle,
       },
       {
         id: 'bindings',
         label: `${t.bindings} (${shownBindingCount})`,
-        title: activeLocale === 'cs'
-          ? 'Vazby podle účelu — přímé hodnoty, výpočty, podmínky, texty — v pořadí, v jakém soubor vzniká'
-          : 'Bindings by intent — direct values, calculations, conditions, texts — in the order the file is built',
+        title: t.fmtTabBindingsTitle,
       },
       {
         id: 'datasources',
         label: `${t.dataSources} (${stats.datasources})`,
-        title: activeLocale === 'cs' ? 'Datové zdroje mapování — tabulky, výčty, třídy a vypočítaná pole' : 'Mapping data sources — tables, enums, classes and calculated fields',
+        title: t.fmtTabDatasourcesTitle,
       },
       {
         id: 'preview',
         label: t.previewLabel,
-        title: activeLocale === 'cs' ? 'Náhled generovaného výstupu ve správném formátu' : 'Preview of generated output in the correct format',
+        title: t.fmtTabPreviewTitle,
       },
     ];
     if (fc.embeddedModelMappingVersions.length > 0) {
       tabs.push({
         id: 'embedded-mapping',
-        label: `${activeLocale === 'cs' ? 'Mapování' : 'Mapping'} (${fc.embeddedModelMappingVersions.length})`,
-        title: activeLocale === 'cs' ? 'Mapování modelu zabudované přímo v importním formátu' : 'Model mapping embedded directly in the import format',
+        label: `${t.fmtTabEmbeddedMapping} (${fc.embeddedModelMappingVersions.length})`,
+        title: t.fmtTabEmbeddedMappingTitle,
       });
     }
     return tabs;
+    // `t` is swapped on a language switch; activeLocale is what tells the memo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stats.totalElements, stats.datasources, shownBindingCount, fc.embeddedModelMappingVersions.length, activeLocale]);
 
   /* Expand/collapse. Rendered either in the toolbar next to the filter
@@ -702,7 +702,7 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
               : bindingSections.map(section => {
                   const collapsed = isBindingSectionCollapsed(section.key);
                   const count = section.entries.reduce((n, entry) => n + entry.bindings.length, 0);
-                  const unresolvedName = activeLocale === 'cs' ? 'Prvky mimo strukturu formátu' : 'Elements outside the format structure';
+                  const unresolvedName = t.fmtElementsOutsideStructure;
                   const toggle = () => toggleBindingSection(section.key);
                   return (
                     <div key={section.key} className="mm-group">

@@ -52,7 +52,7 @@ import {
   WarningRegular,
 } from '@fluentui/react-icons';
 import { useAppStore, resolveDeepExpression, selectMappingDefinition, getScopedMappingDefinitions } from '../state/store';
-import { locale, t, getLocale, useLocale, type Locale } from '../i18n';
+import { t, getLocale, getTranslations, useLocale, type Locale } from '../i18n';
 import { dsPathToExpression } from '../utils/ds-path';
 import { useResizableDialog } from '../utils/resizable-dialog';
 import { formatEnumDisplayName } from '../utils/enum-display';
@@ -92,73 +92,12 @@ export function getDrillDownEffectiveResolutionInput({
 
 /** Plural of `localizeBadgeLabel`, for the heading over a group of sources. */
 function localizeBadgeGroupLabel(badge: string): string {
-  const cs: Record<string, string> = {
-    table: 'AX tabulky',
-    enum: 'AX výčty',
-    class: 'AX třídy',
-    calc: 'Vypočtená pole',
-    container: 'Složky',
-    groupby: 'Seskupení',
-    join: 'Spojení',
-    object: 'AX objekty',
-    userparameter: 'Parametry uživatele',
-    param: 'Parametry uživatele',
-    importformat: 'Importní formáty',
-    leaf: 'AX tabulky',
-    unknown: 'Neznámé',
-  };
-  const en: Record<string, string> = {
-    table: 'AX tables',
-    enum: 'AX enums',
-    class: 'AX classes',
-    calc: 'Calculated fields',
-    container: 'Folders',
-    groupby: 'Group by',
-    join: 'Joins',
-    object: 'AX objects',
-    userparameter: 'User parameters',
-    param: 'User parameters',
-    importformat: 'Import formats',
-    leaf: 'AX tables',
-    unknown: 'Unknown',
-  };
-  const map = locale === 'cs' ? cs : en;
-  return map[badge] ?? localizeBadgeLabel(badge);
+  return t.drillBadgeGroupLabels[badge] ?? localizeBadgeLabel(badge);
 }
 
+/** One label per badge — the tree nodes and the lineage source list share it. */
 function localizeBadgeLabel(badge: string): string {
-  const cs: Record<string, string> = {
-    table: 'AX tabulka',
-    enum: 'AX výčet',
-    class: 'AX třída',
-    calc: 'Vypočtené pole',
-    container: 'Složka',
-    groupby: 'Seskupení',
-    join: 'Spojení',
-    object: 'AX objekt',
-    userparameter: 'Parametr uživatele',
-    param: 'Parametr uživatele',
-    importformat: 'Importní formát',
-    leaf: 'AX tabulka',
-    unknown: 'Neznámé',
-  };
-  const en: Record<string, string> = {
-    table: 'AX table',
-    enum: 'AX enum',
-    class: 'AX class',
-    calc: 'Calculated field',
-    container: 'Folder',
-    groupby: 'Group by',
-    join: 'Join',
-    object: 'AX object',
-    userparameter: 'User parameter',
-    param: 'User parameter',
-    importformat: 'Import format',
-    leaf: 'AX table',
-    unknown: 'Unknown',
-  };
-  const dict = locale === 'cs' ? cs : en;
-  return dict[badge] ?? humanizeInternalName(badge);
+  return t.drillBadgeLabels[badge] ?? humanizeInternalName(badge);
 }
 
 /**
@@ -170,7 +109,7 @@ function humanizeInternalName(token: string): string {
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/[_-]+/g, ' ')
     .trim();
-  if (!words) return locale === 'cs' ? 'Zdroj' : 'Source';
+  if (!words) return t.drillSourceFallback;
   return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
 }
 
@@ -552,8 +491,8 @@ function getValidationActionLabel(rule: any): string | undefined {
   const text = candidates.find(value => typeof value === 'string' && value.trim().length > 0);
   if (text) return text.trim();
 
-  if (rule?.stopProcessing === true) return locale === 'cs' ? 'Zastavit' : 'Stop';
-  if (rule?.isWarning === true) return locale === 'cs' ? 'Varování' : 'Warning';
+  if (rule?.stopProcessing === true) return t.drillRuleStop;
+  if (rule?.isWarning === true) return t.drillRuleWarning;
 
   return undefined;
 }
@@ -1242,7 +1181,7 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
               onClick={() => setShowUnresolved(v => !v)}
               aria-pressed={showUnresolved}
             >
-              {locale === 'cs' ? 'Nevyřešené' : 'Unresolved'}
+              {t.drillUnresolved}
             </button>
           )}
         </header>
@@ -1687,7 +1626,7 @@ function buildTreeNode(
     const mappingNode: TreeExprNode = {
       id: `${id}-m`,
       kind: 'mapping',
-      label: ctx.locale === 'cs' ? 'Mapování' : 'Mapping',
+      label: getTranslations(ctx.locale).drillMappingNode,
       sublabel: bindingExpr,
       badge: 'mapping',
       expression: bindingExpr,
@@ -1914,7 +1853,7 @@ function buildDsNode(
     dsNode.badge = 'param';
     dsNode.sublabel = valueExpr
       ? valueExpr
-      : [edt, ctx.locale === 'cs' ? 'zadává uživatel při spuštění' : 'entered by the user at run time']
+      : [edt, getTranslations(ctx.locale).drillParamEnteredAtRunTime]
           .filter(Boolean).join(' — ');
     if (valueExpr) expandExpression(dsNode, valueExpr, 'ds-param-ref', configIndex);
   } else if (ds.groupByInfo) {
@@ -2093,7 +2032,7 @@ export function buildExpressionTree(options: {
     // No DS refs found – show single "unresolved" leaf
     rootChildren.push({
       id: 'unresolved', kind: 'ref',
-      label: locale === 'cs' ? 'Žádná datová reference' : 'No data reference',
+      label: getTranslations(locale).drillNoDataReference,
       badge: 'ds', children: [],
     });
   } else {
@@ -2336,17 +2275,17 @@ function collectEdges(node: TreeExprNode, edges: Array<{ source: string; target:
 // ── ReactFlow custom node ────────────────────────────────────────────────────
 
 const BADGE_COLORS: Record<string, { bg: string; fg: string; border: string }> = {
-  root:    { bg: 'var(--brand-1)', fg: '#fff', border: 'var(--brand-1)' },
-  model:   { bg: 'var(--surface-info-bg)', fg: 'var(--surface-info-fg)', border: 'var(--surface-info-border)' },
-  mapping: { bg: 'var(--surface-warning-bg)', fg: 'var(--surface-warning-fg)', border: 'var(--surface-warning-border)' },
-  ds:      { bg: 'var(--bg-secondary)', fg: 'var(--text-primary)', border: 'var(--border-color)' },
-  table:   { bg: 'var(--surface-success-bg)', fg: 'var(--surface-success-fg)', border: 'var(--surface-success-border)' },
-  enum:    { bg: 'var(--surface-warning-bg)', fg: 'var(--surface-warning-fg)', border: 'var(--surface-warning-border)' },
-  class:   { bg: 'color-mix(in srgb,var(--accent)15%,transparent)', fg: 'var(--accent)', border: 'color-mix(in srgb,var(--accent)40%,transparent)' },
-  calc:    { bg: 'var(--bg-tertiary)', fg: 'var(--text-secondary)', border: 'var(--border-color)' },
-  param:   { bg: 'var(--surface-info-bg)', fg: 'var(--surface-info-fg)', border: 'var(--surface-info-border)' },
-  groupby: { bg: 'var(--bg-tertiary)', fg: 'var(--text-secondary)', border: 'var(--border-color)' },
-  leaf:    { bg: 'var(--surface-success-bg)', fg: 'var(--surface-success-fg)', border: 'var(--surface-success-border)' },
+  root:    { bg: 'var(--er-accent)', fg: 'var(--er-accent-contrast)', border: 'var(--er-accent)' },
+  model:   { bg: 'var(--er-info-soft)', fg: 'var(--er-info)', border: 'var(--er-info-border)' },
+  mapping: { bg: 'var(--er-warning-soft)', fg: 'var(--er-warning)', border: 'var(--er-warning-border)' },
+  ds:      { bg: 'var(--bg-secondary)', fg: 'var(--er-text)', border: 'var(--border-color)' },
+  table:   { bg: 'var(--er-success-soft)', fg: 'var(--er-success)', border: 'var(--er-success-border)' },
+  enum:    { bg: 'var(--er-warning-soft)', fg: 'var(--er-warning)', border: 'var(--er-warning-border)' },
+  class:   { bg: 'color-mix(in srgb,var(--er-accent)15%,transparent)', fg: 'var(--er-accent)', border: 'color-mix(in srgb,var(--er-accent)40%,transparent)' },
+  calc:    { bg: 'var(--bg-tertiary)', fg: 'var(--er-text-muted)', border: 'var(--border-color)' },
+  param:   { bg: 'var(--er-info-soft)', fg: 'var(--er-info)', border: 'var(--er-info-border)' },
+  groupby: { bg: 'var(--bg-tertiary)', fg: 'var(--er-text-muted)', border: 'var(--border-color)' },
+  leaf:    { bg: 'var(--er-success-soft)', fg: 'var(--er-success)', border: 'var(--er-success-border)' },
 };
 
 function badgeIcon(badge: string): React.ReactNode {
@@ -2361,12 +2300,6 @@ function badgeIcon(badge: string): React.ReactNode {
   if (badge === 'groupby') return <ArrowShuffleRegular {...s} />;
   if (badge === 'ds') return <PinRegular {...s} />;
   return <CircleRegular {...s} />;
-}
-
-function badgeLabel(badge: string): string {
-  const cs: Record<string, string> = { root: 'Výraz', model: 'Model', mapping: 'Mapování', table: 'AX tabulka', enum: 'AX výčet', class: 'AX třída', calc: 'Vypočtené pole', param: 'Parametr uživatele', groupby: 'Seskupení', ds: 'Pole', leaf: 'AX tabulka' };
-  const en: Record<string, string> = { root: 'Expression', model: 'Model', mapping: 'Mapping', table: 'AX table', enum: 'AX enum', class: 'AX class', calc: 'Calculated field', param: 'User parameter', groupby: 'Group by', ds: 'Field', leaf: 'AX table' };
-  return (locale === 'cs' ? cs : en)[badge] ?? humanizeInternalName(badge);
 }
 
 function TreeFlowNode({ data }: { data: {
@@ -2398,7 +2331,7 @@ function TreeFlowNode({ data }: { data: {
       >
         <div className="ddt-node__head">
           <span className="ddt-node__icon">{badgeIcon(node.badge)}</span>
-          <span className="ddt-node__badge">{badgeLabel(node.badge)}</span>
+          <span className="ddt-node__badge">{localizeBadgeLabel(node.badge)}</span>
           {(isRoot || isLeaf) && <span className="ddt-node__pin" />}
         </div>
         <div className="ddt-node__label" title={node.label}>{node.label}</div>
@@ -2414,12 +2347,12 @@ function TreeFlowNode({ data }: { data: {
             )}
             {canCopy && (
               <button type="button" className="ddt-node__action" onClick={() => onCopy?.(node)}>
-                {locale === 'cs' ? 'Kopírovat' : 'Copy'}
+                {t.drillCopy}
               </button>
             )}
             {canOpenExplorer && (
               <button type="button" className="ddt-node__action" onClick={() => onOpenExplorer?.(node)}>
-                {locale === 'cs' ? 'Explorer' : 'Explorer'}
+                {t.explorer}
               </button>
             )}
           </div>
@@ -2550,14 +2483,12 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill, i
               await navigator.clipboard.writeText(value);
               pushToast({
                 kind: 'success',
-                message: locale === 'cs' ? `Zkopírováno: ${value}` : `Copied: ${value}`,
+                message: t.drillCopied(value),
               });
             } catch {
               pushToast({
                 kind: 'warning',
-                message: locale === 'cs'
-                  ? 'Kopírování se nepodařilo (schránka není dostupná).'
-                  : 'Copy failed (clipboard is not available).',
+                message: t.drillCopyFailed,
               });
             }
           },
@@ -2577,11 +2508,11 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill, i
       target: e.target,
       type: 'smoothstep',
       style: highlightedEdgeIds.has(`${e.source}->${e.target}`)
-        ? { stroke: 'var(--accent)', strokeWidth: 2.2, opacity: 0.95 }
+        ? { stroke: 'var(--er-accent)', strokeWidth: 2.2, opacity: 0.95 }
         : { stroke: 'var(--border-color)', strokeWidth: 1.3, strokeDasharray: '4,3', opacity: 0.45 },
       markerEnd: {
         type: 'arrowclosed' as any,
-        color: highlightedEdgeIds.has(`${e.source}->${e.target}`) ? 'var(--accent)' : 'var(--border-color)',
+        color: highlightedEdgeIds.has(`${e.source}->${e.target}`) ? 'var(--er-accent)' : 'var(--border-color)',
         width: highlightedEdgeIds.has(`${e.source}->${e.target}`) ? 12 : 10,
         height: highlightedEdgeIds.has(`${e.source}->${e.target}`) ? 12 : 10,
       },
@@ -2604,9 +2535,7 @@ function DrillDownTreeView({ expression, configIndex, configurations, onDrill, i
       {rootNode.truncated && <TruncatedNotice floating />}
       {effectiveLabelMode !== labelMode && showTechnicalDetails && (
         <div className="ddt-auto-compact-hint">
-          {locale === 'cs'
-            ? `Auto: kompaktní režim (${treeNodeCount} uzlů)`
-            : `Auto: compact mode (${treeNodeCount} nodes)`}
+          {t.drillAutoCompact(treeNodeCount)}
         </div>
       )}
       <ReactFlow
@@ -2742,17 +2671,17 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
           </div>
 
           {/* View-mode tab switcher — pinned to the right */}
-          <div className="dd-view-toggle" role="tablist" aria-label={locale === 'cs' ? 'Pohled' : 'View'}>
+          <div className="dd-view-toggle" role="tablist" aria-label={t.drillViewAria}>
             <button
               type="button"
               role="tab"
               aria-selected={viewMode === 'workbench'}
               className={`dd-view-toggle__btn${viewMode === 'workbench' ? ' is-active' : ''}`}
               onClick={() => setViewMode('workbench')}
-              title={locale === 'cs' ? 'Přehledný detail výrazu' : 'Expression detail'}
+              title={t.drillViewDetailHint}
             >
               <AppsListDetailRegular fontSize={14} />
-              <span className="dd-view-toggle__label">{locale === 'cs' ? 'Detail' : 'Detail'}</span>
+              <span className="dd-view-toggle__label">{t.drillViewDetail}</span>
             </button>
             <button
               type="button"
@@ -2760,10 +2689,10 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
               aria-selected={viewMode === 'tree'}
               className={`dd-view-toggle__btn${viewMode === 'tree' ? ' is-active' : ''}`}
               onClick={() => setViewMode('tree')}
-              title={locale === 'cs' ? 'Stromová vizualizace' : 'Tree view'}
+              title={t.drillViewTreeHint}
             >
               <FlowRegular fontSize={14} />
-              <span className="dd-view-toggle__label">{locale === 'cs' ? 'Strom' : 'Tree'}</span>
+              <span className="dd-view-toggle__label">{t.drillViewTree}</span>
             </button>
           </div>
           {viewMode === 'tree' && showTechnicalDetails && (
@@ -2771,7 +2700,7 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
               <div
                 className="dd-tree-label-toggle"
                 role="tablist"
-                aria-label={locale === 'cs' ? 'Režim popisků uzlů' : 'Node label mode'}
+                aria-label={t.drillLabelModeAria}
               >
                 <button
                   type="button"
@@ -2779,9 +2708,9 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
                   aria-selected={treeLabelMode === 'compact'}
                   className={`dd-tree-label-toggle__btn${treeLabelMode === 'compact' ? ' is-active' : ''}`}
                   onClick={() => setTreeLabelMode('compact')}
-                  title={locale === 'cs' ? 'Kompaktní režim popisků' : 'Compact label mode'}
+                  title={t.drillCompactHint}
                 >
-                  {locale === 'cs' ? 'Kompaktní' : 'Compact'}
+                  {t.drillCompact}
                 </button>
                 <button
                   type="button"
@@ -2789,9 +2718,9 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
                   aria-selected={treeLabelMode === 'full'}
                   className={`dd-tree-label-toggle__btn${treeLabelMode === 'full' ? ' is-active' : ''}`}
                   onClick={() => setTreeLabelMode('full')}
-                  title={locale === 'cs' ? 'Plný režim popisků' : 'Full label mode'}
+                  title={t.drillFullHint}
                 >
-                  {locale === 'cs' ? 'Plný' : 'Full'}
+                  {t.drillFull}
                 </button>
               </div>
               <button
@@ -2799,23 +2728,23 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
                 className={`dd-tree-debug-toggle${showUnresolvedRefs ? ' is-active' : ''}`}
                 onClick={() => setShowUnresolvedRefs(v => !v)}
                 aria-pressed={showUnresolvedRefs}
-                title={locale === 'cs' ? 'Zobrazit nevyřešené reference' : 'Show unresolved references'}
+                title={t.drillShowUnresolvedHint}
               >
-                {locale === 'cs' ? 'Nevyřešené' : 'Unresolved'}
+                {t.drillUnresolved}
               </button>
             </>
           )}
         </div>
 
         {validationContext && validationContext.rules.length > 0 && (
-          <section className="dd-validation-summary" aria-label={locale === 'cs' ? 'Detaily validace' : 'Validation details'}>
+          <section className="dd-validation-summary" aria-label={t.drillValidationDetails}>
             <div className="dd-validation-summary__head">
               <span className="dd-validation-summary__title">
-                {locale === 'cs' ? 'Detaily validace' : 'Validation details'}
+                {t.drillValidationDetails}
               </span>
               <span className="dd-validation-summary__meta">
                 {showTechnicalDetails && `${validationContext.path} • `}
-                {validationContext.rules.length} {locale === 'cs' ? 'pravidel' : 'rules'}
+                {t.drillRuleCount(validationContext.rules.length)}
               </span>
             </div>
             <div className="dd-validation-summary__list">
@@ -2829,13 +2758,13 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
                   </div>
                   {rule.conditionExpressionAsString && (
                     <div className="dd-validation-summary__expr-row">
-                      <span className="dd-validation-summary__expr-label">{locale === 'cs' ? 'Podmínka' : 'Condition'}</span>
+                      <span className="dd-validation-summary__expr-label">{t.propCondition}</span>
                       <ExpressionView expr={rule.conditionExpressionAsString} configIndex={configIndex} />
                     </div>
                   )}
                   {rule.messageExpressionAsString && (
                     <div className="dd-validation-summary__expr-row">
-                      <span className="dd-validation-summary__expr-label">{locale === 'cs' ? 'Zpráva' : 'Message'}</span>
+                      <span className="dd-validation-summary__expr-label">{t.propMessage}</span>
                       <ExpressionView expr={rule.messageExpressionAsString} configIndex={configIndex} />
                     </div>
                   )}

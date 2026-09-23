@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
+import { ArrowDownloadRegular, ArrowUploadRegular, DocumentPdfRegular } from '@fluentui/react-icons';
 import { useAppStore } from '../../state/store';
-import { locale, t } from '../../i18n';
+import { t } from '../../i18n';
 import { ERDirection, type ERFormatContent, type ERFormatElement } from '@er-visualizer/core';
 import { renderXmlHighlightedMarkup } from '../../utils/xml-highlight';
 import { formatTypeLabelFor } from './shared';
@@ -75,7 +76,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
   }
 
   if (isPdf && previewRoot === rootElement) {
-    return <div style={{ padding: 16, fontSize: 12, color: 'var(--text-secondary)' }}>📕 {t.pdfNoSourceComponent}</div>;
+    return <div style={{ padding: 16, fontSize: 12, color: 'var(--er-text-muted)' }}><DocumentPdfRegular fontSize={13} aria-hidden /> {t.pdfNoSourceComponent}</div>;
   }
 
   const showDelimitedTable = (info.label === 'Text / CSV' || info.label === 'Text') && delimitedPreview !== null;
@@ -94,7 +95,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
     margin: 0,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-all',
-    color: 'var(--text-primary)',
+    color: 'var(--er-text)',
     background: 'var(--bg-secondary)',
     padding: 16,
     borderRadius: 6,
@@ -102,79 +103,81 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
   };
   return (
     <div style={{ padding: 16, overflow: 'auto', height: '100%' }}>
-      <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
-        {direction === ERDirection.Import ? `📥 ${t.excelInput}` : `📤 ${t.excelOutput}`} — {t.previewDescription}
+      <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--er-text-muted)' }}>
+        {direction === ERDirection.Import
+          ? <><ArrowDownloadRegular fontSize={13} aria-hidden /> {t.excelInput}</>
+          : <><ArrowUploadRegular fontSize={13} aria-hidden /> {t.excelOutput}</>} — {t.previewDescription}
       </div>
       {isPdf && (
-        <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
-          📕 {t.pdfConvertedFrom(info.label)}
+        <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--er-text-muted)' }}>
+          <DocumentPdfRegular fontSize={13} aria-hidden /> {t.pdfConvertedFrom(info.label)}
         </div>
       )}
       <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{locale === 'cs' ? 'Nevyřešené hodnoty:' : 'Unresolved values:'}</span>
+        <span style={{ fontSize: 11, color: 'var(--er-text-muted)' }}>{t.previewUnresolvedValues}</span>
         <button
           type="button"
           onClick={() => setPlaceholderMode('sample')}
           style={{
-            border: placeholderMode === 'sample' ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-            background: placeholderMode === 'sample' ? 'color-mix(in srgb, var(--accent) 16%, transparent)' : 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
+            border: placeholderMode === 'sample' ? '1px solid var(--er-accent)' : '1px solid var(--border-color)',
+            background: placeholderMode === 'sample' ? 'color-mix(in srgb, var(--er-accent) 16%, transparent)' : 'var(--bg-secondary)',
+            color: 'var(--er-text)',
             fontSize: 11,
             padding: '3px 8px',
             borderRadius: 6,
             cursor: 'pointer',
           }}
         >
-          {locale === 'cs' ? 'Vzorová data' : 'Sample data'}
+          {t.previewSampleData}
         </button>
         <button
           type="button"
           onClick={() => setPlaceholderMode('braces')}
           style={{
-            border: placeholderMode === 'braces' ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-            background: placeholderMode === 'braces' ? 'color-mix(in srgb, var(--accent) 16%, transparent)' : 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
+            border: placeholderMode === 'braces' ? '1px solid var(--er-accent)' : '1px solid var(--border-color)',
+            background: placeholderMode === 'braces' ? 'color-mix(in srgb, var(--er-accent) 16%, transparent)' : 'var(--bg-secondary)',
+            color: 'var(--er-text)',
             fontSize: 11,
             padding: '3px 8px',
             borderRadius: 6,
             cursor: 'pointer',
           }}
         >
-          {locale === 'cs' ? 'Ponechat {placeholder}' : 'Keep {placeholder}'}
+          {t.previewKeepPlaceholder}
         </button>
         <button
           type="button"
           onClick={() => setPlaceholderMode('omit')}
           style={{
-            border: placeholderMode === 'omit' ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-            background: placeholderMode === 'omit' ? 'color-mix(in srgb, var(--accent) 16%, transparent)' : 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
+            border: placeholderMode === 'omit' ? '1px solid var(--er-accent)' : '1px solid var(--border-color)',
+            background: placeholderMode === 'omit' ? 'color-mix(in srgb, var(--er-accent) 16%, transparent)' : 'var(--bg-secondary)',
+            color: 'var(--er-text)',
             fontSize: 11,
             padding: '3px 8px',
             borderRadius: 6,
             cursor: 'pointer',
           }}
         >
-          {locale === 'cs' ? 'Skrýt nevyřešené' : 'Hide unresolved'}
+          {t.previewHideUnresolved}
         </button>
       </div>
       {showDelimitedTable && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{locale === 'cs' ? 'CSV zobrazení:' : 'CSV view:'}</span>
+          <span style={{ fontSize: 11, color: 'var(--er-text-muted)' }}>{t.previewCsvView}</span>
           <button
             type="button"
             onClick={() => setCsvFirstRowHeader(v => !v)}
             style={{
-              border: csvFirstRowHeader ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-              background: csvFirstRowHeader ? 'color-mix(in srgb, var(--accent) 16%, transparent)' : 'var(--bg-secondary)',
-              color: 'var(--text-primary)',
+              border: csvFirstRowHeader ? '1px solid var(--er-accent)' : '1px solid var(--border-color)',
+              background: csvFirstRowHeader ? 'color-mix(in srgb, var(--er-accent) 16%, transparent)' : 'var(--bg-secondary)',
+              color: 'var(--er-text)',
               fontSize: 11,
               padding: '3px 8px',
               borderRadius: 6,
               cursor: 'pointer',
             }}
           >
-            {locale === 'cs' ? 'První řádek = hlavička' : 'First row = header'}
+            {t.previewFirstRowHeader}
           </button>
         </div>
       )}
@@ -188,7 +191,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
           <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'right', width: 56, padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', fontSize: 11 }}>#</th>
+                <th style={{ textAlign: 'right', width: 56, padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--er-text-muted)', fontSize: 11 }}>#</th>
                 {Array.from({ length: delimitedPreview.columnCount }, (_, i) => (
                   <th
                     key={i}
@@ -196,7 +199,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
                       textAlign: 'left',
                       padding: '6px 8px',
                       borderBottom: '1px solid var(--border-subtle)',
-                      color: 'var(--text-secondary)',
+                      color: 'var(--er-text-muted)',
                       fontSize: 11,
                       fontWeight: 600,
                       whiteSpace: 'nowrap',
@@ -210,7 +213,7 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
             <tbody>
               {tableRows.map((row, rowIndex) => (
                 <tr key={rowIndex}>
-                  <td style={{ textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', fontSize: 11 }}>{rowIndex + (csvFirstRowHeader ? 2 : 1)}</td>
+                  <td style={{ textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--er-text-muted)', fontSize: 11 }}>{rowIndex + (csvFirstRowHeader ? 2 : 1)}</td>
                   {Array.from({ length: delimitedPreview.columnCount }, (_, colIndex) => (
                     <td
                       key={colIndex}
@@ -338,17 +341,17 @@ function generateExcelPreview(root: ERFormatElement, bm: BindingMap, options: Pr
   const walk = (el: ERFormatElement, depth: number) => {
     const indent = '  '.repeat(depth);
     if (el.elementType === 'ExcelFile') {
-      lines.push(`📊 ${t.excelWorkbook}`);
+      lines.push(`${t.excelWorkbook}`);
       for (const child of el.children) walk(child, depth + 1);
     } else if (el.elementType === 'ExcelSheet') {
-      lines.push(`${indent}📃 ${t.excelSheet}: "${el.name}"`);
+      lines.push(`${indent}${t.excelSheet}: "${el.name}"`);
       for (const child of el.children) walk(child, depth + 1);
     } else if (el.elementType === 'ExcelRange' || el.elementType === 'ExcelHeader' || el.elementType === 'ExcelFooter') {
-      const sectionLabel = el.elementType === 'ExcelHeader' ? `🔼 ${t.excelHeader}` : el.elementType === 'ExcelFooter' ? `🔽 ${t.excelFooter}` : `📐 ${t.excelRange}`;
+      const sectionLabel = el.elementType === 'ExcelHeader' ? `${t.excelHeader}` : el.elementType === 'ExcelFooter' ? `${t.excelFooter}` : `${t.excelRange}`;
       lines.push(`${indent}${sectionLabel}: ${el.name}`);
       for (const child of el.children) walk(child, depth + 1);
     } else if (el.elementType === 'ExcelCell') {
-      lines.push(`${indent}📎 ${t.excelCell}: ${el.name} = ${previewValue(el, bm, options)}`);
+      lines.push(`${indent}${t.excelCell}: ${el.name} = ${previewValue(el, bm, options)}`);
     } else {
       lines.push(`${indent}${formatTypeLabelFor(el.elementType, options.showTechnicalDetails)}: ${el.name}`);
       for (const child of el.children) walk(child, depth + 1);

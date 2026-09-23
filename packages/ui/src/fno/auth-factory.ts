@@ -4,7 +4,7 @@
 
 import { FnoAuthError, type AuthProvider } from '@er-visualizer/fno-client';
 import { getElectronApi } from './electron-bridge';
-import { locale } from '../i18n';
+import { t } from '../i18n';
 
 /**
  * True only inside the ER Visualizer Electron shell, which stamps its own token
@@ -36,15 +36,7 @@ async function loadAdapter<T>(load: () => Promise<T>, moduleName: string): Promi
     return await load();
   } catch (err) {
     throw new FnoAuthError(
-      locale === 'cs'
-        ? `Nepodařilo se načíst přihlašovací modul (${moduleName}). ` +
-          'Aplikace ho stahuje až ve chvíli přihlášení a stažení selhalo — ' +
-          'typicky když neběží dev server, když se mezitím nasadila nová verze, ' +
-          'nebo při výpadku sítě. Načti stránku znovu (Ctrl+F5) a zkus to znovu.'
-        : `Could not load the sign-in module (${moduleName}). ` +
-          'It is downloaded on demand and the download failed — usually a stopped ' +
-          'dev server, a redeploy that replaced the chunk, or a network drop. ' +
-          'Reload the page (Ctrl+F5) and try again.',
+      t.fnoAuthModuleLoadFailed(moduleName),
       err,
     );
   }
@@ -68,17 +60,7 @@ export async function getAuthProvider(): Promise<AuthProvider> {
     // back to the browser flow, whose popup the Electron window blocker kills
     // with popup_window_error.
     throw new FnoAuthError(
-      locale === 'cs'
-        ? 'Electron auth bridge není k dispozici — preload se nenačetl, takže window.electronAPI chybí. ' +
-          'Podívej se do konzole hlavního procesu na "[electron] preload failed to load"; ' +
-          'nejčastější příčinou je preload zkompilovaný jako ESM (balíček má "type": "module", ' +
-          'sandboxovaný preload musí být CommonJS → dist/preload.cjs). ' +
-          'Přebuilduj přes `pnpm --filter @er-visualizer/electron build` a restartuj aplikaci.'
-        : 'Electron auth bridge is unavailable — the preload script did not load, so window.electronAPI is missing. ' +
-          'Check the main-process console for "[electron] preload failed to load"; ' +
-          'the usual cause is a preload compiled as ESM (the package has "type": "module", ' +
-          'a sandboxed preload must be CommonJS → dist/preload.cjs). ' +
-          'Rebuild with `pnpm --filter @er-visualizer/electron build` and restart the application.',
+      t.fnoAuthElectronBridgeMissing,
     );
   }
   const { BrowserAuthProvider } = await loadAdapter(() => import('./browser-auth'), 'browser-auth');

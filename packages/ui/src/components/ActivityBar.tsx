@@ -165,8 +165,9 @@ export function ActivityBar(props: ActivityBarProps) {
       {/* Two locales, so one button that names the current one — the same
           convention as the theme switch below. */}
       <ActivityButton
-        glyph={currentLocale === 'cs' ? 'CZ' : 'EN'}
-        label={`${t.language}: ${currentLocale === 'cs' ? t.languageCzech : t.languageEnglish}`}
+        glyph={t.languageCode}
+        label={`${t.language}: ${t.languageCurrent}`}
+        // eslint-disable-next-line no-restricted-syntax -- picks the other locale, not text
         onClick={() => setLocale(currentLocale === 'cs' ? 'en' : 'cs')}
       />
       <ActivityButton

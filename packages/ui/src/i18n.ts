@@ -70,6 +70,10 @@ export interface Translations {
   language: string;
   languageCzech: string;
   languageEnglish: string;
+  /** Short code of the active language, shown on the language toggle. */
+  languageCode: string;
+  /** Name of the active language, in that language. */
+  languageCurrent: string;
   home: string;
   loadXml: string;
   searchPlaceholder: string;
@@ -341,6 +345,12 @@ export interface Translations {
   fnoRemoveProfileConfirmTitle: (name: string) => string;
   fnoRemoveProfileConfirmBody: string;
   cancel: string;
+  modelViewLabel: string;
+  modelViewList: string;
+  modelViewGraph: string;
+  modelListFilterPlaceholder: string;
+  modelListLabel: string;
+  modelListMoreMatches: (n: number) => string;
   recentSessionLoadFailed: (reason: string) => string;
   splitResize: string;
   searchShowMore: (next: number, remaining: number) => string;
@@ -695,6 +705,227 @@ export interface Translations {
   fnoErrMfaRequired: (code: string) => string;
   fnoErrPublicClientFlows: string;
   fnoErrRedirectIsSpa: string;
+
+  // ─── F&O sign-in module loading (fno/auth-factory.ts) ───
+  fnoAuthModuleLoadFailed: (moduleName: string) => string;
+  fnoAuthElectronBridgeMissing: string;
+
+  // ─── File loading (utils/file-loading.ts) ───
+  fileNotXml: string;
+
+  // ─── Format binding sections (utils/format-binding-sections.ts, format-binding-display.ts) ───
+  bindingIntentLabels: Record<'direct' | 'calculated' | 'condition' | 'text' | 'property', string>;
+  bindingIntentItemLabels: Record<'direct' | 'calculated' | 'condition' | 'text' | 'property', string>;
+  bindingIntentHints: Record<'direct' | 'calculated' | 'condition' | 'text' | 'property', string>;
+  formatBindingCategoryLabels: Record<'data' | 'visibility' | 'formatting' | 'property', string>;
+  formatBindingValueBadge: string;
+
+  // ─── Configuration warnings (state/config-warnings.ts) ───
+  warnLoadDataModelForDrillDown: string;
+  warnFormatWithoutMapping: string;
+  warnBrokenDatasourceRefs: (formatName: string, count: number, detail: string, hidden: number) => string;
+
+  // ─── Explorer tree section labels (state/tree-builder.ts) ───
+  treeDsGroupLabels: Record<string, string>;
+  treeDataModelSections: { roots: string; enums: string; records: string };
+  treeMappingSections: { title: string; dataSources: string; bindings: string; validations: string };
+  treeFormatSections: { outputStructure: string; modelMappings: string; enumerations: string; transformations: string; dataSources: string; bindings: string; noBindings: string };
+  treeGroupBySections: { groupedBy: string; aggregated: string };
+  groupOther: string;
+  treeEmbeddedMappingUsedSuffix: string;
+
+  // ─── Store toasts (state/store.ts) ───
+  toastNewerVersionOpen: (fileName: string, version: string | number, loadedVersion?: string | number) => string;
+  toastLoadFailedWithMessage: (fileName: string, message: string) => string;
+  toastConfigClosed: (name: string) => string;
+  toastReopen: string;
+  toastSessionNotCached: string;
+  toastSessionFilesMissing: (files: string) => string;
+  toastAlreadyOpen: (label: string) => string;
+  toastFileNotCached: (label: string) => string;
+
+  // ─── Path tooltip rows (utils/path-tooltip.ts) ───
+  pathTipInside: string;
+  pathTipReadsTables: string;
+  pathTipCallsClasses: string;
+  pathTipViaCalcFields: string;
+  pathTipOpenDatasource: string;
+  pathTipOpenBinding: string;
+  pathTipSource: string;
+  pathTipTableField: string;
+  pathTipClassMember: string;
+  pathTipEnumValue: string;
+  pathTipDatasourceField: string;
+  pathTipModelField: string;
+  pathTipMappingBinding: string;
+  pathTipRecord: string;
+  pathTipRecordFieldsBound: (n: number) => string;
+  pathTipNearestBinding: string;
+  pathTipMapping: string;
+  pathTipNoBinding: string;
+  pathTipModelRoot: string;
+  pathTipDataModel: string;
+  pathTipUserParameter: string;
+
+  // ─── Consultant view words (utils/consultant-labels.ts) ───
+  consultantFormatTypeLabels: Record<string, string>;
+  consultantElementFallback: string;
+  consultantDataTypeLabels: Record<string, string>;
+  consultantFieldTypeLabels: Record<number, string>;
+  consultantBindingCategoryLabels: Record<'data' | 'visibility' | 'formatting' | 'property', string>;
+  consultantPropertyLabels: Record<string, string>;
+  consultantTurnedOff: string;
+  consultantTurnedOn: string;
+  consultantCondition: string;
+
+  // ─── Enum type labels (utils/enum-display.ts) ───
+  enumTypeLabels: Record<'Ax' | 'DataModel' | 'Format', string>;
+
+  // ─── Configuration kind labels (DependencyPromptDialog.tsx, ConfigExplorer.tsx) ───
+  configKindLabels: { DataModel: string; ModelMapping: string; Format: string };
+  explorerKindPills: { DataModel: string; ModelMapping: string; Format: string };
+  explorerGroupLabels: { DataModel: string; ModelMapping: string; Format: string };
+  explorerChipLabels: { DataModel: string; ModelMapping: string; Format: string };
+
+  // ─── F&O ingest steps (FnoIngestPanel.tsx) ───
+  fnoIngestSteps: { prepare: string; dm: string; fm: string; mm: string; finalize: string };
+
+  // ─── Data source groups (designers/DatasourceTree.tsx) ───
+  dsGroupLabelsTechnical: Record<string, string>;
+  dsGroupLabelsConsultant: Record<string, string>;
+  dsImportFormat: string;
+  dsGroupedBy: string;
+
+  // ─── Data model designer (designers/DataModelDesigner.tsx) ───
+  dmDesignerTitle: string;
+  dmDatasourceProperties: string;
+  dmNoRelevantBindings: string;
+
+  // ─── Format designer tabs (designers/FormatDesigner.tsx) ───
+  fmtTabStructureTitle: string;
+  fmtTabBindingsTitle: string;
+  fmtTabDatasourcesTitle: string;
+  fmtTabPreviewTitle: string;
+  fmtTabEmbeddedMapping: string;
+  fmtTabEmbeddedMappingTitle: string;
+  fmtElementsOutsideStructure: string;
+
+  // ─── Format preview (designers/FormatPreview.tsx) ───
+  previewUnresolvedValues: string;
+  previewSampleData: string;
+  previewKeepPlaceholder: string;
+  previewHideUnresolved: string;
+  previewCsvView: string;
+  previewFirstRowHeader: string;
+
+  // ─── Model mapping designer (designers/ModelMappingDesigner.tsx) ───
+  mmDefinitionTitleTechnical: string;
+  mmDefinitionTitle: string;
+  mmDefinition: string;
+  mmClickToSwitch: (title: string) => string;
+  mmDesignerTitle: string;
+  mmDesignerHint: string;
+  mmRuleCount: (n: number) => string;
+  mmBranchBindingCount: (n: number) => string;
+
+  // ─── Search panel (SearchPanel.tsx) ───
+  searchExampleSections: { mapping: string; calc: string; output: string };
+  searchExamplePresets: { model: string; companyInfo: string; labels: string; round: string; conditional: string; calculated: string; dateFormat: string; numberFormat: string; concatenate: string };
+  whereUsedExampleSections: { impact: string; trace: string };
+  whereUsedExamplePresets: { table: string; enumType: string; lookup: string; parameter: string; ledgerAccount: string; calculated: string };
+  searchShowingFirst: (shown: number, total: number) => string;
+  searchScopeResultsAria: string;
+  whereUsedScopeAria: string;
+  searchReachAria: string;
+  searchScopeAll: string;
+  searchScopeFormat: string;
+  searchScopeMapping: string;
+  searchScopeModel: string;
+  searchMinChars: (n: number) => string;
+  searchLblFormatExpression: string;
+  searchLblVisibility: string;
+  searchLblFormatting: string;
+  searchLblProperty: string;
+  searchLblTable: string;
+  searchLblEnum: string;
+  searchLblClass: string;
+  searchLblParameter: string;
+  searchLblField: string;
+  searchLblBinding: string;
+  searchLblExpression: string;
+  searchLblCalcField: string;
+  searchLblFieldType: string;
+  searchLblModelRef: string;
+  searchLblBaseRef: string;
+  searchLblFormatRef: string;
+  searchLblReference: string;
+  searchLblUnresolvedRef: string;
+  searchExprSource: (component: string) => string;
+  searchExprParam: (component: string) => string;
+  searchKindLabels: { Format: string; ModelMapping: string; DataModel: string };
+  searchTabDatasources: string;
+  searchLocalizeBindingKind: (label: string) => string;
+  searchRefKindLabels: { calc: string; param: string; agg: string; validation: string; message: string };
+
+  // ─── Format bindings view (designers/FormatBindingsView.tsx) ───
+  fbReadsPrefix: string;
+  fbReadsSuffix: (n: number) => string;
+  fbMappingPrefix: string;
+  fbMappingNotLoadedFor: (descriptor: string | null | undefined) => string;
+  fbUnmappedCount: (n: number) => string;
+  fbLoadModelForLabels: string;
+  fbOnlyUnmappedHint: string;
+  fbOnlyUnmapped: string;
+  fbAllFieldsMapped: string;
+  fbBranchUnmappedCount: (n: number) => string;
+  fbUsageCount: (n: number) => string;
+  fbLineMapping: string;
+  fbFieldNeverFilledHint: string;
+  fbNoMappingBinding: string;
+  fbMappingNotLoaded: string;
+  fbRecordFieldsBound: string;
+  fbLineFormat: string;
+  fbMoreUsages: (n: number) => string;
+  fbLayoutByFormat: string;
+  fbLayoutByFormatHint: string;
+  fbLayoutByModel: string;
+  fbLayoutByModelHint: string;
+  fbToolbarAria: string;
+  fbLayoutAria: string;
+  fbNothingInSelectedTypes: (hiddenList: string) => string;
+  fbShowAll: string;
+  fbHiddenByFilter: (n: number) => string;
+
+  // ─── Drill-down panel (DrillDownPanel.tsx) ───
+  drillBadgeLabels: Record<string, string>;
+  drillBadgeGroupLabels: Record<string, string>;
+  drillSourceFallback: string;
+  drillRuleStop: string;
+  drillRuleWarning: string;
+  drillUnresolved: string;
+  drillMappingNode: string;
+  drillParamEnteredAtRunTime: string;
+  drillNoDataReference: string;
+  drillCopy: string;
+  drillCopied: (value: string) => string;
+  drillCopyFailed: string;
+  drillAutoCompact: (nodes: number) => string;
+  drillViewAria: string;
+  drillViewDetailHint: string;
+  drillViewDetail: string;
+  drillViewTreeHint: string;
+  drillViewTree: string;
+  drillLabelModeAria: string;
+  drillCompactHint: string;
+  drillCompact: string;
+  drillFullHint: string;
+  drillFull: string;
+  drillShowUnresolvedHint: string;
+  drillValidationDetails: string;
+  drillRuleCount: (n: number) => string;
+
+  // ─── Where-used text matches (state/where-used.ts) ───
+  whereUsedTextMatchName: (query: string) => string;
 }
 
 // ─── Translation dictionaries ─────────────────────────────────────────────
@@ -706,13 +937,15 @@ const cs: Translations = {
   language: 'Jazyk',
   languageCzech: 'Čeština',
   languageEnglish: 'Angličtina',
+  languageCode: 'CZ',
+  languageCurrent: 'Čeština',
   home: 'Domů',
   loadXml: 'Načíst XML',
   searchPlaceholder: 'Název tabulky, pole, cesty…',
   search: 'Hledat',
   propRevealInExplorer: 'Zobrazit v Exploreru',
   whereUsedPlaceholder: 'např. TaxTrans, CustTable, MyCalcField…',
-  whereUsedLabel: 'Zadej název tabulky, výčtu, třídy nebo datasource:',
+  whereUsedLabel: 'Zadejte název tabulky, výčtu, třídy nebo datového zdroje:',
   find: 'Najít',
   hideExplorer: 'Skrýt Explorer',
   showExplorer: 'Zobrazit Explorer',
@@ -754,7 +987,7 @@ const cs: Translations = {
   clearSearch: 'Vymazat hledání',
   clearWhereUsedSearch: 'Vymazat hledání míst použití',
   noConfigurationsLoaded: 'Nejsou načtené žádné konfigurace.',
-  loadXmlHint: 'Klikni na Načíst XML pro import ER konfiguračních souborů.',
+  loadXmlHint: 'Klikněte na Načíst XML pro import ER konfiguračních souborů.',
   focusedDetail: 'Detail výběru',
   node: 'Uzel',
   elementType: 'Typ prvku',
@@ -776,7 +1009,7 @@ const cs: Translations = {
   explorerActiveMappingHint: 'Tuto definici modelu používá aktivní formát',
   detailOverview: 'Přehled výběru',
   attributes: 'Atributy',
-  drillSteps: (n: number) => `${n} krok${n === 1 ? '' : n < 5 ? 'y' : 'ů'}`,
+  drillSteps: (n: number) => `${n} ${csPlural(n, 'krok', 'kroky', 'kroků')}`,
   back: 'Zpět',
   closeConfiguration: 'Zavřít konfiguraci',
   closeAllConfigurations: 'Zavřít vše',
@@ -830,7 +1063,7 @@ const cs: Translations = {
   openInExplorerAction: 'Otevřít v Exploreru',
   explorerActionShort: 'Explorer',
   noSelection: 'Není vybraný žádný prvek.',
-  selectElementHint: 'Vyber v exploreru nebo v návrháři uzel, jehož vlastnosti chceš zobrazit.',
+  selectElementHint: 'Vyberte v Exploreru nebo v návrháři uzel, jehož vlastnosti chcete zobrazit.',
   viewLabel: 'Pohled',
 
   // Drill-down panel
@@ -846,24 +1079,24 @@ const cs: Translations = {
   drillLabelChildren: 'Související zdroje',
   drillLabelExpression: 'Výraz',
   drillUnbound: 'Hodnota není napojena — chybí jí výraz.',
-  drillNoModelMapping: 'Tento odkaz míří do modelu. Pro rozpad načti soubor ModelMapping (.xml).',
+  drillNoModelMapping: 'Tento odkaz míří do modelu. Pro rozpad načtěte soubor ModelMapping (.xml).',
   drillPathNotFound: (p: string) => `Cesta „${p}" nebyla nalezena v ModelMapping.`,
-  drillClickToTrace: 'Klikni na výraz a pokračuj do další úrovně →',
+  drillClickToTrace: 'Klikněte na výraz a pokračujte do další úrovně →',
   drillActualPaths: 'Cesty vazeb v ModelMapping',
   drillMore: (n: number) => `… a ${n} dalších`,
   drillCurrentRecord: 'Odkaz na aktuální záznam smyčky (@). Zdroj hodnoty určuje nadřazený prvek ve struktuře formátu.',
   drillComplexExpr: 'Složená ER funkce — výraz nelze jednoduše trasovat na jeden datový zdroj.',
-  drillCompoundExpr: 'Porovnávací výraz — obsahuje více modelových odkazů. Klikni na cestu pro rozpad:',
-  drillInteractiveExpr: 'ER výraz — klikni na zvýrazněný odkaz pro rozpad:',
-  drillConstant: 'Konstantní hodnota — bez zdroje dat.',
-  drillDsNotFound: (name: string) => `Datový zdroj „${name}" nebyl nalezen v načtených konfiguracích. Zkontroluj, zda je načten správný ModelMapping nebo Format soubor.`,
+  drillCompoundExpr: 'Porovnávací výraz — obsahuje více modelových odkazů. Klikněte na cestu pro rozpad:',
+  drillInteractiveExpr: 'ER výraz — klikněte na zvýrazněný odkaz pro rozpad:',
+  drillConstant: 'Konstantní hodnota — bez datového zdroje.',
+  drillDsNotFound: (name: string) => `Datový zdroj „${name}" nebyl nalezen v načtených konfiguracích. Zkontrolujte, zda je načten správný ModelMapping nebo Format soubor.`,
   drillAnalyzing: 'Rozebíraný výraz',
-  drillHintClickable: 'Klikni na zvýrazněné části výrazu a rozpadni si ho krok po kroku až na původ dat.',
-  drillHintEmpty: 'Vyber prvek s vazbou (formulí) v Návrháři — rozpad ukáže, odkud se hodnota bere.',
+  drillHintClickable: 'Klikněte na zvýrazněné části výrazu a rozpadněte si ho krok po kroku až na původ dat.',
+  drillHintEmpty: 'Vyberte prvek s vazbou (formulí) v Návrháři — rozpad ukáže, odkud se hodnota bere.',
   drillStepMappingTitle: 'Jak se hledá v modelu',
   drillStepDatasourceTitle: 'Odkud se bere hodnota',
   drillStepDepsTitle: 'Co hodnotu ovlivňuje',
-  drillStepFormulaTitle: 'Výpočet hodnoty — klikni pro další rozpad',
+  drillStepFormulaTitle: 'Výpočet hodnoty — klikněte pro další rozpad',
   drillStepUserParameterTitle: 'Výraz parametru',
   drillStepGroupedListTitle: 'Seskupený seznam',
   drillStepAggregationTitle: (name: string) => `Agregace: ${name}`,
@@ -891,7 +1124,7 @@ const cs: Translations = {
   drillLabelEmpty: 'Pro tento popisek není v načtených konfiguracích žádný překlad.',
   resizeDialog: 'Tažením změníte velikost okna (dvojklik obnoví výchozí)',
   drillHowFilledTitle: 'Jak se hodnota naplní',
-  drillHowFilledHint: 'Vzorce, kterými vzniká hodnota tohoto kroku. Klikni na kteroukoli část vzorce a propadneš se do ní.',
+  drillHowFilledHint: 'Vzorce, kterými vzniká hodnota tohoto kroku. Klikněte na kteroukoli část vzorce a propadnete se do ní.',
   lineageTitle: 'Cesta hodnoty',
   lineageHint: 'Celý řetězec od výrazu ve formátu až k poli v D365FO. Zvýrazněné části výrazů lze rozkliknout — cesta se rozbalí až k danému zdroji.',
   lineageFormulaLabel: 'Vzorec',
@@ -920,7 +1153,7 @@ const cs: Translations = {
   drillForward: 'Vpřed',
   drillSourcePropsTitle: 'Vlastnosti zdroje',
   drillHowFilledHintSingle: 'Vzorec z mapování modelu, kterým se tato cesta naplní daty.',
-  drillHowFilledHintMany: 'Výraz používá více cest do modelu. U každé cesty je vzorec, kterým se v mapování naplní — klikni na cestu nebo na část vzorce a pokračuj hlouběji.',
+  drillHowFilledHintMany: 'Výraz používá více cest do modelu. U každé cesty je vzorec, kterým se v mapování naplní — klikněte na cestu nebo na část vzorce a pokračujte hlouběji.',
   drillSourceDetailTitle: 'Detail zdroje hodnoty',
   drillSourceTarget: 'Čte se z',
   drillUserParameterNote: 'Hodnotu zadává uživatel při spuštění reportu — nepochází z modelu ani z tabulky.',
@@ -939,7 +1172,7 @@ const cs: Translations = {
   propValue: 'Hodnota',
   propTransform: 'Transformace',
   propTransformUnnamed: 'Nepojmenovaná transformace',
-  propExcluded: 'Vyloučeno z DS',
+  propExcluded: 'Vyloučeno z datového zdroje',
   propYes: 'Ano',
   propDirection: 'Směr',
   formatDirectionImport: 'Import',
@@ -951,15 +1184,15 @@ const cs: Translations = {
   // Landing page
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',
   landingTitle: 'D365FO ER Visualizer',
-  landingSub: 'Načti ER konfigurace z disku nebo přímo z prostředí Finance & Operations a začni trasovat vazby formátů přes mapování až ke zdrojové tabulce, třídě nebo výčtu.',
+  landingSub: 'Načtěte ER konfigurace z disku nebo přímo z prostředí Finance & Operations a začněte trasovat vazby formátů přes mapování až ke zdrojové tabulce, třídě nebo výčtu.',
   landingDocsLink: 'Dokumentace',
   landingHomeLinkLabel: 'Zpět na úvodní stránku D365FO ER Visualizer',
   landingSourceLabel: 'Zdroj konfigurací',
-  landingDropPrimary: 'Přetáhni ER XML soubory sem',
-  landingDropRelease: 'Pusť soubory',
-  landingDropSecondary: 'nebo klikni pro výběr · můžeš načíst více souborů najednou',
+  landingDropPrimary: 'Přetáhněte ER XML soubory sem',
+  landingDropRelease: 'Pusťte soubory',
+  landingDropSecondary: 'nebo klikněte pro výběr · můžete načíst více souborů najednou',
   landingLoading: 'Načítání souborů…',
-  landingDropAriaLabel: 'Přetáhni XML soubory sem',
+  landingDropAriaLabel: 'Přetáhněte XML soubory sem',
   landingPillModel: 'Datový model',
   landingPillMapping: 'Mapování modelu',
   landingPillFormat: 'Formát',
@@ -976,6 +1209,12 @@ const cs: Translations = {
   fnoRemoveProfileConfirmTitle: (name: string) => `Odebrat profil „${name}“?`,
   fnoRemoveProfileConfirmBody: 'Profil se odebere i s uloženým přihlášením k prostředí. Pro další stahování bude potřeba ho znovu vytvořit a přihlásit se.',
   cancel: 'Zrušit',
+  modelViewLabel: 'Zobrazení modelu',
+  modelViewList: 'Seznam',
+  modelViewGraph: 'Graf',
+  modelListFilterPlaceholder: 'Filtrovat pole modelu…',
+  modelListLabel: 'Pole datového modelu',
+  modelListMoreMatches: (n: number) => `…a ${n} ${csPlural(n, 'další pole', 'další pole', 'dalších polí')} — zužte filtr.`,
   recentSessionLoadFailed: (reason: string) => `Relaci se nepodařilo otevřít: ${reason}. Otevřete soubory znovu z disku.`,
   splitResize: 'Změnit poměr skupin (šipky; dvojklik vrátí na polovinu)',
   searchShowMore: (next: number, remaining: number) => `Zobrazit ${next === remaining ? 'zbývající' : 'dalších'} ${next}${next === remaining ? '' : ` (zbývá ${remaining})`}`,
@@ -988,7 +1227,7 @@ const cs: Translations = {
   noRecentFiles: 'Žádné nedávno otevřené soubory.',
   recentReloadHint: 'Znovu načíst soubor',
   recentSessions: 'Nedávné relace',
-  recentSessionTitle: (count: number) => `Relace (${count} ${count === 1 ? 'soubor' : count >= 2 && count <= 4 ? 'soubory' : 'souborů'})`,
+  recentSessionTitle: (count: number) => `Relace (${count} ${csPlural(count, 'soubor', 'soubory', 'souborů')})`,
   recentSessionMergeHint: 'Přidat relaci do pracovní plochy',
   recentSessionReplaceHint: 'Nahradit pracovní plochu touto relací',
   recentSessionFileHint: 'Přidat konfiguraci do pracovní plochy',
@@ -1007,7 +1246,7 @@ const cs: Translations = {
   panelRestore: 'Obnovit velikost panelu',
   panelClose: 'Zavřít panel',
 
-  pathClickToNavigate: 'Klikni pro navigaci →',
+  pathClickToNavigate: 'Klikněte pro navigaci →',
   pathTable: 'Tabulka',
   pathEnum: 'Výčet',
   pathClass: 'Třída',
@@ -1022,18 +1261,18 @@ const cs: Translations = {
   fnoTabLocal: 'Lokální soubory',
   fnoTabRemote: 'D365 F&O server',
   fnoHeading: 'Připojení k Dynamics 365 F&O',
-  fnoSubheading: 'Načti ER konfigurace přímo z prostředí (CHE, Sandbox, UDE).',
+  fnoSubheading: 'Načtěte ER konfigurace přímo z prostředí (CHE, Sandbox, UDE).',
   fnoProfileName: 'Název profilu',
   fnoProfileNameHint: 'Jak se prostředí zobrazí v seznamu.',
   fnoEnvUrl: 'URL prostředí',
   fnoEnvUrlHint: 'Adresa, na které běží F&O — bez cesty za doménou.',
-  fnoEnvUrlInvalid: 'Zadej platnou adresu začínající https://',
+  fnoEnvUrlInvalid: 'Zadejte platnou adresu začínající https://',
   fnoSignInHint: 'Po kliknutí na Připojit se otevře standardní přihlášení Microsoftem.',
   fnoMissingBuiltInClientId:
     'Tento build nemá nastavené VITE_FNO_CLIENT_ID, takže se nelze přihlásit. ' +
-    'Doplň do buildu Application (client) ID víceklientské (multi-tenant) SPA registrace ' +
+    'Doplňte do buildu Application (client) ID víceklientské (multi-tenant) SPA registrace ' +
     's delegovaným oprávněním Dynamics ERP a s tímto Redirect URI:',
-  fnoRedirectUriHint: 'Redirect URI — zaregistruj v Entra pod „Single-page application" přesně tuto hodnotu:',
+  fnoRedirectUriHint: 'Redirect URI — zaregistrujte v Entra pod „Single-page application" přesně tuto hodnotu:',
   fnoRedirectUriCopy: 'Kopírovat',
   fnoRedirectUriCopied: 'Redirect URI zkopírováno do schránky.',
   fnoSaveProfile: 'Uložit profil',
@@ -1049,7 +1288,7 @@ const cs: Translations = {
   fnoConnected: (user: string) => `Připojen jako ${user}`,
   fnoProfiles: 'Prostředí',
   fnoNoProfiles: 'Zatím tu není žádné prostředí.',
-  fnoNoProfilesHint: 'Přidej profil s názvem a URL adresou F&O prostředí a přihlas se účtem Microsoft.',
+  fnoNoProfilesHint: 'Přidejte profil s názvem a URL adresou F&O prostředí a přihlaste se účtem Microsoft.',
   fnoRemoveProfile: 'Odebrat profil',
   fnoSolutions: 'ER řešení',
   fnoConfigurations: 'Konfigurace',
@@ -1064,7 +1303,7 @@ const cs: Translations = {
   fnoProfileUpdated: (name: string) => `Profil „${name}" aktualizován.`,
   fnoLoadingFailed: (msg: string) => `Načítání selhalo: ${msg}`,
   fnoDownloadFailed: (name: string, msg: string) => `Stažení „${name}" selhalo: ${msg}`,
-  fnoLoadedCount: (n: number) => `Načteno ${n} konfigurací z F&O.`,
+  fnoLoadedCount: (n: number) => `${csPlural(n, 'Načtena', 'Načteny', 'Načteno')} ${n} ${csPlural(n, 'konfigurace', 'konfigurace', 'konfigurací')} z F&O.`,
   fnoIngestAborted: (message: string) => `Stahování z F&O bylo přerušeno: ${message}`,
   excelCellGoToStructure: 'Kliknutím přejít do struktury',
   statusDerivedFromModel: 'model: ',
@@ -1073,7 +1312,7 @@ const cs: Translations = {
   fnoMappingNotAvailable: (names: string[]) => `ModelMapping nelze stáhnout pro: ${names.join(', ')}. Vazby formátových elementů jsou i přesto dostupné přes FormatMapping.`,
   fnoModelIdNotExposed: (names: string[]) => `F&O nevrací pro tyto modely a jejich mapování žádné ID: ${names.join(', ')}. Není tedy podle čeho je stáhnout — v seznamu jsou proto označené jako přeskočené. U importních formátů to nejde obejít: model je uvedený až v jejich samostatném mapování, samotný formát na model neodkazuje. Stáhl se tedy jen formát; vazby jeho elementů jsou dostupné přes FormatMapping.`,
   fnoImportMappingNotFound: (names: string[]) => `Mapování patřící vybranému importnímu formátu se nenašlo (model: ${names.join(', ')}). F&O vrátilo jen mapování jiných formátů, případně exportní mapování téhož modelu — ta jsou načtená, ale k tomuto formátu nepatří (žádné neuvádí náš formát v ERImportFormatDatasource a žádné nemá prázdnou definici modelu).`,
-  fnoMappingNoDataModel: 'ModelMapping se nestahoval — ve staženém formátu nebyl nalezen žádný GUID datového modelu, takže není podle čeho mapování dohledat. Vyber navíc příslušný datový model (nebo jeho mapování) ve stromu.',
+  fnoMappingNoDataModel: 'ModelMapping se nestahoval — ve staženém formátu nebyl nalezen žádný GUID datového modelu, takže není podle čeho mapování dohledat. Vyberte navíc příslušný datový model (nebo jeho mapování) ve stromu.',
 
   // Property inspector labels
   propDescription: 'Popis',
@@ -1083,7 +1322,7 @@ const cs: Translations = {
   propBase: 'Základ',
   propBaseGuid: 'GUID základu',
   propKind: 'Druh',
-  propLabelsCount: (n: number) => `${n} záznamů`,
+  propLabelsCount: (n: number) => `${n} ${csPlural(n, 'záznam', 'záznamy', 'záznamů')}`,
   propLabel: 'Popisek',
   propFields: 'Pole',
   propIsRoot: 'Je kořen',
@@ -1138,8 +1377,8 @@ const cs: Translations = {
   excelWorkbook: 'Excel sešit',
   excelInput: 'Vstupní',
   excelOutput: 'Výstupní',
-  excelRangeCount: (n: number) => `${n} oblast${n === 1 ? '' : n < 5 ? 'i' : 'í'}`,
-  excelCellCount: (n: number) => `${n} buň${n === 1 ? 'ka' : n < 5 ? 'ky' : 'ek'}`,
+  excelRangeCount: (n: number) => `${n} ${csPlural(n, 'oblast', 'oblasti', 'oblastí')}`,
+  excelCellCount: (n: number) => `${n} ${csPlural(n, 'buňka', 'buňky', 'buněk')}`,
   excelNoSheets: 'Ve struktuře formátu nebyly nalezeny žádné listy Excelu.',
   excelEmptySheet: 'Prázdný list',
   excelHeader: 'Záhlaví',
@@ -1153,10 +1392,10 @@ const cs: Translations = {
   excelTemplateLoading: 'Načítání Excel šablony…',
   excelTemplateError: 'Chyba při čtení šablony',
   excelStructureView: 'Struktura',
-  excelTemplateCells: (n: number) => `${n} buň${n === 1 ? 'ka' : n < 5 ? 'ky' : 'ek'}`,
-  excelTemplateMerged: (n: number) => `${n} sloučen${n === 1 ? 'á' : n < 5 ? 'é' : 'ých'}`,
+  excelTemplateCells: (n: number) => `${n} ${csPlural(n, 'buňka', 'buňky', 'buněk')}`,
+  excelTemplateMerged: (n: number) => `${n} ${csPlural(n, 'sloučená', 'sloučené', 'sloučených')}`,
   excelTemplateImage: 'Obrázek šablony',
-  excelTemplateImages: (n: number) => `${n} obráz${n === 1 ? 'ek' : n < 5 ? 'ky' : 'ků'}`,
+  excelTemplateImages: (n: number) => `${n} ${csPlural(n, 'obrázek', 'obrázky', 'obrázků')}`,
   excelTemplateDropHint: 'Přetáhněte sem soubor .xlsx z exportovaného ER solution package',
   excelTemplateDropActive: 'Pusťte soubor .xlsx…',
   excelTemplateDropInvalid: 'Pouze soubory .xlsx',
@@ -1167,18 +1406,18 @@ const cs: Translations = {
   previewDescription: 'Náhled struktury souboru — konstantní hodnoty jsou odvozeny z binding výrazů. Dynamické hodnoty (cesty datových zdrojů, funkce) jsou zobrazeny jako {zástupné}.',
 
   // Format stats
-  statsRoots: (n: number) => `${n} kořenů`,
-  statsRecords: (n: number) => `${n} záznamů`,
-  statsEnums: (n: number) => `${n} výčtů`,
-  statsFields: (n: number) => `${n} polí`,
-  statsRelations: (n: number) => `${n} relací`,
-  modelHierarchyHint: 'Hierarchická mapa · klikni na kontejner pro zvýraznění',
+  statsRoots: (n: number) => `${n} ${csPlural(n, 'kořen', 'kořeny', 'kořenů')}`,
+  statsRecords: (n: number) => `${n} ${csPlural(n, 'záznam', 'záznamy', 'záznamů')}`,
+  statsEnums: (n: number) => `${n} ${csPlural(n, 'výčet', 'výčty', 'výčtů')}`,
+  statsFields: (n: number) => `${n} ${csPlural(n, 'pole', 'pole', 'polí')}`,
+  statsRelations: (n: number) => `${n} ${csPlural(n, 'relace', 'relace', 'relací')}`,
+  modelHierarchyHint: 'Hierarchická mapa · klikněte na kontejner pro zvýraznění',
   moreFields: (n: number) => `+${n} dalších…`,
 
   // Search panel
   searchInLabel: 'v',
-  searchRefCount: (n: number) => `${n} ${n === 1 ? 'odkaz' : n < 5 ? 'odkazy' : 'odkazů'} ve výrazu`,
-  whereUsedSummary: (occurrences: number, files: number) => `${occurrences} ${occurrences === 1 ? 'výskyt' : occurrences < 5 ? 'výskyty' : 'výskytů'} v ${files} ${files === 1 ? 'souboru' : 'souborech'}`,
+  searchRefCount: (n: number) => `${n} ${csPlural(n, 'odkaz', 'odkazy', 'odkazů')} ve výrazu`,
+  whereUsedSummary: (occurrences: number, files: number) => `${occurrences} ${csPlural(occurrences, 'výskyt', 'výskyty', 'výskytů')} v ${files} ${files === 1 ? 'souboru' : 'souborech'}`,
   navigateToDatasource: 'Přejít na datový zdroj',
   textOccurrences: 'Textové výskyty ve výrazech',
   inExpressions: 've výrazech',
@@ -1196,15 +1435,15 @@ const cs: Translations = {
   fnoStatusDownloadingMMCount: (n: number) => `Stahuji Model Mappings (${n})…`,
   fnoStatusLateDM: 'Řeším DataModely z křížových odkazů mapování…',
   fnoSkippedDerived: (name: string) => `„${name}" nemá vlastní XML (odvozená konfigurace) — přeskočeno.`,
-  fnoSkippedDraft: (name: string) => `„${name}" má jen rozpracovanou verzi — F&O vydává jen dokončené verze, takže není co stáhnout. Dokonči verzi v F&O (Reporting configurations → Versions → Complete).`,
+  fnoSkippedDraft: (name: string) => `„${name}" má jen rozpracovanou verzi — F&O vydává jen dokončené verze, takže není co stáhnout. Dokončete verzi v F&O (Reporting configurations → Versions → Complete).`,
   fnoDraftOnly: 'Koncept',
-  fnoDraftOnlyHint: 'Nelze stáhnout: konfigurace nemá žádnou dokončenou verzi. F&O vydává jen dokončenou (effective) verzi — dokonči ji v F&O (Reporting configurations → Versions → Complete) a pak ji tu bude možné vybrat.',
+  fnoDraftOnlyHint: 'Nelze stáhnout: konfigurace nemá žádnou dokončenou verzi. F&O vydává jen dokončenou (effective) verzi — dokončete ji v F&O (Reporting configurations → Versions → Complete) a pak ji tu bude možné vybrat.',
   fnoSelectedCount: (n: number) => `${n} vybráno (napříč úrovněmi)`,
   fnoSelectedCountLabel: 'vybráno (napříč úrovněmi)',
   treeCollapseNode: 'Sbalit',
   treeExpandNode: 'Rozbalit',
-  fnoPickModelHint: 'Vyber vlevo datový model a projdi jeho konfigurace.',
-  fnoNoConfigurationsHint: 'V tomto prostředí nebyly nalezeny žádné ER konfigurace. Přihlas se do F&O a v Organization administration → Electronic reporting → Configuration providers → Microsoft (Active) → Repositories → LCS → Open → Import naimportuj konfigurace z Lifecycle Services. Poté se připoj znovu. (Detaily: DevTools → Console → filtr „[fno-client]“.)',
+  fnoPickModelHint: 'Vyberte vlevo datový model a projděte jeho konfigurace.',
+  fnoNoConfigurationsHint: 'V tomto prostředí nebyly nalezeny žádné ER konfigurace. Přihlaste se do F&O a v Organization administration → Electronic reporting → Configuration providers → Microsoft (Active) → Repositories → LCS → Open → Import naimportujte konfigurace z Lifecycle Services. Poté se připojte znovu. (Detaily: DevTools → Console → filtr „[fno-client]“.)',
   fnoFilterModels: 'Filtrovat modely…',
   fnoFilterConfigurations: 'Filtrovat konfigurace…',
   fnoSearchEverywhere: 'Hledat i ve formátech',
@@ -1217,10 +1456,10 @@ const cs: Translations = {
   fnoNoModelMatch: (query: string) => `Žádný model neodpovídá „${query}“.`,
   fnoNoModelMatchHint: 'Formáty a mapování leží až pod modely — najde je tlačítko Hledat i ve formátech.',
   fnoSearchOpenModel: (model: string) => `Otevřít model ${model}`,
-  fnoSearchFailed: (n: number) => `${n} modelů se nepodařilo prohledat — výsledky nemusí být úplné.`,
+  fnoSearchFailed: (n: number) => `${n} ${csPlural(n, 'model', 'modely', 'modelů')} se nepodařilo prohledat — výsledky nemusí být úplné.`,
   fnoBack: '← Zpět',
   fnoRetry: 'Zkusit znovu',
-  fnoNoChildren: (name: string) => `Pod „${name}" nejsou žádné potomky.`,
+  fnoNoChildren: (name: string) => `Pod „${name}" nejsou žádní potomci.`,
   fnoDownloadInfo: 'Výběrem Formátu se automaticky stáhnou i navázané konfigurace DataModel a ModelMapping. U čistě importních formátů (např. bankovní výpisy) F&O API DataModel neposkytuje — stáhnout lze pouze konfiguraci samotného Formátu.',
   fnoCredentials: 'Přihlašovací údaje',
 
@@ -1236,14 +1475,14 @@ const cs: Translations = {
   designerUnsupportedView: (kind) => `Nepodporovaný pohled pro: ${kind}`,
   excelLegendConstantWord: 'konstanta',
   dsCrossCompany: 'napříč společnostmi',
-  dsNestedCount: (n) => `${n} vnořených datových zdrojů`,
+  dsNestedCount: (n) => `${n} ${csPlural(n, 'vnořený datový zdroj', 'vnořené datové zdroje', 'vnořených datových zdrojů')}`,
   dsGroupBy: 'Seskupit podle',
   dsAggregated: 'Agregované',
   dsImplicitType: 'Uzel cesty',
   dsImplicitHint: 'Není deklarován jako datový zdroj — je to záznam datového modelu nebo část cesty, pod kterou jsou vnořeny další datové zdroje.',
   dsModelField: 'Pole datového modelu',
   dsModelNotLoaded: 'datový model není načten',
-  bindingCount: (n) => `${n} ${n === 1 ? 'vazba' : n < 5 ? 'vazby' : 'vazeb'}`,
+  bindingCount: (n) => `${n} ${csPlural(n, 'vazba', 'vazby', 'vazeb')}`,
   bindingVia: 'přes',
   searchNoResultsInScope: 'V tomto rozsahu nic nenalezeno.',
   searchRelatedOnly: 'Jen související',
@@ -1319,44 +1558,267 @@ const cs: Translations = {
   // F&O connection panel
   fnoRootNoSolutions: (root: string) => `Kořen „${root}“ stále nevrátil žádná řešení. Buď je název vydavatele chybný, nebo prostředí nemá importované žádné ER konfigurace.`,
   fnoNoSolutionsFound: 'Pod známými kořeny nebyla nalezena žádná řešení.',
-  fnoCustomRootHint: 'Pokud znáš konkrétní název vydavatele, zadej ho sem a zkus to znovu:',
+  fnoCustomRootHint: 'Pokud znáte konkrétní název vydavatele, zadejte ho sem a zkuste to znovu:',
   fnoCustomRootPlaceholder: 'Název vydavatele / kořenového řešení',
   fnoTypeMapping: 'Mapování',
   fnoTypeModel: 'Model',
   fnoUnreachableMapping: 'F&O pro toto mapování modelu nezveřejňuje ID služby. Jeho pravidla jsou součástí XML formátu.',
   fnoNoDownloadableContent: 'Nic ke stažení — odvozená konfigurace, která jen dědí obsah.',
-  fnoBranchNodeHint: 'Větev — kliknutím zobrazíš podřízené konfigurace',
+  fnoBranchNodeHint: 'Větev — kliknutím zobrazíte podřízené konfigurace',
   fnoViaParent: 'přes rodiče',
   fnoDrillInto: 'Zobrazit podřízené',
   fnoUnknownError: 'Neznámá chyba',
   fnoErrServiceNotFound: (url: string, serviceUrl: string, operation: string) =>
     `404 Not Found (${url}). Custom service nebo operace na tomto prostředí neexistuje. ` +
-    `Otevři v prohlížeči ${serviceUrl} ` +
-    `a zkontroluj, že operace "${operation}" je v seznamu <Operations>. Pokud má jiný název, uprav ER_SERVICE_OPS v packages/fno-client/src/er-services.ts`,
-  fnoErrEndpointNotFound: (status: string) => `${status}. Endpoint na prostředí neexistuje. Ověř přesnou URL prostředí (bez /namespace) a že jsou ER služby nainstalovány`,
-  fnoErrForbidden: (status: string) => `${status}. Uživatel v F&O nemá oprávnění na ER služby. Přidej uživatele / roli "Electronic reporting developer" nebo "Electronic reporting functional consultant"`,
-  fnoErrRedirectDesktop: 'AADSTS50011: Redirect URI nesedí. V App registration → Authentication → Mobile and desktop applications přidej „http://localhost".',
+    `Otevřete v prohlížeči ${serviceUrl} ` +
+    `a zkontrolujte, že operace "${operation}" je v seznamu <Operations>. Pokud má jiný název, upravte ER_SERVICE_OPS v packages/fno-client/src/er-services.ts`,
+  fnoErrEndpointNotFound: (status: string) => `${status}. Endpoint na prostředí neexistuje. Ověřte přesnou URL prostředí (bez /namespace) a že jsou ER služby nainstalovány`,
+  fnoErrForbidden: (status: string) => `${status}. Uživatel v F&O nemá oprávnění na ER služby. Přidejte uživatele / roli "Electronic reporting developer" nebo "Electronic reporting functional consultant"`,
+  fnoErrRedirectDesktop: 'AADSTS50011: Redirect URI nesedí. V App registration → Authentication → Mobile and desktop applications přidejte „http://localhost".',
   fnoErrRedirectWeb: (uri: string) =>
     `AADSTS50011: Redirect URI nesedí. Aplikace posílá přesně:\n` +
     `    ${uri}\n` +
-    `Zaregistruj tuto hodnotu v Entra → App registrations → Authentication → Add a platform → ` +
+    `Zaregistrujte tuto hodnotu v Entra → App registrations → Authentication → Add a platform → ` +
     `Single-page application (ne „Web", ne „Mobile and desktop applications").\n` +
     `Musí sedět znak po znaku — bez lomítka na konci a bez cesty.\n` +
     `Pozor: každé preview nasazení má vlastní hostname a potřebuje vlastní záznam.`,
-  fnoErrClientIdUnavailable: 'AADSTS700016: Application (client) ID zabudované v tomto buildu není v tomto tenantu dostupné. Pokud si nástroj hostuješ sám, nastav VITE_FNO_CLIENT_ID (resp. FNO_CLIENT_ID u desktopu) na vlastní víceklientskou registraci.',
+  fnoErrClientIdUnavailable: 'AADSTS700016: Application (client) ID zabudované v tomto buildu není v tomto tenantu dostupné. Pokud si nástroj hostujete sami, nastavte VITE_FNO_CLIENT_ID (resp. FNO_CLIENT_ID u desktopu) na vlastní víceklientskou registraci.',
   fnoErrConsentRequired: 'AADSTS65001: Přihlášení nebylo schváleno. Správce tenantu musí aplikaci jednorázově schválit (Entra → Enterprise applications → Admin consent requests) pro delegované oprávnění Dynamics ERP CustomService.FullAccess.',
-  fnoErrScopeMismatch: 'AADSTS500011: Scope (envUrl) neodpovídá žádnému service principálu. Ověř přesnou URL prostředí (bez lomítka na konci) a že v daném tenantu je Dynamics 365 F&O nainstalován.',
-  fnoErrWrongTenant: 'AADSTS50020: Přihlášený účet není v tenantu, kde F&O prostředí běží. Přihlas se pracovním účtem daného tenantu, případně guest účtem, který v něm byl přijat.',
-  fnoErrCodeUsed: (code: string) => `AADSTS${code}: Autorizační kód byl již použit nebo je neplatný. Zkus se přihlásit znovu.`,
-  fnoErrMfaRequired: (code: string) => `AADSTS${code}: Je vyžadováno MFA. Projdi výzvou v prohlížeči a zkus to znovu.`,
-  fnoErrPublicClientFlows: 'AADSTS7000218: App registration nemá povolené public client flows. V Entra → App registrations → Authentication zapni „Allow public client flows" = Yes.',
-  fnoErrRedirectIsSpa: 'AADSTS9002326: Redirect URI je u App registration zařazené jako „Single-page application". Přesuň ho pod „Mobile and desktop applications" (http://localhost).',
+  fnoErrScopeMismatch: 'AADSTS500011: Scope (envUrl) neodpovídá žádnému service principálu. Ověřte přesnou URL prostředí (bez lomítka na konci) a že v daném tenantu je Dynamics 365 F&O nainstalován.',
+  fnoErrWrongTenant: 'AADSTS50020: Přihlášený účet není v tenantu, kde F&O prostředí běží. Přihlaste se pracovním účtem daného tenantu, případně guest účtem, který v něm byl přijat.',
+  fnoErrCodeUsed: (code: string) => `AADSTS${code}: Autorizační kód byl již použit nebo je neplatný. Zkuste se přihlásit znovu.`,
+  fnoErrMfaRequired: (code: string) => `AADSTS${code}: Je vyžadováno MFA. Projděte výzvou v prohlížeči a zkuste to znovu.`,
+  fnoErrPublicClientFlows: 'AADSTS7000218: App registration nemá povolené public client flows. V Entra → App registrations → Authentication zapněte „Allow public client flows" = Yes.',
+  fnoErrRedirectIsSpa: 'AADSTS9002326: Redirect URI je u App registration zařazené jako „Single-page application". Přesuňte ho pod „Mobile and desktop applications" (http://localhost).',
+
+  // ─── F&O sign-in module loading (fno/auth-factory.ts) ───
+  fnoAuthModuleLoadFailed: (moduleName: string) => `Nepodařilo se načíst přihlašovací modul (${moduleName}). Aplikace ho stahuje až ve chvíli přihlášení a stažení selhalo — typicky když neběží dev server, když se mezitím nasadila nová verze, nebo při výpadku sítě. Načtěte stránku znovu (Ctrl+F5) a zkuste to znovu.`,
+  fnoAuthElectronBridgeMissing: 'Electron auth bridge není k dispozici — preload se nenačetl, takže window.electronAPI chybí. Podívejte se do konzole hlavního procesu na "[electron] preload failed to load"; nejčastější příčinou je preload zkompilovaný jako ESM (balíček má "type": "module", sandboxovaný preload musí být CommonJS → dist/preload.cjs). Přebuildujte přes `pnpm --filter @er-visualizer/electron build` a restartujte aplikaci.',
+
+  // ─── File loading (utils/file-loading.ts) ───
+  fileNotXml: 'není XML soubor',
+
+  // ─── Format binding sections (utils/format-binding-sections.ts, format-binding-display.ts) ───
+  bindingIntentLabels: { direct: 'Přímé hodnoty', calculated: 'Výpočty', condition: 'Podmínky', text: 'Texty', property: 'Vlastnosti' },
+  bindingIntentItemLabels: { direct: 'Hodnota', calculated: 'Výpočet', condition: 'Podmínka', text: 'Text', property: 'Vlastnost' },
+  bindingIntentHints: { direct: 'Hodnota převzatá beze změny z datového modelu nebo datového zdroje', calculated: 'Hodnota, kterou výraz počítá nebo upravuje — funkce, operátory', condition: 'Kdy se prvek generuje — Enabled, Visible a podobné', text: 'Pevný text nebo konstanta, typicky popisky sloupců (@GER_LABEL)', property: 'Nastavení prvku — název souboru, jazyk, formát, kódování' },
+  formatBindingCategoryLabels: { data: 'Data', visibility: 'Viditelnost', formatting: 'Formátování', property: 'Ostatní vlastnosti' },
+  formatBindingValueBadge: 'Hodnota',
+
+  // ─── Configuration warnings (state/config-warnings.ts) ───
+  warnLoadDataModelForDrillDown: 'Pro plný drill-down načtěte i Data Model soubor.',
+  warnFormatWithoutMapping: 'Formát bez Model Mapping — výrazy nebude možné trasovat na zdrojové tabulky.',
+  warnBrokenDatasourceRefs: (formatName: string, count: number, detail: string, hidden: number) => `Formát "${formatName}" obsahuje ${count} ${csPlural(count, 'výraz odkazující', 'výrazy odkazující', 'výrazů odkazujících')} na neznámý datový zdroj.\n${detail}${hidden > 0 ? `\n  … a ${hidden} dalších` : ''}`,
+
+  // ─── Explorer tree section labels (state/tree-builder.ts) ───
+  treeDsGroupLabels: { DataModel: 'Datový model', Table: 'Tabulky', CalculatedField: 'Výpočtová pole', Class: 'Třídy', Enum: 'AX výčty', ModelEnum: 'Výčty datového modelu', FormatEnum: 'Výčty formátu', ImportFormat: 'Importní formáty', UserParameter: 'Uživatelské parametry', GroupBy: 'Seskupení', Container: 'Kontejnery', Join: 'Spojení', Object: 'Objekty' },
+  treeDataModelSections: { roots: 'Definice modelu', enums: 'Výčtové typy', records: 'Záznamy' },
+  treeMappingSections: { title: 'Mapování', dataSources: 'Datové zdroje', bindings: 'Vazby', validations: 'Validace' },
+  treeFormatSections: { outputStructure: 'Výstupní struktura', modelMappings: 'Mapování modelu', enumerations: 'Výčty', transformations: 'Transformace', dataSources: 'Datové zdroje', bindings: 'Vazby', noBindings: 'bez vazeb' },
+  treeGroupBySections: { groupedBy: 'Seskupeno podle', aggregated: 'Agregace' },
+  groupOther: 'Ostatní',
+  treeEmbeddedMappingUsedSuffix: '  ✓ použito načteným formátem',
+
+  // ─── Store toasts (state/store.ts) ───
+  toastNewerVersionOpen: (fileName: string, version: string | number, loadedVersion?: string | number) => `${fileName} (verze ${version}) nebyl načten – již je otevřena novější verze${loadedVersion ? ` ${loadedVersion}` : ''}.`,
+  toastLoadFailedWithMessage: (fileName: string, message: string) => `Chyba při načítání ${fileName}: ${message}`,
+  toastConfigClosed: (name: string) => `Konfigurace „${name}“ byla zavřena.`,
+  toastReopen: 'Znovu otevřít',
+  toastSessionNotCached: 'Obsah relace už není v mezipaměti, otevřete soubory znovu ručně.',
+  toastSessionFilesMissing: (files: string) => `Některé soubory v relaci nebyly načteny (chybí mezipaměť): ${files}.`,
+  toastAlreadyOpen: (label: string) => `„${label}“ už je otevřen v pracovní ploše.`,
+  toastFileNotCached: (label: string) => `Obsah „${label}“ už není v mezipaměti, otevřete soubor znovu ručně.`,
+
+  // ─── Path tooltip rows (utils/path-tooltip.ts) ───
+  pathTipInside: 'Uvnitř',
+  pathTipReadsTables: 'Čte tabulky',
+  pathTipCallsClasses: 'Volá třídy',
+  pathTipViaCalcFields: 'Přes vypočtená pole',
+  pathTipOpenDatasource: 'Kliknutím přejít na zdroj',
+  pathTipOpenBinding: 'Kliknutím přejít na vazbu',
+  pathTipSource: 'Zdroj',
+  pathTipTableField: 'Pole tabulky',
+  pathTipClassMember: 'Člen třídy',
+  pathTipEnumValue: 'Hodnota výčtu',
+  pathTipDatasourceField: 'Pole datového zdroje',
+  pathTipModelField: 'Pole datového modelu',
+  pathTipMappingBinding: 'Vazba v mapování',
+  pathTipRecord: 'Záznam',
+  pathTipRecordFieldsBound: (n: number) => `Vazby mají jeho pole (${n})`,
+  pathTipNearestBinding: 'Nejbližší vazba',
+  pathTipMapping: 'Mapování',
+  pathTipNoBinding: 'Žádná vazba v načtených mapováních',
+  pathTipModelRoot: 'Kořen modelu',
+  pathTipDataModel: 'Datový model',
+  pathTipUserParameter: 'Uživatelský parametr',
+
+  // ─── Consultant view words (utils/consultant-labels.ts) ───
+  consultantFormatTypeLabels: { File: 'Soubor', ExcelFile: 'Excel', WordFile: 'Word', PDFFile: 'PDF', XMLElement: 'Element', XMLAttribute: 'Atribut', XMLSequence: 'Sekvence', String: 'Text', Numeric: 'Číslo', DateTime: 'Datum a čas', Base64: 'Příloha', ExcelSheet: 'List', ExcelRange: 'Oblast', ExcelCell: 'Buňka', ExcelHeader: 'Záhlaví', ExcelFooter: 'Zápatí', TextSequence: 'Sekvence', TextLine: 'Řádek', Sequence: 'Sekvence', Common: 'Prvek', Empty: 'Prázdný prvek' },
+  consultantElementFallback: 'Prvek',
+  consultantDataTypeLabels: { String: 'Text', Real: 'Číslo', DateTime: 'Datum a čas', Container: 'Příloha' },
+  consultantFieldTypeLabels: { 1: 'Ano/ne', 3: 'Celé číslo', 4: 'Celé číslo', 5: 'Číslo', 6: 'Text', 7: 'Datum', 9: 'Výčet', 10: 'Záznam', 11: 'Seznam záznamů', 13: 'Binární data' },
+  consultantBindingCategoryLabels: { data: 'Hodnota', visibility: 'Viditelnost', formatting: 'Formátování', property: 'Další vlastnosti' },
+  consultantPropertyLabels: { FileName: 'Název souboru', FileLanguage: 'Jazyk', FileCulture: 'Jazyková verze' },
+  consultantTurnedOff: 'Vypnuto',
+  consultantTurnedOn: 'Zapnuto',
+  consultantCondition: 'Podmínka',
+
+  // ─── Enum type labels (utils/enum-display.ts) ───
+  enumTypeLabels: { Ax: 'Výčet AX', DataModel: 'Výčet datového modelu', Format: 'Výčet formátu' },
+
+  // ─── Configuration kind labels (DependencyPromptDialog.tsx, ConfigExplorer.tsx) ───
+  configKindLabels: { DataModel: 'Datový model', ModelMapping: 'Mapování modelu', Format: 'Formát' },
+  explorerKindPills: { DataModel: 'Model', ModelMapping: 'Mapování', Format: 'Formát' },
+  explorerGroupLabels: { DataModel: 'Datové modely', ModelMapping: 'Mapování modelu', Format: 'Formáty' },
+  explorerChipLabels: { DataModel: 'Modely', ModelMapping: 'Mapování', Format: 'Formáty' },
+
+  // ─── F&O ingest steps (FnoIngestPanel.tsx) ───
+  fnoIngestSteps: { prepare: 'Příprava', dm: 'Datové modely', fm: 'Formáty a mapování', mm: 'Mapování modelů', finalize: 'Dokončení' },
+
+  // ─── Data source groups (designers/DatasourceTree.tsx) ───
+  dsGroupLabelsTechnical: { Table: 'Tabulky', CalculatedField: 'Vypočtená pole', Class: 'Třídy', Object: 'Objekty', Enum: 'Výčty AX', ModelEnum: 'Výčty datového modelu', FormatEnum: 'Výčty formátu', ImportFormat: 'Importní formáty', UserParameter: 'Uživatelské parametry', GroupBy: 'Seskupení', Container: 'Kontejnery', Join: 'Spojení', DataModel: 'Datový model' },
+  dsGroupLabelsConsultant: { Table: 'Tabulky', CalculatedField: 'Vypočtené hodnoty', Class: 'Logika', Object: 'Objekty', Enum: 'Hodnoty', ModelEnum: 'Hodnoty', FormatEnum: 'Hodnoty', ImportFormat: 'Importní formát', UserParameter: 'Parametry', GroupBy: 'Seskupená data', Container: 'Kontejnery', Join: 'Spojení', DataModel: 'Datový model', Values: 'Hodnoty' },
+  dsImportFormat: 'Importní formát',
+  dsGroupedBy: 'Seskupení podle',
+
+  // ─── Data model designer (designers/DataModelDesigner.tsx) ───
+  dmDesignerTitle: 'Datový model',
+  dmDatasourceProperties: 'Vlastnosti datového zdroje',
+  dmNoRelevantBindings: 'Žádné relevantní vazby pro vybraný zdroj.',
+
+  // ─── Format designer tabs (designers/FormatDesigner.tsx) ───
+  fmtTabStructureTitle: 'Hierarchická struktura prvků formátu s vazbami na datový model',
+  fmtTabBindingsTitle: 'Vazby podle účelu — přímé hodnoty, výpočty, podmínky, texty — v pořadí, v jakém soubor vzniká',
+  fmtTabDatasourcesTitle: 'Datové zdroje mapování — tabulky, výčty, třídy a vypočítaná pole',
+  fmtTabPreviewTitle: 'Náhled generovaného výstupu ve správném formátu',
+  fmtTabEmbeddedMapping: 'Mapování',
+  fmtTabEmbeddedMappingTitle: 'Mapování modelu zabudované přímo v importním formátu',
+  fmtElementsOutsideStructure: 'Prvky mimo strukturu formátu',
+
+  // ─── Format preview (designers/FormatPreview.tsx) ───
+  previewUnresolvedValues: 'Nevyřešené hodnoty:',
+  previewSampleData: 'Vzorová data',
+  previewKeepPlaceholder: 'Ponechat {placeholder}',
+  previewHideUnresolved: 'Skrýt nevyřešené',
+  previewCsvView: 'CSV zobrazení:',
+  previewFirstRowHeader: 'První řádek = hlavička',
+
+  // ─── Model mapping designer (designers/ModelMappingDesigner.tsx) ───
+  mmDefinitionTitleTechnical: 'Definice mapování (DataContainerDescriptor — kořenový kontejner datového modelu)',
+  mmDefinitionTitle: 'Definice mapování',
+  mmDefinition: 'Definice',
+  mmClickToSwitch: (title: string) => `${title} — kliknutím přepnete`,
+  mmDesignerTitle: 'Mapování modelu',
+  mmDesignerHint: 'Klikněte na řádek pro vlastnosti, na výraz pro rozpad hodnoty',
+  mmRuleCount: (n: number) => `Počet pravidel: ${n}`,
+  mmBranchBindingCount: (n: number) => `Počet vazeb v této větvi: ${n}`,
+
+  // ─── Search panel (SearchPanel.tsx) ───
+  searchExampleSections: { mapping: 'Odkud se berou data', calc: 'Výpočty a podmínky', output: 'Podoba výstupu' },
+  searchExamplePresets: { model: 'Co všechno čte z datového modelu', companyInfo: 'Kde se používají údaje o firmě', labels: 'Odkud pocházejí popisky', round: 'Kde se zaokrouhlují částky', conditional: 'Podmíněná logika ve výrazech', calculated: 'Počítaná pole a mezisoučty', dateFormat: 'Formátování data a času', numberFormat: 'Formátování čísel', concatenate: 'Skládání textových hodnot' },
+  whereUsedExampleSections: { impact: 'Dopad změny', trace: 'Dohledání hodnoty' },
+  whereUsedExamplePresets: { table: 'Co se rozbije při změně tabulky', enumType: 'Kde se opírám o výčtový typ', lookup: 'Kde se používá lookup', parameter: 'Kde se uplatní parametr', ledgerAccount: 'Odkud se plní účet', calculated: 'Co stojí za počítaným polem' },
+  searchShowingFirst: (shown: number, total: number) => `Zobrazeno prvních ${shown} z ${total}`,
+  searchScopeResultsAria: 'Oblast výsledků',
+  whereUsedScopeAria: 'Oblast použití',
+  searchReachAria: 'Rozsah hledání',
+  searchScopeAll: 'Vše',
+  searchScopeFormat: 'Formát',
+  searchScopeMapping: 'Mapování',
+  searchScopeModel: 'Model',
+  searchMinChars: (n: number) => `Zadejte alespoň ${n} ${csPlural(n, 'znak', 'znaky', 'znaků')}.`,
+  searchLblFormatExpression: 'Výraz formátu',
+  searchLblVisibility: 'Viditelnost',
+  searchLblFormatting: 'Formátování',
+  searchLblProperty: 'Vlastnost',
+  searchLblTable: 'Tabulka',
+  searchLblEnum: 'Výčet',
+  searchLblClass: 'Třída',
+  searchLblParameter: 'Parametr',
+  searchLblField: 'Pole',
+  searchLblBinding: 'Vazba',
+  searchLblExpression: 'Výraz',
+  searchLblCalcField: 'Výpočet',
+  searchLblFieldType: 'Typ pole',
+  searchLblModelRef: 'Model',
+  searchLblBaseRef: 'Základ',
+  searchLblFormatRef: 'Formát',
+  searchLblReference: 'Odkaz',
+  searchLblUnresolvedRef: 'Nerozpoznaný odkaz',
+  searchExprSource: (component: string) => `zdroj: ${component}`,
+  searchExprParam: (component: string) => `parametr: ${component}`,
+  searchKindLabels: { Format: 'Formát', ModelMapping: 'Mapování', DataModel: 'Model' },
+  searchTabDatasources: 'Datové zdroje',
+  searchLocalizeBindingKind: (label: string) => { const trimmed = label.trim().toLowerCase(); if (trimmed === 'binding') return 'Vazba'; if (trimmed.startsWith('binding ')) return `Vazba ${label.slice('binding'.length).trim()}`; return label; },
+  searchRefKindLabels: { calc: 'Výpočet', param: 'Parametr', agg: 'Agregace', validation: 'Validace', message: 'Zpráva' },
+
+  // ─── Format bindings view (designers/FormatBindingsView.tsx) ───
+  fbReadsPrefix: 'Formát čte ',
+  fbReadsSuffix: (n: number) => ` ${csPlural(n, 'pole', 'pole', 'polí')} modelu`,
+  fbMappingPrefix: 'Mapování: ',
+  fbMappingNotLoadedFor: (descriptor: string | null | undefined) => `Mapování pro ${descriptor || 'datový model'} není načtené`,
+  fbUnmappedCount: (n: number) => `${n} bez vazby v mapování`,
+  fbLoadModelForLabels: 'Popisky polí se ukážou po načtení datového modelu',
+  fbOnlyUnmappedHint: 'Jen pole, která formát čte a mapování neplní',
+  fbOnlyUnmapped: 'Jen bez vazby',
+  fbAllFieldsMapped: 'Každé pole, které formát čte, má vazbu v mapování.',
+  fbBranchUnmappedCount: (n: number) => `Bez vazby v mapování v této větvi: ${n}`,
+  fbUsageCount: (n: number) => `Použití ve formátu: ${n}`,
+  fbLineMapping: 'Mapování',
+  fbFieldNeverFilledHint: 'Mapování toto pole neplní, formát tu dostane prázdnou hodnotu.',
+  fbNoMappingBinding: 'Bez vazby v mapování',
+  fbMappingNotLoaded: 'Mapování není načtené',
+  fbRecordFieldsBound: 'Záznam — vazby mají jeho pole',
+  fbLineFormat: 'Formát',
+  fbMoreUsages: (n: number) => `+${n} dalších`,
+  fbLayoutByFormat: 'Podle formátu',
+  fbLayoutByFormatHint: 'Vazby v pořadí, v jakém soubor vzniká',
+  fbLayoutByModel: 'Podle modelu',
+  fbLayoutByModelHint: 'Pole datového modelu, která formát čte, a co je plní v mapování',
+  fbToolbarAria: 'Uspořádání a filtr vazeb',
+  fbLayoutAria: 'Uspořádání vazeb',
+  fbNothingInSelectedTypes: (hiddenList: string) => `Ve vybraných typech vazeb nic není. Skryté: ${hiddenList}.`,
+  fbShowAll: 'Zobrazit vše',
+  fbHiddenByFilter: (n: number) => `Další vazby prvku skryté filtrem: ${n}`,
+
+  // ─── Drill-down panel (DrillDownPanel.tsx) ───
+  drillBadgeLabels: { root: 'Výraz', model: 'Model', mapping: 'Mapování', ds: 'Pole', table: 'AX tabulka', enum: 'AX výčet', class: 'AX třída', calc: 'Vypočtené pole', container: 'Složka', groupby: 'Seskupení', join: 'Spojení', object: 'AX objekt', userparameter: 'Parametr uživatele', param: 'Parametr uživatele', importformat: 'Importní formát', leaf: 'AX tabulka', unknown: 'Neznámé' },
+  drillBadgeGroupLabels: { table: 'AX tabulky', enum: 'AX výčty', class: 'AX třídy', calc: 'Vypočtená pole', container: 'Složky', groupby: 'Seskupení', join: 'Spojení', object: 'AX objekty', userparameter: 'Parametry uživatele', param: 'Parametry uživatele', importformat: 'Importní formáty', leaf: 'AX tabulky', unknown: 'Neznámé' },
+  drillSourceFallback: 'Zdroj',
+  drillRuleStop: 'Zastavit',
+  drillRuleWarning: 'Varování',
+  drillUnresolved: 'Nevyřešené',
+  drillMappingNode: 'Mapování',
+  drillParamEnteredAtRunTime: 'zadává uživatel při spuštění',
+  drillNoDataReference: 'Žádná datová reference',
+  drillCopy: 'Kopírovat',
+  drillCopied: (value: string) => `Zkopírováno: ${value}`,
+  drillCopyFailed: 'Kopírování se nepodařilo (schránka není dostupná).',
+  drillAutoCompact: (nodes: number) => `Auto: kompaktní režim (${nodes} ${csPlural(nodes, 'uzel', 'uzly', 'uzlů')})`,
+  drillViewAria: 'Pohled',
+  drillViewDetailHint: 'Přehledný detail výrazu',
+  drillViewDetail: 'Detail',
+  drillViewTreeHint: 'Stromová vizualizace',
+  drillViewTree: 'Strom',
+  drillLabelModeAria: 'Režim popisků uzlů',
+  drillCompactHint: 'Kompaktní režim popisků',
+  drillCompact: 'Kompaktní',
+  drillFullHint: 'Plný režim popisků',
+  drillFull: 'Plný',
+  drillShowUnresolvedHint: 'Zobrazit nevyřešené reference',
+  drillValidationDetails: 'Detaily validace',
+  drillRuleCount: (n: number) => `${n} ${csPlural(n, 'pravidlo', 'pravidla', 'pravidel')}`,
+
+  // ─── Where-used text matches (state/where-used.ts) ───
+  whereUsedTextMatchName: (query: string) => `"${query}" (výskyty ve výrazech)`,
 };
 
 const en: Translations = {
   language: 'Language',
   languageCzech: 'Czech',
   languageEnglish: 'English',
+  languageCode: 'EN',
+  languageCurrent: 'English',
   appName: 'ER Visualizer',
   appSubtitle: 'D365 FO · Electronic Reporting',
   home: 'Home',
@@ -1625,6 +2087,12 @@ const en: Translations = {
   fnoRemoveProfileConfirmTitle: (name: string) => `Remove profile "${name}"?`,
   fnoRemoveProfileConfirmBody: 'The profile is removed together with its saved sign-in to the environment. To download again you will need to create it and sign in again.',
   cancel: 'Cancel',
+  modelViewLabel: 'Model view',
+  modelViewList: 'List',
+  modelViewGraph: 'Graph',
+  modelListFilterPlaceholder: 'Filter model fields…',
+  modelListLabel: 'Data model fields',
+  modelListMoreMatches: (n: number) => `…and ${n} more field${n === 1 ? '' : 's'} — narrow the filter.`,
   recentSessionLoadFailed: (reason: string) => `The session could not be opened: ${reason}. Open the files again from disk.`,
   splitResize: 'Resize the groups (arrow keys; double-click resets to half)',
   searchShowMore: (next: number, remaining: number) => `Show ${next === remaining ? 'the remaining' : 'the next'} ${next}${next === remaining ? '' : ` (${remaining} left)`}`,
@@ -2000,6 +2468,233 @@ const en: Translations = {
   fnoErrMfaRequired: (code: string) => `AADSTS${code}: MFA is required. Complete the prompt in the browser and try again.`,
   fnoErrPublicClientFlows: 'AADSTS7000218: The app registration does not allow public client flows. In Entra → App registrations → Authentication, set "Allow public client flows" to Yes.',
   fnoErrRedirectIsSpa: 'AADSTS9002326: The redirect URI is registered as a "Single-page application". Move it under "Mobile and desktop applications" (http://localhost).',
+
+  // ─── F&O sign-in module loading (fno/auth-factory.ts) ───
+  fnoAuthModuleLoadFailed: (moduleName: string) => `Could not load the sign-in module (${moduleName}). It is downloaded on demand and the download failed — usually a stopped dev server, a redeploy that replaced the chunk, or a network drop. Reload the page (Ctrl+F5) and try again.`,
+  fnoAuthElectronBridgeMissing: 'Electron auth bridge is unavailable — the preload script did not load, so window.electronAPI is missing. Check the main-process console for "[electron] preload failed to load"; the usual cause is a preload compiled as ESM (the package has "type": "module", a sandboxed preload must be CommonJS → dist/preload.cjs). Rebuild with `pnpm --filter @er-visualizer/electron build` and restart the application.',
+
+  // ─── File loading (utils/file-loading.ts) ───
+  fileNotXml: 'is not an XML file',
+
+  // ─── Format binding sections (utils/format-binding-sections.ts, format-binding-display.ts) ───
+  bindingIntentLabels: { direct: 'Direct values', calculated: 'Calculations', condition: 'Conditions', text: 'Texts', property: 'Properties' },
+  bindingIntentItemLabels: { direct: 'Value', calculated: 'Calculation', condition: 'Condition', text: 'Text', property: 'Property' },
+  bindingIntentHints: { direct: 'Value taken unchanged from the data model or a data source', calculated: 'Value an expression computes or transforms — functions, operators', condition: 'When the element is generated — Enabled, Visible and the like', text: 'Fixed text or a constant, typically column captions (@GER_LABEL)', property: 'Element settings — file name, language, format, encoding' },
+  formatBindingCategoryLabels: { data: 'Data', visibility: 'Visibility', formatting: 'Formatting', property: 'Other Properties' },
+  formatBindingValueBadge: 'Value',
+
+  // ─── Configuration warnings (state/config-warnings.ts) ───
+  warnLoadDataModelForDrillDown: 'Load a Data Model file as well for a complete drill-down.',
+  warnFormatWithoutMapping: 'Format loaded without a Model Mapping — expressions cannot be traced back to source tables.',
+  warnBrokenDatasourceRefs: (formatName: string, count: number, detail: string, hidden: number) => `Format "${formatName}" contains ${count} expressions that reference an unknown data source.\n${detail}${hidden > 0 ? `\n  … and ${hidden} more` : ''}`,
+
+  // ─── Explorer tree section labels (state/tree-builder.ts) ───
+  treeDsGroupLabels: { DataModel: 'Data model', Table: 'Tables', CalculatedField: 'Calculated Fields', Class: 'Classes', Enum: 'Ax Enums', ModelEnum: 'Data model Enums', FormatEnum: 'Format enums', ImportFormat: 'Import formats', UserParameter: 'User Parameters', GroupBy: 'Group By', Container: 'Containers', Join: 'Joins', Object: 'Objects' },
+  treeDataModelSections: { roots: 'Model Definitions', enums: 'Enumerations', records: 'Records' },
+  treeMappingSections: { title: 'Mapping', dataSources: 'Data Sources', bindings: 'Bindings', validations: 'Validations' },
+  treeFormatSections: { outputStructure: 'Output Structure', modelMappings: 'Model Mappings', enumerations: 'Enumerations', transformations: 'Transformations', dataSources: 'Data Sources', bindings: 'Bindings', noBindings: 'no bindings' },
+  treeGroupBySections: { groupedBy: 'Grouped By', aggregated: 'Aggregated' },
+  groupOther: 'Other',
+  treeEmbeddedMappingUsedSuffix: '  ✓ used by loaded format',
+
+  // ─── Store toasts (state/store.ts) ───
+  toastNewerVersionOpen: (fileName: string, version: string | number, loadedVersion?: string | number) => `${fileName} (version ${version}) was not loaded — a newer version${loadedVersion ? ` ${loadedVersion}` : ''} is already open.`,
+  toastLoadFailedWithMessage: (fileName: string, message: string) => `Failed to load ${fileName}: ${message}`,
+  toastConfigClosed: (name: string) => `Configuration "${name}" was closed.`,
+  toastReopen: 'Reopen',
+  toastSessionNotCached: 'The session content is no longer cached, please open the files again.',
+  toastSessionFilesMissing: (files: string) => `Some files in the session were not loaded (not cached): ${files}.`,
+  toastAlreadyOpen: (label: string) => `"${label}" is already open in the workspace.`,
+  toastFileNotCached: (label: string) => `"${label}" is no longer cached, please open the file again.`,
+
+  // ─── Path tooltip rows (utils/path-tooltip.ts) ───
+  pathTipInside: 'Inside',
+  pathTipReadsTables: 'Reads tables',
+  pathTipCallsClasses: 'Calls classes',
+  pathTipViaCalcFields: 'Via calculated fields',
+  pathTipOpenDatasource: 'Click to open the data source',
+  pathTipOpenBinding: 'Click to open the binding',
+  pathTipSource: 'Source',
+  pathTipTableField: 'Table field',
+  pathTipClassMember: 'Class member',
+  pathTipEnumValue: 'Enum value',
+  pathTipDatasourceField: 'Data source field',
+  pathTipModelField: 'Data model field',
+  pathTipMappingBinding: 'Mapping binding',
+  pathTipRecord: 'Record',
+  pathTipRecordFieldsBound: (n: number) => `Its fields carry the bindings (${n})`,
+  pathTipNearestBinding: 'Nearest binding',
+  pathTipMapping: 'Mapping',
+  pathTipNoBinding: 'No binding in the loaded mappings',
+  pathTipModelRoot: 'Model root',
+  pathTipDataModel: 'Data model',
+  pathTipUserParameter: 'User parameter',
+
+  // ─── Consultant view words (utils/consultant-labels.ts) ───
+  consultantFormatTypeLabels: { File: 'File', ExcelFile: 'Excel', WordFile: 'Word', PDFFile: 'PDF', XMLElement: 'Element', XMLAttribute: 'Attribute', XMLSequence: 'Sequence', String: 'Text', Numeric: 'Number', DateTime: 'Date and time', Base64: 'Attachment', ExcelSheet: 'Sheet', ExcelRange: 'Range', ExcelCell: 'Cell', ExcelHeader: 'Header', ExcelFooter: 'Footer', TextSequence: 'Sequence', TextLine: 'Line', Sequence: 'Sequence', Common: 'Element', Empty: 'Empty element' },
+  consultantElementFallback: 'Element',
+  consultantDataTypeLabels: { String: 'Text', Real: 'Number', DateTime: 'Date and time', Container: 'Attachment' },
+  consultantFieldTypeLabels: { 1: 'Yes/no', 3: 'Whole number', 4: 'Whole number', 5: 'Number', 6: 'Text', 7: 'Date', 9: 'Enumeration', 10: 'Record', 11: 'Record list', 13: 'Binary data' },
+  consultantBindingCategoryLabels: { data: 'Value', visibility: 'Visibility', formatting: 'Formatting', property: 'Other properties' },
+  consultantPropertyLabels: { FileName: 'File name', FileLanguage: 'Language', FileCulture: 'Culture' },
+  consultantTurnedOff: 'Turned off',
+  consultantTurnedOn: 'Turned on',
+  consultantCondition: 'Condition',
+
+  // ─── Enum type labels (utils/enum-display.ts) ───
+  enumTypeLabels: { Ax: 'Ax Enum', DataModel: 'Data model Enum', Format: 'Format enum' },
+
+  // ─── Configuration kind labels (DependencyPromptDialog.tsx, ConfigExplorer.tsx) ───
+  configKindLabels: { DataModel: 'Data model', ModelMapping: 'Model mapping', Format: 'Format' },
+  explorerKindPills: { DataModel: 'Model', ModelMapping: 'Mapping', Format: 'Format' },
+  explorerGroupLabels: { DataModel: 'Data Models', ModelMapping: 'Model Mappings', Format: 'Formats' },
+  explorerChipLabels: { DataModel: 'Models', ModelMapping: 'Mappings', Format: 'Formats' },
+
+  // ─── F&O ingest steps (FnoIngestPanel.tsx) ───
+  fnoIngestSteps: { prepare: 'Preparing', dm: 'Data models', fm: 'Formats & mappings', mm: 'Model mappings', finalize: 'Finalizing' },
+
+  // ─── Data source groups (designers/DatasourceTree.tsx) ───
+  dsGroupLabelsTechnical: { Table: 'Tables', CalculatedField: 'Calculated Fields', Class: 'Classes', Object: 'Objects', Enum: 'Ax Enums', ModelEnum: 'Data model Enums', FormatEnum: 'Format enums', ImportFormat: 'Import formats', UserParameter: 'User Parameters', GroupBy: 'Group By', Container: 'Containers', Join: 'Joins', DataModel: 'Data model' },
+  dsGroupLabelsConsultant: { Table: 'Tables', CalculatedField: 'Calculated values', Class: 'Logic', Object: 'Objects', Enum: 'Values', ModelEnum: 'Values', FormatEnum: 'Values', ImportFormat: 'Import format', UserParameter: 'Parameters', GroupBy: 'Grouped data', Container: 'Containers', Join: 'Joins', DataModel: 'Data model', Values: 'Values' },
+  dsImportFormat: 'Import format',
+  dsGroupedBy: 'Grouped by',
+
+  // ─── Data model designer (designers/DataModelDesigner.tsx) ───
+  dmDesignerTitle: 'Data Model',
+  dmDatasourceProperties: 'Datasource properties',
+  dmNoRelevantBindings: 'No relevant bindings for the selected datasource.',
+
+  // ─── Format designer tabs (designers/FormatDesigner.tsx) ───
+  fmtTabStructureTitle: 'Hierarchical structure of format elements with data model bindings',
+  fmtTabBindingsTitle: 'Bindings by intent — direct values, calculations, conditions, texts — in the order the file is built',
+  fmtTabDatasourcesTitle: 'Mapping data sources — tables, enums, classes and calculated fields',
+  fmtTabPreviewTitle: 'Preview of generated output in the correct format',
+  fmtTabEmbeddedMapping: 'Mapping',
+  fmtTabEmbeddedMappingTitle: 'Model mapping embedded directly in the import format',
+  fmtElementsOutsideStructure: 'Elements outside the format structure',
+
+  // ─── Format preview (designers/FormatPreview.tsx) ───
+  previewUnresolvedValues: 'Unresolved values:',
+  previewSampleData: 'Sample data',
+  previewKeepPlaceholder: 'Keep {placeholder}',
+  previewHideUnresolved: 'Hide unresolved',
+  previewCsvView: 'CSV view:',
+  previewFirstRowHeader: 'First row = header',
+
+  // ─── Model mapping designer (designers/ModelMappingDesigner.tsx) ───
+  mmDefinitionTitleTechnical: 'Mapping definition (DataContainerDescriptor — root container of the data model)',
+  mmDefinitionTitle: 'Mapping definition',
+  mmDefinition: 'Definition',
+  mmClickToSwitch: (title: string) => `${title} — click to switch`,
+  mmDesignerTitle: 'Model mapping',
+  mmDesignerHint: 'Click a row for properties, the formula for its value breakdown',
+  mmRuleCount: (n: number) => `Number of rules: ${n}`,
+  mmBranchBindingCount: (n: number) => `Number of bindings in this branch: ${n}`,
+
+  // ─── Search panel (SearchPanel.tsx) ───
+  searchExampleSections: { mapping: 'Where the data comes from', calc: 'Calculations and conditions', output: 'Shape of the output' },
+  searchExamplePresets: { model: 'Everything read from the data model', companyInfo: 'Where company details are used', labels: 'Where labels come from', round: 'Where amounts get rounded', conditional: 'Conditional logic in expressions', calculated: 'Calculated fields and subtotals', dateFormat: 'Date and time formatting', numberFormat: 'Number formatting', concatenate: 'Text values being pieced together' },
+  whereUsedExampleSections: { impact: 'Impact of a change', trace: 'Tracing a value' },
+  whereUsedExamplePresets: { table: 'What breaks if a table changes', enumType: 'Where an enum is relied on', lookup: 'Where a lookup is used', parameter: 'Where a parameter takes effect', ledgerAccount: 'What fills the ledger account', calculated: 'What sits behind a calculated field' },
+  searchShowingFirst: (shown: number, total: number) => `Showing first ${shown} of ${total}`,
+  searchScopeResultsAria: 'Scope',
+  whereUsedScopeAria: 'Scope',
+  searchReachAria: 'Search reach',
+  searchScopeAll: 'All',
+  searchScopeFormat: 'Format',
+  searchScopeMapping: 'Mappings',
+  searchScopeModel: 'Model',
+  searchMinChars: (n: number) => `Type at least ${n} characters.`,
+  searchLblFormatExpression: 'Format expression',
+  searchLblVisibility: 'Visibility',
+  searchLblFormatting: 'Formatting',
+  searchLblProperty: 'Property',
+  searchLblTable: 'Table',
+  searchLblEnum: 'Enum',
+  searchLblClass: 'Class',
+  searchLblParameter: 'Parameter',
+  searchLblField: 'Field',
+  searchLblBinding: 'Binding',
+  searchLblExpression: 'Expression',
+  searchLblCalcField: 'Calc. field',
+  searchLblFieldType: 'Field type',
+  searchLblModelRef: 'Model ref',
+  searchLblBaseRef: 'Base ref',
+  searchLblFormatRef: 'Format ref',
+  searchLblReference: 'Reference',
+  searchLblUnresolvedRef: 'Unresolved reference',
+  searchExprSource: (component: string) => `source: ${component}`,
+  searchExprParam: (component: string) => `param: ${component}`,
+  searchKindLabels: { Format: 'Format', ModelMapping: 'Model Mapping', DataModel: 'Data Model' },
+  searchTabDatasources: 'Data Sources',
+  searchLocalizeBindingKind: (label: string) => label,
+  searchRefKindLabels: { calc: 'Calculated', param: 'Parameter', agg: 'Aggregation', validation: 'Validation', message: 'Message' },
+
+  // ─── Format bindings view (designers/FormatBindingsView.tsx) ───
+  fbReadsPrefix: 'The format reads ',
+  fbReadsSuffix: (n: number) => ` model ${n === 1 ? 'field' : 'fields'}`,
+  fbMappingPrefix: 'Mapping: ',
+  fbMappingNotLoadedFor: (descriptor: string | null | undefined) => `No model mapping loaded for ${descriptor || 'the data model'}`,
+  fbUnmappedCount: (n: number) => `${n} without a mapping binding`,
+  fbLoadModelForLabels: 'Load the data model to see field labels',
+  fbOnlyUnmappedHint: 'Only fields the format reads and the mapping never fills',
+  fbOnlyUnmapped: 'Unmapped only',
+  fbAllFieldsMapped: 'Every field the format reads has a mapping binding.',
+  fbBranchUnmappedCount: (n: number) => `Without a mapping binding in this branch: ${n}`,
+  fbUsageCount: (n: number) => `Uses in the format: ${n}`,
+  fbLineMapping: 'Mapping',
+  fbFieldNeverFilledHint: 'The mapping never fills this field, so the format gets an empty value here.',
+  fbNoMappingBinding: 'No mapping binding',
+  fbMappingNotLoaded: 'Mapping not loaded',
+  fbRecordFieldsBound: 'Record — its fields carry the bindings',
+  fbLineFormat: 'Format',
+  fbMoreUsages: (n: number) => `+${n} more`,
+  fbLayoutByFormat: 'By format',
+  fbLayoutByFormatHint: 'Bindings in the order the file is built',
+  fbLayoutByModel: 'By model',
+  fbLayoutByModelHint: 'Data model fields the format reads, and what fills them in the mapping',
+  fbToolbarAria: 'Bindings layout and filter',
+  fbLayoutAria: 'Bindings layout',
+  fbNothingInSelectedTypes: (hiddenList: string) => `Nothing in the selected binding types. Hidden: ${hiddenList}.`,
+  fbShowAll: 'Show all',
+  fbHiddenByFilter: (n: number) => `More bindings of this element hidden by the filter: ${n}`,
+
+  // ─── Drill-down panel (DrillDownPanel.tsx) ───
+  drillBadgeLabels: { root: 'Expression', model: 'Model', mapping: 'Mapping', ds: 'Field', table: 'AX table', enum: 'AX enum', class: 'AX class', calc: 'Calculated field', container: 'Folder', groupby: 'Group by', join: 'Join', object: 'AX object', userparameter: 'User parameter', param: 'User parameter', importformat: 'Import format', leaf: 'AX table', unknown: 'Unknown' },
+  drillBadgeGroupLabels: { table: 'AX tables', enum: 'AX enums', class: 'AX classes', calc: 'Calculated fields', container: 'Folders', groupby: 'Group by', join: 'Joins', object: 'AX objects', userparameter: 'User parameters', param: 'User parameters', importformat: 'Import formats', leaf: 'AX tables', unknown: 'Unknown' },
+  drillSourceFallback: 'Source',
+  drillRuleStop: 'Stop',
+  drillRuleWarning: 'Warning',
+  drillUnresolved: 'Unresolved',
+  drillMappingNode: 'Mapping',
+  drillParamEnteredAtRunTime: 'entered by the user at run time',
+  drillNoDataReference: 'No data reference',
+  drillCopy: 'Copy',
+  drillCopied: (value: string) => `Copied: ${value}`,
+  drillCopyFailed: 'Copy failed (clipboard is not available).',
+  drillAutoCompact: (nodes: number) => `Auto: compact mode (${nodes} nodes)`,
+  drillViewAria: 'View',
+  drillViewDetailHint: 'Expression detail',
+  drillViewDetail: 'Detail',
+  drillViewTreeHint: 'Tree view',
+  drillViewTree: 'Tree',
+  drillLabelModeAria: 'Node label mode',
+  drillCompactHint: 'Compact label mode',
+  drillCompact: 'Compact',
+  drillFullHint: 'Full label mode',
+  drillFull: 'Full',
+  drillShowUnresolvedHint: 'Show unresolved references',
+  drillValidationDetails: 'Validation details',
+  drillRuleCount: (n: number) => `${n} ${n === 1 ? 'rule' : 'rules'}`,
+
+  // ─── Where-used text matches (state/where-used.ts) ───
+  whereUsedTextMatchName: (query: string) => `"${query}" (occurrences in expressions)`,
 };
 
 export let t: Translations = locale === 'cs' ? cs : en;
+
+/** Translations for an explicit locale — for callers that are handed one instead of reading the active locale. */
+export function getTranslations(forLocale: Locale): Translations {
+  return forLocale === 'cs' ? cs : en;
+}
+

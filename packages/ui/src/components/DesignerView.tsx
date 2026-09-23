@@ -83,6 +83,7 @@ import { pruneTabViewState } from '../utils/tab-view-state';
 import { ModelDesigner } from './designers/DataModelDesigner';
 import { MappingDesigner } from './designers/ModelMappingDesigner';
 import { FormatDesigner } from './designers/FormatDesigner';
+import { FormatElementIcon, getFormatTypeColor } from './designers/format-type';
 
 export type { GroupedDatasourceListHandle } from './designers/DatasourceTree';
 
@@ -442,7 +443,7 @@ function FormatElementFocusTab({ node, configIndex }: { node: any; configIndex: 
     <div className="focused-node-tab">
       <div className="focused-node-tab-body">
         {bindings.length === 0 && childTreeNodes.length === 0 && (
-          <div style={{ padding: 16, color: 'var(--text-secondary)', fontSize: 12 }}>
+          <div style={{ padding: 16, color: 'var(--er-text-muted)', fontSize: 12 }}>
             {t.bindings}: 0
           </div>
         )}
@@ -490,7 +491,9 @@ function FormatElementFocusTab({ node, configIndex }: { node: any; configIndex: 
                 className="fmt-detail-child"
                 onClick={() => navigateToTreeNode(child.id)}
               >
-                <span style={{ marginRight: 6 }}>{child.icon}</span>
+                <span className="fmt-detail-child__icon" style={{ color: getFormatTypeColor(child.data?.elementType ?? '') }}>
+                  <FormatElementIcon type={child.data?.elementType ?? ''} />
+                </span>
                 <span>{child.name}</span>
               </div>
             ))}

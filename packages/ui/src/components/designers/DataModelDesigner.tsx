@@ -8,11 +8,12 @@ import {
   type Edge,
   Position,
 } from '@xyflow/react';
-import { DataBarVerticalFilled } from '@fluentui/react-icons';
+import { BoxRegular, DataBarVerticalFilled, HomeRegular, TextCaseTitleRegular } from '@fluentui/react-icons';
+import { DataModelList } from './DataModelList';
 import { useAppStore, resolveDeepExpression } from '../../state/store';
 import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
-import { locale, t } from '../../i18n';
+import { t } from '../../i18n';
 import { type ERConfiguration, type ERDataModelContent } from '@er-visualizer/core';
 import { ExpressionDetailLink, DesignerHint, enumLabelFor, fieldTypeLabel } from './shared';
 
@@ -122,9 +123,26 @@ function buildModelLayout(containers: any[]) {
   return { positions, nodeHeight };
 }
 
+/** The list is where fields are found; the graph gives the overview. Remembered per browser. */
+const MODEL_VIEW_KEY = 'er-visualizer.model-view';
+
+function readModelView(): 'list' | 'graph' {
+  try {
+    return window.localStorage.getItem(MODEL_VIEW_KEY) === 'graph' ? 'graph' : 'list';
+  } catch {
+    return 'list';
+  }
+}
+
 export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; focusNode: any | null }) {
   const dm = (config.content as ERDataModelContent).version.model;
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const configIndex = useAppStore(s => s.configurations.indexOf(config));
+  const [view, setView] = useState<'list' | 'graph'>(readModelView);
+  const chooseView = (next: 'list' | 'graph') => {
+    setView(next);
+    try { window.localStorage.setItem(MODEL_VIEW_KEY, next); } catch { /* a convenience only */ }
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Selection follows navigation only: the focus effect below reads the
@@ -191,19 +209,19 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
                 alignItems: 'center',
                 gap: 6,
               }}>
-                <span style={{ fontSize: 14 }}>
-                  {container.isRoot ? '🏠' : container.isEnum ? '🔤' : '📦'}
+                <span style={{ display: 'inline-flex' }} aria-hidden>
+                  {container.isRoot ? <HomeRegular fontSize={14} /> : container.isEnum ? <TextCaseTitleRegular fontSize={14} /> : <BoxRegular fontSize={14} />}
                 </span>
                 <span>{container.name}</span>
                 {container.isRoot && (
                   <span style={{
                     marginLeft: 'auto',
                     fontSize: 9,
-                    background: 'var(--surface-info-bg)',
-                    border: '1px solid var(--surface-info-border)',
+                    background: 'var(--er-info-soft)',
+                    border: '1px solid var(--er-info-border)',
                     padding: '1px 5px',
                     borderRadius: 3,
-                    color: 'var(--surface-info-fg)',
+                    color: 'var(--er-info)',
                     fontWeight: 600,
                   }}>{t.modelRootBadge}</span>
                 )}
@@ -211,18 +229,18 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
                   <span style={{
                     marginLeft: 'auto',
                     fontSize: 9,
-                    background: 'var(--surface-warning-bg)',
-                    border: '1px solid var(--surface-warning-border)',
+                    background: 'var(--er-warning-soft)',
+                    border: '1px solid var(--er-warning-border)',
                     padding: '1px 5px',
                     borderRadius: 3,
-                    color: 'var(--surface-warning-fg)',
+                    color: 'var(--er-warning)',
                     fontWeight: 600,
                   }}>{t.modelEnumBadge}</span>
                 )}
                 <span style={{
                   marginLeft: container.isRoot || container.isEnum ? 0 : 'auto',
                   fontSize: 9,
-                  color: 'var(--text-secondary)',
+                  color: 'var(--er-text-muted)',
                   fontWeight: 400,
                 }}>{t.statsFields(container.items.length)}</span>
               </div>
@@ -248,7 +266,7 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
                     </span>
                     {showTechnicalDetails && (
                       <span style={{
-                        color: f.typeDescriptor ? 'var(--surface-info-fg)' : 'var(--syn-field-type)',
+                        color: f.typeDescriptor ? 'var(--er-info)' : 'var(--syn-field-type)',
                         fontSize: 10,
                         fontWeight: f.typeDescriptor ? 600 : 400,
                         flexShrink: 0,
@@ -259,7 +277,7 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
                   </div>
                 ))}
                 {container.items.length > 14 && (
-                  <div style={{ padding: '2px 10px', color: 'var(--text-secondary)', fontSize: 10 }}>
+                  <div style={{ padding: '2px 10px', color: 'var(--er-text-muted)', fontSize: 10 }}>
                     {t.moreFields(container.items.length - 14)}
                   </div>
                 )}
@@ -296,7 +314,7 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
             label: item.name,
             animated: isRecordList,
             style: {
-              stroke: isRecordList ? 'var(--accent-text-success)' : 'var(--syn-edge)',
+              stroke: isRecordList ? 'var(--er-success)' : 'var(--syn-edge)',
               strokeWidth: isRecordList ? 2 : 1,
               strokeDasharray: item.type === 10 ? '5,3' : undefined,
             },
@@ -329,7 +347,7 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
       <div className="fmt-header">
         <span className="fmt-header-title">
           <DataBarVerticalFilled fontSize={15} />
-          {locale === 'cs' ? 'Datový model' : 'Data Model'}
+          {t.dmDesignerTitle}
         </span>
         <div className="fmt-header-stats">
           <span className="fmt-stat" style={{ color: 'var(--er-model)' }}>{t.statsRoots(stats.roots)}</span>
@@ -338,8 +356,26 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
           <span className="fmt-stat">{t.statsFields(stats.fields)}</span>
           <span className="fmt-stat">{t.statsRelations(stats.edges)}</span>
         </div>
+        <div className="search-scope-toggle dm-view-toggle" role="group" aria-label={t.modelViewLabel}>
+          {(['list', 'graph'] as const).map(v => (
+            <button
+              key={v}
+              type="button"
+              className={`search-scope-toggle__btn ${view === v ? 'active' : ''}`}
+              aria-pressed={view === v}
+              onClick={() => chooseView(v)}
+            >
+              {v === 'list' ? t.modelViewList : t.modelViewGraph}
+            </button>
+          ))}
+        </div>
         <DesignerHint text={t.modelHierarchyHint} />
       </div>
+      {view === 'list' ? (
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <DataModelList containers={dm.containers} configIndex={configIndex} />
+        </div>
+      ) : (
       <div style={{ flex: 1 }}>
         <ReactFlow nodes={nodes} edges={edges} fitView nodesConnectable={false} nodesDraggable proOptions={{ hideAttribution: true }}>
           <Background color="var(--er-border)" gap={20} variant={'dots' as any} />
@@ -359,6 +395,7 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
           />
         </ReactFlow>
       </div>
+      )}
     </div>
   );
 }
@@ -477,7 +514,7 @@ function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: n
 
         <div className="focused-detail-card">
           <div className="focused-detail-card__head">
-            <span className="focused-detail-card__title">{locale === 'cs' ? 'Vlastnosti datového zdroje' : 'Datasource properties'}</span>
+            <span className="focused-detail-card__title">{t.dmDatasourceProperties}</span>
             <span className="focused-detail-card__badge">{(showTechnicalDetails && datasource.type) || t.nodeTypeLabel('datasource')}</span>
           </div>
           <div className="focused-detail-grid">
@@ -496,7 +533,7 @@ function ActiveTabNodeSummary({ node, configIndex }: { node: any; configIndex: n
             <span className="focused-detail-card__badge">{relevantDatasourceBindings.length}</span>
           </div>
           {relevantDatasourceBindings.length === 0 ? (
-            <div className="focused-detail-empty">{locale === 'cs' ? 'Žádné relevantní vazby pro vybraný zdroj.' : 'No relevant bindings for the selected datasource.'}</div>
+            <div className="focused-detail-empty">{t.dmNoRelevantBindings}</div>
           ) : (
             <div className="focused-detail-binding-list">
               {relevantDatasourceBindings.map((binding, index) => (
