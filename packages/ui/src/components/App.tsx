@@ -26,11 +26,10 @@ import {
   SearchRegular,
   AppsListDetailRegular,
 } from '@fluentui/react-icons';
-import { useAppStore } from '../state/store';
+import { useAppStore, focusedTabId } from '../state/store';
 import { ConfigExplorer } from './ConfigExplorer';
 import { PropertyInspector } from './PropertyInspector';
 import { Toolbar } from './Toolbar';
-import { TabBar } from './TabBar';
 
 /**
  * Split at the workspace boundary: the designer pulls React Flow, JSZip and the
@@ -362,7 +361,7 @@ export function App() {
   const configs = useAppStore(s => s.configurations);
   const treeNodes = useAppStore(s => s.treeNodes);
   const openTabs = useAppStore(s => s.openTabs);
-  const activeTabId = useAppStore(s => s.activeTabId);
+  const activeTabId = useAppStore(focusedTabId);
   const navigateBack = useAppStore(s => s.navigateBack);
   const navigateForward = useAppStore(s => s.navigateForward);
   const rebuildDerivedState = useAppStore(s => s.rebuildDerivedState);
@@ -561,7 +560,6 @@ export function App() {
                  toggling a panel does not throw away its scroll and tab state. */
               <div className={styles.narrowStack}>
                 <div className={mergeClasses(styles.center, (showLeft || showRight) && styles.narrowHidden)}>
-                  <TabBar />
                   <div className={styles.panelContent}>
                     <ErrorBoundary label={t.errorAreaDesigner}>
                       <React.Suspense fallback={<PanelLoading />}>
@@ -609,8 +607,7 @@ export function App() {
 
                 <Panel defaultSize={centerPaneSize} minSize={isCompact ? 22 : 30}>
                   <div className={styles.center}>
-                    <TabBar />
-                    <div className={styles.panelContent}>
+                      <div className={styles.panelContent}>
                       <ErrorBoundary label={t.errorAreaDesigner}>
                         <React.Suspense fallback={<PanelLoading />}>
                           <DesignerView />
@@ -799,7 +796,7 @@ function StatusBar({ warningsOpen, setWarningsOpen }: {
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
   const openTabs = useAppStore(s => s.openTabs);
-  const activeTabId = useAppStore(s => s.activeTabId);
+  const activeTabId = useAppStore(focusedTabId);
 
   const activeRelationship = useMemo(() => {
     const activeTab = openTabs.find(tab => tab.id === activeTabId);

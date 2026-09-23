@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseERConfiguration } from '@er-visualizer/core';
-import { lastActiveFormatIndex, openDesignerTabsForFormats, useAppStore } from './store';
+import { focusedTabId, lastActiveFormatIndex, openDesignerTabsForFormats, tabsInPane, useAppStore } from './store';
 
 const FORMAT_XML = (id: string, name: string) => `<?xml version="1.0" encoding="utf-8"?>
 <ERSolutionVersion>
@@ -144,29 +144,121 @@ describe('side-by-side tabs', () => {
     expect(useAppStore.getState().splitTabId).toBe('cfg-0');
   });
 
-  it('swaps the panes when the tab on the side is activated', () => {
+  it('moves a tab into a group of its own on the side', () => {
     loadTwoFormats();
     useAppStore.getState().openTabToSide('cfg-0');
+    expect(useAppStore.getState()).toMatchObject({ activeTabId: 'cfg-1', splitTabId: 'cfg-0', sideTabIds: ['cfg-0'], focusedPane: 'side' });
+    expect(tabsInPane(useAppStore.getState(), 'main').map(tab => tab.id)).toEqual(['cfg-1']);
+    expect(tabsInPane(useAppStore.getState(), 'side').map(tab => tab.id)).toEqual(['cfg-0']);
+  });
+
+  it('activates a tab in its own group, which takes focus', () => {
+    loadTwoFormats();
+    useAppStore.getState().openTabToSide('cfg-0');
+    useAppStore.getState().setActiveTab('cfg-1');
+    expect(useAppStore.getState()).toMatchObject({ activeTabId: 'cfg-1', splitTabId: 'cfg-0', focusedPane: 'main' });
     useAppStore.getState().setActiveTab('cfg-0');
-    expect(useAppStore.getState().activeTabId).toBe('cfg-0');
-    expect(useAppStore.getState().splitTabId).toBe('cfg-1');
+    expect(useAppStore.getState()).toMatchObject({ activeTabId: 'cfg-1', splitTabId: 'cfg-0', focusedPane: 'side' });
+    expect(focusedTabId(useAppStore.getState())).toBe('cfg-0');
   });
 
-  it('opens a drill-down beside the active tab', () => {
+  it('opens new tabs in the focused group, each group keeping its own tabs', () => {
     loadTwoFormats();
-    useAppStore.getState().openDrillDownTab('model.Invoice.Date', 1, 'Date', { side: true });
-    const state = useAppStore.getState();
-    expect(state.activeTabId).toBe('cfg-1');
-    expect(state.splitTabId).toBe('drilldown:1:Date:model.Invoice.Date');
-    expect(state.openTabs.some(tab => tab.id === state.splitTabId)).toBe(true);
+    useAppStore.getState().openTabToSide('cfg-0');
+
+    // Right group focused: the drill-down from format A joins it.
+    useAppStore.getState().openDrillDownTab('model.Invoice.Date', 0, 'Date');
+    const dd0 = 'drilldown:0:Date:model.Invoice.Date';
+    expect(useAppStore.getState()).toMatchObject({ activeTabId: 'cfg-1', splitTabId: dd0, focusedPane: 'side' });
+    expect(tabsInPane(useAppStore.getState(), 'side').map(tab => tab.id)).toEqual(['cfg-0', dd0]);
+
+    // Left group focused: the drill-down from format B joins that one.
+    useAppStore.getState().focusPane('main');
+    useAppStore.getState().openDrillDownTab('model.Invoice.Date', 1, 'Date');
+    const dd1 = 'drilldown:1:Date:model.Invoice.Date';
+    expect(useAppStore.getState()).toMatchObject({ activeTabId: dd1, splitTabId: dd0 });
+    expect(tabsInPane(useAppStore.getState(), 'main').map(tab => tab.id)).toEqual(['cfg-1', dd1]);
   });
 
-  it('closes the side view with its tab', () => {
+  it('opens a drill-down beside the focused group, in the other one', () => {
     loadTwoFormats();
+    useAppStore.getState().openTabToSide('cfg-0');
+    // Focus is on the right, so "beside" is the left group.
+    useAppStore.getState().openDrillDownTab('model.Invoice.Date', 0, 'Date', { side: true });
+    expect(useAppStore.getState()).toMatchObject({
+      activeTabId: 'drilldown:0:Date:model.Invoice.Date',
+      splitTabId: 'cfg-0',
+      sideTabIds: ['cfg-0'],
+      focusedPane: 'main',
+    });
+  });
+
+  it('never empties the main group by moving its last tab aside', () => {
+    loadTwoFormats();
+    useAppStore.getState().openTabToSide('cfg-0');
+    useAppStore.getState().moveTabToPane('cfg-1', 'side');
+    expect(useAppStore.getState()).toMatchObject({ activeTabId: 'cfg-1', sideTabIds: ['cfg-0'] });
+  });
+
+  it('closes a group once its last tab moves out or closes', () => {
+    loadTwoFormats();
+    useAppStore.getState().openTabToSide('cfg-0');
+    useAppStore.getState().moveTabToPane('cfg-0', 'main');
+    expect(useAppStore.getState()).toMatchObject({ activeTabId: 'cfg-0', splitTabId: null, sideTabIds: [], focusedPane: 'main' });
+
     useAppStore.getState().openTabToSide('cfg-0');
     useAppStore.getState().closeTab('cfg-0');
-    expect(useAppStore.getState().splitTabId).toBeNull();
-    expect(useAppStore.getState().activeTabId).toBe('cfg-1');
+    expect(useAppStore.getState()).toMatchObject({ activeTabId: 'cfg-1', splitTabId: null, sideTabIds: [] });
+  });
+
+  it('hands the side group over when the main group runs out of tabs', () => {
+    loadTwoFormats();
+    useAppStore.getState().openTabToSide('cfg-0');
+    useAppStore.getState().closeTab('cfg-1');
+    expect(useAppStore.getState()).toMatchObject({ activeTabId: 'cfg-0', splitTabId: null, sideTabIds: [], focusedPane: 'main' });
+  });
+
+  it('shows the neighbour when the shown tab of a group closes', () => {
+    loadTwoFormats();
+    useAppStore.getState().openTabToSide('cfg-0');
+    useAppStore.getState().openDrillDownTab('model.Invoice.Date', 0, 'Date');
+    useAppStore.getState().closeTab('drilldown:0:Date:model.Invoice.Date');
+    expect(useAppStore.getState()).toMatchObject({ activeTabId: 'cfg-1', splitTabId: 'cfg-0', sideTabIds: ['cfg-0'] });
+  });
+
+  it('closing a group keeps its tabs, in the other group', () => {
+    loadTwoFormats();
+    useAppStore.getState().openTabToSide('cfg-0');
+    useAppStore.getState().closePane('main');
+    expect(useAppStore.getState()).toMatchObject({ activeTabId: 'cfg-0', splitTabId: null, sideTabIds: [], focusedPane: 'main' });
+    expect(useAppStore.getState().openTabs).toHaveLength(2);
+  });
+
+  it('keeps the groups apart when a configuration is removed', () => {
+    loadTwoFormats();
+    useAppStore.getState().openDrillDownTab('model.Invoice.Date', 1, 'Date');
+    useAppStore.getState().moveTabToPane('drilldown:1:Date:model.Invoice.Date', 'side');
+    useAppStore.getState().removeConfiguration(0);
+    const state = useAppStore.getState();
+    expect(state.openTabs.map(tab => tab.id)).toEqual(['cfg-0', 'drilldown:0:Date:model.Invoice.Date']);
+    expect(state).toMatchObject({ activeTabId: 'cfg-0', splitTabId: 'drilldown:0:Date:model.Invoice.Date', sideTabIds: ['drilldown:0:Date:model.Invoice.Date'] });
+  });
+
+  it('shows a tab of the side group there when navigation activates it', () => {
+    loadTwoFormats();
+    useAppStore.getState().openTabToSide('cfg-0');
+    useAppStore.getState().focusPane('main');
+    // Back/Forward and explorer navigation set the active tab directly.
+    useAppStore.setState({ activeTabId: 'cfg-0' });
+    expect(useAppStore.getState()).toMatchObject({ activeTabId: 'cfg-1', splitTabId: 'cfg-0', focusedPane: 'side' });
+  });
+
+  it('reorders tabs in the strip', () => {
+    loadTwoFormats();
+    useAppStore.getState().reorderTab('cfg-1', 'cfg-0');
+    expect(useAppStore.getState().openTabs.map(tab => tab.id)).toEqual(['cfg-1', 'cfg-0']);
+    useAppStore.getState().reorderTab('cfg-1', null);
+    expect(useAppStore.getState().openTabs.map(tab => tab.id)).toEqual(['cfg-0', 'cfg-1']);
   });
 
   it('remembers the format of the last active tab', () => {

@@ -6,7 +6,7 @@ import {
   FilterRegular,
   TextCollapseRegular,
 } from '@fluentui/react-icons';
-import { useAppStore, relatedMappingDefinitionLabels, MIN_SEARCH_QUERY_LENGTH } from '../state/store';
+import { useAppStore, focusedTabId, relatedMappingDefinitionLabels, MIN_SEARCH_QUERY_LENGTH } from '../state/store';
 import type { TreeNode } from '../state/store';
 import type { ERConfiguration } from '@er-visualizer/core';
 import { locale, t, useLocale } from '../i18n';
@@ -220,7 +220,7 @@ export function SearchPanel() {
   const whereUsedTrigger = useAppStore(s => s.whereUsedTrigger);
   const consumeWhereUsedTrigger = useAppStore(s => s.consumeWhereUsedTrigger);
   const openTabs = useAppStore(s => s.openTabs);
-  const activeTabId = useAppStore(s => s.activeTabId);
+  const activeTabId = useAppStore(focusedTabId);
 
   const [searchExpandSignal, setSearchExpandSignal] = useState<{ version: number; expanded: boolean }>({ version: 0, expanded: true });
   const [whereUsedExpandSignal, setWhereUsedExpandSignal] = useState<{ version: number; expanded: boolean }>({ version: 0, expanded: true });

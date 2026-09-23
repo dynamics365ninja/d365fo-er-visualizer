@@ -10,8 +10,10 @@ import {
   shorthands,
 } from '@fluentui/react-components';
 import { DismissRegular, CompassNorthwestRegular, SplitVerticalRegular } from '@fluentui/react-icons';
-import { useAppStore } from '../state/store';
+import { useShallow } from 'zustand/react/shallow';
+import { useAppStore, isSplitView, tabsInPane, type DesignerPane } from '../state/store';
 import { t, useLocale } from '../i18n';
+import { draggedTabId, isTabDrag, startTabDrag } from '../utils/tab-drag';
 
 const useStyles = makeStyles({
   root: {
@@ -66,7 +68,7 @@ const useStyles = makeStyles({
       color: 'var(--er-accent)',
     },
   },
-  /** The tab shown in the side pane: marked, but quieter than the active one. */
+  /** The tab on screen in the group without focus: marked, but quieter than the focused one. */
   tabSide: {
     ...shorthands.borderColor('var(--er-accent-border)'),
     ...shorthands.borderStyle('dashed'),
@@ -74,6 +76,16 @@ const useStyles = makeStyles({
   },
   tabDrillDown: {
     fontStyle: 'italic',
+  },
+  tabDragging: {
+    opacity: 0.5,
+  },
+  /* Where a tab dragged along the strip lands: before or after this one. */
+  dropBefore: {
+    boxShadow: 'inset 2px 0 0 var(--er-accent)',
+  },
+  dropAfter: {
+    boxShadow: 'inset -2px 0 0 var(--er-accent)',
   },
   tabs: {
     display: 'flex',
@@ -85,10 +97,6 @@ const useStyles = makeStyles({
     overflowX: 'auto',
     overflowY: 'hidden',
   },
-  splitBtn: {
-    flexShrink: 0,
-    marginLeft: 'auto',
-  },
   icon: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -99,6 +107,13 @@ const useStyles = makeStyles({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     flex: 1,
+  },
+  groupClose: {
+    flexShrink: 0,
+    minWidth: '24px',
+    width: '24px',
+    height: '24px',
+    padding: 0,
   },
   closeBtn: {
     position: 'absolute',
@@ -117,44 +132,95 @@ const useStyles = makeStyles({
   },
 });
 
-export function TabBar() {
+/**
+ * The tab strip of one group of the designer. Every group has its own, as in
+ * an IDE: a tab dragged onto another group's strip (or into its content)
+ * moves into that group.
+ */
+export function TabStrip({ pane }: { pane: DesignerPane }) {
   const styles = useStyles();
-  const tabs = useAppStore(s => s.openTabs);
-  const activeTabId = useAppStore(s => s.activeTabId);
+  const tabs = useAppStore(useShallow(s => tabsInPane(s, pane)));
+  const shownTabId = useAppStore(s => (pane === 'side' ? s.splitTabId : s.activeTabId));
+  const split = useAppStore(isSplitView);
+  const groupFocused = useAppStore(s => !isSplitView(s) || s.focusedPane === pane);
+  const mainTabCount = useAppStore(s => tabsInPane(s, 'main').length);
   const setActiveTab = useAppStore(s => s.setActiveTab);
   const closeTab = useAppStore(s => s.closeTab);
-  const splitTabId = useAppStore(s => s.splitTabId);
-  const openTabToSide = useAppStore(s => s.openTabToSide);
-  const closeSplit = useAppStore(s => s.closeSplit);
+  const moveTabToPane = useAppStore(s => s.moveTabToPane);
+  const reorderTab = useAppStore(s => s.reorderTab);
+  const closePane = useAppStore(s => s.closePane);
+  const draggingTabId = useAppStore(s => s.draggingTabId);
+  const setDraggingTab = useAppStore(s => s.setDraggingTab);
   const [menu, setMenu] = useState<{ tabId: string; target: HTMLElement } | null>(null);
+  const [dropHint, setDropHint] = useState<{ tabId: string; after: boolean } | null>(null);
   useLocale(); // re-render on language change so aria labels stay localized
 
   if (tabs.length === 0) return null;
 
-  const split = Boolean(splitTabId && splitTabId !== activeTabId);
-  // Side by side starts with the tab the user was on before this one.
-  const activeIndex = tabs.findIndex(tab => tab.id === activeTabId);
-  const sideCandidate = tabs[activeIndex - 1] ?? tabs.find(tab => tab.id !== activeTabId);
+  const otherPane: DesignerPane = pane === 'main' ? 'side' : 'main';
+  // Dropped here from the other group: join this one, then take the spot.
+  const dropInto = (id: string, beforeId: string | null) => {
+    if (useAppStore.getState().sideTabIds.includes(id) !== (pane === 'side')) moveTabToPane(id, pane);
+    reorderTab(id, beforeId);
+    setDropHint(null);
+  };
 
   return (
     <div className={styles.root}>
-      <div className={styles.tabs} role="tablist">
-        {tabs.map(tab => {
-          const isActive = tab.id === activeTabId;
-          const isSide = split && tab.id === splitTabId;
+      <div
+        className={styles.tabs}
+        role="tablist"
+        onDragOver={e => { if (isTabDrag(e)) e.preventDefault(); }}
+        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropHint(null); }}
+        onDrop={e => {
+          // Past the last tab: to the end of the strip.
+          const id = draggedTabId(e);
+          if (!id) return;
+          e.preventDefault();
+          dropInto(id, null);
+        }}
+      >
+        {tabs.map((tab, index) => {
+          const shown = tab.id === shownTabId;
           const isDrillDown = tab.kind === 'drillDown';
+          const hint = dropHint?.tabId === tab.id ? dropHint : null;
           return (
             <div
               key={tab.id}
               role="tab"
-              aria-selected={isActive}
+              aria-selected={shown}
               tabIndex={0}
+              draggable
               className={mergeClasses(
                 styles.tab,
-                isActive && styles.tabActive,
-                isSide && styles.tabSide,
+                shown && (groupFocused ? styles.tabActive : styles.tabSide),
                 isDrillDown && styles.tabDrillDown,
+                draggingTabId === tab.id && styles.tabDragging,
+                hint ? (hint.after ? styles.dropAfter : styles.dropBefore) : undefined,
               )}
+              onDragStart={e => {
+                startTabDrag(e, tab.id);
+                setDraggingTab(tab.id);
+              }}
+              onDragEnd={() => {
+                setDraggingTab(null);
+                setDropHint(null);
+              }}
+              onDragOver={e => {
+                if (!isTabDrag(e)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const rect = e.currentTarget.getBoundingClientRect();
+                const after = e.clientX > rect.left + rect.width / 2;
+                if (hint?.after !== after) setDropHint({ tabId: tab.id, after });
+              }}
+              onDrop={e => {
+                const id = draggedTabId(e);
+                if (!id) return;
+                e.preventDefault();
+                e.stopPropagation();
+                dropInto(id, hint?.after ? (tabs[index + 1]?.id ?? null) : tab.id);
+              }}
               onClick={() => setActiveTab(tab.id)}
               onContextMenu={e => {
                 e.preventDefault();
@@ -189,21 +255,16 @@ export function TabBar() {
           );
         })}
       </div>
-      {(split || sideCandidate) && (
+      {split && (
         <Button
-          appearance={split ? 'secondary' : 'subtle'}
+          appearance="subtle"
           size="small"
-          icon={<SplitVerticalRegular />}
-          className={styles.splitBtn}
-          aria-pressed={split}
-          title={split ? t.splitClose : t.splitToggleHint}
-          onClick={() => {
-            if (split) closeSplit();
-            else if (sideCandidate) openTabToSide(sideCandidate.id);
-          }}
-        >
-          {t.splitToggle}
-        </Button>
+          icon={<DismissRegular />}
+          className={styles.groupClose}
+          title={pane === 'side' ? t.splitCloseSideGroup : t.splitCloseMainGroup}
+          aria-label={pane === 'side' ? t.splitCloseSideGroup : t.splitCloseMainGroup}
+          onClick={() => closePane(pane)}
+        />
       )}
       <Menu
         open={menu !== null}
@@ -212,13 +273,10 @@ export function TabBar() {
       >
         <MenuPopover>
           <MenuList>
-            {menu && tabs.length > 1 && menu.tabId !== splitTabId && (
-              <MenuItem icon={<SplitVerticalRegular />} onClick={() => openTabToSide(menu.tabId)}>
-                {t.splitOpenBeside}
+            {menu && (pane === 'side' || mainTabCount > 1) && (
+              <MenuItem icon={<SplitVerticalRegular />} onClick={() => moveTabToPane(menu.tabId, otherPane)}>
+                {!split ? t.splitOpenBeside : otherPane === 'main' ? t.splitMoveLeft : t.splitMoveRight}
               </MenuItem>
-            )}
-            {split && (
-              <MenuItem onClick={closeSplit}>{t.splitClose}</MenuItem>
             )}
             {menu && (
               <MenuItem icon={<DismissRegular />} onClick={() => closeTab(menu.tabId)}>

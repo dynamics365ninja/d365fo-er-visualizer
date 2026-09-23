@@ -32,7 +32,7 @@ import { treeArrowAction } from '../utils/tree-keyboard';
 import { flattenVisibleTree, indexFlatRows, type FlatTreeRow } from '../utils/flat-tree';
 import { useTreeOpenState } from '../utils/use-tree-open-state';
 import { useVirtualTree } from '../utils/use-virtual-tree';
-import { useAppStore, lastActiveFormatIndex, type TreeNode } from '../state/store';
+import { useAppStore, focusedTabId, lastActiveFormatIndex, type TreeNode } from '../state/store';
 import { ERDirection } from '@er-visualizer/core';
 import type { ERConfiguration } from '@er-visualizer/core';
 import { buildExplorerModelGroups, getDisplayVersion, type ExplorerModelGroup } from '../utils/model-hierarchy';
@@ -375,7 +375,7 @@ export function ConfigExplorer() {
     () => storeTreeNodes.map((node, idx) => toExplorerTreeNode(node, configurations[idx])),
     [storeTreeNodes, configurations],
   );
-  const activeTabId = useAppStore(s => s.activeTabId);
+  const activeTabId = useAppStore(focusedTabId);
   const openTabs = useAppStore(s => s.openTabs);
   const lastFormatIndex = useAppStore(lastActiveFormatIndex);
   const storeSelectedNodeId = useAppStore(s => s.selectedNodeId);

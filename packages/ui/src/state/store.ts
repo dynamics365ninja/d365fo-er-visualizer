@@ -97,6 +97,8 @@ export { parseDottedPath, resolveDeepExpression } from './expression-resolution'
 export type { WhereUsedEntry } from './where-used';
 
 export type { ThemeMode, ResolvedTheme } from '../theme';
+/** The two panes of the designer's side-by-side view: `main` on the left, `side` on the right. */
+export type DesignerPane = 'main' | 'side';
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';
 
 export interface Toast {
@@ -157,10 +159,22 @@ export interface AppState {
    */
   lastActiveFormatPath: string | null;
   /**
-   * Tab shown to the right of the active one, for comparing two of them (say,
-   * the drill-downs of one field in two formats). `null` when not split.
+   * The designer splits into two groups of tabs, as an IDE does: the main
+   * group on the left, the side group on the right, each with its own tab
+   * strip. `activeTabId` is the tab shown in the main group, `splitTabId` the
+   * one shown in the side group (`null` while there is none).
    */
   splitTabId: string | null;
+  /** Tabs of the side group, in no particular order (the strip follows `openTabs`). Empty when not split. */
+  sideTabIds: string[];
+  /**
+   * The pane that has focus while split: tabs picked in the tab strip or opened
+   * from the explorer, search or a drill-down land in it, as in VS Code.
+   * Always `'main'` when not split.
+   */
+  focusedPane: DesignerPane;
+  /** Tab being dragged from a tab strip; the groups show drop zones meanwhile. */
+  draggingTabId: string | null;
   searchQuery: string;
   searchResults: any[];
   searchPanelMode: 'search' | 'where-used';
@@ -219,6 +233,14 @@ export interface AppState {
   setActiveTab: (id: string) => void;
   /** Show tab `id` to the right of the active tab. */
   openTabToSide: (id: string) => void;
+  /** Move tab `id` into the given group (creating the side group for `'side'`); the group takes focus. */
+  moveTabToPane: (id: string, pane: DesignerPane) => void;
+  /** Move tab `id` in the tab strip to just before `beforeId` (or to the end when `null`). */
+  reorderTab: (id: string, beforeId: string | null) => void;
+  focusPane: (pane: DesignerPane) => void;
+  /** Close one group of the split view; its tabs join the other one, which takes the whole width. */
+  closePane: (pane: DesignerPane) => void;
+  setDraggingTab: (id: string | null) => void;
   closeSplit: () => void;
   rebuildDerivedState: () => void;
   setShowTechnicalDetails: (show: boolean) => void;
@@ -336,6 +358,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeTabId: null,
   lastActiveFormatPath: null,
   splitTabId: null,
+  sideTabIds: [],
+  focusedPane: 'main',
+  draggingTabId: null,
   searchQuery: '',
   searchResults: [],
   searchPanelMode: 'search',
@@ -510,6 +535,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const activeTabId = remapIdAfterConfigRemoval(state.activeTabId, index);
     const splitTabId = remapIdAfterConfigRemoval(state.splitTabId, index);
+    const sideTabIds = state.sideTabIds
+      .map(id => remapIdAfterConfigRemoval(id, index))
+      .filter((id): id is string => Boolean(id) && openTabs.some(tab => tab.id === id));
     const selectedNodeId = remapIdAfterConfigRemoval(state.selectedNodeId, index);
     const selectedNode = selectedNodeId ? findNodeById(treeNodes, selectedNodeId) : null;
     const navigationHistory = remapNavigationStackAfterRemoval(state.navigationHistory, index);
@@ -526,7 +554,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       warnings,
       openTabs,
       activeTabId: nextActiveTabId,
-      splitTabId: splitTabId && splitTabId !== nextActiveTabId && openTabs.some(tab => tab.id === splitTabId) ? splitTabId : null,
+      splitTabId,
+      sideTabIds,
       selectedNodeId: selectedNode?.id ?? null,
       selectedNode,
       navigationHistory,
@@ -627,6 +656,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       openTabs: [],
       activeTabId: null,
       splitTabId: null,
+      sideTabIds: [],
       selectedNodeId: null,
       selectedNode: null,
       navigationHistory: [],
@@ -668,7 +698,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!state.openTabs.find(t => t.id === id)) {
       set({
         openTabs: [...state.openTabs, { id, label, configIndex }],
-        activeTabId: id,
+        ...showTabInFocusedPane(state, id),
         navigationHistory,
         navigationForward: [],
         canNavigateBack: navigationHistory.length > 0,
@@ -676,7 +706,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
     } else {
       set({
-        activeTabId: id,
+        ...showTabInFocusedPane(state, id),
         navigationHistory,
         navigationForward: [],
         canNavigateBack: navigationHistory.length > 0,
@@ -688,20 +718,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   closeTab: (id: string) => {
     const state = get();
     const newTabs = state.openTabs.filter(t => t.id !== id);
-    const splitTabId = state.splitTabId === id ? null : state.splitTabId;
-    // The side pane is already on screen; the main pane takes another tab
-    // first and only falls back to it when nothing else is open.
-    const others = newTabs.filter(t => t.id !== splitTabId);
-    const newActive = state.activeTabId === id
-      ? (others.length > 0 ? others[others.length - 1].id : (newTabs[newTabs.length - 1]?.id ?? null))
-      : state.activeTabId;
+    // The group the tab was in shows its neighbour next; a group left
+    // without tabs closes (see normalizeGroups).
+    const pane = paneOfTab(state, id);
+    const groupTabs = tabsInPane(state, pane);
+    const newActive = pane === 'main' && state.activeTabId === id ? neighbourTab(groupTabs, id) : state.activeTabId;
+    const nextSplit = pane === 'side' && state.splitTabId === id ? neighbourTab(groupTabs, id) : state.splitTabId;
     // A closed tab is not somewhere Back/Forward should return to.
     const navigationHistory = pruneNavigationStack(state.navigationHistory, id);
     const navigationForward = pruneNavigationStack(state.navigationForward, id);
     set({
       openTabs: newTabs,
       activeTabId: newActive,
-      splitTabId: splitTabId === newActive ? null : splitTabId,
+      splitTabId: nextSplit,
+      sideTabIds: state.sideTabIds.filter(tabId => tabId !== id),
       navigationHistory,
       navigationForward,
       canNavigateBack: navigationHistory.length > 0,
@@ -721,36 +751,65 @@ export const useAppStore = create<AppState>((set, get) => ({
     const openTabs = state.openTabs.some(t => t.id === id)
       ? state.openTabs
       : [...state.openTabs, { kind: 'drillDown' as const, id, label, configIndex, expression: trimmed, elementName }];
-    // Beside the active tab, unless that is this very drill-down (or there is none).
-    if (options?.side && state.activeTabId && state.activeTabId !== id) {
-      set({ openTabs, splitTabId: id });
-    } else {
-      set({ openTabs, activeTabId: id });
-    }
-  },
-
-  openTabToSide: (id: string) => {
-    const state = get();
-    if (!state.openTabs.some(t => t.id === id)) return;
-    if (id !== state.activeTabId) {
-      set({ splitTabId: id });
+    const onScreen = id === state.activeTabId || (isSplitView(state) && id === state.splitTabId);
+    if (!options?.side || !state.activeTabId || onScreen) {
+      set({ openTabs, ...showTabInFocusedPane(state, id) });
       return;
     }
-    // The active tab moves to the side; the main pane takes the tab before it.
-    const others = state.openTabs.filter(t => t.id !== id);
-    if (others.length === 0) return;
-    const index = state.openTabs.findIndex(t => t.id === id);
-    const main = state.openTabs[index - 1] ?? others[others.length - 1];
-    set({ splitTabId: id, activeTabId: main.id });
+    // "Beside" is the group that does not have focus — the one the
+    // drill-down was not opened from.
+    const other: DesignerPane = isSplitView(state) && state.focusedPane === 'side' ? 'main' : 'side';
+    set({ openTabs, ...placeTabInPane({ ...state, openTabs }, id, other) });
   },
 
-  closeSplit: () => set({ splitTabId: null }),
+  openTabToSide: (id: string) => get().moveTabToPane(id, 'side'),
+
+  moveTabToPane: (id: string, pane: DesignerPane) => {
+    const state = get();
+    if (!state.openTabs.some(t => t.id === id)) return;
+    set(placeTabInPane(state, id, pane));
+  },
+
+  reorderTab: (id: string, beforeId: string | null) => {
+    const state = get();
+    const tab = state.openTabs.find(t => t.id === id);
+    if (!tab || id === beforeId) return;
+    const rest = state.openTabs.filter(t => t.id !== id);
+    const index = beforeId ? rest.findIndex(t => t.id === beforeId) : -1;
+    const openTabs = index < 0 ? [...rest, tab] : [...rest.slice(0, index), tab, ...rest.slice(index)];
+    if (openTabs.every((t, i) => t === state.openTabs[i])) return;
+    set({ openTabs });
+  },
+
+  focusPane: (pane: DesignerPane) => {
+    const state = get();
+    const next = pane === 'side' && isSplitView(state) ? 'side' : 'main';
+    if (state.focusedPane !== next) set({ focusedPane: next });
+  },
+
+  closePane: (pane: DesignerPane) => {
+    const state = get();
+    if (!isSplitView(state)) return;
+    // The tabs stay open: they join the other group, whose tab stays on screen.
+    set({
+      activeTabId: pane === 'side' ? state.activeTabId : state.splitTabId,
+      splitTabId: null,
+      sideTabIds: [],
+      focusedPane: 'main',
+    });
+  },
+
+  setDraggingTab: (id: string | null) => {
+    if (get().draggingTabId !== id) set({ draggingTabId: id });
+  },
+
+  closeSplit: () => get().closePane('side'),
 
   setActiveTab: (id: string) => {
     const state = get();
     const navigationHistory = pushNavigationHistory(state, id, state.selectedNodeId);
     set({
-      activeTabId: id,
+      ...showTabInFocusedPane(state, id),
       navigationHistory,
       navigationForward: [],
       canNavigateBack: navigationHistory.length > 0,
@@ -774,7 +833,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedNode,
       openTabs,
       activeTabId,
-      splitTabId: openTabs.some(tab => tab.id === state.splitTabId) ? state.splitTabId : null,
       canNavigateBack: state.navigationHistory.length > 0,
     });
   },
@@ -919,7 +977,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const existingTab = state.openTabs.find(t => t.id === nextTabId);
     if (existingTab) {
       set({
-        activeTabId: existingTab.id,
+        ...showTabInFocusedPane(state, existingTab.id),
         navigationHistory,
         navigationForward: [],
         canNavigateBack: navigationHistory.length > 0,
@@ -928,9 +986,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       return;
     }
 
+    const openTabs = [...state.openTabs, { id: nextTabId, label: targetTabLabel, configIndex: node.configIndex }];
     set({
-      openTabs: [...state.openTabs, { id: nextTabId, label: targetTabLabel, configIndex: node.configIndex }],
-      activeTabId: nextTabId,
+      openTabs,
+      ...showTabInFocusedPane(state, nextTabId),
       navigationHistory,
       navigationForward: [],
       canNavigateBack: navigationHistory.length > 0,
@@ -1040,6 +1099,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         openTabs: [],
         activeTabId: null,
         splitTabId: null,
+        sideTabIds: [],
         selectedNodeId: null,
         selectedNode: null,
         navigationHistory: [],
@@ -1137,6 +1197,116 @@ export const useAppStore = create<AppState>((set, get) => ({
   )),
 }));
 
+type GroupState = Pick<AppState, 'openTabs' | 'activeTabId' | 'splitTabId' | 'sideTabIds' | 'focusedPane'>;
+
+/** Whether the designer is split into two groups of tabs. */
+export function isSplitView(state: Pick<AppState, 'activeTabId' | 'splitTabId'>): boolean {
+  return Boolean(state.splitTabId && state.splitTabId !== state.activeTabId);
+}
+
+/** The tab in the focused group — the one the rest of the workspace (explorer scope, search) follows. */
+export function focusedTabId(state: Pick<AppState, 'activeTabId' | 'splitTabId' | 'focusedPane'>): string | null {
+  return isSplitView(state) && state.focusedPane === 'side' ? state.splitTabId : state.activeTabId;
+}
+
+/** The group tab `id` belongs to. */
+export function paneOfTab(state: Pick<AppState, 'sideTabIds'>, id: string): DesignerPane {
+  return state.sideTabIds.includes(id) ? 'side' : 'main';
+}
+
+/** The tabs of one group, in tab strip order. */
+export function tabsInPane(state: Pick<AppState, 'openTabs' | 'sideTabIds'>, pane: DesignerPane): OpenTab[] {
+  return state.openTabs.filter(tab => paneOfTab(state, tab.id) === pane);
+}
+
+/** What a group shows once tab `id` leaves it: the tab before it, else the one after. */
+function neighbourTab(groupTabs: OpenTab[], id: string): string | null {
+  const index = groupTabs.findIndex(tab => tab.id === id);
+  const rest = groupTabs.filter(tab => tab.id !== id);
+  if (rest.length === 0) return null;
+  return (groupTabs[index - 1] ?? groupTabs[index + 1] ?? rest[rest.length - 1]).id;
+}
+
+/**
+ * Show tab `id` — `state` is from before the tab was added, if it is new. A
+ * tab that is open already comes forward in its own group, which takes focus;
+ * a new one joins the focused group.
+ */
+function showTabInFocusedPane(state: GroupState, id: string): Partial<GroupState> {
+  const isNew = !state.openTabs.some(tab => tab.id === id);
+  const pane = isNew ? (isSplitView(state) ? state.focusedPane : 'main') : paneOfTab(state, id);
+  if (pane === 'side') {
+    return {
+      splitTabId: id,
+      sideTabIds: isNew ? [...state.sideTabIds, id] : state.sideTabIds,
+      focusedPane: 'side',
+    };
+  }
+  return { activeTabId: id, focusedPane: 'main' };
+}
+
+/**
+ * Move tab `id` into `pane` and focus that group. Moving it to the side opens
+ * the side group; the main group never gives up its last tab.
+ */
+function placeTabInPane(state: GroupState, id: string, pane: DesignerPane): Partial<GroupState> {
+  const from = paneOfTab(state, id);
+  if (from === pane) {
+    return pane === 'side' ? { splitTabId: id, focusedPane: 'side' } : { activeTabId: id, focusedPane: 'main' };
+  }
+  if (pane === 'side') {
+    const mainTabs = tabsInPane(state, 'main');
+    if (mainTabs.length <= 1) return {};
+    return {
+      sideTabIds: [...state.sideTabIds, id],
+      splitTabId: id,
+      activeTabId: state.activeTabId === id ? neighbourTab(mainTabs, id) : state.activeTabId,
+      focusedPane: 'side',
+    };
+  }
+  const sideTabs = tabsInPane(state, 'side');
+  return {
+    sideTabIds: state.sideTabIds.filter(tabId => tabId !== id),
+    splitTabId: state.splitTabId === id ? neighbourTab(sideTabs, id) : state.splitTabId,
+    activeTabId: id,
+    focusedPane: 'main',
+  };
+}
+
+/**
+ * The invariants of the two groups, restored after any change: the side group
+ * holds only open tabs and shows one of them; a group left without tabs
+ * closes (an empty main group takes over the side group's tabs); the main
+ * group shows one of its own tabs; only a split view has a side to focus.
+ * `previousMainTab` is what the main group showed before a tab of the side
+ * group was activated in its place — say, by Back or by navigation.
+ */
+export function normalizeGroups(state: GroupState, previousMainTab: string | null = null): GroupState {
+  const open = new Set(state.openTabs.map(tab => tab.id));
+  let sideTabIds = state.sideTabIds.filter(id => open.has(id));
+  let { activeTabId, splitTabId, focusedPane } = state;
+
+  if (activeTabId && sideTabIds.includes(activeTabId)) {
+    splitTabId = activeTabId;
+    focusedPane = 'side';
+    activeTabId = previousMainTab;
+  }
+
+  const mainTabs = state.openTabs.filter(tab => !sideTabIds.includes(tab.id));
+  if (mainTabs.length === 0 && sideTabIds.length > 0) {
+    activeTabId = splitTabId && sideTabIds.includes(splitTabId) ? splitTabId : sideTabIds[sideTabIds.length - 1];
+    sideTabIds = [];
+  } else if (!activeTabId || !mainTabs.some(tab => tab.id === activeTabId)) {
+    activeTabId = mainTabs[mainTabs.length - 1]?.id ?? null;
+  }
+
+  if (sideTabIds.length === 0) splitTabId = null;
+  else if (!splitTabId || !sideTabIds.includes(splitTabId)) splitTabId = sideTabIds[sideTabIds.length - 1];
+  if (!splitTabId) focusedPane = 'main';
+
+  return { openTabs: state.openTabs, activeTabId, splitTabId, sideTabIds, focusedPane };
+}
+
 /** Index of the format whose tab was active last, or `null` when it is no longer loaded. */
 export function lastActiveFormatIndex(state: Pick<AppState, 'configurations' | 'lastActiveFormatPath'>): number | null {
   if (!state.lastActiveFormatPath) return null;
@@ -1146,20 +1316,32 @@ export function lastActiveFormatIndex(state: Pick<AppState, 'configurations' | '
   return index >= 0 ? index : null;
 }
 
-// Remember the last format tab. Every action that moves `activeTabId` (tab
+// Remember the last format tab. Every action that moves the focused tab (tab
 // clicks, navigation, Back/Forward, closing a tab) goes through here, so no
 // single one of them has to know about it.
 useAppStore.subscribe((state, prev) => {
-  // Activating the tab on the side swaps the two panes rather than showing it
-  // twice — whichever way it was activated (tab strip, navigation, Back).
-  if (state.splitTabId && state.splitTabId === state.activeTabId) {
-    const previous = prev.activeTabId;
-    const keep = previous && previous !== state.activeTabId && state.openTabs.some(t => t.id === previous);
-    useAppStore.setState({ splitTabId: keep ? previous : null });
+  // Whichever way the tabs changed (closing, removing a configuration, Back
+  // activating a tab of the side group), the two groups stay consistent.
+  const previousMainTab = prev.activeTabId && !state.sideTabIds.includes(prev.activeTabId) ? prev.activeTabId : null;
+  const groups = normalizeGroups(state, previousMainTab);
+  if (
+    groups.activeTabId !== state.activeTabId
+    || groups.splitTabId !== state.splitTabId
+    || groups.focusedPane !== state.focusedPane
+    || groups.sideTabIds.length !== state.sideTabIds.length
+    || groups.sideTabIds.some((id, i) => id !== state.sideTabIds[i])
+  ) {
+    useAppStore.setState({
+      activeTabId: groups.activeTabId,
+      splitTabId: groups.splitTabId,
+      sideTabIds: groups.sideTabIds,
+      focusedPane: groups.focusedPane,
+    });
     return;
   }
-  if (state.activeTabId === prev.activeTabId && state.configurations === prev.configurations) return;
-  const tab = state.openTabs.find(t => t.id === state.activeTabId);
+  const focusedId = focusedTabId(state);
+  if (focusedId === focusedTabId(prev) && state.configurations === prev.configurations) return;
+  const tab = state.openTabs.find(t => t.id === focusedId);
   const config = tab ? state.configurations[tab.configIndex] : undefined;
   if (config?.content.kind === 'Format' && config.filePath !== state.lastActiveFormatPath) {
     useAppStore.setState({ lastActiveFormatPath: config.filePath });
