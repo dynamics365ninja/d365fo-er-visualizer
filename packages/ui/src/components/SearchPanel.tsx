@@ -16,6 +16,9 @@ import { relatedConfigIndices, relatedContainerRules, hitPassesContainerRule, ty
 import { referenceCategory, WHERE_USED_CATEGORY_ORDER, type ReferenceCategory } from '../utils/where-used-category';
 import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 import { useSearchFocusTarget } from '../utils/search-focus';
+import { rankByRelevance } from '../utils/search-relevance';
+
+const SEARCH_PAGE_SIZE = 100;
 import { buildSearchNodeIndex, findNodeForSearchResult, type SearchRegistry, type SearchResultEntry } from '../utils/search-node-index';
 
 
@@ -200,6 +203,8 @@ export function SearchPanel() {
   const currentLocale = useLocale();
   const inputRef = useRef<HTMLInputElement>(null);
   useSearchFocusTarget(inputRef);
+  // Results are shown a page at a time; a new query or scope starts over.
+  const [resultLimit, setResultLimit] = useState(SEARCH_PAGE_SIZE);
   const searchQuery = useAppStore(s => s.searchQuery);
   const setSearchQuery = useAppStore(s => s.setSearchQuery);
   const executeSearch = useAppStore(s => s.executeSearch);
@@ -232,6 +237,7 @@ export function SearchPanel() {
   // registry search reports hits from all of them. Default to the open
   // configuration's own tree; the "All" chip opts back into the full sweep.
   const [relatedOnly, setRelatedOnly] = useState(true);
+  useEffect(() => { setResultLimit(SEARCH_PAGE_SIZE); }, [searchQuery, searchScope, relatedOnly]);
 
   const activeConfigIndex = useMemo(() => {
     const tab = openTabs.find(tb => tb.id === activeTabId);
@@ -564,11 +570,18 @@ export function SearchPanel() {
                   // The list is capped, and the definitions of the other model
                   // roots come first in file order — without this the active
                   // definition would drop off the end when "All" is turned on.
-                  const ranked = relatedFilter && !relatedOnly
-                    ? [...scopedResults].sort((a, b) =>
-                      Number(isRelatedResult(b)) - Number(isRelatedResult(a)))
-                    : scopedResults;
-                  const capped = ranked.slice(0, 100);
+                  // Best matches first (exact name, then prefix, word start,
+                  // path, expression); with "All" on, the active definition's
+                  // hits still lead so they never drop off the end.
+                  const ranked = rankByRelevance(
+                    scopedResults,
+                    searchQuery,
+                    relatedFilter && !relatedOnly
+                      ? (a, b) => Number(isRelatedResult(b)) - Number(isRelatedResult(a))
+                      : undefined,
+                  );
+                  const capped = ranked.slice(0, resultLimit);
+                  const remaining = ranked.length - capped.length;
                   return (
                     <>
                       {/* Count, scope, reach and the expand slider on one
@@ -638,15 +651,26 @@ export function SearchPanel() {
                             {navigableResults.length === 0 ? t.noResults : t.searchNoResultsInScope}
                           </div>
                         ) : (
-                          <SearchResultsGrouped
-                            results={capped}
-                            nodeByResult={navigableSearch.nodeByResult}
-                            query={searchQuery}
-                            expandSignal={searchExpandSignal}
-                            configurations={configurations}
-                            registry={registry}
-                            navigateToTreeNode={navigateToTreeNode}
-                          />
+                          <>
+                            <SearchResultsGrouped
+                              results={capped}
+                              nodeByResult={navigableSearch.nodeByResult}
+                              query={searchQuery}
+                              expandSignal={searchExpandSignal}
+                              configurations={configurations}
+                              registry={registry}
+                              navigateToTreeNode={navigateToTreeNode}
+                            />
+                            {remaining > 0 && (
+                              <button
+                                type="button"
+                                className="search-panel__more"
+                                onClick={() => setResultLimit(limit => limit + SEARCH_PAGE_SIZE)}
+                              >
+                                {t.searchShowMore(Math.min(remaining, SEARCH_PAGE_SIZE), remaining)}
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </>

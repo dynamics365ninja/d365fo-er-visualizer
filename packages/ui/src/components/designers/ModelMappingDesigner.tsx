@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LinkFilled, CheckmarkCircleRegular, CheckmarkRegular, ChevronDownRegular, TextBulletListTreeRegular } from '@fluentui/react-icons';
+import { LinkFilled, CheckmarkCircleRegular, CheckmarkRegular, ChevronDownRegular } from '@fluentui/react-icons';
 import { Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from '@fluentui/react-components';
 import type { ERDataModelContent } from '@er-visualizer/core';
 import { useAppStore, getMappingDefinitions, mappingDefinitionLabel } from '../../state/store';
@@ -596,17 +596,10 @@ function ValidationExpression({ label, expression, configIndex, elementName }: {
     <div className="mm-validation-expr">
       <span className="mm-validation-expr-label">{label}</span>
       <div className="mm-binding-expr">
-        <ClickablePath expression={expr} configIndex={configIndex} />
+        <DrillDownTrigger expression={expr} configIndex={configIndex} elementName={elementName}>
+          <ClickablePath expression={expr} configIndex={configIndex} interactive={false} />
+        </DrillDownTrigger>
       </div>
-      <DrillDownTrigger
-        expression={expr}
-        configIndex={configIndex}
-        elementName={elementName}
-        className="mm-binding-drill"
-        label={t.drillCollapsibleLabel}
-      >
-        <TextBulletListTreeRegular fontSize={16} aria-hidden="true" />
-      </DrillDownTrigger>
     </div>
   );
 }
@@ -680,23 +673,15 @@ function BindingTreeRows({
               title={locale === 'cs' ? `Počet vazeb v této větvi: ${node.count}` : `Number of bindings in this branch: ${node.count}`}
             >{node.count}</span>
           )}
-          {binding && (
-            <DrillDownTrigger
-              expression={binding.expressionAsString}
-              configIndex={configIndex}
-              elementName={node.name}
-              className="mm-binding-drill"
-              label={t.drillCollapsibleLabel}
-            >
-              <TextBulletListTreeRegular fontSize={16} aria-hidden="true" />
-            </DrillDownTrigger>
-          )}
           {binding && onRevealBinding && <RevealInExplorerMenu onReveal={() => onRevealBinding(node.key)} />}
         </div>
         {binding && (
           <div className="mm-binding-expr">
             <span className="mm-binding-arrow" aria-hidden>←</span>
-            <ClickablePath expression={binding.expressionAsString} configIndex={configIndex} mode="binding-expr" />
+            {/* The formula opens its drill-down, as in the format and datasource views. */}
+            <DrillDownTrigger expression={binding.expressionAsString} configIndex={configIndex} elementName={node.name}>
+              <ClickablePath expression={binding.expressionAsString} configIndex={configIndex} mode="binding-expr" interactive={false} />
+            </DrillDownTrigger>
           </div>
         )}
       </div>

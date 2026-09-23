@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { TextBulletListTreeRegular } from '@fluentui/react-icons';
 import { type ModelUsageNode } from '../../utils/format-model-usage';
 import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
@@ -192,20 +191,6 @@ function ModelUsageTreeRows({ node, depth, mappingConfigIndex, isCollapsed, onTo
           >
             {node.usageCount}
           </span>
-          {used && node.mapping && (
-            // The row head toggles the branch; the drill-down must not.
-            <span style={{ display: 'contents' }} onClick={event => event.stopPropagation()}>
-              <DrillDownTrigger
-                expression={node.mapping.expressionAsString}
-                configIndex={mappingConfigIndex}
-                elementName={node.path}
-                className="mm-binding-drill"
-                label={t.drillCollapsibleLabel}
-              >
-                <TextBulletListTreeRegular fontSize={16} aria-hidden="true" />
-              </DrillDownTrigger>
-            </span>
-          )}
         </div>
 
         {used && (
@@ -214,7 +199,9 @@ function ModelUsageTreeRows({ node, depth, mappingConfigIndex, isCollapsed, onTo
             {node.mapping ? (
               <div className="mm-binding-expr">
                 <span className="mm-binding-arrow" aria-hidden>←</span>
-                <ClickablePath expression={node.mapping.expressionAsString} configIndex={mappingConfigIndex} mode="binding-expr" />
+                <DrillDownTrigger expression={node.mapping.expressionAsString} configIndex={mappingConfigIndex} elementName={node.path}>
+                  <ClickablePath expression={node.mapping.expressionAsString} configIndex={mappingConfigIndex} mode="binding-expr" interactive={false} />
+                </DrillDownTrigger>
               </div>
             ) : node.unmapped ? (
               <span

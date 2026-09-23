@@ -1162,8 +1162,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     // we know at least one file is actually available. A bundle and its
     // extracts share one cache entry, so each is read and loaded once.
     const contentPaths = [...new Set(session.files.map(f => bundleContentPath(f.path)))];
+    // A cache that cannot be read counts as missing, not as a silent failure.
     const contents = await Promise.all(
-      contentPaths.map(async path => ({ path, content: await readFileContent(path) })),
+      contentPaths.map(async path => {
+        try {
+          return { path, content: await readFileContent(path) };
+        } catch {
+          return { path, content: null };
+        }
+      }),
     );
     const missing = contents.filter(c => !c.content).map(c => c.path.split(/[\\/]/).pop() ?? c.path);
     const available = contents.filter(c => c.content);
@@ -1223,7 +1230,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           : `Some files in the session were not loaded (not cached): ${missing.join(', ')}.`,
       });
     }
-    return loaded > 0;
+    // Files that were open already (or newer versions of them) still make
+    // the session usable — the designer should open on them.
+    const open = new Set(get().configurations.map(cfg => cfg.filePath));
+    return loaded > 0 || available.some(({ path }) => open.has(path));
   },
 
   loadCachedFile: async (path: string, name?: string) => {

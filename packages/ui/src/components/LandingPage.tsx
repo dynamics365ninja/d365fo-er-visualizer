@@ -431,6 +431,9 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const removeRecentSession = useAppStore(s => s.removeRecentSession);
   const clearRecentSessions = useAppStore(s => s.clearRecentSessions);
   const loadRecentSession = useAppStore(s => s.loadRecentSession);
+  const pushToast = useAppStore(s => s.pushToast);
+  // The session being opened: its button spins and the others wait.
+  const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
   const loadCachedFile = useAppStore(s => s.loadCachedFile);
   const cachedPaths = useAppStore(s => s.cachedPaths);
   const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
@@ -675,9 +678,17 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
                     const title = session.files.length === 1
                       ? session.files[0]?.name ?? ''
                       : t.recentSessionTitle(session.files.length);
+                    const busy = loadingSessionId === session.id;
                     const handleLoad = (replace: boolean) => {
-                      if (!canLoad) return;
-                      void loadRecentSession(session.id, { replace }).then(ok => { if (ok) onFilesLoaded(); });
+                      if (!canLoad || loadingSessionId) return;
+                      setLoadingSessionId(session.id);
+                      loadRecentSession(session.id, { replace })
+                        .then(ok => { if (ok) onFilesLoaded(); })
+                        .catch(error => pushToast({
+                          kind: 'error',
+                          message: t.recentSessionLoadFailed(error instanceof Error ? error.message : String(error)),
+                        }))
+                        .finally(() => setLoadingSessionId(null));
                     };
                     return (
                       <div
@@ -715,9 +726,10 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
                             <Button
                               appearance="subtle"
                               size="small"
-                              icon={<OpenRegular />}
+                              icon={busy ? <Spinner size="extra-tiny" /> : <OpenRegular />}
                               aria-label={t.recentSessionMergeHint}
                               title={t.recentSessionMergeHint}
+                              disabled={Boolean(loadingSessionId)}
                               onClick={() => handleLoad(false)}
                             />
                             <Button
@@ -726,6 +738,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
                               icon={<ArrowSyncRegular />}
                               aria-label={t.recentSessionReplaceHint}
                               title={t.recentSessionReplaceHint}
+                              disabled={Boolean(loadingSessionId)}
                               onClick={() => handleLoad(true)}
                             />
                           </>

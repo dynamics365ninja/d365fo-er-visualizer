@@ -236,7 +236,8 @@ export interface Translations {
   drillRestart: string;
   drillPopOut: string;
   drillOpenInTab: string;
-  drillClickToToggle: string;
+  drillTriggerHint: string;
+  drillTriggerTabHint: string;
   drillCollapsibleLabel: string;
   drillOpenExplorerFull: string;
   drillLegendClickable: string;
@@ -340,6 +341,9 @@ export interface Translations {
   fnoRemoveProfileConfirmTitle: (name: string) => string;
   fnoRemoveProfileConfirmBody: string;
   cancel: string;
+  recentSessionLoadFailed: (reason: string) => string;
+  splitResize: string;
+  searchShowMore: (next: number, remaining: number) => string;
   drillTruncated: string;
   fnoIngestCancel: string;
   landingOpen: string;
@@ -867,7 +871,8 @@ const cs: Translations = {
   drillRestart: 'Začít znovu',
   drillPopOut: 'Otevřít v okně',
   drillOpenInTab: 'Otevřít v nové záložce',
-  drillClickToToggle: 'Klikněte pro zobrazení / skrytí detailu výrazu',
+  drillTriggerHint: 'Kliknutím zobrazíte, odkud se hodnota bere',
+  drillTriggerTabHint: 'dvojklik nebo Ctrl+klik otevře záložku',
   drillCollapsibleLabel: 'Zobrazit rozpad hodnoty',
   drillOpenExplorerFull: 'Otevřít v Exploreru →',
   drillLegendClickable: 'Klikatelný odkaz',
@@ -971,6 +976,9 @@ const cs: Translations = {
   fnoRemoveProfileConfirmTitle: (name: string) => `Odebrat profil „${name}“?`,
   fnoRemoveProfileConfirmBody: 'Profil se odebere i s uloženým přihlášením k prostředí. Pro další stahování bude potřeba ho znovu vytvořit a přihlásit se.',
   cancel: 'Zrušit',
+  recentSessionLoadFailed: (reason: string) => `Relaci se nepodařilo otevřít: ${reason}. Otevřete soubory znovu z disku.`,
+  splitResize: 'Změnit poměr skupin (šipky; dvojklik vrátí na polovinu)',
+  searchShowMore: (next: number, remaining: number) => `Zobrazit ${next === remaining ? 'zbývající' : 'dalších'} ${next}${next === remaining ? '' : ` (zbývá ${remaining})`}`,
   drillTruncated: 'Cesta je příliš rozvětvená a nezobrazuje se celá — část zdrojů chybí i v „Použitá data“. Klikněte na část výrazu a rozpad se zúží na ni.',
   fnoIngestCancel: 'Zrušit stahování',
   landingOpen: 'Otevřít návrhář',
@@ -1514,7 +1522,8 @@ const en: Translations = {
   drillRestart: 'Restart',
   drillPopOut: 'Open in dialog',
   drillOpenInTab: 'Open in new tab',
-  drillClickToToggle: 'Click to show / hide expression detail',
+  drillTriggerHint: 'Click to see where the value comes from',
+  drillTriggerTabHint: 'double-click or Ctrl+click opens a tab',
   drillCollapsibleLabel: 'Show value breakdown',
   drillOpenExplorerFull: 'Open in Explorer →',
   drillLegendClickable: 'Clickable reference',
@@ -1616,6 +1625,9 @@ const en: Translations = {
   fnoRemoveProfileConfirmTitle: (name: string) => `Remove profile "${name}"?`,
   fnoRemoveProfileConfirmBody: 'The profile is removed together with its saved sign-in to the environment. To download again you will need to create it and sign in again.',
   cancel: 'Cancel',
+  recentSessionLoadFailed: (reason: string) => `The session could not be opened: ${reason}. Open the files again from disk.`,
+  splitResize: 'Resize the groups (arrow keys; double-click resets to half)',
+  searchShowMore: (next: number, remaining: number) => `Show ${next === remaining ? 'the remaining' : 'the next'} ${next}${next === remaining ? '' : ` (${remaining} left)`}`,
   drillTruncated: 'The path branches too much to show in full — some sources are missing from “Used data” too. Click a part of the expression to narrow the breakdown to it.',
   fnoIngestCancel: 'Cancel download',
   landingOpen: 'Open designer',

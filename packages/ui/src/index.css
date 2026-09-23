@@ -2975,69 +2975,6 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* Per-row drill-down: the format designer had this affordance, the mapping
-   designer did not, so the workbench was two hops away from every binding.
-   It sits inline in the row header and stays visible — hiding it until hover
-   made users believe drill-down was missing — but as a quiet icon button, so
-   a column of rows no longer repeats the same labelled button. Compound
-   selectors: the generic `.dd-trigger-expr` rules come later in this file and
-   would otherwise reset the padding, margins and hover underline. */
-.dd-trigger-expr.mm-binding-drill {
-  margin: -3px 0 -3px auto;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: var(--er-radius-md);
-  background: transparent;
-  color: var(--er-text-muted);
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-}
-
-.dd-trigger-expr.mm-binding-drill svg {
-  display: block;
-}
-
-/* The row under the pointer lifts its button out of the background. */
-.mm-tree-row:hover .dd-trigger-expr.mm-binding-drill,
-.mm-validation-expr:hover .dd-trigger-expr.mm-binding-drill,
-.ds-row:hover .dd-trigger-expr.mm-binding-drill {
-  color: var(--er-text);
-  border-color: var(--er-border);
-  background: var(--er-surface);
-}
-
-.dd-trigger-expr.mm-binding-drill:hover,
-.mm-tree-row:hover .dd-trigger-expr.mm-binding-drill:hover,
-.mm-validation-expr:hover .dd-trigger-expr.mm-binding-drill:hover {
-  color: var(--er-accent);
-  border-color: var(--er-accent-border);
-  background: var(--er-accent-soft);
-  box-shadow: none;
-}
-
-.dd-trigger-expr.mm-binding-drill:active {
-  transform: scale(0.94);
-}
-
-.dd-trigger-expr.mm-binding-drill:focus-visible {
-  color: var(--er-accent);
-  background: var(--er-accent-soft);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 50%, transparent);
-}
-
-@media (pointer: coarse) {
-  .dd-trigger-expr.mm-binding-drill {
-    width: 36px;
-    height: 36px;
-    margin-block: -8px;
-  }
-}
 .mm-binding-arrow {
   flex-shrink: 0;
   color: var(--er-accent);
@@ -8545,7 +8482,6 @@ div.path-tooltip-card {
 
 /* Mapping rows and datasource rows carry the same ⋮ after their drill-down,
    count or where-used control; those may already push right. */
-.mm-binding-drill + .fmt-row-actions,
 .mm-group-count + .fmt-row-actions,
 .ds-row-where-used + .fmt-row-actions {
   margin-left: 4px;
@@ -8817,4 +8753,89 @@ div.path-tooltip-card {
   z-index: 5;
   margin: 0;
   box-shadow: var(--er-shadow-2, 0 2px 8px rgb(0 0 0 / 0.12));
+}
+
+/* Search results come a page at a time; the next page is one click away. */
+.search-panel__more {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px dashed var(--er-border-strong);
+  border-radius: var(--er-radius-md);
+  background: transparent;
+  color: var(--er-accent);
+  font: inherit;
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.search-panel__more:hover {
+  background: var(--er-accent-soft);
+  border-color: var(--er-accent-border);
+}
+
+/* ── Groups: a draggable divider between them, and a stacked layout when the
+      designer is too narrow for two columns (strips on top of each other,
+      only the focused group's tab on screen). ── */
+.designer-split-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 6;
+  width: 7px;
+  margin-left: -3px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.designer-split-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition: background-color 120ms, width 120ms, left 120ms;
+}
+
+.designer-split-handle:hover::after,
+.designer-split-handle:focus-visible::after,
+.designer-split-handle--dragging::after {
+  left: 2px;
+  width: 3px;
+  background: var(--er-accent);
+}
+
+.designer-split-handle:focus-visible {
+  outline: none;
+}
+
+.designer-tabs--split.designer-tabs--narrow {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.designer-tabs--narrow .designer-group-strip--side {
+  grid-row: 2;
+  grid-column: 1;
+  border-left: none;
+}
+
+.designer-tabs--narrow .designer-tab-pane,
+.designer-tabs--narrow .designer-drop-zones {
+  grid-row: 3;
+  grid-column: 1;
+}
+
+.designer-tabs--narrow .designer-tab-pane--side {
+  border-left: none;
+}
+
+.designer-tabs--narrow[data-focused-pane='main'] .designer-tab-pane--side,
+.designer-tabs--narrow[data-focused-pane='side'] .designer-tab-pane--main {
+  visibility: hidden;
+  pointer-events: none;
 }
