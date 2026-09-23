@@ -13,7 +13,6 @@ import {
 } from '@fluentui/react-components';
 import {
   ArrowDownloadRegular,
-  ArrowSyncRegular,
   CloudRegular,
   DataBarVerticalRegular,
   DismissRegular,
@@ -21,12 +20,12 @@ import {
   FolderOpenRegular,
   LinkRegular,
   OpenRegular,
-  DeleteRegular,
 } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
 import { ThemeSwitch } from './ThemeSwitch';
 import { BrandWordmark } from './BrandWordmark';
 import { setLocale, t, useLocale } from '../i18n';
+import { RecentWork } from './RecentWork';
 import { FnoConnectPanel } from './FnoConnectPanel';
 import { useFnoSession } from '../state/fno-session';
 import { peekRedirectPending } from '../fno/redirect-state';
@@ -274,108 +273,6 @@ const useStyles = makeStyles({
   kindModel: { color: 'var(--er-model)' },
   kindMapping: { color: 'var(--er-mapping)' },
   kindFormat: { color: 'var(--er-format)' },
-  // ── recents ──
-  columns: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))',
-    gap: '20px',
-  },
-  section: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '10px',
-    minWidth: 0,
-  },
-  sectionHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '12px',
-  },
-  eyebrow: {
-    fontSize: '10.5px',
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    letterSpacing: '0.09em',
-    color: 'var(--er-text-muted)',
-  },
-  list: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
-  },
-  item: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    padding: '10px 12px',
-    borderRadius: 'var(--er-radius-lg)',
-    ...shorthands.border('1px', 'solid', 'var(--er-border)'),
-    backgroundColor: 'var(--er-surface)',
-    transitionProperty: 'border-color, background-color',
-    transitionDuration: 'var(--er-duration)',
-    ':hover': {
-      ...shorthands.borderColor('var(--er-accent-border)'),
-      backgroundColor: 'var(--er-surface-2)',
-    },
-  },
-  itemBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  itemName: {
-    fontSize: '13px',
-    fontWeight: 600,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  itemMeta: {
-    fontSize: '11px',
-    color: 'var(--er-text-muted)',
-    fontFamily: 'var(--er-font-mono)',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  sessionFiles: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '3px',
-    marginTop: '6px',
-    fontSize: '11.5px',
-    color: 'var(--er-text-muted)',
-  },
-  sessionFileRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    overflow: 'hidden',
-    whiteSpace: 'nowrap',
-    textOverflow: 'ellipsis',
-  },
-  sessionFileButton: {
-    ...shorthands.border('1px', 'solid', 'transparent'),
-    ...shorthands.borderRadius('4px'),
-    ...shorthands.padding('2px', '6px'),
-    width: '100%',
-    textAlign: 'left',
-    font: 'inherit',
-    color: 'var(--er-text-muted)',
-    backgroundColor: 'transparent',
-    cursor: 'pointer',
-    ':hover': {
-      backgroundColor: 'var(--er-surface-2)',
-      ...shorthands.borderColor('var(--er-accent-border)'),
-      color: 'var(--er-text-primary)',
-    },
-    ':disabled': {
-      cursor: 'default',
-      opacity: 0.6,
-      backgroundColor: 'transparent',
-      ...shorthands.borderColor('transparent'),
-    },
-  },
   footer: {
     borderTop: '1px solid var(--er-border)',
     padding: '18px 20px',
@@ -425,19 +322,6 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
   const isCs = currentLocale === 'cs';
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
   const configs = useAppStore(s => s.configurations);
-  const recentFiles = useAppStore(s => s.recentFiles);
-  const removeRecentFile = useAppStore(s => s.removeRecentFile);
-  const clearRecentFiles = useAppStore(s => s.clearRecentFiles);
-  const reloadRecentFile = useAppStore(s => s.reloadRecentFile);
-  const recentSessions = useAppStore(s => s.recentSessions);
-  const removeRecentSession = useAppStore(s => s.removeRecentSession);
-  const clearRecentSessions = useAppStore(s => s.clearRecentSessions);
-  const loadRecentSession = useAppStore(s => s.loadRecentSession);
-  const pushToast = useAppStore(s => s.pushToast);
-  // The session being opened: its button spins and the others wait.
-  const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
-  const loadCachedFile = useAppStore(s => s.loadCachedFile);
-  const cachedPaths = useAppStore(s => s.cachedPaths);
   const fnoIngestStatus = useAppStore(s => s.fnoIngestStatus);
   const fnoConnected = useFnoSession(s => s.connState.kind === 'connected');
   const [isDragging, setIsDragging] = useState(false);
@@ -664,165 +548,10 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
           </MessageBar>
         )}
 
-        {(recentSessions.length > 0 || recentFiles.length > 0) && (
-          <div className={styles.columns}>
-            {recentSessions.length > 0 && (
-              <div className={styles.section}>
-                <div className={styles.sectionHeader}>
-                  <span className={styles.eyebrow}>{t.recentSessions}</span>
-                  <Button appearance="subtle" size="small" icon={<DeleteRegular />} onClick={clearRecentSessions}>
-                    {t.clearRecent}
-                  </Button>
-                </div>
-                <div className={styles.list}>
-                  {recentSessions.map(session => {
-                    const canLoad = session.files.some(f => cachedPaths.has(f.path));
-                    const title = session.files.length === 1
-                      ? session.files[0]?.name ?? ''
-                      : t.recentSessionTitle(session.files.length);
-                    const busy = loadingSessionId === session.id;
-                    const handleLoad = (replace: boolean) => {
-                      if (!canLoad || loadingSessionId) return;
-                      setLoadingSessionId(session.id);
-                      loadRecentSession(session.id, { replace })
-                        .then(ok => { if (ok) onFilesLoaded(); })
-                        .catch(error => pushToast({
-                          kind: 'error',
-                          message: t.recentSessionLoadFailed(error instanceof Error ? error.message : String(error)),
-                        }))
-                        .finally(() => setLoadingSessionId(null));
-                    };
-                    return (
-                      <div
-                        key={session.id}
-                        className={styles.item}
-                        style={{ alignItems: 'flex-start', opacity: canLoad ? 1 : 0.6 }}
-                      >
-                        <div className={styles.itemBody}>
-                          <div className={styles.itemName}>{title}</div>
-                          <div className={styles.sessionFiles}>
-                            {session.files.map(f => {
-                              const cached = cachedPaths.has(f.path);
-                              const openOne = () => {
-                                if (!cached) return;
-                                void loadCachedFile(f.path, f.name).then(ok => { if (ok) onFilesLoaded(); });
-                              };
-                              return (
-                                <button
-                                  key={f.path}
-                                  type="button"
-                                  disabled={!cached}
-                                  className={mergeClasses(styles.sessionFileRow, styles.sessionFileButton)}
-                                  title={cached ? `${t.recentSessionFileHint} — ${f.path}` : f.path}
-                                  onClick={openOne}
-                                >
-                                  <KindIcon kind={f.kind} />
-                                  {f.name}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        {canLoad && (
-                          <>
-                            <Button
-                              appearance="subtle"
-                              size="small"
-                              icon={busy ? <Spinner size="extra-tiny" /> : <OpenRegular />}
-                              aria-label={t.recentSessionMergeHint}
-                              title={t.recentSessionMergeHint}
-                              disabled={Boolean(loadingSessionId)}
-                              onClick={() => handleLoad(false)}
-                            />
-                            <Button
-                              appearance="transparent"
-                              size="small"
-                              icon={<ArrowSyncRegular />}
-                              aria-label={t.recentSessionReplaceHint}
-                              title={t.recentSessionReplaceHint}
-                              disabled={Boolean(loadingSessionId)}
-                              onClick={() => handleLoad(true)}
-                            />
-                          </>
-                        )}
-                        <Button
-                          appearance="transparent"
-                          size="small"
-                          icon={<DismissRegular />}
-                          aria-label={t.removeFromHistory}
-                          title={t.removeFromHistory}
-                          onClick={() => removeRecentSession(session.id)}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {recentFiles.length > 0 && (
-              <div className={styles.section}>
-                <div className={styles.sectionHeader}>
-                  <span className={styles.eyebrow}>{t.recentFiles}</span>
-                  <Button appearance="subtle" size="small" icon={<DeleteRegular />} onClick={clearRecentFiles}>
-                    {t.clearRecent}
-                  </Button>
-                </div>
-                <div className={styles.list}>
-                  {recentFiles.map(rf => {
-                    const canReload = cachedPaths.has(rf.path);
-                    const handleReload = () => {
-                      if (!canReload) return;
-                      void reloadRecentFile(rf.path).then(ok => { if (ok) onFilesLoaded(); });
-                    };
-                    return (
-                      <div
-                        key={rf.path}
-                        className={styles.item}
-                        title={rf.path}
-                        style={{ opacity: canReload ? 1 : 0.75 }}
-                      >
-                        <KindIcon kind={rf.kind} size={16} />
-                        <div className={styles.itemBody}>
-                          <div className={styles.itemName}>{rf.name}</div>
-                          <div className={styles.itemMeta}>{rf.path}</div>
-                        </div>
-                        {canReload && (
-                          <Button
-                            appearance="subtle"
-                            size="small"
-                            icon={<OpenRegular />}
-                            aria-label={t.recentReloadHint}
-                            title={t.recentReloadHint}
-                            onClick={handleReload}
-                          />
-                        )}
-                        <Button
-                          appearance="transparent"
-                          size="small"
-                          icon={<DismissRegular />}
-                          aria-label={t.removeFromHistory}
-                          title={t.removeFromHistory}
-                          onClick={() => removeRecentFile(rf.path)}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        <RecentWork onFilesLoaded={onFilesLoaded} />
       </main>
 
       <footer className={styles.footer}>{t.landingFooter}</footer>
     </div>
   );
-}
-
-function KindIcon({ kind, size = 14 }: { kind?: string; size?: number }) {
-  const styles = useStyles();
-  if (kind === 'DataModel') return <DataBarVerticalRegular fontSize={size} className={styles.kindModel} />;
-  if (kind === 'ModelMapping') return <LinkRegular fontSize={size} className={styles.kindMapping} />;
-  return <DocumentRegular fontSize={size} className={styles.kindFormat} />;
 }

@@ -82,7 +82,7 @@ describe('deriveRecentSessionsAfterConfigChange', () => {
     expect(next.some(session => session.id === '/tmp/a.xml\u0001/tmp/b.xml')).toBe(false);
   });
 
-  it('removes the active session when all configurations are closed', () => {
+  it('keeps the last workspace in the history when all configurations are closed', () => {
     const previousConfigs = [makeConfig('/tmp/a.xml'), makeConfig('/tmp/b.xml')];
     const recentSessions = [
       makeSession(['/tmp/a.xml', '/tmp/b.xml'], 100),
@@ -101,7 +101,7 @@ describe('deriveRecentSessionsAfterConfigChange', () => {
       recentFiles,
     );
 
-    expect(next.map(session => session.id)).toEqual(['/tmp/older.xml']);
+    expect(next.map(session => session.id)).toEqual(['/tmp/a.xml\u0001/tmp/b.xml', '/tmp/older.xml']);
   });
 
   it('clears the F&O selection when all configurations are closed', () => {

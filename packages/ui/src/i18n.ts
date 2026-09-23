@@ -362,6 +362,25 @@ export interface Translations {
 
   // Recent files, samples, validator, shortcuts, forward nav
   recentFiles: string;
+  recentConfigs: string;
+  recentSessionsHint: string;
+  recentOpen: string;
+  recentMoreActions: string;
+  recentSourceFile: string;
+  recentSourceFiles: string;
+  recentSourceFileNamed: (file: string) => string;
+  recentSourceFno: string;
+  recentSourceFnoHost: (host: string) => string;
+  recentBundledFrom: (file: string) => string;
+  recentNotCached: string;
+  recentNotCachedHint: string;
+  recentOpenConfigHint: string;
+  recentSessionUnavailable: string;
+  recentSessionContents: (n: number) => string;
+  recentSessionCount: (n: number) => string;
+  recentShowAll: (n: number) => string;
+  recentShowLess: string;
+  recentFilterPlaceholder: string;
   noRecentFiles: string;
   clearRecent: string;
   recentReloadHint: string;
@@ -1224,6 +1243,25 @@ const cs: Translations = {
   landingFooter: 'D365 FO ER Visualizer · Electronic Reporting Configuration Inspector',
 
   recentFiles: 'Nedávné soubory',
+  recentConfigs: 'Nedávné konfigurace',
+  recentSessionsHint: 'Sady konfigurací, které byly otevřené spolu. Otevřením se přidají do pracovní plochy.',
+  recentOpen: 'Otevřít',
+  recentMoreActions: 'Další akce',
+  recentSourceFile: 'Místní soubor',
+  recentSourceFiles: 'Místní soubory',
+  recentSourceFileNamed: (file: string) => `Soubor ${file}`,
+  recentSourceFno: 'D365 F&O',
+  recentSourceFnoHost: (host: string) => `F&O · ${host}`,
+  recentBundledFrom: (file: string) => `Součást souboru ${file}`,
+  recentNotCached: 'není uloženo v prohlížeči',
+  recentNotCachedHint: 'Obsah už prohlížeč nemá uložený — otevřete soubor znovu z disku nebo ho stáhněte z F&O.',
+  recentOpenConfigHint: 'Přidat tuto konfiguraci do pracovní plochy',
+  recentSessionUnavailable: 'Konfigurace této relace už prohlížeč nemá uložené. Otevřete je znovu z disku nebo stáhněte z F&O.',
+  recentSessionCount: (n: number) => `${n} ${csPlural(n, 'konfigurace', 'konfigurace', 'konfigurací')}`,
+  recentSessionContents: (n: number) => `Obsah relace: ${n} ${csPlural(n, 'konfigurace', 'konfigurace', 'konfigurací')}`,
+  recentShowAll: (n: number) => `Zobrazit ${csPlural(n, 'celou', 'všechny', 'všech')} ${n}`,
+  recentShowLess: 'Zobrazit méně',
+  recentFilterPlaceholder: 'Filtrovat nedávné konfigurace…',
   noRecentFiles: 'Žádné nedávno otevřené soubory.',
   recentReloadHint: 'Znovu načíst soubor',
   recentSessions: 'Nedávné relace',
@@ -2102,6 +2140,25 @@ const en: Translations = {
   landingFooter: 'D365 FO ER Visualizer · Electronic Reporting Configuration Inspector',
 
   recentFiles: 'Recent files',
+  recentConfigs: 'Recent configurations',
+  recentSessionsHint: 'Sets of configurations that were open together. Opening one adds them to the workspace.',
+  recentOpen: 'Open',
+  recentMoreActions: 'More actions',
+  recentSourceFile: 'Local file',
+  recentSourceFiles: 'Local files',
+  recentSourceFileNamed: (file: string) => `File ${file}`,
+  recentSourceFno: 'D365 F&O',
+  recentSourceFnoHost: (host: string) => `F&O · ${host}`,
+  recentBundledFrom: (file: string) => `Part of ${file}`,
+  recentNotCached: 'not stored in the browser',
+  recentNotCachedHint: 'The browser no longer has the content — open the file again from disk or download it from F&O.',
+  recentOpenConfigHint: 'Add this configuration to the workspace',
+  recentSessionUnavailable: 'The browser no longer has the configurations of this session. Open them again from disk or download them from F&O.',
+  recentSessionCount: (n: number) => `${n} configuration${n === 1 ? '' : 's'}`,
+  recentSessionContents: (n: number) => `Session contents: ${n} configuration${n === 1 ? '' : 's'}`,
+  recentShowAll: (n: number) => `Show all ${n}`,
+  recentShowLess: 'Show less',
+  recentFilterPlaceholder: 'Filter recent configurations…',
   noRecentFiles: 'No recently opened files.',
   recentReloadHint: 'Reload file',
   recentSessions: 'Recent sessions',
