@@ -1436,3 +1436,36 @@ div.path-tooltip-card {
   color: var(--er-text-muted);
   font-size: var(--er-text-sm);
 }
+
+/* ── Model-mapping bindings, virtualized: each row is its own positioned
+      box, so it holds its margins (they are part of the measured height) and
+      draws the indentation rails and the elbow the nested markup used to. ── */
+.mm-flat-row {
+  display: flow-root;
+}
+
+.mm-flat-row:not([data-depth='0'])::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 20px;
+  width: calc(var(--mm-depth, 0) * 16px);
+  background-image: repeating-linear-gradient(
+    to right,
+    color-mix(in srgb, var(--er-border-strong) 80%, transparent) 0 1px,
+    transparent 1px 16px
+  );
+  pointer-events: none;
+}
+
+.mm-flat-row:not([data-depth='0']) > .mm-tree-row::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background: color-mix(in srgb, var(--er-border-strong) 80%, transparent);
+  pointer-events: none;
+}
