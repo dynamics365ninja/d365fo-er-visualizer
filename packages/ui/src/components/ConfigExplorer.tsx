@@ -385,7 +385,7 @@ export function ConfigExplorer() {
   const selectedNodeId = storeSelectedNodeId === explorerMutedSelectionId ? null : storeSelectedNodeId;
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const removeConfiguration = useAppStore(s => s.closeConfigurationWithUndo);
-  const removeAllConfigurations = useAppStore(s => s.removeAllConfigurations);
+  const closeAllConfigurationsWithUndo = useAppStore(s => s.closeAllConfigurationsWithUndo);
   const requestLanding = useAppStore(s => s.requestLanding);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -880,7 +880,7 @@ export function ConfigExplorer() {
                 {t.explorerSortNameDesc}
               </MenuItem>
               <MenuDivider />
-              <MenuItem icon={<DismissSquareMultipleRegular />} onClick={removeAllConfigurations}>
+              <MenuItem icon={<DismissSquareMultipleRegular />} onClick={closeAllConfigurationsWithUndo}>
                 {t.closeAllConfigurations}
               </MenuItem>
             </MenuList>

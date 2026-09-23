@@ -97,7 +97,7 @@ export function WorkspaceManager({
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
   const loadCachedFile = useAppStore(s => s.loadCachedFile);
   const closeConfigurationWithUndo = useAppStore(s => s.closeConfigurationWithUndo);
-  const removeAllConfigurations = useAppStore(s => s.removeAllConfigurations);
+  const closeAllConfigurationsWithUndo = useAppStore(s => s.closeAllConfigurationsWithUndo);
   const removeRecentFile = useAppStore(s => s.removeRecentFile);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const pushToast = useAppStore(s => s.pushToast);
@@ -309,7 +309,7 @@ export function WorkspaceManager({
                   size="small"
                   icon={<DismissSquareMultipleRegular />}
                   disabled={configurations.length === 0}
-                  onClick={removeAllConfigurations}
+                  onClick={closeAllConfigurationsWithUndo}
                 >
                   {t.closeAllConfigurations}
                 </Button>

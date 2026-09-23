@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DocumentRegular,
   ArrowRightRegular,
@@ -15,6 +15,7 @@ import { getFormatTypeThemeColor } from '../utils/theme-colors';
 import { relatedConfigIndices, relatedContainerRules, hitPassesContainerRule, type ScopeContainerRule } from '../utils/model-hierarchy';
 import { referenceCategory, WHERE_USED_CATEGORY_ORDER, type ReferenceCategory } from '../utils/where-used-category';
 import { ExpandCollapseSlider } from './ExpandCollapseSlider';
+import { useSearchFocusTarget } from '../utils/search-focus';
 import { buildSearchNodeIndex, findNodeForSearchResult, type SearchRegistry, type SearchResultEntry } from '../utils/search-node-index';
 
 
@@ -197,6 +198,8 @@ function ExamplePalette({
 
 export function SearchPanel() {
   const currentLocale = useLocale();
+  const inputRef = useRef<HTMLInputElement>(null);
+  useSearchFocusTarget(inputRef);
   const searchQuery = useAppStore(s => s.searchQuery);
   const setSearchQuery = useAppStore(s => s.setSearchQuery);
   const executeSearch = useAppStore(s => s.executeSearch);
@@ -457,6 +460,11 @@ export function SearchPanel() {
     if (e.key === 'Enter') {
       if (mode === 'search') handleSearch();
       else executeWhereUsed(whereUsedQuery);
+    } else if (e.key === 'Escape') {
+      // First Escape clears the query, the next one leaves the box.
+      e.preventDefault();
+      if (currentQuery) handleClear();
+      else e.currentTarget.blur();
     }
   };
 
@@ -475,7 +483,10 @@ export function SearchPanel() {
             <path d="M10 10l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
           </svg>
           <input
+            ref={inputRef}
             type="text"
+            data-search-input="true"
+            aria-label={mode === 'search' ? t.searchPlaceholder : t.whereUsedPlaceholder}
             value={currentQuery}
             onChange={handleInputChange}
             onKeyDown={handleInputKeyDown}

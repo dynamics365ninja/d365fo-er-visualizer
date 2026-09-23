@@ -92,9 +92,11 @@
   --syn-path: #4fc1ff;
   --syn-operator: #d4d4d4;
   --syn-literal: #ce9178;
-  --syn-separator: #808080;
+  /* Separators and field types come from the text tokens: the fixed greys
+     they used to be fell under 3:1 against the surfaces. */
+  --syn-separator: var(--er-text-subtle);
   --syn-resolved: #4ec9b0;
-  --syn-field-type: #666;
+  --syn-field-type: var(--er-text-muted);
   --syn-calc: #6a9955;
   /* Graph chrome follows the shared surfaces so designers, panels and the
      marketing screenshots all read as the same material. */
@@ -124,9 +126,9 @@
   --syn-path: #005fb8;
   --syn-operator: #383838;
   --syn-literal: #a31515;
-  --syn-separator: #999;
+  --syn-separator: var(--er-text-subtle);
   --syn-resolved: #16825d;
-  --syn-field-type: #999;
+  --syn-field-type: var(--er-text-muted);
   --syn-calc: #098658;
   color-scheme: light;
 }
@@ -8770,4 +8772,49 @@ div.path-tooltip-card {
 /* Element names on the format's binding cards: identifier blue, as elsewhere. */
 .fmt-bind-card-name {
   color: var(--syn-identifier);
+}
+
+/* Reduced motion, everywhere: looping pulses (the download progress, the
+   navigation flash) and every transition settle at once. The earlier block
+   only covered the path tooltip. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Drill-down cut off by its depth or node limit: said, not hidden. */
+.dd-truncated {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--er-warning) 40%, transparent);
+  border-radius: var(--er-radius-md);
+  background: color-mix(in srgb, var(--er-warning) 10%, var(--er-surface));
+  color: var(--er-text);
+  font-size: var(--er-text-sm);
+  line-height: 1.45;
+}
+
+.dd-truncated > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--er-warning);
+}
+
+.dd-truncated--floating {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 5;
+  margin: 0;
+  box-shadow: var(--er-shadow-2, 0 2px 8px rgb(0 0 0 / 0.12));
 }

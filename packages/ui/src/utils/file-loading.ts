@@ -28,6 +28,8 @@ async function ingestXmlFiles(
     try {
       if (loadXmlFile(file.content, file.name) !== false) loaded++;
     } catch (error) {
+      // The store has shown this one in a toast already.
+      if ((error as { reported?: boolean } | null)?.reported) continue;
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`${file.name}: ${message}`);
     }

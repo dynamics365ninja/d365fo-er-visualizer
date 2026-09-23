@@ -79,6 +79,7 @@ export function useFnoIngest({
     ingestAbortRef.current?.abort();
     ingestAbortRef.current = ingestAbort;
     setIngesting(true);
+    useAppStore.setState({ cancelFnoIngest: () => ingestAbort.abort() });
     let result: FnoIngestResult;
     try {
       result = await runFnoIngest({
@@ -90,7 +91,10 @@ export function useFnoIngest({
         signal: ingestAbort.signal,
       }, appIngestDeps());
     } finally {
-      if (ingestAbortRef.current === ingestAbort) ingestAbortRef.current = null;
+      if (ingestAbortRef.current === ingestAbort) {
+        ingestAbortRef.current = null;
+        useAppStore.setState({ cancelFnoIngest: null });
+      }
       setIngesting(false);
     }
     // Cancelled: whatever arrived is in the workspace, but this is no success.

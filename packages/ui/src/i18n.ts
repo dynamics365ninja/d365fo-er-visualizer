@@ -1,5 +1,13 @@
 import { useSyncExternalStore } from 'react';
 
+/** Czech plural form: 1 → `one`, 2–4 → `few`, 0 and 5+ → `many`. */
+export function csPlural(n: number, one: string, few: string, many: string): string {
+  const abs = Math.abs(n);
+  if (abs === 1) return one;
+  if (abs >= 2 && abs <= 4) return few;
+  return many;
+}
+
 // ─── Internationalisation ───────────────────────────────────────────────────
 // Detects OS/browser locale and returns the correct translation dict.
 // Supported: cs (Czech), en (English, default)
@@ -322,6 +330,18 @@ export interface Translations {
   landingErrors: string;
   landingDismiss: string;
   landingLoaded: (n: number) => string;
+  undo: string;
+  removeFromHistory: string;
+  historyFileRemoved: (name: string) => string;
+  historyFilesCleared: (n: number) => string;
+  historySessionsCleared: (n: number) => string;
+  workspaceClosedAll: (n: number) => string;
+  workspaceUndoCloseAll: string;
+  fnoRemoveProfileConfirmTitle: (name: string) => string;
+  fnoRemoveProfileConfirmBody: string;
+  cancel: string;
+  drillTruncated: string;
+  fnoIngestCancel: string;
   landingOpen: string;
   // Landing page – footer
   landingFooter: string;
@@ -348,6 +368,9 @@ export interface Translations {
   // Toasts / errors
   toastLoadFailed: (file: string) => string;
   dismiss: string;
+  panelMaximize: string;
+  panelRestore: string;
+  panelClose: string;
 
   // Tooltips in ClickablePath
   pathClickToNavigate: string;
@@ -454,6 +477,7 @@ export interface Translations {
   propModelVersion: string;
   propDatasources: string;
   propBindings: string;
+  propNotBound: string;
   propValidations: string;
   /** Empty state of the model-mapping designer's Validations tab. */
   mappingNoValidations: string;
@@ -936,7 +960,19 @@ const cs: Translations = {
   landingPillFormat: 'Formát',
   landingErrors: 'Chyby načítání',
   landingDismiss: 'Zavřít',
-  landingLoaded: (n: number) => `${n} konfigurac${n === 1 ? 'e načtena' : 'e načteny'}`,
+  landingLoaded: (n: number) => `${n} ${csPlural(n, 'konfigurace načtena', 'konfigurace načteny', 'konfigurací načteno')}`,
+  undo: 'Zpět',
+  removeFromHistory: 'Odebrat z historie',
+  historyFileRemoved: (name: string) => `„${name}“ odebrán z historie.`,
+  historyFilesCleared: (n: number) => `Historie vymazána (${n} ${csPlural(n, 'soubor', 'soubory', 'souborů')}).`,
+  historySessionsCleared: (n: number) => `Historie relací vymazána (${n} ${csPlural(n, 'relace', 'relace', 'relací')}).`,
+  workspaceClosedAll: (n: number) => `${csPlural(n, 'Zavřena', 'Zavřeny', 'Zavřeno')} ${n} ${csPlural(n, 'konfigurace', 'konfigurace', 'konfigurací')}.`,
+  workspaceUndoCloseAll: 'Znovu otevřít',
+  fnoRemoveProfileConfirmTitle: (name: string) => `Odebrat profil „${name}“?`,
+  fnoRemoveProfileConfirmBody: 'Profil se odebere i s uloženým přihlášením k prostředí. Pro další stahování bude potřeba ho znovu vytvořit a přihlásit se.',
+  cancel: 'Zrušit',
+  drillTruncated: 'Cesta je příliš rozvětvená a nezobrazuje se celá — část zdrojů chybí i v „Použitá data“. Klikněte na část výrazu a rozpad se zúží na ni.',
+  fnoIngestCancel: 'Zrušit stahování',
   landingOpen: 'Otevřít návrhář',
   landingFooter: 'D365 FO ER Visualizer · Electronic Reporting Configuration Inspector',
 
@@ -959,6 +995,9 @@ const cs: Translations = {
 
   toastLoadFailed: (file: string) => `Soubor „${file}" se nepodařilo načíst.`,
   dismiss: 'Zavřít',
+  panelMaximize: 'Zvětšit panel',
+  panelRestore: 'Obnovit velikost panelu',
+  panelClose: 'Zavřít panel',
 
   pathClickToNavigate: 'Klikni pro navigaci →',
   pathTable: 'Tabulka',
@@ -1065,6 +1104,7 @@ const cs: Translations = {
   propModelVersion: 'Verze modelu',
   propDatasources: 'Datové zdroje',
   propBindings: 'Vazby',
+  propNotBound: 'Bez vazby',
   propValidations: 'Validace',
   mappingNoValidations: 'Toto mapování nemá žádné validace',
   propModelGuid: 'GUID modelu',
@@ -1566,6 +1606,18 @@ const en: Translations = {
   landingErrors: 'Load errors',
   landingDismiss: 'Dismiss',
   landingLoaded: (n: number) => `${n} configuration${n === 1 ? '' : 's'} loaded`,
+  undo: 'Undo',
+  removeFromHistory: 'Remove from history',
+  historyFileRemoved: (name: string) => `"${name}" removed from history.`,
+  historyFilesCleared: (n: number) => `History cleared (${n} file${n === 1 ? '' : 's'}).`,
+  historySessionsCleared: (n: number) => `Session history cleared (${n} session${n === 1 ? '' : 's'}).`,
+  workspaceClosedAll: (n: number) => `Closed ${n} configuration${n === 1 ? '' : 's'}.`,
+  workspaceUndoCloseAll: 'Reopen',
+  fnoRemoveProfileConfirmTitle: (name: string) => `Remove profile "${name}"?`,
+  fnoRemoveProfileConfirmBody: 'The profile is removed together with its saved sign-in to the environment. To download again you will need to create it and sign in again.',
+  cancel: 'Cancel',
+  drillTruncated: 'The path branches too much to show in full — some sources are missing from “Used data” too. Click a part of the expression to narrow the breakdown to it.',
+  fnoIngestCancel: 'Cancel download',
   landingOpen: 'Open designer',
   landingFooter: 'D365 FO ER Visualizer · Electronic Reporting Configuration Inspector',
 
@@ -1588,6 +1640,9 @@ const en: Translations = {
 
   toastLoadFailed: (file: string) => `Failed to load "${file}".`,
   dismiss: 'Dismiss',
+  panelMaximize: 'Maximize panel',
+  panelRestore: 'Restore panel size',
+  panelClose: 'Close panel',
 
   pathClickToNavigate: 'Click to navigate →',
   pathTable: 'Table',
@@ -1694,6 +1749,7 @@ const en: Translations = {
   propModelVersion: 'Model Version',
   propDatasources: 'Datasources',
   propBindings: 'Bindings',
+  propNotBound: 'Not bound',
   propValidations: 'Validations',
   mappingNoValidations: 'This mapping defines no validations',
   propModelGuid: 'Model GUID',

@@ -9,6 +9,7 @@ import {
   CloudArrowDownRegular,
   ArrowSyncRegular,
   CheckmarkCircleRegular,
+  DismissRegular,
 } from '@fluentui/react-icons';
 import type { ErConfigSummary } from '@er-visualizer/fno-client';
 import { t } from '../../i18n';
@@ -24,6 +25,7 @@ export interface IngestFooterProps {
 export const IngestFooter: React.FC<IngestFooterProps> = ({ selected, ingesting, onLoadSelected }) => {
   const styles = useFnoPanelStyles();
   const ingestStatus = useAppStore(s => s.fnoIngestStatus);
+  const cancelIngest = useAppStore(s => s.cancelFnoIngest);
   return (
     <div className={styles.footer}>
       <div className={styles.footerStatus}>
@@ -63,6 +65,11 @@ export const IngestFooter: React.FC<IngestFooterProps> = ({ selected, ingesting,
           </Tooltip>
         )}
       </div>
+      {ingesting && cancelIngest && (
+        <Button appearance="secondary" size="large" icon={<DismissRegular />} onClick={cancelIngest}>
+          {t.fnoIngestCancel}
+        </Button>
+      )}
       <Button
         appearance="primary"
         size="large"

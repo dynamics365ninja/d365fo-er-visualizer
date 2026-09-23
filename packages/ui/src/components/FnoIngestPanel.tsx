@@ -5,6 +5,7 @@ import {
   CheckmarkCircleFilled,
   CloudArrowDownRegular,
   DismissCircleFilled,
+  DismissRegular,
   SubtractCircleRegular,
 } from '@fluentui/react-icons';
 import { t, useLocale } from '../i18n';
@@ -75,6 +76,7 @@ export function FnoIngestPanel({ variant = 'overlay', onClose }: {
   const loc = useLocale();
   const status = useAppStore(s => s.fnoIngestStatus);
   const progress = useAppStore(s => s.fnoIngestProgress);
+  const cancelIngest = useAppStore(s => s.cancelFnoIngest);
   const elapsed = useElapsedSeconds(progress.startedAt, progress.finishedAt);
   const active = progress.active || Boolean(status);
   const step = activeIngestStep(status);
@@ -153,6 +155,11 @@ export function FnoIngestPanel({ variant = 'overlay', onClose }: {
       {isOverlay && (
         <div className="fno-ingest__foot">
           <span className="fno-ingest__hint">{t.fnoIngestHint}</span>
+          {active && cancelIngest && (
+            <Button appearance="secondary" size="small" icon={<DismissRegular />} onClick={cancelIngest}>
+              {t.fnoIngestCancel}
+            </Button>
+          )}
           {onClose && !active && (
             <Button appearance="primary" size="small" onClick={onClose}>{t.fnoIngestClose}</Button>
           )}
