@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      # The Electron binary is not needed to type-check or test.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The UI and Electron type-checks read the libraries' built .d.ts files.
+      - name: Build the libraries
+        run: pnpm --filter @er-visualizer/core --filter @er-visualizer/fno-client build
+
+      - name: Type-check and lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build the web app
+        run: pnpm build:web
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level=high

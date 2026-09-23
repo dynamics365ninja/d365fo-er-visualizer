@@ -113,7 +113,9 @@ the only part of the repo written for search engines.
 - **Hosts the SPA** — `scripts/stage-app.mjs` copies `packages/ui/dist` into `public/app`, and a
   rewrite maps `/app` to its entry document. The SPA must be built with `APP_BASE=/app/`.
 - **`/api/fno`** — edge route handler proxying F&O calls, since F&O sends no CORS headers. Allows
-  `*.dynamics.com` over HTTPS only; streams the upstream body back without storing anything.
+  F&O environment hosts only (`*.operations[.<region>].dynamics.com`, `*.cloudax`, `*.axcloud`,
+  `*.sandbox.ax.dynamics.com`) over HTTPS, rejects foreign origins server-side, and streams the
+  upstream body back without storing anything.
 
 Styling is Tailwind 4 with CSS custom properties that flip on `prefers-color-scheme`. The header's
 `ThemeSwitch` (the site's only client component) and a blocking script in the root layout both go
@@ -125,8 +127,8 @@ CSS. See [Theming](#theming).
 
 Thin shell — `BrowserWindow` + `contextBridge`. Adds:
 - Native file-open dialogs via IPC.
-- Loopback MSAL flow for F&O sign-in in environments that block popup origins: `@azure/msal-node` `getAuthCodeUrl` opens the system browser, an ephemeral `http://localhost:<port>/` listener receives the code, `acquireTokenByCode` exchanges it (5-minute timeout). Tokens are cached on disk, encrypted with `safeStorage` when available.
-- `fno:request` IPC — forwards HTTPS requests to `*.dynamics.com` hosts only (same allow-list as the site proxy).
+- Loopback MSAL flow for F&O sign-in in environments that block popup origins: `@azure/msal-node` `getAuthCodeUrl` (with PKCE) opens the system browser, an ephemeral `http://localhost:<port>/` listener receives the code, `acquireTokenByCode` exchanges it (5-minute timeout). Each connection remembers its own account. Tokens are cached on disk encrypted with `safeStorage`, or kept in memory only when the OS offers no encryption.
+- `fno:request` IPC — validates the caller and payload and forwards GET/POST requests to F&O environment hosts only (the site proxy's allow-list plus `cloud.onebox` dev VMs); `fno:abort` cancels a request by id.
 - Packaging — `electron-builder` (`pnpm --filter @er-visualizer/electron dist`); the renderer is shipped as `extraResources/ui` from `packages/ui/dist`.
 
 ---

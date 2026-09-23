@@ -125,7 +125,8 @@ Finance &amp; Operations does not send CORS headers, so a browser cannot call it
 directly. The hosted app routes those calls through a stateless proxy that forwards the request
 server-side, carrying your bearer token, and returns the response with CORS headers attached.
 
-The proxy only forwards to hosts matching `*.dynamics.com` over HTTPS — it cannot be used as an
+The proxy only forwards to Finance & Operations environment hosts (`*.operations.dynamics.com` and
+its regional and sandbox forms, `*.cloudax`, `*.axcloud`, `*.sandbox.ax.dynamics.com`) over HTTPS — it cannot be used as an
 open relay — and it stores nothing: no tokens, no configuration content, no logs of your data. The
 [desktop app](/docs/desktop-app) skips the proxy entirely and calls the environment directly.
 
