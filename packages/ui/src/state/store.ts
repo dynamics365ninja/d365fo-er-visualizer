@@ -10,7 +10,6 @@ import {
   saveFileContent,
   readFileContent,
   deleteFileContent,
-  clearAllFileContent,
   listCachedPaths,
 } from '../utils/content-cache';
 import {
@@ -1085,7 +1084,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       void deleteFileContent(path);
       return;
     }
-    const pending = scheduleUndoable(() => { void deleteFileContent(path); });
+    // The cached copy goes once the undo window has passed — unless the file
+    // was opened again meanwhile, whose fresh copy lives under the same key.
+    const contentKey = entry.bundlePath ?? bundleContentPath(path);
+    const pending = scheduleUndoable(() => {
+      if (contentKeysInUse(get()).has(contentKey)) return;
+      void deleteFileContent(contentKey);
+    });
     get().pushToast({
       kind: 'info',
       message: t.historyFileRemoved(entry.solutionName ?? entry.name),
@@ -1110,7 +1115,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (previousFiles.length === 0) return;
     saveRecentFiles([]);
     set({ recentFiles: [], cachedPaths: new Set<string>() });
-    const pending = scheduleUndoable(() => { void clearAllFileContent(); });
+    // Everything cached goes once the undo window has passed, except what was
+    // opened since: clearing the whole store then wiped files loaded after
+    // the click, and their sessions offered "Open" for content that was gone.
+    const pending = scheduleUndoable(() => {
+      void (async () => {
+        const inUse = contentKeysInUse(get());
+        for (const key of await listCachedPaths()) {
+          if (!inUse.has(key)) await deleteFileContent(key);
+        }
+      })();
+    });
     get().pushToast({
       kind: 'info',
       message: t.historyFilesCleared(previousFiles.length),
@@ -1170,8 +1185,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }),
     );
-    const missing = contents.filter(c => !c.content).map(c => c.path.split(/[\\/]/).pop() ?? c.path);
+    const missingKeys = contents.filter(c => !c.content).map(c => c.path);
+    const missing = missingKeys.map(key => key.split(/[\\/]/).pop() ?? key);
     const available = contents.filter(c => c.content);
+    // What turned out not to be cached stops being offered as reopenable.
+    if (missingKeys.length > 0) set({ cachedPaths: withoutContentKeys(get().cachedPaths, missingKeys) });
     if (available.length === 0) {
       get().pushToast({
         kind: 'warning',
@@ -1243,6 +1261,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const contentPath = entry?.bundlePath ?? bundleContentPath(path);
     const content = await readFileContent(contentPath);
     if (!content) {
+      set({ cachedPaths: withoutContentKeys(get().cachedPaths, [contentPath]) });
       get().pushToast({
         kind: 'warning',
         message: t.toastFileNotCached(label),
@@ -1398,6 +1417,20 @@ export function normalizeGroups(state: GroupState, previousMainTab: string | nul
   if (!splitTabId) focusedPane = 'main';
 
   return { openTabs: state.openTabs, activeTabId, splitTabId, sideTabIds, focusedPane };
+}
+
+/** Content-cache keys still needed: every recent file's and every open configuration's. */
+function contentKeysInUse(state: Pick<AppState, 'recentFiles' | 'configurations'>): Set<string> {
+  const keys = new Set<string>();
+  for (const file of state.recentFiles) keys.add(file.bundlePath ?? bundleContentPath(file.path));
+  for (const config of state.configurations) keys.add(bundleContentPath(config.filePath));
+  return keys;
+}
+
+/** `cachedPaths` without the given content keys and the bundled extracts stored under them. */
+function withoutContentKeys(cachedPaths: Set<string>, keys: string[]): Set<string> {
+  const drop = new Set(keys);
+  return new Set([...cachedPaths].filter(path => !drop.has(bundleContentPath(path))));
 }
 
 /** How long an "Undo" toast stays up; the undone work runs only after it. */

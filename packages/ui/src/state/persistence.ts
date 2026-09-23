@@ -171,14 +171,19 @@ export function bundleContentPath(path: string): string {
   return path.replace(/#datamodel:.*$/, '');
 }
 
+/**
+ * A session remembers each configuration the way the recent-files list does
+ * (name, version, source) — it used to keep only the file name, so an F&O
+ * download showed up as its synthetic `fno://…` key.
+ */
 function buildRecentSessionFiles(configurations: ERConfiguration[], recentFiles: RecentFile[]): RecentFile[] {
   return configurations.map(config => {
-    const cachedFromList = recentFiles.find(entry => entry.path === config.filePath);
+    const known = recentFiles.find(entry => entry.path === config.filePath);
+    const source = known?.source ?? (config.filePath.startsWith('fno://') ? 'fno' : 'file');
     return {
-      path: config.filePath,
-      name: config.filePath.split(/[\\/]/).pop() ?? config.filePath,
-      kind: config.content.kind,
-      openedAt: cachedFromList?.openedAt ?? Date.now(),
+      ...describeRecentFile(config, source),
+      bundlePath: known?.bundlePath,
+      openedAt: known?.openedAt ?? Date.now(),
     };
   });
 }
@@ -189,12 +194,16 @@ export function deriveRecentSessionsAfterConfigChange(
   recentSessions: RecentSession[],
   recentFiles: RecentFile[],
 ): RecentSession[] {
+  // Closing everything leaves the last workspace in the history — reopening
+  // it is what the list is for. Only a workspace that is still open follows
+  // the configurations as they are closed one by one.
+  if (nextConfigs.length === 0) return recentSessions;
+
   const previousSessionId = previousConfigs.length > 0
     ? sessionFingerprint(previousConfigs.map(config => config.filePath))
     : null;
 
   const baseSessions = recentSessions.filter(session => session.id !== previousSessionId);
-  if (nextConfigs.length === 0) return baseSessions;
 
   const nextSessionFiles = buildRecentSessionFiles(nextConfigs, recentFiles);
   const nextSessionId = sessionFingerprint(nextSessionFiles.map(file => file.path));

@@ -25,6 +25,7 @@ import {
 } from '@fluentui/react-icons';
 import { findRelatedRecentFiles, useAppStore, type RecentFile } from '../state/store';
 import { t, useLocale } from '../i18n';
+import { describeRecent } from '../utils/recent-display';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 import { useResizableDialog } from '../utils/resizable-dialog';
 import { buildExplorerModelGroups, getBestVersion, type ExplorerModelGroup } from '../utils/model-hierarchy';
@@ -57,6 +58,17 @@ function SourcePill({ source, path }: { source: RecentFile['source'] | undefined
       {isFno ? t.workspaceSourceFno : t.workspaceSourceFile}
     </span>
   );
+}
+
+/**
+ * Where a configuration came from, when it adds to its name: the F&O host, the
+ * bundle it was extracted from, or a file name that is not just the name again.
+ * The synthetic `fno://…` key used to show here verbatim.
+ */
+function Origin({ path, recent }: { path: string; recent?: RecentFile }) {
+  const display = describeRecent(recent ?? { path, name: path.split(/[\\/]/).pop() ?? path, openedAt: 0 });
+  if (!display.origin) return null;
+  return <span className="ws-path" title={path}>{display.origin}</span>;
 }
 
 function matches(query: string, ...parts: Array<string | undefined>): boolean {
@@ -175,7 +187,7 @@ export function WorkspaceManager({
           <span className="ws-row-meta">
             {version && <span className="ws-version">v{version}</span>}
             <SourcePill source={recent?.source} path={cfg.filePath} />
-            <span className="ws-path" title={cfg.filePath}>{cfg.filePath.replace(/^fno:\/\/[^/]+\//, '')}</span>
+            <Origin path={cfg.filePath} recent={recent} />
           </span>
         </span>
         <span className="ws-row-actions">
@@ -347,11 +359,11 @@ export function WorkspaceManager({
                     <li key={rf.path} className={`ws-row ws-row--${kindAccent[rf.kind ?? ''] ?? 'unknown'}`}>
                       <KindPill kind={rf.kind} />
                       <span className="ws-row-body">
-                        <span className="ws-row-name" title={rf.solutionName ?? rf.name}>{rf.solutionName ?? rf.name}</span>
+                        <span className="ws-row-name" title={describeRecent(rf).title}>{describeRecent(rf).title}</span>
                         <span className="ws-row-meta">
                           {rf.version && <span className="ws-version">v{rf.version}</span>}
                           <SourcePill source={rf.source} path={rf.path} />
-                          <span className="ws-path" title={rf.path}>{rf.name}</span>
+                          <Origin path={rf.path} recent={rf} />
                         </span>
                       </span>
                       <span className="ws-row-actions">
