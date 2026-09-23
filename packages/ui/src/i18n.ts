@@ -363,8 +363,8 @@ export interface Translations {
   // Recent files, samples, validator, shortcuts, forward nav
   recentFiles: string;
   recentConfigs: string;
-  recentSessionsHint: string;
   recentOpen: string;
+  recentAddToOpen: string;
   recentMoreActions: string;
   recentSourceFile: string;
   recentSourceFiles: string;
@@ -1244,8 +1244,8 @@ const cs: Translations = {
 
   recentFiles: 'Nedávné soubory',
   recentConfigs: 'Nedávné konfigurace',
-  recentSessionsHint: 'Sady konfigurací, které byly otevřené spolu. Otevřením se přidají do pracovní plochy.',
   recentOpen: 'Otevřít',
+  recentAddToOpen: 'Přidat k otevřeným',
   recentMoreActions: 'Další akce',
   recentSourceFile: 'Místní soubor',
   recentSourceFiles: 'Místní soubory',
@@ -1266,8 +1266,8 @@ const cs: Translations = {
   recentReloadHint: 'Znovu načíst soubor',
   recentSessions: 'Nedávné relace',
   recentSessionTitle: (count: number) => `Relace (${count} ${csPlural(count, 'soubor', 'soubory', 'souborů')})`,
-  recentSessionMergeHint: 'Přidat relaci do pracovní plochy',
-  recentSessionReplaceHint: 'Nahradit pracovní plochu touto relací',
+  recentSessionMergeHint: 'Přidat konfigurace relace k těm, které jsou otevřené',
+  recentSessionReplaceHint: 'Zavřít otevřené a otevřít tuto relaci',
   recentSessionFileHint: 'Přidat konfiguraci do pracovní plochy',
   clearRecent: 'Vymazat historii',
   loadSample: 'Načíst ukázkovou konfiguraci',
@@ -2141,8 +2141,8 @@ const en: Translations = {
 
   recentFiles: 'Recent files',
   recentConfigs: 'Recent configurations',
-  recentSessionsHint: 'Sets of configurations that were open together. Opening one adds them to the workspace.',
   recentOpen: 'Open',
+  recentAddToOpen: 'Add to open',
   recentMoreActions: 'More actions',
   recentSourceFile: 'Local file',
   recentSourceFiles: 'Local files',
@@ -2163,8 +2163,8 @@ const en: Translations = {
   recentReloadHint: 'Reload file',
   recentSessions: 'Recent sessions',
   recentSessionTitle: (count: number) => `Session (${count} ${count === 1 ? 'file' : 'files'})`,
-  recentSessionMergeHint: 'Add session to workspace',
-  recentSessionReplaceHint: 'Replace workspace with this session',
+  recentSessionMergeHint: 'Add the session’s configurations to the ones that are open',
+  recentSessionReplaceHint: 'Close what is open and open this session',
   recentSessionFileHint: 'Add configuration to workspace',
   clearRecent: 'Clear history',
   loadSample: 'Load sample configuration',

@@ -69,7 +69,6 @@ function RecentSessions({ sessions, recentFiles, onFilesLoaded }: {
         <h2 id="recent-sessions-title" className="recent-section__title">{t.recentSessions}</h2>
         <Button appearance="subtle" size="small" icon={<DeleteRegular />} onClick={clearRecentSessions}>{t.clearRecent}</Button>
       </header>
-      <p className="recent-section__hint">{t.recentSessionsHint}</p>
       <ul className="recent-sessions">
         {shown.map(session => (
           <SessionCard
@@ -104,6 +103,10 @@ function SessionCard({ session, recentFiles, loadingId, setLoadingId, onFilesLoa
   const loadCachedFile = useAppStore(s => s.loadCachedFile);
   const removeRecentSession = useAppStore(s => s.removeRecentSession);
   const pushToast = useAppStore(s => s.pushToast);
+  // With nothing open, adding a session and replacing the workspace with it
+  // are the same thing — "Replace" is only offered when there is something
+  // to replace.
+  const workspaceOpen = useAppStore(s => s.configurations.length > 0);
 
   const headline = useMemo(() => sessionHeadline(session, recentFiles), [session, recentFiles]);
   const available = session.files.some(f => cachedPaths.has(f.path));
@@ -144,10 +147,10 @@ function SessionCard({ session, recentFiles, loadingId, setLoadingId, onFilesLoa
               size="small"
               icon={busy ? <Spinner size="extra-tiny" /> : <OpenRegular />}
               disabled={Boolean(loadingId)}
-              title={t.recentSessionMergeHint}
+              title={workspaceOpen ? t.recentSessionMergeHint : undefined}
               onClick={() => load(false)}
             >
-              {t.recentOpen}
+              {workspaceOpen ? t.recentAddToOpen : t.recentOpen}
             </Button>
           )}
           <Menu>
@@ -156,7 +159,7 @@ function SessionCard({ session, recentFiles, loadingId, setLoadingId, onFilesLoa
             </MenuTrigger>
             <MenuPopover>
               <MenuList>
-                {available && (
+                {available && workspaceOpen && (
                   <MenuItem icon={<ArrowSyncRegular />} disabled={Boolean(loadingId)} onClick={() => load(true)}>
                     {t.recentSessionReplaceHint}
                   </MenuItem>
