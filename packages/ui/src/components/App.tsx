@@ -608,10 +608,15 @@ export function App() {
                 )}
               </div>
             ) : (
+              /* Side panels come and go, so every panel carries an id and an
+                 order: without them the group ranks panels by when they
+                 mounted, and an explorer reopened next to an open designer
+                 became the second panel — dragging its splitter to the left
+                 then widened it. */
               <PanelGroup direction="horizontal">
                 {showLeft && (
                   <>
-                    <Panel defaultSize={leftPaneSize} minSize={isCompact ? 28 : 15} maxSize={isCompact ? 60 : 40}>
+                    <Panel id="explorer" order={1} defaultSize={leftPaneSize} minSize={isCompact ? 28 : 15} maxSize={isCompact ? 60 : 40}>
                       <div className={styles.sidebar}>
                         <ErrorBoundary label={t.explorer}>
                           <ConfigExplorer />
@@ -622,7 +627,7 @@ export function App() {
                   </>
                 )}
 
-                <Panel defaultSize={centerPaneSize} minSize={isCompact ? 22 : 30}>
+                <Panel id="designer" order={2} defaultSize={centerPaneSize} minSize={isCompact ? 22 : 30}>
                   <div className={styles.center}>
                       <div className={styles.panelContent}>
                       <ErrorBoundary label={t.errorAreaDesigner}>
@@ -637,7 +642,7 @@ export function App() {
                 {showRight && (
                   <>
                     <PanelResizeHandle className={styles.resizeHandle} />
-                    <Panel defaultSize={rightPaneSize} minSize={isCompact ? 30 : 20} maxSize={isCompact ? 65 : 50}>
+                    <Panel id="side-panel" order={3} defaultSize={rightPaneSize} minSize={isCompact ? 30 : 20} maxSize={isCompact ? 65 : 50}>
                       <div className={mergeClasses(styles.sidebar, styles.sidebarRight)}>
                         <RightPanel
                           tab={rightTab}
