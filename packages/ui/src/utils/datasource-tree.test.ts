@@ -8,6 +8,7 @@ import {
   filterDatasources,
   findModelForDescriptor,
   keysWithDeclaredDescendants,
+  collectDeclaredNodes,
   type DatasourceTreeNode,
 } from './datasource-tree';
 
@@ -99,8 +100,11 @@ describe('datasource tree', () => {
     const lines = tree.childrenOf(top[1]);
     expect(names(lines)).toEqual(['$Split_InventDimPrint', 'Amount', 'LineBase', 'Status']);
     expect(tree.hasChildren(lines[2])).toBe(true);
-    // An enum field names a container too, but has no fields to browse.
-    expect(tree.hasChildren(lines[3])).toBe(false);
+    // An enum field opens to the values of the enum it names, not to fields.
+    expect(tree.hasChildren(lines[3])).toBe(true);
+    const [open] = tree.childrenOf(lines[3]);
+    expect(open.enumValue).toEqual({ name: 'Open', label: undefined, uses: 0 });
+    expect(open.key).toBe('model/invoicelines/status/=open');
     expect(names(tree.childrenOf(lines[2]))).toEqual(['$Split_Note', 'ItemId']);
 
     // Children of anything that is not a data model stay as declared.
@@ -127,5 +131,32 @@ describe('datasource tree', () => {
     expect(findModelForDescriptor([other, model], 'salesinvoice', new Set(['model']))).toBe(model);
     expect(findModelForDescriptor([other, model], 'SalesInvoice')).toBe(other);
     expect(findModelForDescriptor([model], 'Missing')).toBeUndefined();
+  });
+
+  it('lists an enum datasource\'s values below it', () => {
+    const tree = buildDatasourceTree(datasources, undefined, (source, key) => (
+      key === 'enums/unit' && source.enumInfo
+        ? { values: [{ name: 'Pcs', uses: 2 }, { name: 'Kg', uses: 0 }], complete: false }
+        : null
+    ));
+    const unit = tree.childrenOf(tree.roots[1])[0];
+    expect(unit.enumValues?.complete).toBe(false);
+    expect(tree.hasChildren(unit)).toBe(true);
+    expect(tree.childrenOf(unit).map(node => [node.key, node.enumValue?.uses])).toEqual([
+      ['enums/unit/=pcs', 2],
+      ['enums/unit/=kg', 0],
+    ]);
+  });
+
+  it('collects every declared datasource at any depth, in definition order', () => {
+    const tree = buildDatasourceTree(datasources);
+    expect(collectDeclaredNodes(tree).map(node => node.key)).toEqual([
+      'model',
+      'model/invoicelines/split_inventdimprint',
+      'model/invoicelines/linebase/split_note',
+      'model/invoicebase/split_note',
+      'enums',
+      'enums/unit',
+    ]);
   });
 });
