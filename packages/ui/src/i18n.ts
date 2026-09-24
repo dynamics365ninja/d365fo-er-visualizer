@@ -545,8 +545,6 @@ export interface Translations {
   excelFooter: string;
   excelRepeatingVertical: string;
   excelRepeatingHorizontal: string;
-  excelLegendDynamic: string;
-  excelLegendConstant: string;
   excelTemplateView: string;
   excelShowTemplate: string;
   excelTemplateLoading: string;
@@ -633,7 +631,6 @@ export interface Translations {
   // Audit fixes (a11y labels, former inline ternaries)
   designerWorkspaceEyebrow: string;
   designerUnsupportedView: (kind: string) => string;
-  excelLegendConstantWord: string;
   dsCrossCompany: string;
   dsNestedCount: (n: number) => string;
   dsGroupBy: string;
@@ -1423,8 +1420,6 @@ const cs: Translations = {
   excelFooter: 'Zápatí',
   excelRepeatingVertical: 'opakující se svisle',
   excelRepeatingHorizontal: 'opakující se vodorovně',
-  excelLegendDynamic: 'datově vázaný',
-  excelLegendConstant: 'odvozeno z výrazu',
   excelTemplateView: 'Šablona',
   excelShowTemplate: 'Zobrazit Excel šablonu',
   excelTemplateLoading: 'Načítání Excel šablony…',
@@ -1511,7 +1506,6 @@ const cs: Translations = {
   // Audit fixes (a11y labels, former inline ternaries)
   designerWorkspaceEyebrow: 'Pracovní plocha designeru',
   designerUnsupportedView: (kind) => `Nepodporovaný pohled pro: ${kind}`,
-  excelLegendConstantWord: 'konstanta',
   dsCrossCompany: 'napříč společnostmi',
   dsNestedCount: (n) => `${n} ${csPlural(n, 'vnořený datový zdroj', 'vnořené datové zdroje', 'vnořených datových zdrojů')}`,
   dsGroupBy: 'Seskupit podle',
@@ -2320,8 +2314,6 @@ const en: Translations = {
   excelFooter: 'Footer',
   excelRepeatingVertical: 'repeating vertical',
   excelRepeatingHorizontal: 'repeating horizontal',
-  excelLegendDynamic: 'data-bound',
-  excelLegendConstant: 'resolved from expression',
   excelTemplateView: 'Template',
   excelShowTemplate: 'Show Excel template',
   excelTemplateLoading: 'Loading Excel template…',
@@ -2408,7 +2400,6 @@ const en: Translations = {
   // Audit fixes (a11y labels, former inline ternaries)
   designerWorkspaceEyebrow: 'Designer Workspace',
   designerUnsupportedView: (kind) => `Unsupported view for: ${kind}`,
-  excelLegendConstantWord: 'constant',
   dsCrossCompany: 'cross-company',
   dsNestedCount: (n) => `${n} nested datasource${n === 1 ? '' : 's'}`,
   dsGroupBy: 'Group By',

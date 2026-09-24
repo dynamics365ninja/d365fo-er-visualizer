@@ -6,7 +6,7 @@ import { ERDirection, type ERFormatElement, type ERLabel } from '@er-visualizer/
 import { resolveLabel, buildLabelPool, labelLanguageTag } from '../../utils/label-resolver';
 import { useTabState } from '../../utils/tab-view-state';
 import { parseXlsxBase64, colToLetter, type XlsxWorkbook, type XlsxCell as XlsxCellType, type XlsxMerge, type XlsxArea, type XlsxDrawing, type XlsxAnchorPoint } from '../../utils/xlsx-parser';
-import { type BindingMap, type PreviewRenderOptions, isSamplePlaceholder, previewValue } from './preview-values';
+import { type BindingMap, type PreviewRenderOptions, previewValue } from './preview-values';
 
 interface ExcelSheetData {
   name: string;
@@ -31,14 +31,15 @@ interface ExcelRangeData {
 }
 
 interface ExcelCellData {
+  /** Format element behind the cell, for the jump to Structure */
+  elementId: string;
   name: string;
   excelRange: string;
-  value: string;
   /** Resolved label text (from ERLabel) if the cell has a Label attribute */
   label?: string;
 }
 
-function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLabel[], options: PreviewRenderOptions = { placeholderMode: 'sample' }, labelLang?: string): ExcelSheetData[] {
+function collectExcelSheets(root: ERFormatElement, labels?: ERLabel[], labelLang?: string): ExcelSheetData[] {
   const sheets: ExcelSheetData[] = [];
 
   const resolveCellLabel = (el: ERFormatElement): string | undefined => {
@@ -48,15 +49,15 @@ function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLa
     return resolved?.localized ?? resolved?.enUs ?? undefined;
   };
 
+  const toCell = (el: ERFormatElement): ExcelCellData => ({
+    elementId: el.id,
+    name: el.name,
+    excelRange: el.attributes?.['ExcelRange'] ?? el.name,
+    label: resolveCellLabel(el),
+  });
+
   const collectCells = (el: ERFormatElement): ExcelCellData[] => {
-    if (el.elementType === 'ExcelCell') {
-      return [{
-        name: el.name,
-        excelRange: el.attributes?.['ExcelRange'] ?? el.name,
-        value: previewValue(el, bm, options),
-        label: resolveCellLabel(el),
-      }];
-    }
+    if (el.elementType === 'ExcelCell') return [toCell(el)];
     return el.children.flatMap(c => collectCells(c));
   };
 
@@ -66,12 +67,7 @@ function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLa
         name: el.name,
         excelRange: el.attributes?.['ExcelRange'] ?? el.name,
         replicationDirection: el.attributes?.['ReplicationDirection'] === '1' ? 'vertical' : el.attributes?.['ReplicationDirection'] === '2' ? 'horizontal' : '',
-        cells: el.children.filter(c => c.elementType === 'ExcelCell').map(c => ({
-          name: c.name,
-          excelRange: c.attributes?.['ExcelRange'] ?? c.name,
-          value: previewValue(c, bm, options),
-          label: resolveCellLabel(c),
-        })),
+        cells: el.children.filter(c => c.elementType === 'ExcelCell').map(toCell),
         children: el.children.filter(c => c.elementType === 'ExcelRange').flatMap(c => collectRanges(c)),
       }];
     }
@@ -88,12 +84,7 @@ function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLa
         header: header ? { name: header.name, type: 'header', cells: collectCells(header) } : null,
         footer: footer ? { name: footer.name, type: 'footer', cells: collectCells(footer) } : null,
         ranges: bodyChildren.flatMap(c => collectRanges(c)),
-        cells: bodyChildren.filter(c => c.elementType === 'ExcelCell').map(c => ({
-          name: c.name,
-          excelRange: c.attributes?.['ExcelRange'] ?? c.name,
-          value: previewValue(c, bm, options),
-          label: resolveCellLabel(c),
-        })),
+        cells: bodyChildren.filter(c => c.elementType === 'ExcelCell').map(toCell),
       });
     } else {
       for (const child of el.children) walkSheet(child);
@@ -112,12 +103,7 @@ function collectExcelSheets(root: ERFormatElement, bm: BindingMap, labels?: ERLa
       header: header ? { name: header.name, type: 'header', cells: collectCells(header) } : null,
       footer: footer ? { name: footer.name, type: 'footer', cells: collectCells(footer) } : null,
       ranges: bodyChildren.flatMap(c => collectRanges(c)),
-      cells: bodyChildren.filter(c => c.elementType === 'ExcelCell').map(c => ({
-        name: c.name,
-        excelRange: c.attributes?.['ExcelRange'] ?? c.name,
-        value: previewValue(c, bm, options),
-        label: resolveCellLabel(c),
-      })),
+      cells: bodyChildren.filter(c => c.elementType === 'ExcelCell').map(toCell),
     });
   }
 
@@ -141,7 +127,6 @@ const excelPaper = {
   gridBg: '#e9e9e9',
   sectionBg: '#f7f7f7',
   rangeBg: '#eef4f0',
-  dynamicText: '#8a3fa0',
 };
 
 /** Theme-aware chrome around the paper: ribbon, sheet tabs, range accents. */
@@ -726,10 +711,10 @@ function collectSheetColumns(sheet: ExcelSheetData): string[] {
 export function ExcelVisualPreview({ rootElement, direction, bindingMap, configIndex, template, onNavigateToElement, pdfOutput, tabId }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; template?: { filename: string; base64?: string }; onNavigateToElement?: (elementId: string) => void; pdfOutput?: boolean; tabId?: string }) {
   const configurations = useAppStore(s => s.configurations);
   const labels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
-  const previewOptions = useMemo<PreviewRenderOptions>(() => ({ placeholderMode: 'sample' }), []);
   // Cell labels are resolved in the app's language, so a switch re-resolves them.
   const labelLang = labelLanguageTag(useLocale());
-  const sheets = useMemo(() => collectExcelSheets(rootElement, bindingMap, labels, previewOptions, labelLang), [rootElement, bindingMap, labels, previewOptions, labelLang]);
+  // The Excel structure names the cells only; sample values belong to the template.
+  const sheets = useMemo(() => collectExcelSheets(rootElement, labels, labelLang), [rootElement, labels, labelLang]);
   const [activeSheet, setActiveSheet] = useTabState(tabId, 'excel.sheet', 0);
   const [selectedCell, setSelectedCell] = useState<ExcelCellData | null>(null);
   // A workbook the user loaded belongs to the format it was loaded for, and is
@@ -740,10 +725,13 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
   const droppedBase64 = droppedTemplate?.key === templateKey ? droppedTemplate.base64 : null;
   const effectiveBase64 = droppedBase64 ?? template?.base64 ?? null;
   // Opening the preview starts on the template whenever there is one (even
-  // filename-only — that shows the drop zone). Deliberately not remembered per
-  // tab: a trip to Structure from inside the template must not make the next
-  // visit to Preview open on the structure.
-  const [viewMode, setViewMode] = useState<'structure' | 'template'>(
+  // filename-only — that shows the drop zone). A jump from a cell to the
+  // format's Structure leaves this mode alone, so coming back to Preview shows
+  // the same view — template or Excel structure — the jump was made from.
+  // Kept with the tab, as the user's choice between the two.
+  const [viewMode, setViewMode] = useTabState<'structure' | 'template'>(
+    tabId,
+    'excel.viewMode',
     () => (template || effectiveBase64 ? 'template' : 'structure'),
   );
   const [xlsxData, setXlsxData] = useState<XlsxWorkbook | null>(null);
@@ -757,7 +745,14 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
     setXlsxData(null);
     setXlsxError(null);
     setViewMode('template');
-  }, [setDroppedTemplate, templateKey]);
+  }, [setDroppedTemplate, setViewMode, templateKey]);
+
+  // A cell in the Excel structure jumps to its element in the format's
+  // Structure, the same as a bound cell in the template does.
+  const handleStructureCellClick = useCallback((cell: ExcelCellData) => {
+    setSelectedCell(cell);
+    onNavigateToElement?.(cell.elementId);
+  }, [onNavigateToElement]);
 
   // Parse xlsx whenever effectiveBase64 becomes available.
   // The parsed workbook is cached against the base64 it came from: without
@@ -862,10 +857,7 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
           labels={labels}
           pdfOutput={pdfOutput}
           onSwitchToStructure={() => setViewMode('structure')}
-          onElementClick={onNavigateToElement ? (elementId) => {
-            setViewMode('structure');
-            onNavigateToElement(elementId);
-          } : undefined}
+          onElementClick={onNavigateToElement}
         />
       );
     }
@@ -1073,7 +1065,6 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
             const parts: string[] = [];
             if (selectedCell.name !== selectedCell.excelRange) parts.push(selectedCell.name);
             if (selectedCell.label) parts.push(selectedCell.label);
-            parts.push(selectedCell.value);
             return parts.join(': ');
           })() : ''}
         </div>
@@ -1119,24 +1110,24 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
         }}>
           {/* Header section */}
           {sheet.header && sheet.header.cells.length > 0 && (
-            <ExcelSectionBlock section={sheet.header} onCellClick={setSelectedCell} />
+            <ExcelSectionBlock section={sheet.header} onCellClick={handleStructureCellClick} canNavigate={Boolean(onNavigateToElement)} />
           )}
 
           {/* Loose cells at sheet level */}
           {sheet.cells.length > 0 && (
             <div style={{ borderBottom: `1px solid ${excelPaper.cellBorder}` }}>
-              <ExcelCellGrid cells={sheet.cells} onCellClick={setSelectedCell} selectedCell={selectedCell} />
+              <ExcelCellGrid cells={sheet.cells} onCellClick={handleStructureCellClick} selectedCell={selectedCell} canNavigate={Boolean(onNavigateToElement)} />
             </div>
           )}
 
           {/* Ranges */}
           {sheet.ranges.map((range, i) => (
-            <ExcelRangeBlock key={i} range={range} depth={0} onCellClick={setSelectedCell} selectedCell={selectedCell} />
+            <ExcelRangeBlock key={i} range={range} depth={0} onCellClick={handleStructureCellClick} selectedCell={selectedCell} canNavigate={Boolean(onNavigateToElement)} />
           ))}
 
           {/* Footer section */}
           {sheet.footer && sheet.footer.cells.length > 0 && (
-            <ExcelSectionBlock section={sheet.footer} onCellClick={setSelectedCell} />
+            <ExcelSectionBlock section={sheet.footer} onCellClick={handleStructureCellClick} canNavigate={Boolean(onNavigateToElement)} />
           )}
 
           {/* Empty state */}
@@ -1146,20 +1137,6 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
         </div>
       </div>
 
-      {/* Legend — sits on the paper so its colour samples match the grid */}
-      <div style={{
-        padding: '4px 12px',
-        fontSize: 10,
-        color: excelPaper.mutedText,
-        borderTop: `1px solid ${excelPaper.cellBorder}`,
-        background: excelPaper.headerBg,
-        display: 'flex',
-        gap: 12,
-        flexShrink: 0,
-      }}>
-        <span><span style={{ color: excelPaper.dynamicText, fontStyle: 'italic' }}>Sample(…)</span> = {t.excelLegendDynamic}</span>
-        <span><span style={{ fontWeight: 600 }}>{t.excelLegendConstantWord}</span> = {t.excelLegendConstant}</span>
-      </div>
 
       {/* Sheet tabs at bottom */}
       {sheets.length > 0 && (
@@ -1198,7 +1175,7 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
   );
 }
 
-function ExcelSectionBlock({ section, onCellClick }: { section: ExcelSectionData; onCellClick?: (cell: ExcelCellData) => void }) {
+function ExcelSectionBlock({ section, onCellClick, canNavigate }: { section: ExcelSectionData; onCellClick?: (cell: ExcelCellData) => void; canNavigate?: boolean }) {
   const isHeader = section.type === 'header';
   return (
     <div style={{
@@ -1219,12 +1196,12 @@ function ExcelSectionBlock({ section, onCellClick }: { section: ExcelSectionData
       }}>
         {isHeader ? <PanelTopExpandRegular fontSize={12} aria-hidden /> : <PanelBottomExpandRegular fontSize={12} aria-hidden />} {isHeader ? t.excelHeader : t.excelFooter}
       </div>
-      <ExcelCellGrid cells={section.cells} onCellClick={onCellClick} />
+      <ExcelCellGrid cells={section.cells} onCellClick={onCellClick} canNavigate={canNavigate} />
     </div>
   );
 }
 
-function ExcelRangeBlock({ range, depth, onCellClick, selectedCell }: { range: ExcelRangeData; depth: number; onCellClick?: (cell: ExcelCellData) => void; selectedCell?: ExcelCellData | null }) {
+function ExcelRangeBlock({ range, depth, onCellClick, selectedCell, canNavigate }: { range: ExcelRangeData; depth: number; onCellClick?: (cell: ExcelCellData) => void; selectedCell?: ExcelCellData | null; canNavigate?: boolean }) {
   const repIcon = range.replicationDirection === 'vertical' ? '↕' : range.replicationDirection === 'horizontal' ? '↔' : '';
   return (
     <div style={{
@@ -1262,18 +1239,18 @@ function ExcelRangeBlock({ range, depth, onCellClick, selectedCell }: { range: E
 
       {/* Cells in this range */}
       {range.cells.length > 0 && (
-        <ExcelCellGrid cells={range.cells} onCellClick={onCellClick} selectedCell={selectedCell} />
+        <ExcelCellGrid cells={range.cells} onCellClick={onCellClick} selectedCell={selectedCell} canNavigate={canNavigate} />
       )}
 
       {/* Nested ranges */}
       {range.children.map((child, i) => (
-        <ExcelRangeBlock key={i} range={child} depth={depth + 1} onCellClick={onCellClick} selectedCell={selectedCell} />
+        <ExcelRangeBlock key={i} range={child} depth={depth + 1} onCellClick={onCellClick} selectedCell={selectedCell} canNavigate={canNavigate} />
       ))}
     </div>
   );
 }
 
-function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellData[]; onCellClick?: (cell: ExcelCellData) => void; selectedCell?: ExcelCellData | null }) {
+function ExcelCellGrid({ cells, onCellClick, selectedCell, canNavigate }: { cells: ExcelCellData[]; onCellClick?: (cell: ExcelCellData) => void; selectedCell?: ExcelCellData | null; canNavigate?: boolean }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   return (
     <div style={{
@@ -1282,9 +1259,6 @@ function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellD
       gap: 0,
     }}>
       {cells.map((cell, i) => {
-        // Values rendered as Sample(...) stand in for data-bound cells; anything
-        // else is a constant derived from the binding expression.
-        const isDynamic = isSamplePlaceholder(cell.value);
         const hasDistinctAddress = cell.excelRange && cell.excelRange !== cell.name;
         const isSelected = selectedCell?.excelRange === cell.excelRange && selectedCell?.name === cell.name;
         const isHovered = hoveredIndex === i;
@@ -1292,6 +1266,7 @@ function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellD
           <div
             key={i}
             onClick={() => onCellClick?.(cell)}
+            title={canNavigate ? t.excelCellGoToStructure : undefined}
             onMouseEnter={() => setHoveredIndex(i)}
             onMouseLeave={() => setHoveredIndex(prev => (prev === i ? null : prev))}
             style={{
@@ -1352,18 +1327,6 @@ function ExcelCellGrid({ cells, onCellClick, selectedCell }: { cells: ExcelCellD
                 {cell.label}
               </span>
             )}
-            <span style={{
-              fontFamily: 'var(--font-mono, monospace)',
-              fontSize: 11,
-              color: isDynamic ? excelPaper.dynamicText : excelPaper.cellText,
-              fontStyle: isDynamic ? 'italic' : undefined,
-              fontWeight: isDynamic ? 400 : 500,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }} title={cell.value}>
-              {cell.value}
-            </span>
           </div>
         );
       })}
