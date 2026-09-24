@@ -636,6 +636,28 @@ export interface Translations {
   excelLegendConstantWord: string;
   dsCrossCompany: string;
   dsNestedCount: (n: number) => string;
+  dsLayoutKind: string;
+  dsLayoutKindHint: string;
+  dsLayoutRoots: string;
+  dsLayoutRootsHint: string;
+  dsLayoutTree: string;
+  dsLayoutTreeHint: string;
+  dsToolbarAria: string;
+  dsLayoutAria: string;
+  dsKindShow: (kind: string) => string;
+  dsKindHide: (kind: string) => string;
+  dsFormulas: string;
+  dsFormulasShowAll: string;
+  dsFormulasHideAll: string;
+  dsFormulaShow: string;
+  dsFormulaHide: string;
+  dsEnumValueCount: (n: number) => string;
+  dsEnumValuesUsedCount: (n: number) => string;
+  dsEnumValuesInFno: string;
+  dsEnumValuesHint: string;
+  dsEnumValuesPartialHint: string;
+  dsEnumValueUses: (n: number) => string;
+  dsEnumValueUsesHint: (n: number) => string;
   dsGroupBy: string;
   dsAggregated: string;
   dsImplicitType: string;
@@ -1160,7 +1182,7 @@ const cs: Translations = {
   lineageModelDefinitionTitle: 'Definice mapování modelu, ve které byla cesta vyhodnocena',
   lineageStageMapping: 'Vazba v mapování modelu',
   lineageStageSource: 'Datový zdroj',
-  lineageStageFormula: 'Vypočtené pole',
+  lineageStageFormula: 'Kalkulované pole',
   lineageStageUserParam: 'Parametr uživatele',
   lineageStageGroupBy: 'Seskupení',
   lineageStageEntity: 'AX objekt',
@@ -1514,6 +1536,28 @@ const cs: Translations = {
   excelLegendConstantWord: 'konstanta',
   dsCrossCompany: 'napříč společnostmi',
   dsNestedCount: (n) => `${n} ${csPlural(n, 'vnořený datový zdroj', 'vnořené datové zdroje', 'vnořených datových zdrojů')}`,
+  dsLayoutKind: 'Podle druhu',
+  dsLayoutKindHint: 'Všechny datové zdroje z libovolné úrovně, seskupené podle druhu — vnořený zdroj má před názvem cestu, pod kterou visí',
+  dsLayoutRoots: 'Kořeny',
+  dsLayoutRootsHint: 'Datové zdroje nejvyšší úrovně podle druhu, vnořené zdroje pod nimi',
+  dsLayoutTree: 'Strom',
+  dsLayoutTreeHint: 'Datové zdroje tak, jak jsou vnořené v definici, bez seskupení',
+  dsToolbarAria: 'Zobrazení datových zdrojů',
+  dsLayoutAria: 'Rozpad datových zdrojů',
+  dsKindShow: (kind) => `Zobrazit: ${kind}`,
+  dsKindHide: (kind) => `Skrýt: ${kind}`,
+  dsFormulas: 'Vzorce',
+  dsFormulasShowAll: 'Rozbalit vzorce všech kalkulovaných polí',
+  dsFormulasHideAll: 'Sbalit vzorce kalkulovaných polí',
+  dsFormulaShow: 'Zobrazit celý vzorec',
+  dsFormulaHide: 'Skrýt vzorec',
+  dsEnumValueCount: (n) => `${n} ${csPlural(n, 'hodnota', 'hodnoty', 'hodnot')}`,
+  dsEnumValuesUsedCount: (n) => `${n} ${csPlural(n, 'použitá hodnota', 'použité hodnoty', 'použitých hodnot')}`,
+  dsEnumValuesInFno: 'hodnoty v D365FO',
+  dsEnumValuesHint: 'Hodnoty z definice výčtu; u každé je vidět, kolikrát ji definice používá',
+  dsEnumValuesPartialHint: 'Výčet AX (nebo nenačtený datový model) nese hodnoty jen v D365FO — zobrazené jsou hodnoty, které používají výrazy této definice',
+  dsEnumValueUses: (n) => `${n}×`,
+  dsEnumValueUsesHint: (n) => `Výrazy této definice ji používají ${n}×`,
   dsGroupBy: 'Seskupit podle',
   dsAggregated: 'Agregované',
   dsImplicitType: 'Uzel cesty',
@@ -1671,7 +1715,7 @@ const cs: Translations = {
   pathTipInside: 'Uvnitř',
   pathTipReadsTables: 'Čte tabulky',
   pathTipCallsClasses: 'Volá třídy',
-  pathTipViaCalcFields: 'Přes vypočtená pole',
+  pathTipViaCalcFields: 'Přes kalkulovaná pole',
   pathTipOpenDatasource: 'Kliknutím přejít na zdroj',
   pathTipOpenBinding: 'Kliknutím přejít na vazbu',
   pathTipSource: 'Zdroj',
@@ -1714,8 +1758,8 @@ const cs: Translations = {
   fnoIngestSteps: { prepare: 'Příprava', dm: 'Datové modely', fm: 'Formáty a mapování', mm: 'Mapování modelů', finalize: 'Dokončení' },
 
   // ─── Data source groups (designers/DatasourceTree.tsx) ───
-  dsGroupLabelsTechnical: { Table: 'Tabulky', CalculatedField: 'Vypočtená pole', Class: 'Třídy', Object: 'Objekty', Enum: 'Výčty AX', ModelEnum: 'Výčty datového modelu', FormatEnum: 'Výčty formátu', ImportFormat: 'Importní formáty', UserParameter: 'Uživatelské parametry', GroupBy: 'Seskupení', Container: 'Kontejnery', Join: 'Spojení', DataModel: 'Datový model' },
-  dsGroupLabelsConsultant: { Table: 'Tabulky', CalculatedField: 'Vypočtené hodnoty', Class: 'Logika', Object: 'Objekty', Enum: 'Hodnoty', ModelEnum: 'Hodnoty', FormatEnum: 'Hodnoty', ImportFormat: 'Importní formát', UserParameter: 'Parametry', GroupBy: 'Seskupená data', Container: 'Kontejnery', Join: 'Spojení', DataModel: 'Datový model', Values: 'Hodnoty' },
+  dsGroupLabelsTechnical: { Table: 'Tabulky', CalculatedField: 'Kalkulovaná pole', Class: 'Třídy', Object: 'Objekty', Enum: 'Výčty AX', ModelEnum: 'Výčty datového modelu', FormatEnum: 'Výčty formátu', ImportFormat: 'Importní formáty', UserParameter: 'Uživatelské parametry', GroupBy: 'Seskupení', Container: 'Kontejnery', Join: 'Spojení', DataModel: 'Datový model' },
+  dsGroupLabelsConsultant: { Table: 'Tabulky', CalculatedField: 'Kalkulovaná pole', Class: 'Třídy', Object: 'Objekty', Enum: 'Výčty', ModelEnum: 'Výčty', FormatEnum: 'Výčty', ImportFormat: 'Importní formát', UserParameter: 'Parametry', GroupBy: 'Seskupení', Container: 'Složky', Join: 'Spojení', DataModel: 'Datový model', Values: 'Výčty' },
   dsImportFormat: 'Importní formát',
   dsGroupedBy: 'Seskupení podle',
 
@@ -1727,7 +1771,7 @@ const cs: Translations = {
   // ─── Format designer tabs (designers/FormatDesigner.tsx) ───
   fmtTabStructureTitle: 'Hierarchická struktura prvků formátu s vazbami na datový model',
   fmtTabBindingsTitle: 'Vazby podle účelu — přímé hodnoty, výpočty, podmínky, texty — v pořadí, v jakém soubor vzniká',
-  fmtTabDatasourcesTitle: 'Datové zdroje mapování — tabulky, výčty, třídy a vypočítaná pole',
+  fmtTabDatasourcesTitle: 'Datové zdroje mapování — tabulky, výčty, třídy a kalkulovaná pole',
   fmtTabPreviewTitle: 'Náhled generovaného výstupu ve správném formátu',
   fmtTabEmbeddedMapping: 'Mapování',
   fmtTabEmbeddedMappingTitle: 'Mapování modelu zabudované přímo v importním formátu',
@@ -1820,8 +1864,8 @@ const cs: Translations = {
   fbHiddenByFilter: (n: number) => `Další vazby prvku skryté filtrem: ${n}`,
 
   // ─── Drill-down panel (DrillDownPanel.tsx) ───
-  drillBadgeLabels: { root: 'Výraz', model: 'Model', mapping: 'Mapování', ds: 'Pole', table: 'AX tabulka', enum: 'AX výčet', class: 'AX třída', calc: 'Vypočtené pole', container: 'Složka', groupby: 'Seskupení', join: 'Spojení', object: 'AX objekt', userparameter: 'Parametr uživatele', param: 'Parametr uživatele', importformat: 'Importní formát', leaf: 'AX tabulka', unknown: 'Neznámé' },
-  drillBadgeGroupLabels: { table: 'AX tabulky', enum: 'AX výčty', class: 'AX třídy', calc: 'Vypočtená pole', container: 'Složky', groupby: 'Seskupení', join: 'Spojení', object: 'AX objekty', userparameter: 'Parametry uživatele', param: 'Parametry uživatele', importformat: 'Importní formáty', leaf: 'AX tabulky', unknown: 'Neznámé' },
+  drillBadgeLabels: { root: 'Výraz', model: 'Model', mapping: 'Mapování', ds: 'Pole', table: 'AX tabulka', enum: 'AX výčet', class: 'AX třída', calc: 'Kalkulované pole', container: 'Složka', groupby: 'Seskupení', join: 'Spojení', object: 'AX objekt', userparameter: 'Parametr uživatele', param: 'Parametr uživatele', importformat: 'Importní formát', leaf: 'AX tabulka', unknown: 'Neznámé' },
+  drillBadgeGroupLabels: { table: 'AX tabulky', enum: 'AX výčty', class: 'AX třídy', calc: 'Kalkulovaná pole', container: 'Složky', groupby: 'Seskupení', join: 'Spojení', object: 'AX objekty', userparameter: 'Parametry uživatele', param: 'Parametry uživatele', importformat: 'Importní formáty', leaf: 'AX tabulky', unknown: 'Neznámé' },
   drillSourceFallback: 'Zdroj',
   drillRuleStop: 'Zastavit',
   drillRuleWarning: 'Varování',
@@ -2411,6 +2455,28 @@ const en: Translations = {
   excelLegendConstantWord: 'constant',
   dsCrossCompany: 'cross-company',
   dsNestedCount: (n) => `${n} nested datasource${n === 1 ? '' : 's'}`,
+  dsLayoutKind: 'By kind',
+  dsLayoutKindHint: 'Every datasource at any depth, grouped by kind — a nested one shows the path it hangs under before its name',
+  dsLayoutRoots: 'Roots',
+  dsLayoutRootsHint: 'Top-level datasources by kind, nested ones below them',
+  dsLayoutTree: 'Tree',
+  dsLayoutTreeHint: 'Datasources as the definition nests them, ungrouped',
+  dsToolbarAria: 'Datasource view',
+  dsLayoutAria: 'Datasource breakdown',
+  dsKindShow: (kind) => `Show: ${kind}`,
+  dsKindHide: (kind) => `Hide: ${kind}`,
+  dsFormulas: 'Formulas',
+  dsFormulasShowAll: 'Expand the formulas of all calculated fields',
+  dsFormulasHideAll: 'Collapse the formulas of calculated fields',
+  dsFormulaShow: 'Show the full formula',
+  dsFormulaHide: 'Hide the formula',
+  dsEnumValueCount: (n) => `${n} value${n === 1 ? '' : 's'}`,
+  dsEnumValuesUsedCount: (n) => `${n} used value${n === 1 ? '' : 's'}`,
+  dsEnumValuesInFno: 'values in D365FO',
+  dsEnumValuesHint: 'Values from the enum definition, each with how often this definition uses it',
+  dsEnumValuesPartialHint: 'An AX enum (or a data model that is not loaded) keeps its values in D365FO only — shown are the values this definition\'s expressions use',
+  dsEnumValueUses: (n) => `${n}×`,
+  dsEnumValueUsesHint: (n) => `Used ${n}× in this definition's expressions`,
   dsGroupBy: 'Group By',
   dsAggregated: 'Aggregated',
   dsImplicitType: 'Path node',
@@ -2612,7 +2678,7 @@ const en: Translations = {
 
   // ─── Data source groups (designers/DatasourceTree.tsx) ───
   dsGroupLabelsTechnical: { Table: 'Tables', CalculatedField: 'Calculated Fields', Class: 'Classes', Object: 'Objects', Enum: 'Ax Enums', ModelEnum: 'Data model Enums', FormatEnum: 'Format enums', ImportFormat: 'Import formats', UserParameter: 'User Parameters', GroupBy: 'Group By', Container: 'Containers', Join: 'Joins', DataModel: 'Data model' },
-  dsGroupLabelsConsultant: { Table: 'Tables', CalculatedField: 'Calculated values', Class: 'Logic', Object: 'Objects', Enum: 'Values', ModelEnum: 'Values', FormatEnum: 'Values', ImportFormat: 'Import format', UserParameter: 'Parameters', GroupBy: 'Grouped data', Container: 'Containers', Join: 'Joins', DataModel: 'Data model', Values: 'Values' },
+  dsGroupLabelsConsultant: { Table: 'Tables', CalculatedField: 'Calculated fields', Class: 'Classes', Object: 'Objects', Enum: 'Enums', ModelEnum: 'Enums', FormatEnum: 'Enums', ImportFormat: 'Import format', UserParameter: 'Parameters', GroupBy: 'Group by', Container: 'Folders', Join: 'Joins', DataModel: 'Data model', Values: 'Enums' },
   dsImportFormat: 'Import format',
   dsGroupedBy: 'Grouped by',
 

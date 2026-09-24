@@ -1798,3 +1798,161 @@ div.path-tooltip-card {
     opacity: 1;
   }
 }
+
+/* ── Datasource list: breakdown bar, kinds, enum values, formulas ──
+      The bar sticks to the top of the pane; the group headers stick right
+      below it (its height is measured into --ds-bar-height). */
+.ds-list-bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.ds-list .ds-group-header {
+  top: var(--ds-bar-height, 0px);
+}
+
+.ds-group-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--ds-group-color, var(--er-text-muted));
+}
+
+.ds-list-bar__formulas {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0 9px 0 8px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ds-list-bar__formulas:hover {
+  color: var(--er-text);
+  background: var(--er-surface-2);
+}
+
+.ds-list-bar__formulas.active {
+  color: var(--er-text);
+  border-color: color-mix(in srgb, var(--syn-calc) 55%, transparent);
+  background: color-mix(in srgb, var(--syn-calc) 14%, var(--er-surface));
+}
+
+/* Where a datasource listed "by kind" hangs in the definition. */
+.ds-row-path {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
+  overflow: hidden;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* A calculated field's formula: one line on the row, in full below it. */
+.ds-row-formula {
+  color: var(--syn-calc);
+}
+
+.ds-row-fx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin-block: -3px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--er-radius-sm);
+  background: none;
+  color: var(--er-text-muted);
+  cursor: pointer;
+}
+
+.ds-row-fx:hover {
+  color: var(--er-text);
+  background: var(--er-surface-3);
+}
+
+.ds-row-fx.is-open {
+  color: var(--syn-calc);
+  border-color: color-mix(in srgb, var(--syn-calc) 45%, transparent);
+  background: color-mix(in srgb, var(--syn-calc) 12%, transparent);
+}
+
+.ds-row-formula-full {
+  margin: 4px 0 2px 18px;
+  cursor: auto;
+}
+
+.ds-row-formula-full .er-expr {
+  max-height: 320px;
+  overflow: auto;
+  margin: 0;
+}
+
+/* Enum datasources: how many values they carry — or that D365FO holds them. */
+.ds-enum-count {
+  flex-shrink: 0;
+  padding: 0 7px;
+  border-radius: var(--er-radius-pill);
+  background: color-mix(in srgb, var(--er-format) 16%, transparent);
+  color: var(--er-text);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ds-enum-count--partial {
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--er-format) 55%, transparent);
+  color: var(--er-text-muted);
+  font-weight: 500;
+}
+
+.ds-row.ds-row-enum-value {
+  padding: 3px 12px;
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+}
+
+.ds-row.ds-row-enum-value:hover {
+  background: var(--er-surface-3);
+}
+
+.ds-row-enum-value .ds-row-name {
+  font-family: var(--er-font-mono, monospace);
+  font-weight: 500;
+  color: var(--er-text);
+}
+
+.ds-enum-value-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--er-format);
+}
+
+.ds-enum-value-uses {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: var(--er-radius-pill);
+  background: color-mix(in srgb, var(--er-accent) 16%, transparent);
+  color: var(--er-text);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

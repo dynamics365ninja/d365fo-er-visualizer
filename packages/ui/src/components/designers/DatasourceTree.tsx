@@ -1,10 +1,12 @@
-import { SearchRegular } from '@fluentui/react-icons';
+import { MathFormulaRegular, SearchRegular } from '@fluentui/react-icons';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualTree } from '../../utils/use-virtual-tree';
 import { useAppStore } from '../../state/store';
 import { dsPathToExpression } from '../../utils/ds-path';
-import { ancestorPathKeys, buildDatasourceTree, filterDatasources, keysWithDeclaredDescendants, type DatasourceModel, type DatasourceTree, type DatasourceTreeFilter, type DatasourceTreeNode } from '../../utils/datasource-tree';
-import { DrillDownTrigger } from '../DrillDownPanel';
+import { ancestorPathKeys, buildDatasourceTree, collectDeclaredNodes, filterDatasources, keysWithDeclaredDescendants, type DatasourceModel, type DatasourceTree, type DatasourceTreeFilter, type DatasourceTreeNode } from '../../utils/datasource-tree';
+import { collectEnumValueUses, definedEnumValues, mergeEnumValues } from '../../utils/enum-values';
+import { useTabState } from '../../utils/tab-view-state';
+import { DrillDownTrigger, ExpressionView, tokenizeERExpr } from '../DrillDownPanel';
 import { t } from '../../i18n';
 import { getConsultantFieldTypeLabel } from '../../utils/consultant-labels';
 import { type ERDatasource } from '@er-visualizer/core';
@@ -20,6 +22,35 @@ function getDatasourceGroupLabel(type: string, showTechnicalDetails: boolean): s
 
 /** Datasource types the consultant view names; the rest share one "Other" group. */
 const CONSULTANT_DS_GROUP_TYPES = new Set(['Table', 'CalculatedField', 'Class', 'Object', 'ImportFormat', 'UserParameter', 'GroupBy', 'Container', 'Join', 'DataModel']);
+
+/** The colour a kind of datasource carries on its chip and group header. */
+function getDatasourceGroupColor(key: string): string {
+  switch (key) {
+    case 'DataModel': return 'var(--er-model)';
+    case 'Table': return 'var(--er-info)';
+    case 'CalculatedField': return 'var(--syn-calc)';
+    case 'Class':
+    case 'Object': return 'var(--er-mapping)';
+    case 'Values':
+    case 'Enum':
+    case 'ModelEnum':
+    case 'FormatEnum': return 'var(--er-format)';
+    case 'UserParameter': return 'var(--er-warning)';
+    case 'GroupBy':
+    case 'Join': return 'var(--er-success)';
+    default: return 'var(--er-text-muted)';
+  }
+}
+
+/**
+ * How the list is broken down:
+ * - `kind`  every datasource the definition declares, at any depth, by kind —
+ *           a calculated field under a table sits with the calculated fields,
+ *           its path beside its name;
+ * - `roots` the top-level datasources by kind, the rest nested under them;
+ * - `tree`  the definition as it is nested, no grouping.
+ */
+export type DatasourceLayout = 'kind' | 'roots' | 'tree';
 
 function getDatasourceGroupKey(type: string, showTechnicalDetails: boolean): string {
   if (showTechnicalDetails) return type;
@@ -73,11 +104,49 @@ interface DatasourceListContext {
   labelFor?: (labelRef: string | undefined) => string | undefined;
   /** Whether the explorer lists these datasources, so a row can offer to reveal itself there. */
   revealInExplorer: boolean;
+  layout: DatasourceLayout;
+  /** The children a row opens to — in the `kind` layout, without the declared ones listed on their own. */
+  visibleChildren: (node: DatasourceTreeNode) => DatasourceTreeNode[];
+  isFormulaOpen: (key: string) => boolean;
+  toggleFormula: (key: string) => void;
 }
 
-function DatasourceTreeRow({ node, ctx }: {
+/** One value of an enum: its name, its label and how often the definition names it. */
+function EnumValueRow({ node, ctx }: { node: DatasourceTreeNode; ctx: DatasourceListContext }) {
+  const value = node.enumValue!;
+  const label = ctx.labelFor?.(value.label);
+  return (
+    <div className="ds-row-wrap">
+      <div className="ds-row ds-row-enum-value" title={node.path.join('/')}>
+        <div className="ds-row-main">
+          <span className="ds-row-expander-spacer" aria-hidden="true" />
+          <span className="ds-enum-value-dot" aria-hidden="true" />
+          <span className="ds-row-name">{value.name}</span>
+          <span className="ds-row-meta">{label}</span>
+          {value.uses > 0 && (
+            <span className="ds-enum-value-uses" title={t.dsEnumValueUsesHint(value.uses)}>
+              {t.dsEnumValueUses(value.uses)}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DatasourceTreeRow({ node, ctx, depth }: {
   node: DatasourceTreeNode;
   ctx: DatasourceListContext;
+  depth: number;
+}) {
+  if (node.enumValue) return <EnumValueRow node={node} ctx={ctx} />;
+  return <DatasourceRow node={node} ctx={ctx} depth={depth} />;
+}
+
+function DatasourceRow({ node, ctx, depth }: {
+  node: DatasourceTreeNode;
+  ctx: DatasourceListContext;
+  depth: number;
 }) {
   const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
@@ -87,8 +156,16 @@ function DatasourceTreeRow({ node, ctx }: {
   const field = node.field;
   const declared = Boolean(ds && !ds.implicit);
   const isDirectTarget = ctx.focusKey === node.key;
-  const expandable = ctx.tree.hasChildren(node);
+  const expandable = ctx.visibleChildren(node).length > 0;
   const expanded = expandable && ctx.isExpanded(node.key);
+  const formula: string = declared ? (ds.calculatedField?.expressionAsString ?? '').trim() : '';
+  const formulaOpen = Boolean(formula) && ctx.isFormulaOpen(node.key);
+  // In the `kind` layout a nested datasource is listed on its own; where it
+  // hangs goes before its name.
+  const parentPath = ctx.layout === 'kind' && depth === 0 && node.path.length > 1
+    ? node.path.slice(0, -1).join(' / ')
+    : null;
+  const enumValues = node.enumValues;
 
   const groupByFields = ds?.groupByInfo?.groupedFields ?? [];
   const aggregatedFields = ds?.groupByInfo?.aggregations ?? [];
@@ -135,9 +212,9 @@ function DatasourceTreeRow({ node, ctx }: {
   } else if (ds.classInfo) {
     targetLabel = ds.classInfo.className;
   } else if (ds.calculatedField) {
-    // The group header already says "calculated values"; the formula itself
-    // belongs to the technical view and the drill-down — same as the inspector.
-    targetLabel = showTechnicalDetails ? (ds.calculatedField.expressionAsString ?? '') : null;
+    // The formula is what a calculated field is: on the row in one line, in
+    // full below it on demand (and then only there).
+    targetLabel = formulaOpen ? null : formula || null;
   } else if (ds.importFormatInfo) {
     targetLabel = showTechnicalDetails
       ? ds.importFormatInfo.formatGuid
@@ -191,6 +268,7 @@ function DatasourceTreeRow({ node, ctx }: {
               {fieldTypeLabel(field.type)}
             </span>
           )}
+          {parentPath && <span className="ds-row-path" title={parentPath}>{parentPath} /</span>}
           {declared ? (
             // The name opens the datasource's drill-down — its formula and
             // what it reads — addressed by its full path, so a `$Split_Note`
@@ -215,10 +293,32 @@ function DatasourceTreeRow({ node, ctx }: {
                 ? <span className="ds-row-formula">= {targetLabel}</span>
                 : <>→ <strong>{targetLabel}</strong></>)}
           </span>
-          {node.declaredCount > 0 && (
+          {enumValues && (
+            <span
+              className={`ds-enum-count${enumValues.complete ? '' : ' ds-enum-count--partial'}`}
+              title={enumValues.complete ? t.dsEnumValuesHint : t.dsEnumValuesPartialHint}
+            >
+              {enumValues.complete
+                ? t.dsEnumValueCount(enumValues.values.length)
+                : enumValues.values.length > 0 ? t.dsEnumValuesUsedCount(enumValues.values.length) : t.dsEnumValuesInFno}
+            </span>
+          )}
+          {ctx.layout !== 'kind' && node.declaredCount > 0 && (
             <span className="ds-row-count" title={t.dsNestedCount(node.declaredCount)}>
               {node.declaredCount}
             </span>
+          )}
+          {formula && (
+            <button
+              type="button"
+              className={`ds-row-fx${formulaOpen ? ' is-open' : ''}`}
+              aria-expanded={formulaOpen}
+              onClick={e => { e.stopPropagation(); ctx.toggleFormula(node.key); }}
+              title={formulaOpen ? t.dsFormulaHide : t.dsFormulaShow}
+              aria-label={`${formulaOpen ? t.dsFormulaHide : t.dsFormulaShow}: ${ds.name}`}
+            >
+              <MathFormulaRegular fontSize={14} aria-hidden />
+            </button>
           )}
           {declared && (
             <button
@@ -234,6 +334,11 @@ function DatasourceTreeRow({ node, ctx }: {
           {ds && ctx.revealInExplorer && <RevealInExplorerMenu onReveal={revealDatasourceInExplorer} />}
         </div>
       </div>
+      {formulaOpen && (
+        <div className="ds-row-formula-full" onClick={e => e.stopPropagation()}>
+          <ExpressionView expr={formula} configIndex={ctx.configIndex} />
+        </div>
+      )}
       {ds?.groupByInfo && (groupByFields.length > 0 || aggregatedFields.length > 0) && (
         <div className="ds-row-groupby-meta">
           <div className="ds-row-groupby-grid">
@@ -334,11 +439,13 @@ function flattenDatasourceRows(roots: DatasourceTreeNode[], ctx: DatasourceListC
       // Definitions do repeat a datasource path; the index keeps both rows apart.
       const id = `${parentId}/${node.key}#${i}`;
       out.push({ id, node, depth });
-      if (!ctx.tree.hasChildren(node) || !ctx.isExpanded(node.key)) return;
+      if (!ctx.isExpanded(node.key)) return;
+      const children = ctx.visibleChildren(node);
+      if (children.length === 0) return;
       const matched = Boolean(ctx.filter?.matched.has(node.key));
-      const children = ctx.tree.childrenOf(node).filter(child =>
+      const shown = children.filter(child =>
         !ctx.filter || insideMatch || matched || ctx.filter.matched.has(child.key) || ctx.filter.ancestors.has(child.key));
-      visit(children, depth + 1, insideMatch || matched, id);
+      visit(shown, depth + 1, insideMatch || matched, id);
     });
   };
   visit(roots, 0, false, '');
@@ -398,7 +505,7 @@ function DatasourceGroupRows({ items, ctx, scrollRef }: {
               ['--ds-depth' as string]: row.depth,
             }}
           >
-            <DatasourceTreeRow node={row.node} ctx={ctx} />
+            <DatasourceTreeRow node={row.node} ctx={ctx} depth={row.depth} />
           </div>
         );
       })}
@@ -415,10 +522,95 @@ function findScrollParent(element: HTMLElement | null): HTMLElement | null {
   return null;
 }
 
+// ── Toolbar: breakdown, kinds, formulas ──
+
+interface DatasourceKindChip {
+  key: string;
+  label: string;
+  count: number;
+}
+
+function DatasourceListBar({ layout, onLayoutChange, kinds, hiddenKinds, onToggleKind, formulaCount, formulasOpen, onToggleFormulas, barRef }: {
+  layout: DatasourceLayout;
+  onLayoutChange: (layout: DatasourceLayout) => void;
+  kinds: DatasourceKindChip[];
+  hiddenKinds: readonly string[];
+  onToggleKind: (key: string) => void;
+  formulaCount: number;
+  formulasOpen: boolean;
+  onToggleFormulas: () => void;
+  barRef: React.Ref<HTMLDivElement>;
+}) {
+  const layouts: Array<{ id: DatasourceLayout; label: string; title: string }> = [
+    { id: 'kind', label: t.dsLayoutKind, title: t.dsLayoutKindHint },
+    { id: 'roots', label: t.dsLayoutRoots, title: t.dsLayoutRootsHint },
+    { id: 'tree', label: t.dsLayoutTree, title: t.dsLayoutTreeHint },
+  ];
+  return (
+    <div ref={barRef} className="fmt-bind-intent-bar ds-list-bar" role="toolbar" aria-label={t.dsToolbarAria}>
+      <div className="fmt-bind-layout" role="radiogroup" aria-label={t.dsLayoutAria}>
+        {layouts.map(option => (
+          <button
+            key={option.id}
+            type="button"
+            role="radio"
+            aria-checked={layout === option.id}
+            className={layout === option.id ? 'active' : ''}
+            title={option.title}
+            onClick={() => onLayoutChange(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {layout !== 'tree' && kinds.length > 1 && (
+        <>
+          <span className="fmt-bind-bar-sep" aria-hidden="true" />
+          {kinds.map(kind => {
+            const isActive = !hiddenKinds.includes(kind.key);
+            return (
+              <button
+                key={kind.key}
+                type="button"
+                className={`fmt-bind-intent-chip${isActive ? ' active' : ''}`}
+                style={{ ['--intent-color' as string]: getDatasourceGroupColor(kind.key) }}
+                aria-pressed={isActive}
+                title={isActive ? t.dsKindHide(kind.label) : t.dsKindShow(kind.label)}
+                onClick={() => onToggleKind(kind.key)}
+              >
+                <span className="fmt-bind-intent-dot" aria-hidden="true" />
+                <span>{kind.label}</span>
+                <span className="fmt-bind-intent-count">{kind.count}</span>
+              </button>
+            );
+          })}
+        </>
+      )}
+      {formulaCount > 0 && (
+        <button
+          type="button"
+          className={`ds-list-bar__formulas${formulasOpen ? ' active' : ''}`}
+          aria-pressed={formulasOpen}
+          title={formulasOpen ? t.dsFormulasHideAll : t.dsFormulasShowAll}
+          onClick={onToggleFormulas}
+        >
+          <MathFormulaRegular fontSize={14} aria-hidden />
+          <span>{t.dsFormulas}</span>
+          <span className="fmt-bind-intent-count">{formulaCount}</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── Grouped Datasource List ──
 
 // The data model leads: in a format, calculated fields hang off its records.
 const dsGroupOrder = ['DataModel', 'Table', 'CalculatedField', 'Class', 'Object', 'Enum', 'ModelEnum', 'FormatEnum', 'Values', 'UserParameter', 'GroupBy', 'Container', 'Join', 'Other'];
+
+const isDeclaredNode = (node: DatasourceTreeNode) => Boolean(node.datasource && !node.datasource.implicit);
+
+const NO_KINDS: readonly string[] = [];
 
 export interface GroupedDatasourceListHandle {
   expandAll: () => void;
@@ -431,17 +623,70 @@ export const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandl
   navigateToTreeNode: (nodeId: string) => void;
   /** The datasource the tab was opened for, as a datasource path key. */
   focusKey?: string;
-  /** Text filter — matches datasources at any depth. */
+  /** Text filter — matches datasources at any depth, and enum values. */
   filter?: string;
   /** The loaded data model behind a `model` datasource, whose structure is shown under it. */
   resolveModel?: (datasource: ERDatasource) => DatasourceModel | null;
   labelFor?: (labelRef: string | undefined) => string | undefined;
   /** Off where the explorer does not list the datasources — the reveal menu would find nothing. */
   revealInExplorer?: boolean;
-}>(function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode, focusKey, filter = '', resolveModel, labelFor, revealInExplorer = true }, ref) {
+  /** The designer tab, which keeps the breakdown, the hidden kinds and the formula switch. */
+  tabId?: string;
+  /** The definition's other expressions (its bindings): where enum values are counted as used. */
+  expressions?: readonly string[];
+}>(function GroupedDatasourceList({ datasources, configIndex, navigateToTreeNode, focusKey, filter = '', resolveModel, labelFor, revealInExplorer = true, tabId, expressions }, ref) {
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
-  const tree = useMemo(() => buildDatasourceTree(datasources, resolveModel), [datasources, resolveModel]);
-  const filterState = useMemo(() => filterDatasources(datasources, filter), [datasources, filter]);
+  const configurations = useAppStore(s => s.configurations);
+  const [layout, setLayout] = useTabState<DatasourceLayout>(tabId, 'ds.layout', 'kind');
+  const [hiddenKinds, setHiddenKinds] = useTabState<readonly string[]>(tabId, 'ds.hiddenKinds', NO_KINDS);
+  const [formulasOpen, setFormulasOpen] = useTabState(tabId, 'ds.formulas', false);
+  const [formulaToggles, setFormulaToggles] = useState<Set<string>>(new Set());
+
+  // Enum values the definition names, from its calculated fields and bindings.
+  const enumUses = useMemo(() => {
+    const references: string[][] = [];
+    const add = (expr: string | undefined) => {
+      if (!expr) return;
+      for (const token of tokenizeERExpr(expr)) if (token.kind === 'ds' && token.segments) references.push(token.segments);
+    };
+    const visit = (ds: ERDatasource) => {
+      add(ds.calculatedField?.expressionAsString);
+      for (const child of ds.children ?? []) visit(child);
+    };
+    datasources.forEach(visit);
+    expressions?.forEach(add);
+    return collectEnumValueUses(datasources, references);
+  }, [datasources, expressions]);
+  const resolveEnumValues = useCallback(
+    (ds: ERDatasource, key: string) => mergeEnumValues(
+      ds.enumInfo ? definedEnumValues(ds.enumInfo, configurations, configIndex) : null,
+      enumUses.get(key),
+    ),
+    [configurations, configIndex, enumUses],
+  );
+
+  const tree = useMemo(
+    () => buildDatasourceTree(datasources, resolveModel, resolveEnumValues),
+    [datasources, resolveModel, resolveEnumValues],
+  );
+  const declaredNodes = useMemo(() => collectDeclaredNodes(tree), [tree]);
+
+  // A filter also finds an enum by one of its values, and opens it there.
+  const filterState = useMemo<DatasourceTreeFilter | null>(() => {
+    const base = filterDatasources(datasources, filter);
+    if (!base) return null;
+    const needle = filter.trim().toLowerCase();
+    const matched = new Set(base.matched);
+    const ancestors = new Set(base.ancestors);
+    for (const node of declaredNodes) {
+      if (!node.enumValues?.values.some(value => value.name.toLowerCase().includes(needle))) continue;
+      matched.add(node.key);
+      ancestors.add(node.key);
+      for (const key of ancestorPathKeys(node.key)) ancestors.add(key);
+    }
+    return { matched, ancestors };
+  }, [datasources, filter, declaredNodes]);
+
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   // While a filter is applied the paths to its matches open by themselves; a
@@ -454,10 +699,37 @@ export const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandl
     [showTechnicalDetails],
   );
 
-  const groups = useMemo(() => {
+  // In the `kind` layout a declared child is a row of its own, so a row opens
+  // only to what is not listed elsewhere: model fields, enum values — and the
+  // model records on the way to them.
+  const visibleChildren = useMemo(() => {
+    if (layout !== 'kind') return (node: DatasourceTreeNode) => tree.childrenOf(node);
+    const cache = new Map<DatasourceTreeNode, DatasourceTreeNode[]>();
+    return (node: DatasourceTreeNode) => {
+      let children = cache.get(node);
+      if (!children) {
+        children = tree.childrenOf(node).filter(child => !isDeclaredNode(child) && !(child.datasource?.implicit && !child.container));
+        cache.set(node, children);
+      }
+      return children;
+    };
+  }, [tree, layout]);
+
+  /** Every group of the layout, hidden kinds included — the chips count them. */
+  const allGroups = useMemo(() => {
+    let nodes: DatasourceTreeNode[];
+    if (layout === 'kind') {
+      nodes = declaredNodes.filter(node => node.datasource?.type !== 'Container');
+      if (filterState) {
+        nodes = nodes.filter(node => filterState.matched.has(node.key)
+          || ancestorPathKeys(node.key).some(key => filterState.matched.has(key)));
+      }
+    } else {
+      nodes = tree.roots.filter(node => !filterState || filterState.matched.has(node.key) || filterState.ancestors.has(node.key));
+    }
+    if (layout === 'tree') return nodes.length > 0 ? [['all', nodes] as [string, DatasourceTreeNode[]]] : [];
     const map = new Map<string, DatasourceTreeNode[]>();
-    for (const node of tree.roots) {
-      if (filterState && !filterState.matched.has(node.key) && !filterState.ancestors.has(node.key)) continue;
+    for (const node of nodes) {
       const type = groupKeyOf(node);
       if (!map.has(type)) map.set(type, []);
       map.get(type)!.push(node);
@@ -469,22 +741,40 @@ export const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandl
     }
     for (const [key, val] of map) { sorted.push([key, val]); }
     return sorted;
-  }, [tree, filterState, groupKeyOf]);
+  }, [layout, declaredNodes, tree, filterState, groupKeyOf]);
+
+  const groups = useMemo(
+    () => (layout === 'tree' ? allGroups : allGroups.filter(([key]) => !hiddenKinds.includes(key))),
+    [allGroups, hiddenKinds, layout],
+  );
+
+  const kindChips = useMemo<DatasourceKindChip[]>(
+    () => (layout === 'tree' ? [] : allGroups.map(([key, items]) => ({ key, label: getDatasourceGroupLabel(key, showTechnicalDetails), count: items.length }))),
+    [allGroups, layout, showTechnicalDetails],
+  );
+
+  const formulaCount = useMemo(
+    () => declaredNodes.filter(node => node.datasource?.calculatedField?.expressionAsString?.trim()).length,
+    [declaredNodes],
+  );
 
   // Opening the tab for a datasource reveals it: its group and every node above it.
   useEffect(() => {
     if (!focusKey) return;
     setExpandedKeys(prev => new Set([...prev, ...ancestorPathKeys(focusKey)]));
-    const root = tree.roots.find(node => node.key === focusKey.split('/')[0]);
-    if (!root) return;
-    const group = groupKeyOf(root);
+    const node = layout === 'kind'
+      ? declaredNodes.find(candidate => candidate.key === focusKey)
+      : tree.roots.find(candidate => candidate.key === focusKey.split('/')[0]);
+    if (!node) return;
+    const group = groupKeyOf(node);
     setCollapsedGroups(prev => {
       if (!prev.has(group)) return prev;
       const next = new Set(prev);
       next.delete(group);
       return next;
     });
-  }, [focusKey, tree, groupKeyOf]);
+    setHiddenKinds(prev => (prev.includes(group) ? prev.filter(key => key !== group) : prev));
+  }, [focusKey, tree, declaredNodes, layout, groupKeyOf, setHiddenKinds]);
 
   const isExpanded = useCallback(
     (key: string) => (filterState ? filterState.ancestors.has(key) !== filterToggles.has(key) : expandedKeys.has(key)),
@@ -508,13 +798,32 @@ export const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandl
     });
   }, []);
 
+  const toggleKind = useCallback((key: string) => {
+    setHiddenKinds(prev => (prev.includes(key) ? prev.filter(other => other !== key) : [...prev, key]));
+  }, [setHiddenKinds]);
+
+  const isFormulaOpen = useCallback((key: string) => formulasOpen !== formulaToggles.has(key), [formulasOpen, formulaToggles]);
+  const toggleFormula = useCallback((key: string) => {
+    setFormulaToggles(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }, []);
+  const toggleAllFormulas = useCallback(() => {
+    setFormulasOpen(open => !open);
+    setFormulaToggles(new Set());
+  }, [setFormulasOpen]);
+
   const expandAll = useCallback(() => {
     setCollapsedGroups(new Set());
-    // Every path down to a datasource the definition declares — not the whole
-    // data model, which would open thousands of fields.
-    setExpandedKeys(keysWithDeclaredDescendants(datasources));
+    // Every path down to a datasource the definition declares, and every
+    // enum's values — not the whole data model, which would open thousands of fields.
+    const keys = keysWithDeclaredDescendants(datasources);
+    for (const node of declaredNodes) if (node.enumValues?.values.length) keys.add(node.key);
+    setExpandedKeys(keys);
     setFilterToggles(new Set());
-  }, [datasources]);
+  }, [datasources, declaredNodes]);
 
   const collapseAll = useCallback(() => {
     setExpandedKeys(new Set());
@@ -526,7 +835,8 @@ export const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandl
 
   const ctx = useMemo<DatasourceListContext>(() => ({
     tree, filter: filterState, focusKey, isExpanded, toggle, configIndex, navigateToTreeNode, labelFor, revealInExplorer,
-  }), [tree, filterState, focusKey, isExpanded, toggle, configIndex, navigateToTreeNode, labelFor, revealInExplorer]);
+    layout, visibleChildren, isFormulaOpen, toggleFormula,
+  }), [tree, filterState, focusKey, isExpanded, toggle, configIndex, navigateToTreeNode, labelFor, revealInExplorer, layout, visibleChildren, isFormulaOpen, toggleFormula]);
 
   const effectiveCollapsedGroups = filterState ? EMPTY_STRING_SET : collapsedGroups;
 
@@ -535,28 +845,56 @@ export const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandl
   const scrollRef = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => { scrollRef.current = findScrollParent(rootRef.current); });
 
-  if (groups.length === 0) {
-    return <div style={{ color: 'var(--er-text-muted)', fontSize: 12, padding: 12 }}>{t.noResults}</div>;
-  }
+  // The group headers stick right below the bar, whose height follows its wrapping.
+  const barRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const bar = barRef.current;
+    const root = rootRef.current;
+    if (!bar || !root) return;
+    const apply = () => root.style.setProperty('--ds-bar-height', `${bar.offsetHeight}px`);
+    apply();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(apply);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <div ref={rootRef}>
-      {groups.map(([type, items]) => {
-        const isCollapsed = effectiveCollapsedGroups.has(type);
-        return (
-          <div key={type}>
-            <div
-              className="ds-group-header"
-              onClick={() => toggleGroup(type)}
-            >
-              <span className={`tree-chevron ${!isCollapsed ? 'open' : ''}`} />
-              <span className="ds-group-label">{getDatasourceGroupLabel(type, showTechnicalDetails)}</span>
-              <span className="ds-group-count">{items.length}</span>
-            </div>
-            {!isCollapsed && <DatasourceGroupRows items={items} ctx={ctx} scrollRef={scrollRef} />}
-          </div>
-        );
-      })}
+    <div ref={rootRef} className="ds-list">
+      <DatasourceListBar
+        barRef={barRef}
+        layout={layout}
+        onLayoutChange={setLayout}
+        kinds={kindChips}
+        hiddenKinds={hiddenKinds}
+        onToggleKind={toggleKind}
+        formulaCount={formulaCount}
+        formulasOpen={formulasOpen}
+        onToggleFormulas={toggleAllFormulas}
+      />
+      {groups.length === 0 && (
+        <div style={{ color: 'var(--er-text-muted)', fontSize: 12, padding: 12 }}>{t.noResults}</div>
+      )}
+      {layout === 'tree'
+        ? groups.map(([type, items]) => <DatasourceGroupRows key={type} items={items} ctx={ctx} scrollRef={scrollRef} />)
+        : groups.map(([type, items]) => {
+            const isCollapsed = effectiveCollapsedGroups.has(type);
+            return (
+              <div key={type}>
+                <div
+                  className="ds-group-header"
+                  style={{ ['--ds-group-color' as string]: getDatasourceGroupColor(type) }}
+                  onClick={() => toggleGroup(type)}
+                >
+                  <span className={`tree-chevron ${!isCollapsed ? 'open' : ''}`} />
+                  <span className="ds-group-dot" aria-hidden="true" />
+                  <span className="ds-group-label">{getDatasourceGroupLabel(type, showTechnicalDetails)}</span>
+                  <span className="ds-group-count">{items.length}</span>
+                </div>
+                {!isCollapsed && <DatasourceGroupRows items={items} ctx={ctx} scrollRef={scrollRef} />}
+              </div>
+            );
+          })}
     </div>
   );
 });
