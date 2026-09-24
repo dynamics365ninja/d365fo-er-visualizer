@@ -20,7 +20,9 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     gap: '4px',
-    padding: '6px 8px',
+    // 5 + 28px tab + 6 + 1px rule = 40. An even 6px above left the tabs 27px
+    // of room, so the strip's overflow clip shaved off their bottom border.
+    padding: '5px 8px 6px',
     backgroundColor: 'var(--er-surface)',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
