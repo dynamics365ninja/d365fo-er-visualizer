@@ -623,7 +623,7 @@ interface ExpressionViewProps {
   leadsBelow?: boolean;
 }
 
-function ExpressionView({ expr, configIndex, onSegment, activeSegment, leadsBelow }: ExpressionViewProps) {
+export function ExpressionView({ expr, configIndex, onSegment, activeSegment, leadsBelow }: ExpressionViewProps) {
   const tokens = useMemo(() => tokenizeERExpr(prettifyERExpr(expr)), [expr]);
   const configurations = useAppStore(s => s.configurations);
   const labels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);

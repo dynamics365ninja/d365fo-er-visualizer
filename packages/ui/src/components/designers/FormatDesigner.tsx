@@ -195,6 +195,9 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
     );
   }, [meaningfulBindingGroups, filter]);
 
+  // What the datasource list counts enum values in, next to its own calculated fields.
+  const bindingExpressions = useMemo(() => fmtMap.bindings.map(binding => binding.expressionAsString), [fmtMap.bindings]);
+
   const [bindingsLayout, setBindingsLayout] = useTabState<'format' | 'model'>(tabId, 'format.bindingsLayout', 'format');
   const [bindingIntents, setBindingIntents] = useTabState<readonly BindingIntent[]>(tabId, 'format.bindingIntents', DEFAULT_BINDING_INTENTS);
   const bindingIntentCounts = useMemo(() => countBindingIntents(filteredBindingGroups), [filteredBindingGroups]);
@@ -752,7 +755,7 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
           )}
 
           {view === 'datasources' && (
-            <GroupedDatasourceList ref={dsListRef} datasources={fmtMap.datasources} filter={filter} resolveModel={resolveDatasourceModel} labelFor={modelLabelFor} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusKey={datasourceFocusKey(focusNode)} />
+            <GroupedDatasourceList ref={dsListRef} datasources={fmtMap.datasources} filter={filter} resolveModel={resolveDatasourceModel} labelFor={modelLabelFor} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusKey={datasourceFocusKey(focusNode)} tabId={tabId} expressions={bindingExpressions} />
           )}
 
           <div style={{ display: view === 'preview' ? 'contents' : 'none' }}>

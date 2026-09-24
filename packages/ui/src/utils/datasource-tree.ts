@@ -1,5 +1,6 @@
 import type { ERDataContainerDescriptor, ERDataContainerItem, ERDataModel, ERDatasource } from '@er-visualizer/core';
 import { normGuid } from './model-hierarchy';
+import type { DatasourceEnumValues, EnumValueEntry } from './enum-values';
 
 /**
  * The datasources of a mapping or format definition as one browsable tree.
@@ -16,6 +17,8 @@ import { normGuid } from './model-hierarchy';
 /** ER field types whose `typeDescriptor` names a record with fields of its own. */
 const FIELD_TYPE_RECORD = 10;
 const FIELD_TYPE_RECORD_LIST = 11;
+/** ER field type of an enum; its `typeDescriptor` names the enum container. */
+const FIELD_TYPE_ENUM = 9;
 
 const stripDecoration = (segment: string) => segment.trim().replace(/^[$#]/, '');
 const keySegment = (name: string) => stripDecoration(name).toLowerCase();
@@ -48,6 +51,10 @@ export interface DatasourceTreeNode {
   container?: ERDataContainerDescriptor;
   /** Datasources the definition declares below this node. */
   declaredCount: number;
+  /** An enum datasource or enum-typed model field: the values listed below it. */
+  enumValues?: DatasourceEnumValues;
+  /** This node is one value of the enum above it. */
+  enumValue?: EnumValueEntry;
 }
 
 export interface DatasourceModel {
@@ -99,6 +106,8 @@ export function countDeclaredDatasources(datasources: readonly ERDatasource[]): 
 export function buildDatasourceTree(
   datasources: readonly ERDatasource[],
   resolveModel?: (datasource: ERDatasource) => DatasourceModel | null,
+  /** The values of an enum datasource, by the datasource and its path key. */
+  resolveEnumValues?: (datasource: ERDatasource, key: string) => DatasourceEnumValues | null,
 ): DatasourceTree {
   const declaredCounts = new WeakMap<ERDatasource, number>();
   const declaredBelow = (ds: ERDatasource): number => {
@@ -120,6 +129,17 @@ export function buildDatasourceTree(
   ): DatasourceTreeNode => {
     let lookup = inheritedLookup;
     let container: ERDataContainerDescriptor | undefined;
+    let enumValues: DatasourceEnumValues | undefined;
+    const key = parent ? `${parent.key}/${keySegment(name)}` : keySegment(name);
+    if (datasource?.enumInfo && !datasource.implicit) {
+      enumValues = resolveEnumValues?.(datasource, key) ?? undefined;
+    } else if (field?.type === FIELD_TYPE_ENUM && lookup) {
+      // An enum field of the data model: its values are the enum's items.
+      const enumContainer = lookup(field.typeDescriptor);
+      if (enumContainer?.isEnum) {
+        enumValues = { values: enumContainer.items.map(item => ({ name: item.name, label: item.label, uses: 0 })), complete: true };
+      }
+    }
     if (datasource?.type === 'DataModel') {
       const resolved = resolveModel?.(datasource);
       if (resolved) {
@@ -130,13 +150,14 @@ export function buildDatasourceTree(
       container = lookup(field.typeDescriptor);
     }
     const node: DatasourceTreeNode = {
-      key: parent ? `${parent.key}/${keySegment(name)}` : keySegment(name),
+      key,
       name,
       path: parent ? [...parent.path, name] : [name],
       datasource,
       field,
       container,
       declaredCount: datasource ? declaredBelow(datasource) : 0,
+      enumValues,
     };
     if (lookup) lookups.set(node, lookup);
     return node;
@@ -168,6 +189,14 @@ export function buildDatasourceTree(
     const children = [
       ...own,
       ...items.map(item => atField.get(item) ?? make(node, item.name, undefined, item, lookup)),
+      // `=` keeps a value apart from a datasource of the same name.
+      ...(node.enumValues?.values ?? []).map((value): DatasourceTreeNode => ({
+        key: `${node.key}/=${value.name.toLowerCase()}`,
+        name: value.name,
+        path: [...node.path, value.name],
+        declaredCount: 0,
+        enumValue: value,
+      })),
     ];
     cache.set(node, children);
     return children;
@@ -176,7 +205,9 @@ export function buildDatasourceTree(
   return {
     roots: datasources.map(ds => make(null, ds.name, ds, undefined, undefined)),
     childrenOf,
-    hasChildren: node => (node.datasource?.children?.length ?? 0) > 0 || (node.container?.items.length ?? 0) > 0,
+    hasChildren: node => (node.datasource?.children?.length ?? 0) > 0
+      || (node.container?.items.length ?? 0) > 0
+      || (node.enumValues?.values.length ?? 0) > 0,
   };
 }
 
@@ -221,4 +252,21 @@ export function keysWithDeclaredDescendants(datasources: readonly ERDatasource[]
   };
   for (const ds of datasources) visit(ds, '');
   return keys;
+}
+
+/**
+ * Every datasource the definition declares, at any depth, in definition
+ * order — the rows of the "all by kind" layout. Only datasource nodes are
+ * walked: the data model below a `model` datasource is never opened here.
+ */
+export function collectDeclaredNodes(tree: DatasourceTree): DatasourceTreeNode[] {
+  const out: DatasourceTreeNode[] = [];
+  const visit = (node: DatasourceTreeNode) => {
+    if (!node.datasource) return;
+    if (!node.datasource.implicit) out.push(node);
+    if ((node.datasource.children?.length ?? 0) === 0) return;
+    for (const child of tree.childrenOf(node)) visit(child);
+  };
+  tree.roots.forEach(visit);
+  return out;
 }

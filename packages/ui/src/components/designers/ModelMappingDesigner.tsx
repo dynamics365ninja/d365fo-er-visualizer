@@ -195,6 +195,11 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
   }, [mm.dataContainerDescriptor, mm.modelId, configurations, configIndex, activeLocale]);
   const [filter, setFilter] = useTabState(tabId, 'mapping.filter', '');
   const [view, setView] = useTabState<'bindings' | 'datasources' | 'validations'>(tabId, 'mapping.view', 'bindings');
+  // What the datasource list counts enum values in, next to its own calculated fields.
+  const mappingExpressions = useMemo(() => [
+    ...(mm.bindings ?? []).map((binding: any) => binding.expressionAsString),
+    ...(mm.validations ?? []).flatMap((validation: any) => (validation.conditions ?? []).flatMap((rule: any) => [rule.conditionExpressionAsString, rule.messageExpressionAsString])),
+  ].filter(Boolean) as string[], [mm.bindings, mm.validations]);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   const focusBindingPath: string | undefined = focusNode?.type === 'binding' ? focusNode.data?.path : undefined;
@@ -493,7 +498,7 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
         )}
 
         {view === 'datasources' && (
-          <GroupedDatasourceList ref={dsListRef} datasources={mm.datasources} filter={filter} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusKey={datasourceFocusKey(focusNode)} revealInExplorer={false} />
+          <GroupedDatasourceList ref={dsListRef} datasources={mm.datasources} filter={filter} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusKey={datasourceFocusKey(focusNode)} revealInExplorer={false} tabId={tabId} expressions={mappingExpressions} />
         )}
 
         {view === 'validations' && (
