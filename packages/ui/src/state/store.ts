@@ -92,7 +92,7 @@ export {
 } from './mapping-definitions';
 export { mappingDefinitionLabel } from '@er-visualizer/core';
 export type { DeepDatasourceInfo, DeepResolutionResult } from './expression-resolution';
-export { parseDottedPath, resolveDeepExpression } from './expression-resolution';
+export { parseDottedPath, resolveDeepExpression, toModelRootedPath } from './expression-resolution';
 export type { WhereUsedEntry } from './where-used';
 
 export type { ThemeMode, ResolvedTheme } from '../theme';

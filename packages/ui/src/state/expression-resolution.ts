@@ -430,6 +430,41 @@ export function resolveDeepExpression(
   return null;
 }
 
+export interface ModelRootedPath {
+  /** The path with its root spelled `model`, as the mapping lookups expect it. */
+  modelExpression: string;
+  /** The root as the expression spells it (`Invoice`, `model`, `'My model'`). */
+  root: string;
+}
+
+/**
+ * Whether `expression` starts at the data model, and under which name. A format
+ * may call its data-model datasource anything — the PEPPOL formats read
+ * `Invoice.InvoiceBase.CorrectedInvoice.Id` — so the root is looked up among
+ * the format's own datasources, not matched against the word `model`.
+ */
+export function toModelRootedPath(
+  expression: string,
+  configurations: any[],
+  configIndex: number,
+): ModelRootedPath | null {
+  const trimmed = expression.trim();
+  const match = /^('(?:[^']|'')*'|[A-Za-z_$#][\w$#]*)\s*[.\\]/.exec(trimmed);
+  if (!match) return null;
+  const root = match[1];
+  const rest = trimmed.slice(match[0].length - 1);
+  const name = root.replace(/^'|'$/g, '').replace(/''/g, "'").toLowerCase();
+  if (name === 'model') return { modelExpression: `model${rest}`, root };
+
+  const content = configurations[configIndex]?.content;
+  if (content?.kind !== 'Format') return null;
+  const datasources: any[] = content.formatMappingVersion?.formatMapping?.datasources ?? [];
+  const isModelRoot = datasources.some(ds =>
+    ds.type === 'DataModel' && !ds.parentPath && String(ds.name ?? '').toLowerCase() === name,
+  );
+  return isModelRoot ? { modelExpression: `model${rest}`, root } : null;
+}
+
 // ─── Workspace lookups behind the store's resolve* / find* actions ───
 
 export interface ResolvedDatasource {

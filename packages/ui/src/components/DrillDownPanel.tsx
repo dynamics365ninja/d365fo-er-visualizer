@@ -51,7 +51,7 @@ import {
   ChevronRightRegular,
   WarningRegular,
 } from '@fluentui/react-icons';
-import { useAppStore, resolveDeepExpression, selectMappingDefinition, getScopedMappingDefinitions } from '../state/store';
+import { useAppStore, resolveDeepExpression, toModelRootedPath, selectMappingDefinition, getScopedMappingDefinitions } from '../state/store';
 import { t, getLocale, getTranslations, useLocale, type Locale } from '../i18n';
 import { dsPathToExpression } from '../utils/ds-path';
 import { useResizableDialog } from '../utils/resizable-dialog';
@@ -1596,16 +1596,21 @@ function buildTreeNode(
   visited.add(visitKey);
   ctx.budget -= 1;
 
-  const isModel = expression.toLowerCase().startsWith('model.') || expression.toLowerCase().startsWith('model\\');
+  // The format's data-model datasource need not be called `model` —
+  // `Invoice.InvoiceBase.CorrectedInvoice.Id` reads the model all the same.
+  const modelRooted = toModelRootedPath(expression, ctx.configurations, configIndex);
+  const isModel = modelRooted !== null;
+  const cleanPath = modelRooted ? extractModelPath(modelRooted.modelExpression) : '';
+  // The path as the format spells it, root and all.
+  const formatPath = modelRooted ? `${modelRooted.root}${cleanPath.slice('model'.length)}` : '';
   // A format hangs calculated fields under the records of its data model
   // (`model.InvoiceBase.'$Split_Note'`). That path ends in the format's own
   // datasource, which no model mapping binds — it resolves as a datasource.
-  const formatDeep = isModel ? resolveDeepExpression(extractModelPath(expression), ctx.configurations, configIndex, ctx.scopeConfigIndex) : null;
+  const formatDeep = isModel ? resolveDeepExpression(formatPath, ctx.configurations, configIndex, ctx.scopeConfigIndex) : null;
   const endsInFormatDatasource = Boolean(formatDeep?.nestedDs && formatDeep.rootDs?.type === 'DataModel');
 
   // ── Model path → resolve via ModelMapping ──────────────────────────────
   if (isModel && !endsInFormatDatasource) {
-    const cleanPath = extractModelPath(expression);
     // Resolved in the definition *this* expression's format binds to — with
     // two formats of one mapping open, each has its own.
     const modelResult = ctx.resolveModelPath(cleanPath, ctx.scopeConfigIndex);
@@ -1615,7 +1620,7 @@ function buildTreeNode(
       const { children: scoped, definition } = buildContainerChildren(ctx, id, cleanPath, configIndex, visited, depth);
       return {
         id, kind: 'ref', label: cleanPath.split(/[.\\]/).pop() ?? cleanPath,
-        sublabel: cleanPath, badge: 'model', expression, configIndex,
+        sublabel: formatPath, badge: 'model', expression, configIndex,
         children: scoped,
         definition,
       };
@@ -1650,7 +1655,7 @@ function buildTreeNode(
     return {
       id, kind: 'ref',
       label: cleanPath.split(/[.\\]/).pop() ?? cleanPath,
-      sublabel: cleanPath,
+      sublabel: formatPath,
       badge: 'model',
       expression, configIndex,
       children: [mappingNode],

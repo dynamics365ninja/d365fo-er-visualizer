@@ -156,6 +156,38 @@ describe('mapping definition scope', () => {
     expect(sublabels).not.toContain('TmsCommercialInvoiceDP');
   });
 
+  // The PEPPOL formats call their data-model datasource `Invoice`, so their
+  // bindings read `Invoice.InvoiceBase.…`. Drill-down only recognised a root
+  // spelled `model` and stopped at the `Invoice` datasource itself.
+  it('drills through a data-model datasource that is not called model', () => {
+    const configurations = [
+      parseERConfiguration(
+        FORMAT_XML.replace('Name="model"', 'Name="Invoice"')
+          .replace('"model.InvoiceBase.DocumentDate"', '"Invoice.InvoiceBase.DocumentDate"'),
+        'format.xml',
+      ),
+      parseERConfiguration(MAPPING_XML, 'mapping.xml'),
+    ] as any[];
+    useAppStore.setState({ configurations } as any);
+    const store = useAppStore.getState();
+
+    const tree = buildExpressionTree({
+      expression: 'Invoice.InvoiceBase.DocumentDate<>NULLDATE()',
+      configIndex: 0,
+      configurations,
+      resolveModelPath: store.resolveModelPath,
+      resolveDatasource: store.resolveDatasource,
+      findModelPathBindings: store.findModelPathBindings,
+    });
+
+    const nodes = flatten(tree);
+    const modelNode = nodes.find(n => n.badge === 'model');
+    expect(modelNode?.sublabel).toBe('Invoice.InvoiceBase.DocumentDate');
+    expect(modelNode?.definition).toBe('SalesInvoice');
+    expect(nodes.find(n => n.badge === 'mapping')?.sublabel).toBe('ReportDataProvider.getHeader.DocumentDate');
+    expect(nodes.map(n => n.sublabel ?? '').join('\n')).toContain('SalesInvoiceDP');
+  });
+
   // Search and where-used group their hits per definition, so every node and
   // every reference has to carry the definition it came from.
   it('stamps every tree node under a mapping with its definition', () => {
