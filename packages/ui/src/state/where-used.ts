@@ -15,6 +15,7 @@ import {
   extractExpressionReferences,
   normalizeIdentifier,
   parseDottedPath,
+  toModelRootedPath,
 } from './expression-resolution';
 import { findNodeByMatch, type TreeNode, type WorkspaceTrees } from './tree-builder';
 
@@ -128,9 +129,11 @@ export function findWhereUsed(state: WorkspaceTrees, entityName: string): WhereU
 
           for (const b of fmtMap.bindings) {
             const expr = b.expressionAsString ?? '';
-            const isModelRef = expr.toLowerCase().startsWith('model.');
-            if (isModelRef) {
-              const modelPath = normalizeModelPath(expr.slice(6));
+            // The format's model datasource can be named anything (`Invoice`
+            // in the PEPPOL formats), not only `model`.
+            const rooted = toModelRootedPath(expr, state.configurations, fci);
+            if (rooted) {
+              const modelPath = normalizeModelPath(rooted.modelExpression.slice('model.'.length));
               const matchesPath = modelPaths.some((mp: { path: string }) =>
                 isSameOrDescendantModelPath(modelPath, mp.path),
               );

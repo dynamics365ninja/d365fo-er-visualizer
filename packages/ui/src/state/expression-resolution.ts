@@ -119,6 +119,33 @@ export function parseDottedPath(expr: string): string[] {
 }
 
 /**
+ * An expression that reads the format's data model, rewritten to start at
+ * `model`. The format's model datasource can be named anything — the PEPPOL
+ * formats call it `Invoice` — so `Invoice.InvoiceBase.Id` is as much a model
+ * path as `model.InvoiceBase.Id`. `root` is the root as written. Null when the
+ * expression does not start at the data model.
+ */
+export function toModelRootedPath(
+  expression: string,
+  configurations: any[],
+  configIndex: number,
+): { modelExpression: string; root: string } | null {
+  const match = /^('(?:[^']|'')+'|[^.\\\s('"]+)(?=[.\\])/.exec(expression);
+  if (!match) return null;
+  const root = match[0];
+  const name = root.startsWith("'") ? root.slice(1, -1).replace(/''/g, "'") : root;
+  const rest = expression.slice(root.length);
+  if (name.toLowerCase() === 'model') return { modelExpression: `model${rest}`, root };
+
+  const content = configurations[configIndex]?.content;
+  if (content?.kind !== 'Format') return null;
+  const datasources: any[] = content.formatMappingVersion?.formatMapping?.datasources ?? [];
+  const isModelDs = datasources.some(ds =>
+    ds.type === 'DataModel' && !ds.parentPath && ds.name?.toLowerCase() === name.toLowerCase());
+  return isModelDs ? { modelExpression: `model${rest}`, root } : null;
+}
+
+/**
  * Extract all datasource identifiers referenced in an ER expression string.
  * Finds identifiers that appear at the start of dotted paths (e.g. "DS.field" → "DS").
  * Also extracts nested dot-path references like "ReportFields.'$Child'" as full paths.

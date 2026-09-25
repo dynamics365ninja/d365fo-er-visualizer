@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppsListDetailRegular, InfoRegular, MoreVerticalRegular } from '@fluentui/react-icons';
 import { Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip } from '@fluentui/react-components';
-import { useAppStore, resolveDeepExpression } from '../../state/store';
+import { useAppStore, resolveDeepExpression, toModelRootedPath } from '../../state/store';
 import { datasourcePathKey } from '../../utils/datasource-tree';
 import { ClickablePath } from '../ClickablePath';
 import { t } from '../../i18n';
@@ -69,7 +69,9 @@ export function ExpressionDetailLink({ expression, configIndex, className, inter
   const navigateExpressionTarget = useCallback((event: React.MouseEvent) => {
     event.stopPropagation();
 
-    const modelReference = extractFirstModelReference(expression);
+    // The format's model datasource may be named something other than `model`.
+    const modelExpression = toModelRootedPath(expression, configurations, configIndex)?.modelExpression ?? expression;
+    const modelReference = extractFirstModelReference(modelExpression);
     if (modelReference) {
       const resolvedModel = resolveModelPath(modelReference, configIndex);
       const targetNodeId = resolvedModel?.bindingTreeNodeId ?? resolvedModel?.datasourceTreeNodeId;
@@ -78,7 +80,7 @@ export function ExpressionDetailLink({ expression, configIndex, className, inter
         return;
       }
 
-      for (const variant of normalizeModelReferenceVariants(expression)) {
+      for (const variant of normalizeModelReferenceVariants(modelExpression)) {
         const bindingResult = resolveBinding(variant, configIndex);
         if (bindingResult?.treeNodeId) {
           navigateToTreeNode(bindingResult.treeNodeId);
