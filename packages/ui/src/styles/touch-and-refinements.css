@@ -1956,3 +1956,25 @@ div.path-tooltip-card {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
+/* On touch every [role="button"] grows to 36px, the name's drill-down
+   trigger included — its text then sat at the top of the box, above the path
+   and the formula centred beside it. Centre it on its own line box (it keeps
+   block layout so the ellipsis still works), and give the row's secondary
+   text one size, a step up from the dense desktop one, so the name, the path
+   and what the row reads line up on one baseline. */
+@media (pointer: coarse) {
+  .app-shell .ds-row-main .ds-row-name--drill {
+    box-sizing: border-box;
+    padding-block: 0;
+    margin-block: 0;
+    line-height: 36px;
+  }
+
+  .app-shell .ds-row-path,
+  .app-shell .ds-row-meta,
+  .app-shell .ds-row-meta .ds-row-formula {
+    font-size: var(--er-text-sm);
+    line-height: 20px;
+  }
+}
