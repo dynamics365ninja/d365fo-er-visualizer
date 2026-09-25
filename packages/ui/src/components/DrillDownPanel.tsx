@@ -1940,7 +1940,9 @@ export function collectUsedSources(options: {
 
   // 2. Container-level model path without a formula of its own — list the
   //    sources used by the mapping bindings *under* that path.
-  const selectedModelPath = extractModelPath(expression);
+  const selectedModelPath = extractModelPath(
+    toModelRootedPath(expression, configurations, configIndex)?.modelExpression ?? expression,
+  );
   if (out.size === 0) {
     const splitPathSegments = (path: string): string[] => {
       const segments: string[] = [];

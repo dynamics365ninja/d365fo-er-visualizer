@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseERConfiguration } from '@er-visualizer/core';
 import { useAppStore } from './store';
-import { getScopedMappingDefinitions, relatedMappingDefinitionLabels, selectMappingDefinition } from './store';
+import { getScopedMappingDefinitions, relatedMappingDefinitionLabels, selectMappingDefinition, toModelRootedPath } from './store';
 import { buildExpressionTree } from '../components/DrillDownPanel';
 
 /**
@@ -156,38 +156,6 @@ describe('mapping definition scope', () => {
     expect(sublabels).not.toContain('TmsCommercialInvoiceDP');
   });
 
-  // The PEPPOL formats call their data-model datasource `Invoice`, so their
-  // bindings read `Invoice.InvoiceBase.…`. Drill-down only recognised a root
-  // spelled `model` and stopped at the `Invoice` datasource itself.
-  it('drills through a data-model datasource that is not called model', () => {
-    const configurations = [
-      parseERConfiguration(
-        FORMAT_XML.replace('Name="model"', 'Name="Invoice"')
-          .replace('"model.InvoiceBase.DocumentDate"', '"Invoice.InvoiceBase.DocumentDate"'),
-        'format.xml',
-      ),
-      parseERConfiguration(MAPPING_XML, 'mapping.xml'),
-    ] as any[];
-    useAppStore.setState({ configurations } as any);
-    const store = useAppStore.getState();
-
-    const tree = buildExpressionTree({
-      expression: 'Invoice.InvoiceBase.DocumentDate<>NULLDATE()',
-      configIndex: 0,
-      configurations,
-      resolveModelPath: store.resolveModelPath,
-      resolveDatasource: store.resolveDatasource,
-      findModelPathBindings: store.findModelPathBindings,
-    });
-
-    const nodes = flatten(tree);
-    const modelNode = nodes.find(n => n.badge === 'model');
-    expect(modelNode?.sublabel).toBe('Invoice.InvoiceBase.DocumentDate');
-    expect(modelNode?.definition).toBe('SalesInvoice');
-    expect(nodes.find(n => n.badge === 'mapping')?.sublabel).toBe('ReportDataProvider.getHeader.DocumentDate');
-    expect(nodes.map(n => n.sublabel ?? '').join('\n')).toContain('SalesInvoiceDP');
-  });
-
   // Search and where-used group their hits per definition, so every node and
   // every reference has to carry the definition it came from.
   it('stamps every tree node under a mapping with its definition', () => {
@@ -293,5 +261,58 @@ describe('mapping definition scope', () => {
     const hits = entries.flatMap(e => e.modelPaths);
     expect(hits.length).toBeGreaterThan(0);
     expect(new Set(hits.map(m => m.definition))).toEqual(new Set(['SalesInvoice']));
+  });
+
+  // The format's model datasource can have any name — the PEPPOL formats call
+  // it `Invoice` — and its bindings read `Invoice.InvoiceBase.…`.
+  describe('with the model datasource renamed', () => {
+    const RENAMED_FORMAT_XML = FORMAT_XML
+      .replace('Name="model"', 'Name="Invoice"')
+      .replace('ExpressionAsString="model.', 'ExpressionAsString="Invoice.');
+
+    it('rewrites the model datasource root to model', () => {
+      const configurations = [parseERConfiguration(RENAMED_FORMAT_XML, 'format.xml')] as any[];
+      expect(toModelRootedPath('Invoice.InvoiceBase.DocumentDate', configurations, 0))
+        .toEqual({ modelExpression: 'model.InvoiceBase.DocumentDate', root: 'Invoice' });
+      expect(toModelRootedPath("'Invoice'.InvoiceBase", configurations, 0))
+        .toEqual({ modelExpression: 'model.InvoiceBase', root: "'Invoice'" });
+      expect(toModelRootedPath('model.InvoiceBase', configurations, 0)?.modelExpression).toBe('model.InvoiceBase');
+      expect(toModelRootedPath('Other.InvoiceBase', configurations, 0)).toBeNull();
+      expect(toModelRootedPath('Invoice', configurations, 0)).toBeNull();
+    });
+
+    it('lists the format binding in where-used', () => {
+      useAppStore.setState({ configurations: [], treeNodes: [] } as any);
+      useAppStore.getState().loadXmlFile(RENAMED_FORMAT_XML, 'format.xml');
+      useAppStore.getState().loadXmlFile(MAPPING_XML, 'mapping.xml');
+
+      const usages = useAppStore.getState().whereUsed('SalesInvoiceDP').flatMap(e => e.formatUsages);
+      expect(usages.map(u => u.expression)).toContain('Invoice.InvoiceBase.DocumentDate');
+    });
+
+    it('drills the format binding down through the model mapping', () => {
+      const configurations = [
+        parseERConfiguration(RENAMED_FORMAT_XML, 'format.xml'),
+        parseERConfiguration(MAPPING_XML, 'mapping.xml'),
+      ] as any[];
+      useAppStore.setState({ configurations } as any);
+      const store = useAppStore.getState();
+
+      const tree = buildExpressionTree({
+        expression: 'Invoice.InvoiceBase.DocumentDate<>NULLDATE()',
+        configIndex: 0,
+        configurations,
+        resolveModelPath: store.resolveModelPath,
+        resolveDatasource: store.resolveDatasource,
+        findModelPathBindings: store.findModelPathBindings,
+      });
+      const nodes = flatten(tree);
+      const modelNode = nodes.find(n => n.badge === 'model');
+      // The row keeps the format's own spelling of the path.
+      expect(modelNode?.sublabel).toBe('Invoice.InvoiceBase.DocumentDate');
+      expect(modelNode?.definition).toBe('SalesInvoice');
+      expect(nodes.find(n => n.badge === 'mapping')?.sublabel).toBe('ReportDataProvider.getHeader.DocumentDate');
+      expect(nodes.map(n => n.sublabel ?? '').join('\n')).toContain('SalesInvoiceDP');
+    });
   });
 });
