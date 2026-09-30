@@ -18,8 +18,8 @@ You are an expert agent for generating and modifying Dynamics 365 Finance & Oper
 2. **Generate ER data models**:
    - Create `ERDataModelVersion` XML from a description or sample file
    - Define containers (root + nested), items, enums
-   - Set proper field types (String=6, Int32=10, Int64=0, Real=1, Date=2, DateTime=3, Boolean=4, Container=8, Enum=5, Record=7, RecordList=9, GUID=11)
-   - Create enum containers with `IsEnum="1"` and enum member items
+   - Set proper field types — see *Data Model Field Types* below (Boolean=1, Int64=3, Int32=4, Real=5, String=6, Date=7, Enum=9, Record=10, RecordList=11, Container=13, DateTime=14)
+   - Create enum containers with `IsEnum="1"` and enum member items (`Type="9"`)
    - Extend existing data models with new containers/items
 
 3. **Generate new ER formats** from scratch based on:
@@ -96,70 +96,76 @@ You are an expert agent for generating and modifying Dynamics 365 Finance & Oper
 ```
 
 ### Data Model Structure
+Verified against `Asl Tax declaration model (SK)` and MS `Invoice model` exports. Only `ERDataModel` carries a GUID. **Descriptors are identified by name**: `ID.` equals `Name` (e.g. `CompanyInformation_1`, `TaxDeclarationModel`) and `TypeDescriptor` references that name — never a GUID.
+
 ```xml
-<ERDataModelVersion ID.="{GUID},1" DateTime="2025-01-01T00:00:00" Number="1" Description="...">
+<ERDataModelVersion ID.="{95C07B90-...},10" DateTime="..." Description="..." Number="10">
   <Model>
-    <ERDataModel ID.="{GUID}" Name="BankStatement">
+    <ERDataModel ID.="{95C07B90-...}" Base="{C37ECEC4-...},4" Name="Asl Tax declaration model (SK)">
       <Contents.>
-        <!-- Root container (entry point for mapping) -->
-        <ERDataContainerDescriptor ID.="{GUID}" Name="BankStatement" IsRoot="1">
+        <!-- Root descriptor = entry point for a model mapping / format model datasource -->
+        <ERDataContainerDescriptor ID.="TaxDeclarationModel" IsRoot="1" Label="@GER_LABEL:TaxDeclarationModel" Name="TaxDeclarationModel">
           <Contents.>
-            <!-- Simple fields -->
-            <ERDataContainerDescriptorItem Name="IBAN" Type="6" />           <!-- String -->
-            <ERDataContainerDescriptorItem Name="StatementDate" Type="2" />  <!-- Date -->
-            <ERDataContainerDescriptorItem Name="OpeningBalance" Type="1" /> <!-- Real -->
-            <ERDataContainerDescriptorItem Name="ClosingBalance" Type="1" /> <!-- Real -->
-
-            <!-- Nested record (1:1) - references another container by GUID -->
-            <ERDataContainerDescriptorItem Name="Account" Type="7"
-                TypeDescriptor="{AccountContainerGUID}" IsTypeDescriptorHost="1" />
-
-            <!-- List of records (1:N) -->
-            <ERDataContainerDescriptorItem Name="Transactions" Type="9"
-                TypeDescriptor="{TransactionContainerGUID}" IsTypeDescriptorHost="1" />
-
+            <ERDataContainerDescriptorItem Name="FromDate" Type="7" />         <!-- Date -->
+            <ERDataContainerDescriptorItem Name="NullDeclaration" Type="1" />  <!-- Boolean -->
+            <!-- Record (1:1). IsTypeDescriptorHost="1" = this item DEFINES the type; max. one host per type, others only reference it -->
+            <ERDataContainerDescriptorItem IsTypeDescriptorHost="1" Name="CompanyInformation" Type="10" TypeDescriptor="CompanyInformation_1" />
+            <!-- Record list (1:N) -->
+            <ERDataContainerDescriptorItem Name="AttachedDocuments" Type="11" TypeDescriptor="AttachedDocuments_1" />
             <!-- Enum reference -->
-            <ERDataContainerDescriptorItem Name="Direction" Type="5"
-                TypeDescriptor="{DirectionEnumGUID}" />
+            <ERDataContainerDescriptorItem IsTypeDescriptorHost="1" Name="CountryRegionType" Type="9" TypeDescriptor="CountryRegionType" />
           </Contents.>
         </ERDataContainerDescriptor>
 
-        <!-- Nested container (non-root) -->
-        <ERDataContainerDescriptor ID.="{AccountContainerGUID}" Name="Account">
+        <!-- Nested type (non-root) -->
+        <ERDataContainerDescriptor ID.="CompanyInformation_1" Name="CompanyInformation_1">
           <Contents.>
             <ERDataContainerDescriptorItem Name="Name" Type="6" />
-            <ERDataContainerDescriptorItem Name="BIC" Type="6" />
           </Contents.>
         </ERDataContainerDescriptor>
 
-        <!-- Enum container -->
-        <ERDataContainerDescriptor ID.="{DirectionEnumGUID}" Name="Direction" IsEnum="1">
+        <!-- Enum: members are Type="9" -->
+        <ERDataContainerDescriptor ID.="ReverseCharge" IsEnum="1" Name="ReverseCharge">
           <Contents.>
-            <ERDataContainerDescriptorItem Name="Credit" Type="10" />  <!-- Enum members use Type=10 (Int32) -->
-            <ERDataContainerDescriptorItem Name="Debit" Type="10" />
+            <ERDataContainerDescriptorItem Name="No" Type="9" />
+            <ERDataContainerDescriptorItem Name="Yes" Type="9" />
           </Contents.>
         </ERDataContainerDescriptor>
       </Contents.>
     </ERDataModel>
   </Model>
+  <Delta> <!-- see Derived data model below --> </Delta>
 </ERDataModelVersion>
 ```
 
 ### Data Model Field Types
-| Type Code | TypeScript | Description | Example |
-|---|---|---|---|
-| 0 | Int64 | 64-bit integer | RecId, large IDs |
-| 1 | Real | Decimal number | Amount, Balance |
-| 2 | Date | Date only | StatementDate |
-| 3 | DateTime | Date + time | CreatedDateTime |
-| 4 | Boolean | True/False | IsActive |
-| 5 | Enum | Enumeration ref | Direction (needs TypeDescriptor) |
-| 6 | String | Text | Name, IBAN, BIC |
-| 7 | Record | Nested record | Account (needs TypeDescriptor + IsTypeDescriptorHost) |
-| 8 | Container | Binary blob | FileContent |
-| 9 | RecordList | List of records | Transactions (needs TypeDescriptor + IsTypeDescriptorHost) |
-| 10 | Int32 | 32-bit integer | Count, enum member |
-| 11 | GUID | Unique identifier | ID |
+Codes verified by counting items in the exports in `scripts/er-configs/`:
+
+| Type | Meaning | Examples in real exports |
+|---|---|---|
+| 1 | Boolean | `GTEEnabled`, `NullDeclaration`, `CopyIndicator` |
+| 3 | Int64 | `RecId`, `AslTaxTransRecId` |
+| 4 | Integer (Int32) | `CopyNumber`, `NumberOfDecimals` |
+| 5 | Real | `Amount`, `DeductibleSalesTax` |
+| 6 | String | `Name`, `TaxCode` |
+| 7 | Date | `FromDate`, `DueDate` |
+| 9 | Enum — reference (with `TypeDescriptor`) **or** enum member (inside an `IsEnum="1"` descriptor) | `CountryRegionType`, `No`/`Yes` |
+| 10 | Record (needs `TypeDescriptor`) | `CompanyInformation` |
+| 11 | Record list (needs `TypeDescriptor`) | `TaxTransactionsDetails`, `AttachedDocuments` |
+| 13 | Container | `Document`, `Logo` |
+| 14 | DateTime | `DocumentDateTime` |
+
+Code 8 occurs only once (`LoadingTime` in Invoice model); codes 0, 2, 12 never occur. Do not use any of them (e.g. for GUID) without first confirming the code in a real export.
+
+### Derived data model — `<Delta>`
+- **References inside `<Delta>` are written in square brackets**, in `<Model>` without them:
+  ```xml
+  <!-- Model -->  <ERDataContainerDescriptorItem Name="CompanyInformation" TypeDescriptor="CompanyInformation_1" />
+  <!-- Delta -->  <ERDataContainerDescriptorItem Name="CompanyInformation" TypeDescriptor="[CompanyInformation_1]" />
+  ```
+  Same for `Destination="[Address]"` (insert items into an existing descriptor). Exception: `Destination="root"` (new top-level descriptor) has no brackets. Missing brackets → import error *"Reference of the object 'X' to the object 'Type definition' (X_1) cannot be established"*.
+- **Everything a derived model adds to `<Model>` must also be in `<Delta>`** (e.g. a new root descriptor → append it to the existing `ERObjectOperationInsert Destination="root"`). Rebase replays only the Delta — what is not there is silently dropped.
+- A new root that reuses existing types (e.g. slim `TaxDeclarationModelLite`) only references them — no `IsTypeDescriptorHost`, no copied subtree.
 
 ### Multiplicity Rules (CRITICAL)
 - `Multiplicity="1"` → Element is **always present** (required). Navigation path does **NOT** use `.Data.` — go directly: `Parent.Child.Leaf`
@@ -191,8 +197,8 @@ format.Document.BkToCstmrStmt.Stmt.Acct.Svcr.Data.FinInstnId.BICFI.IsMatched
 ```xml
 <ERModelMappingVersion ID.="{GUID},1" DateTime="..." Number="1">
   <Mapping>
-    <ERModelMapping ID.="{GUID}" Name="..." Model="{modelGUID}" ModelVersion="{modelGUID},version"
-                    DataContainerDescriptor="{containerGUID}">
+    <ERModelMapping ID.="{GUID}" Name="..." Model="{modelGUID}" ModelName="..." ModelVersion="{modelGUID},revision"
+                    DataContainerDescriptor="TaxDeclarationModel">  <!-- root descriptor NAME, not a GUID -->
       <Binding>
         <ERDataContainerBinding>
           <Contents.>
@@ -417,7 +423,20 @@ Example — format mapping delta:
 <!-- Update model enum reference -->
 <ERObjectOperationModify ModifiedProperties="parmModelGuid,parmRevisionNumber"
     Object="ModelItemDefinition:$MyEnumDs.ValueDefinition.ValueSource">
-  <Data><ERModelEnumDataSourceHandler ModelEnumName="MyEnum" ModelGuid="{newGUID}" ModelVersion="{newGUID},2" /></Data>
+  <Data><ERModelEnumDataSourceHandler ModelEnumName="MyEnum" ModelGuid="{modelGUID}" RevisionNumber="10" /></Data>
+</ERObjectOperationModify>
+
+<!-- Switch the format's model datasource to another root descriptor (slim root) -->
+<ERObjectOperationModify ModifiedProperties="parmModelGuid,parmRevisionNumber,parmDataContainerDescriptorName"
+    Object="ModelItemDefinition:model.ValueDefinition.ValueSource">
+  <Data><ERModelDataSourceHandler ModelGuid="{modelGUID}" RevisionNumber="10" DataContainerDescriptorName="TaxDeclarationModelLite" /></Data>
+</ERObjectOperationModify>
+
+<!-- Replace PathsToCache (replaces the WHOLE collection) -->
+<ERObjectOperationModify ModifiedProperties="parmPathsToCache" Object=".Datasource">
+  <Data><ERModelDefinition><PathsToCache><ERPathsToCache><Contents.>
+    <ERPathToCache Path="model/TaxTransactionsDetails" />
+  </Contents.></ERPathsToCache></PathsToCache></ERModelDefinition></Data>
 </ERObjectOperationModify>
 
 <!-- Insert new datasources -->
@@ -472,7 +491,9 @@ Example — format mapping delta:
 
 | Value | When to use |
 |---|---|
-| `parmModelGuid,parmRevisionNumber` | Model enum/type reference update after model rebase |
+| `parmModelGuid,parmRevisionNumber` | Model enum/type reference update after model rebase / new model revision |
+| `parmModelGuid,parmRevisionNumber,parmDataContainerDescriptorName` | Format model datasource switched to another root descriptor |
+| `parmPathsToCache` | `PathsToCache` changed (`Object=".Datasource"`, replaces the whole collection) |
 | `parmModelGUID,parmRevisionNumber` | Same — uppercase variant (depends on datasource type) |
 | `parmExpressionAsString,parmExpression` | Computed field / format binding expression changed |
 | `parmExpressionAsString,parmExpression,parmSyntaxVersion` | Expression changed and SyntaxVersion also changed |
@@ -512,59 +533,81 @@ This is a **different task from creating a derived config from a Microsoft base*
 4. **Append new `Delta` entries after the existing ones** for the actual new changes in this version only — never touch or duplicate prior Delta history.
 5. **After generating**, grep the whole file for the OLD version number (e.g. `,N"` / `Number="N"`) to confirm no stale reference was missed, and re-parse as XML to confirm well-formedness.
 
+#### Configuration identity, version numbers, names
+
+- **`PublicVersionNumber` = public version of the parent at the derivation point + own `Number`.** The prefix is sticky — it comes from `ERSolution/@Base` and does not change when the own `Number` grows (model `171.4.9` → `171.4.10`; format with `Base={model},9` stays `171.4.9.x` even when it consumes model revision 10). Never keep a number inherited from the source file (a new config claiming `171.344.7.12` while its `ERModelMappingVersion` is 1 fails on import).
+- **Where configs hang:** model mappings under the MS model mapping; SK formats under the SK data model; CZ declaration/KH formats under the **MS format** — their `ERSolution/@Base` must never be rewritten to the model (breaks the rebase line and the `136.x` prefix).
+- **The consumed model revision is independent of `Base`** and lives in several places that must move together:
+  - `ERModelMapping/@ModelVersion="{modelGUID},N"`
+  - every `ERModelDataSourceHandler/@RevisionNumber` and `ERModelEnumDataSourceHandler/@RevisionNumber` — **including those inside `<Delta>`**
+  - model mapping prerequisite `<ERPrerequisiteGroup Name="Implementations">` → `<ERPrerequisiteComponent Id="{ERSolution GUID of the data model}" IsImplementation="1" Type="4" Version="N" />` (`Type=4` = Solution; `Id` is the model's **ERSolution** GUID, not the `ERDataModel` GUID). Forgetting it was once fixed by hand (SK: `{1ABFD5BA-…}` Version 9 → 10).
+- **"Can not overwrite a version"**: exports carry `VersionStatus="1"` (Completed); F&O never overwrites an existing config with the same GUID and `Number`.
+  - New version of an existing config → **keep all GUIDs**, bump `Number`. Generators read GUIDs from the previous output, never mint new ones on re-runs.
+  - Clean start (new GUIDs + delete the old config in F&O) → only with explicit user consent.
+- **Build N+1 from N, not from an ancestor.** Before editing, compare child `...Version` numbers of N-1 and N: if they *drop*, N was branched from an older version and lost changes (real case: `Asl Invoice model mapping` 312.341.5 lost all of #4069). Report it before building on it.
+- **Scope of a version = exactly the requested change.** Afterwards diff against the predecessor ("nothing more, nothing less") in a `verify-*.ps1` script and confirm earlier features are still present.
+- **File name:** `<ERSolution/@Name>.version.<PublicVersionNumber>.xml`.
+- **`Description`** (on `ERSolutionVersion` and every `...Version` node): English, **max. 60 characters** (EDT `Description`, longer text is silently truncated on import), prefixed with the ticket id when the user gives one (`#4190 …`, counts into 60). The generator must check the length and throw.
+- **Prerequisites:** remove `<ERPrerequisiteGroup Name="Applicable product versions" Type="1">` completely (platform-version pins block import on newer builds) — user decision for all SK/CZ configs. Keep `AC Package` and `Implementations`.
+- **Import order** is dependent: data model → model mapping → format.
+
 ### Common Datasource Types
+
+**Verified in the exports in `scripts/er-configs/`** (attribute sets copied from real files):
 ```xml
-<!-- Import format reference (links mapping to format tree) -->
-<ERImportFormatDatasource FormatGUID="{formatGUID}" />
+<!-- Data model in a format mapping (the `model` datasource) -->
+<ERModelDataSourceHandler DataContainerDescriptorName="TaxDeclarationModel" ModelGuid="{modelGUID}" RevisionNumber="9" />
 
-<!-- Computed field (ER formula) -->
-<ERModelExpressionItem ExpressionAsString="IF(format.X.IsMatched, format.X.Data.Str, &quot;&quot;)" SyntaxVersion="2" />
+<!-- Enum of the data model -->
+<ERModelEnumDataSourceHandler ModelEnumName="NoYesEnum" ModelGuid="{modelGUID}" RevisionNumber="4" />
 
-<!-- Computed field with parameters -->
-<ERModelExpressionItem ExpressionAsString="CONCATENATE($Param1, &quot; - &quot;, $Param2)" SyntaxVersion="2">
-  <Arguments>
-    <ERModelExpressionItemArguments>
-      <Contents.>
-        <ERModelExpressionItemArgument Name="$Param1" Type="6" />  <!-- Type=6 String, same codes as data model -->
-        <ERModelExpressionItemArgument Name="$Param2" Type="6" />
-      </Contents.>
-    </ERModelExpressionItemArguments>
-  </Arguments>
+<!-- Computed field (ER formula) — always with the <Expression> subtree, never self-closing -->
+<ERModelExpressionItem ExpressionAsString="IF(MessageId &lt;&gt; &quot;&quot;, ..., ...)" SyntaxVersion="1">
+  <Expression> ... </Expression>
 </ERModelExpressionItem>
 
-<!-- Table datasource -->
-<ERTableDataSourceHandler Table="BankAccountTable" />
-
-<!-- Table datasource with cross-company and selected fields -->
-<ERTableDataSourceHandler Table="BankAccountTable" CrossCompany="1">
-  <SelectedFields>
-    <ERSelectedFields>
+<!-- "Table records" = Record list -->
+<ERTableDataSourceHandler IsCrossCompany="1" Path="TaxCodes" Table="TaxTable">
+  <SelectedItems>
+    <ERSelectedTableItems>
       <Contents.>
-        <ERSelectedField Name="AccountNum" />
-        <ERSelectedField Name="Name" />
+        <ERSelectedTableItem Path="TaxCode" />
+        <ERSelectedTableItem Path="dataAreaId" />
       </Contents.>
-    </ERSelectedFields>
-  </SelectedFields>
+    </ERSelectedTableItems>
+  </SelectedItems>
 </ERTableDataSourceHandler>
 
-<!-- Enum datasource (AX enum) -->
+<!-- "Table" = single Record (!) -->
+<ERTableDataSource Path="CompanyInfo" Table="CompanyInfo" />
+
+<!-- AX enum -->
 <EREnumDataSourceHandler EnumName="NoYes" />
 
-<!-- Model enum datasource (enum defined in ER data model) -->
-<ERModelEnumDataSourceHandler ModelEnumName="Direction" ModelGuid="{modelGUID}" />
+<!-- Format enum / format enum parameter / user parameter (asked in a dialog — in batch they need stored values) -->
+<ERFormatEnumDataSourceHandler FormatEnum="{formatEnumGUID}" />
+<ERFormatEnumParameterDataSourceHandler FormatEnum="{formatEnumGUID}" />
+<ERUserParameterDataSourceHandler ExtendedDataTypeName="ElectronicMessageId" />
 
-<!-- User parameter -->
-<ERUserParameterDataSourceHandler ExtendedDataTypeName="ERFormatMappingRunFilterCompanyName" />
+<!-- Format lookup (ERFormatEnumLookupDataSource with LookupRoot/Structure; bindings in slash notation: BindingSourcePath="model/TaxCodesCompany/Code") -->
+<ERFormatEnumLookupDataSource FormatEnum="{GUID}" IsCrossCompany="1"> ... </ERFormatEnumLookupDataSource>
 
-<!-- GroupBy datasource -->
+<!-- Class (X++); ER validates ALL methods of the class -> obsolete-method warnings -->
+<ERClassDataSourceHandler ClassName="TaxIntegrationUtils" />
+
+<!-- Container (group node without own value) -->
+<EREmptyContainerDataSourceHandler />
+
+<!-- Join of lists -->
+<ERListJoinDatasource ExecutionTarget="1"> ... </ERListJoinDatasource>
+
+<!-- GroupBy -->
 <ERModelGroupByFunction ExecutionTarget="2" ListToGroup="#Root/$Transactions">
-  <!-- ExecutionTarget: 1=InMemory, 2=Query (SQL) -->
   <Aggregations>
     <ERModelGroupByAggregations>
       <Contents.>
-        <!-- SelectionField: 1=SUM, 2=COUNT, 3=MAX, 4=MIN, 5=AVG -->
-        <ERModelGroupByAggregation FieldPath="#Root/$Transactions/Amount" SelectionField="1" />
-        <ERModelGroupByAggregation FieldPath="#Root/$Transactions/Count" Name="TxCount" SelectionField="2" />
+        <ERModelGroupByAggregation FieldPath="#Root/$Transactions/Amount" Name="Amount_Sum" SelectionField="1" />
+        <ERModelGroupByAggregation FieldPath="#Root/$Transactions/Rate" Name="TotalCount" SelectionField="4" />
       </Contents.>
     </ERModelGroupByAggregations>
   </Aggregations>
@@ -572,29 +615,29 @@ This is a **different task from creating a derived config from a Microsoft base*
     <ERModelGroupByFieldReferences>
       <Contents.>
         <ERModelGroupByFieldReference FieldPath="#Root/$Transactions/Currency" />
-        <ERModelGroupByFieldReference FieldPath="#Root/$Transactions/Date" />
       </Contents.>
     </ERModelGroupByFieldReferences>
   </GroupedFields>
 </ERModelGroupByFunction>
 
-<!-- Join datasource -->
-<ERJoinDataSourceHandler>
-  <!-- Joins two datasources; children defined as nested ERModelItemDefinition -->
-</ERJoinDataSourceHandler>
-
-<!-- Filtered datasource (applies WHERE condition to a list) -->
-<ERFilteredDataSourceHandler ExpressionAsString="$SourceList.Status = &quot;Active&quot;" />
-
-<!-- Container datasource (binary data) -->
-<ERContainerDataSourceHandler />
-
-<!-- Class datasource (X++ class) -->
-<ERClassDataSourceHandler ClassName="ERTextFormatExcel" />
-
-<!-- Lookup datasource -->
-<ERLookupDataSourceHandler ExpressionAsString="FIRSTORNULL(WHERE($Table, $Table.Id = $CurrentId))" />
+<!-- Cache of datasource paths (in ERModelDefinition of a model mapping or format mapping) -->
+<PathsToCache><ERPathsToCache><Contents.><ERPathToCache Path="model/TaxTransactionsDetails" /></Contents.></ERPathsToCache></PathsToCache>
 ```
+
+**Enum codes:**
+
+| Attribute | Values |
+|---|---|
+| `ERModelGroupByFunction/@ExecutionTarget` (`ERExecutionTargetWithAutodetectAx`) | 0 / missing = Autodetect, 1 = InMemory, 2 = Query (SQL) |
+| `ERListJoinDatasource/@ExecutionTarget` (`ERExecutionTargetAx`) | 0 = InMemory, 1 = Query |
+| `ERModelGroupByAggregation/@SelectionField` | 1 = SUM, 3 = MAX, 4 = COUNT (verified by aggregation names `*_Sum`, `*_Max`, `*_Count` in MS configs). 2 occurs only unnamed; MIN/AVG not verified — confirm in the designer before use |
+| `ERPrerequisiteComponent/@Type` (`ERPrerequisiteComponentType`) | 0 Application, 1 ApplicationSuite (package/model), 2 ApplicationUpdate, 3 ApplicationAssembly, 4 Solution (ER configuration) |
+
+**Record vs Record list** (matters for `ISEMPTY`, which accepts only Record list):
+- Record list: `ERTableDataSourceHandler`, `ERListJoinDatasource`, `ERModelGroupByFunction`, expressions `FILTER`, `WHERE`, `ALLITEMS`, `LISTJOIN`, `EMPTYLIST`, `ORDERBY`, `SPLIT`.
+- Record: `ERTableDataSource`, `FIRSTORNULL(...)`, `FIRST(...)` — empty case is handled differently (e.g. `RecId <> 0`, `<> NULLDATE()`).
+
+**Not present in any export in this repo** — before using, copy the exact attribute set from a real export (import formats, or ask the user): `ERImportFormatDatasource`, `ERModelExpressionItemArgument` (parametrised computed field), `ERJoinDataSourceHandler`, `ERFilteredDataSourceHandler`, `ERContainerDataSourceHandler`, `ERLookupDataSourceHandler`.
 
 ### ER Expression Functions (commonly used)
 - `IF(condition, trueValue, falseValue)`
@@ -619,57 +662,51 @@ This is a **different task from creating a derived config from a Microsoft base*
 
 ## Execution Model
 
-You generate ER configurations by writing and running a PowerShell script that builds the XML programmatically. Follow this 3-step pattern for every file generation task.
+You generate ER configurations by writing and running a PowerShell **generator** script plus a **verification** script. Established layout of this repo:
 
-### Step 1 — Write the generation script to disk
+| Path | Content |
+|---|---|
+| `scripts/er-configs/<area>/Base/`, `.../MS/` | **Inputs only** — published exports (Asl / Microsoft). Never overwrite. |
+| `scripts/er-configs/<area>/` (or a folder the user names) | Generated configurations |
+| `scripts/gen-<name>.ps1` | Generator |
+| `scripts/verify-<name>.ps1` | Static checks of the generator output |
+| `scripts/<area>-shared.ps1` | Rules shared by several generators (dot-sourced, e.g. `sk-peppol-shared.ps1`) |
+| `docs/<topic>.md` | Analyses and decisions (why, measurements, risks) |
 
-Use `run_in_terminal` with `Set-Content` to save the script:
+This repo is private. Scripts and analyses must not be copied to the public `d365fo-er-visualizer` repo.
 
-```powershell
-@'
-# === ER Config Generation Script ===
-# <description of what this generates>
+### Step 1 — Write the generator
 
-$outputPath = "output/<ConfigName>.version.X.Y.Z.xml"
-$doc = New-Object System.Xml.XmlDocument
+Create the file with the file-creation tool (not via a here-string in the terminal — multi-line terminal commands are unreliable on Windows PowerShell 5.1). Conventions:
 
-# ... all XML building logic here using XmlDocument API ...
+- Header comment: what is generated, ticket id, **version map** (`source version -> output version` for every config), link to the `docs/` analysis and to the verify script.
+- **Idempotent**: re-running produces the same output (only `DateTime` may change). Inputs only from `Base/` / `MS/` (or explicit parameters), never from an earlier output unless it is the predecessor version.
+- Identity (GUIDs, `Number`, `PublicVersionNumber`, `Description`) as explicit constants/parameters at the top; `Description` length checked (`<= 60`, throw otherwise).
+- Load with `$doc = New-Object System.Xml.XmlDocument; $doc.Load($path)` — **not** `Get-Content` (PS 5.1 reads BOM-less UTF-8 as ANSI → mojibake that looks like corrupted content).
+- Save as **UTF-8 with BOM** (F&O exports have it): `XmlWriterSettings.Encoding = [System.Text.Encoding]::UTF8` or `[IO.File]::WriteAllText($p, $s, [Text.Encoding]::UTF8)`.
+- When a script is superseded, keep it but put `# !!! NAHRAZENO skriptem scripts/<new>.ps1 (<date>) !!!` on the first line.
 
-# Save
-$settings = New-Object System.Xml.XmlWriterSettings
-$settings.Indent = $true
-$settings.Encoding = [System.Text.Encoding]::UTF8
-$writer = [System.Xml.XmlWriter]::Create($outputPath, $settings)
-$doc.Save($writer)
-$writer.Close()
+### Step 2 — Write the verify script
 
-# Verify
-if (Test-Path $outputPath) {
-    Write-Host "OK: $(Resolve-Path $outputPath) — $((Get-Item $outputPath).Length) bytes"
-} else {
-    Write-Error "FAILED: file was not created"
-}
-'@ | Set-Content -Path "scripts/generate-<name>.ps1" -Encoding UTF8
-```
+`verify-<name>.ps1` loads source and output and checks at least: well-formed XML, BOM, identity and version numbers (incl. cross-references such as `ERFormatMapping/@FormatVersion`, `ModelVersion`, all `RevisionNumber`, `Implementations` prerequisite), `Description` length, and a **structural diff against the predecessor** listing exactly the intended differences and nothing else (counts of datasources/bindings before and after).
 
-### Step 2 — Execute the script
+### Step 3 — Execute
 
 ```powershell
-& "scripts/generate-<name>.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts/gen-<name>.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts/verify-<name>.ps1"
 ```
 
-### Step 3 — Report to user
+### Step 4 — Report to user
 
-Only after seeing `OK:` output with a non-zero file size, confirm to the user the file path and size.
+Only after the verify script passes: file paths, version map, what changed, import order, and anything that must be done in F&O (delete an old version, set batch parameters, …).
 
 ### Key rules
 
 - All ER XML is produced inside the PowerShell script — not written inline in chat.
-- Use `run_in_terminal` + `Set-Content` for all file writes (reliable cross-platform).
-- Confirm file existence via `Test-Path` output before reporting success.
 - Verify referenced files exist via `list_dir` or `file_search` before using them.
 - ❌ Generating XML in reasoning then "summarizing" it
-- ❌ Using `read_file` on ER XML files larger than 300 lines (use a batched `run_in_terminal` PowerShell query, or delegate to `runSubagent` for multi-step investigation — see below)
+- ❌ Using `read_file` on ER XML files larger than 300 lines (use a batched PowerShell query written to a `.ps1` file, or delegate to `runSubagent` for multi-step investigation — see below)
 
 ### PowerShell XmlDocument — CRITICAL formatting rules
 
@@ -703,14 +740,14 @@ ER configuration XML files are typically **10,000–15,000 lines** long (some re
 
 ### Batch discovery into a single PowerShell call
 
-Always batch multiple queries into a **single `run_in_terminal` call** using a multi-command PowerShell script, writing results to a temp `.txt` file and reading that back with `read_file` (this avoids terminal-output truncation on multi-line scripts against large files). For open-ended, multi-step investigation (e.g. diffing a derived config against its base across several sections), delegate the whole investigation to the `runSubagent` tool with a precise prompt describing exactly what facts to return — do not do it via many sequential small tool calls in the main thread.
+Always batch multiple queries into a **single `.ps1` discovery script** (run it with `powershell -NoProfile -ExecutionPolicy Bypass -File`), writing results to a temp `.txt` file and reading that back with `read_file` (this avoids terminal-output truncation). For open-ended, multi-step investigation (e.g. diffing a derived config against its base across several sections), delegate the whole investigation to the `runSubagent` tool with a precise prompt describing exactly what facts to return — do not do it via many sequential small tool calls in the main thread.
 
 **Workspace-scope caveat:** `grep_search` and `file_search` only index files inside the current VS Code workspace folder. Against a file **outside** the workspace (e.g. a reference/base config the user attached from `Downloads`), they silently return empty results regardless of the query — this is not evidence the content is missing. For any external file, use the PowerShell `[System.IO.File]::ReadAllText()` + `IndexOf`/regex approach below instead.
 
 ```powershell
 # Batch example — extract multiple GUIDs in one call:
 $f = "path/to/base.xml"
-$lines = Get-Content $f
+$lines = [System.IO.File]::ReadAllLines($f)
 
 # Solution GUID
 "=== ERSolution ==="
@@ -731,24 +768,32 @@ $idx = ($lines | Select-String 'Name="Sts"').LineNumber[0]; $lines[($idx-4)..($i
 ```
 
 ### Strategy for derived config creation from a large base:
-1. **One batched PowerShell script via `run_in_terminal`** to extract all needed GUIDs (Solution, Format, Format Mapping, specific elements) — write results to a temp file and read it back if output is long
-2. **Write the complete `.ps1` script immediately** using your ER knowledge — fill in GUIDs from step 1
-3. **Execute** with `run_in_terminal` and verify
+1. **One batched discovery script** to extract all needed GUIDs (Solution, Format, Format Mapping, specific elements) and version numbers — write results to a temp file and read it back
+2. **Write the complete generator + verify script** using your ER knowledge — fill in GUIDs from step 1
+3. **Execute** both and fix until verify passes
 
-**Never** use many small sequential `run_in_terminal` calls to discover file content — batch all discovery queries into one script.
+**Never** use many small sequential terminal calls to discover file content — batch all discovery queries into one script.
 
 ## Workflow
 
 ### Any generation task (format, model, mapping, derived config, full solution):
-1. **Gather minimal context** — one batched PowerShell discovery script for all file queries; `file_search`/`list_dir` to verify paths (workspace files only — see workspace-scope caveat above for external files)
-2. **Write a `.ps1` script** to `scripts/` using `run_in_terminal` + `Set-Content` (Step 1 above)
-3. **Execute the script** using `run_in_terminal` (Step 2 above)
-4. **Report** file path + size (Step 3 above)
+1. **Confirm the lineage** — which config is the base/predecessor (e.g. credit note derives from MS *Peppol Sales Credit Note*, not from *Peppol Sales Invoice*) and which version numbers the result gets. If the user's statement and the files disagree, show the evidence once and ask — do not silently pick one.
+2. **Gather minimal context** — one batched discovery script; `file_search`/`list_dir` to verify paths (workspace files only — see workspace-scope caveat above for external files)
+3. **Write generator + verify script** (Execution Model, steps 1–2)
+4. **Execute** (step 3)
+5. **Report** (step 4)
 
 ### When modifying an existing config:
-1. Read the existing file
-2. Write a transformation `.ps1` script that loads, modifies, and saves the XML
-3. Execute and verify
+1. Discover the relevant parts with a batched script (never `read_file` on the whole XML)
+2. Extend the existing generator for that config if there is one; otherwise write a transformation `gen-*.ps1` that loads the predecessor, modifies it and saves a new version
+3. Execute generator and verify script
+
+### Working with the user
+- **Bound the diagnosis.** When the evidence already supports a decision, propose the fix instead of another round of diagnostics; ask for SQL/trace output only when it changes the decision, and say why.
+- **Finish what you start.** Do not end a turn with a half-generated set of files; if something blocks, state exactly what is missing.
+- **Do not remove model fields, GroupBy fields or datasources that formats may read** (e.g. dates in GroupBy used by other formats) without checking all consuming formats and asking.
+- **Cleanup is requested**: unused datasources in a slim mapping are removed for readability — prove they are unused (no binding, no expression, no `ParentPath` child references them).
+- Texts for Azure DevOps (work item descriptions): English, markdown **without tables** (DevOps does not render them).
 
 ### Datasource Hierarchy (ParentPath)
 Datasources form a tree via `ParentPath` on `ERModelItemDefinition`:
@@ -796,24 +841,20 @@ Datasources form a tree via `ParentPath` on `ERModelItemDefinition`:
 
 ## Important Rules
 
-1. **Always generate new GUIDs** for new elements — never reuse existing ones
+1. **New GUIDs only for new objects** (new elements, datasources, a brand-new configuration). A new *version* of an existing configuration keeps all its GUIDs — see *Configuration identity* above.
 2. **Check Multiplicity** before building path expressions — `"1"` skips `.Data.`, others need it
 3. **Update both dot and slash notation** in expressions when modifying paths
-4. **Preserve encoding** — ER XML uses UTF-8 with BOM
-5. **Use PowerShell** for XML manipulation — `[xml]` type with `XmlDocument` methods
+4. **Preserve encoding** — ER XML uses UTF-8 with BOM (see Execution Model for load/save)
+5. **Use PowerShell** for XML manipulation — `XmlDocument.Load()` + `XmlDocument` methods (not `[xml](Get-Content ...)`)
 6. **Validate** the generated XML by re-parsing it and checking element counts
-7. **Never modify** the base format file — create derived configurations instead
+7. **Never modify** the published input files in `Base/` / `MS/` — create a new version or a derived configuration instead
 8. **ISO 20022 knowledge**: know the differences between camt.053 versions (.001.02 vs .001.08), pain.001/002 versions, etc.
-9. **XmlDocument PreserveWhitespace + Indent = BROKEN** — never set both. See *PowerShell XmlDocument — CRITICAL formatting rules* above.
-10. **Prefer string/text replacement** over DOM node replacement when changing only `ExpressionAsString` attribute values in existing large ER XML files — zero risk of re-indentation side effects.
-11. **ExpressionAsString line separator: LF only** — use `&#xA;` as the newline character in ExpressionAsString attributes. Using `&#xD;&#xA;` (CRLF) causes D365FO to report "Type is Void" on the datasource. Always write/replace with `&#xA;` only.
-12. **ERModelExpressionItem always needs `<Expression>` subtree** — self-closing `<ERModelExpressionItem ... />` causes "Type is Void". The tree must faithfully mirror the ExpressionAsString (same operators, same paths, same nesting). See the Common Datasource Types section for the tree element reference.
-13. **camt.053.001.08 vs .001.02 differences** (already implemented in AT Raiffeisenbank format):
-    - `RltdPties/Cdtr` and `RltdPties/Dbtr` wrap party data in `Pty` element (`Party40Choice`, Multiplicity=`"1"`) → path: `.Cdtr.Data.Pty.Nm.Data.Str`
-    - `FinInstnId/BIC` renamed to `FinInstnId/BICFI` — always check both in expressions with BICFI→BIC→Othr→"" fallback
-    - Bank code expression pattern: `IF(BICFI.IsMatched, BICFI.Data.Str, IF(Othr.IsMatched, Othr.Data.Id.Str, ""))`
-14. **Isolate before diagnosing**: when the user reports a validation/import error on a config you generated or modified, always first check whether the SAME error reproduces on the unmodified base/prior version before attributing the cause to your own edit. Do not report a fix as confirmed-resolved without this check — a fix that merely "seems plausible" and doesn't reproduce your own test can be wrong even if the file re-parses fine and version checks pass.
-15. **Be cautious inserting a brand-new property binding type (e.g. a first-ever `Enabled` binding) for a pre-existing base component if there's no precedent for that exact operation in the base's own Delta/history** — prefer the smallest possible change that achieves the goal (e.g. a plain tree-level attribute edit) over introducing a new binding category.
+9. **Prefer string/text replacement** over DOM node replacement when changing only `ExpressionAsString` attribute values in existing large ER XML files — zero risk of re-indentation side effects.
+10. **Line separators in `ExpressionAsString`**: write `&#xA;` in new expressions and keep whatever the existing expression uses. CRLF (`&#xD;&#xA;`) is **not** an error by itself — MS exports contain it hundreds of times (e.g. `Invoice model mapping 304.328`: 240×). For "Type is Void", check the `<Expression>` subtree first (rule 11).
+11. **ERModelExpressionItem always needs `<Expression>` subtree** — self-closing `<ERModelExpressionItem ... />` causes "Type is Void" (no export in this repo has a self-closing one). The tree must faithfully mirror the ExpressionAsString (same operators, same paths, same nesting); every change goes into **both** `@ExpressionAsString` and the tree.
+12. **Isolate before diagnosing**: when the user reports a validation/import error on a config you generated or modified, always first check whether the SAME error reproduces on the unmodified base/prior version before attributing the cause to your own edit. Do not report a fix as confirmed-resolved without this check — a fix that merely "seems plausible" and doesn't reproduce your own test can be wrong even if the file re-parses fine and version checks pass.
+13. **Be cautious inserting a brand-new property binding type (e.g. a first-ever `Enabled` binding) for a pre-existing base component if there's no precedent for that exact operation in the base's own Delta/history** — prefer the smallest possible change that achieves the goal (e.g. a plain tree-level attribute edit) over introducing a new binding category.
+14. **Rebase safety**: every change a derived config makes to base objects must be expressed in `<Delta>` (model: new descriptors/items; format mapping: `parmDataContainerDescriptorName`, `parmPathsToCache`, `RevisionNumber` …). Rebase replays only the Delta.
 
 ## Troubleshooting Common Validation Errors
 
@@ -832,15 +873,37 @@ When the user reports a D365FO import/validation error (e.g. "Object reference n
 5. **Consider environment/import-sequence causes, not just file content**: derived ER configs require their full Base lineage to already be imported in the target environment at the referenced version. If steps 1–4 show the file is internally consistent, the next most likely cause is that the base configuration isn't imported yet (or is an older version) in the user's D365FO environment — recommend importing/re-importing the exact base file first, then retrying validation.
 6. **Ask for the exception's stack trace / "Show details"** if available — it names the exact class/property involved and shortcuts steps 1–5.
 
+### Known messages and their causes (from real cases in this repo)
+
+| Message | Cause | Fix |
+|---|---|---|
+| *Reference of the object 'X' to the object 'Type definition' (X_1) cannot be established* (model import) | reference in `<Delta>` without square brackets | `TypeDescriptor="[X_1]"`, `Destination="[Descriptor]"` (only `root` without brackets) |
+| *Can not overwrite a version* | same GUID + `Number` already in F&O (`VersionStatus=1`), or a number inherited from the source file | keep GUIDs, bump `Number`; clean start only with consent |
+| *Path not found 'model.X...'* after slimming a root / removing datasources | model paths live in **four** places: `ERDataContainerPathBinding`, `ERDataContainerPathValidationBinding` under `<Validations>`, format lookups (`BindingSourcePath`, slash notation) and expressions | filter all four with the same rule; the generator must fail if any path outside the root remains |
+| *Wrong type of value - expected: , actual: String* | follow-up error of an unresolvable lookup (empty *expected*) | fix the *Path not found* first |
+| *List 'X' does not have any check for empty list case* | reported on bindings, but the root cause is usually one datasource expression | `scripts/check-list-guards.ps1 -Mapping <file>` finds the root causes; fix with `IF(ISEMPTY(list), <typed empty>, <expr>)` in both `@ExpressionAsString` and the tree (`ERExpressionGenericIf`: `Condition`, `FalseValue`, `TrueValue`) — only on Record lists |
+| *Type of path 'X' is 'Record' but should be one of 'Record list'* | `ISEMPTY` applied to a Record (`ERTableDataSource`, `FIRSTORNULL`) | remove the guard; see *Record vs Record list* |
+| *The element 'X' is marked as obsolete* | `ERClassDataSourceHandler` — ER validates **all** methods of the class | only removable by dropping the class datasource; keep it (and the warning) when the class is really needed (e.g. `TaxIntegrationUtils`) |
+| *Error while evaluating expression for path 'Parameters/$X'* (batch run) | `ERUserParameterDataSourceHandler` / `ERFormatEnumParameterDataSourceHandler` have no dialog in batch | list all parameters of the format and have them stored for the batch run; warn about parameters that fail silently (e.g. threshold = 0) |
+| *ER API is called to initiate values of data sources ... 'ERModelDataSourceHandlerParameters' with path 'model/MessageId'* | Electronic messages pass `MessageId` into the model mapping's root user parameter `MessageId` (`ERUserParameterDataSourceHandler ExtendedDataTypeName="ElectronicMessageId"`) | when building/cleaning a mapping, never drop or rename root-level user parameters used by Electronic messages; compare them with the original mapping |
+
 ## Reference Files in This Workspace
 
 Before referencing any file, **verify it exists** using `list_dir` or `file_search`.
 
-Known useful locations (verify before use):
-- `packages/core/src/types/` — TypeScript type definitions for ER components
-- `packages/core/src/parser/xml-parser.ts` — XML parsing logic
-- `docs/architecture.md` — System architecture overview
-- `scripts/` — Generation scripts (check contents before referencing specific files)
+In this repo:
+- `scripts/er-configs/SK DPH ER konfigurace/`, `CZ DPH ER konfigurace/` — VAT declaration, control statement (KH/KV), CSV export, tax declaration model + mapping
+- `scripts/er-configs/Peppol Sales Invoice ER konfigurace/` — Invoice model, model mapping, Peppol / UBL invoice and credit note (MS inputs in `MS/`)
+- `scripts/gen-sk-vat.ps1`, `gen-cz-vat.ps1` (+ `verify-*`) — slim (LITE) VAT branch: model root `TaxDeclarationModelLite`, LITE mapping, formats; analyses in `docs/sk-vat-performance-analysis.md`, `docs/cz-vat-performance-analysis.md` (performance: `PathsToCache`, `ExecutionTarget`, slim root — variant F)
+- `scripts/gen-sk-invoice.ps1`, `gen-sk-credit-note.ps1`, `sk-peppol-shared.ps1`, `verify-sk-credit-note.ps1` — Slovak Peppol BIS 3.0 formats; `docs/sk-peppol-credit-note.md`. Credit note: base = MS *Peppol Sales Credit Note*, type code **381**, amounts reported positive (D365 stores them negative), SK-only rules shared with the invoice
+- `scripts/gen-asl-invoice-mapping.ps1` — Asl Invoice model mapping 312.341.6 = .4 + #4142 changes
+- `scripts/check-list-guards.ps1` — root causes of *empty list case* warnings
+- Scripts marked `!!! NAHRAZENO` / `!!! NEAKTUALNI` are history only — never run them
+
+Other repos (read-only reference):
+- `K:\repos\d365fo-er-visualizer\packages\core\src\types\` — TypeScript type definitions for ER components
+- `K:\repos\d365fo-er-visualizer\packages\core\src\parser\xml-parser.ts` — XML parsing logic
+- `K:\repos\d365fo-er-visualizer\docs\architecture.md` — System architecture overview
 
 ## Microsoft Learn Resources
 
