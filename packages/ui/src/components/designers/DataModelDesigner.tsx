@@ -16,7 +16,7 @@ import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
 import { t } from '../../i18n';
 import { type ERConfiguration, type ERDataModelContent } from '@er-visualizer/core';
-import { ExpressionDetailLink, DesignerHint, enumLabelFor, fieldTypeLabel } from './shared';
+import { ExpressionDetailLink, enumLabelFor, fieldTypeLabel } from './shared';
 
 /**
  * Restrict a solution's mapping definitions to the one that actually owns the
@@ -371,7 +371,6 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
             </button>
           ))}
         </div>
-        <DesignerHint text={t.modelHierarchyHint} />
         {/* Same place and width as the filter in the format toolbar. */}
         {view === 'list' && (
           <div className="dm-header-filter">

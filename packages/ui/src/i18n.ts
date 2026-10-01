@@ -569,7 +569,6 @@ export interface Translations {
   statsEnums: (n: number) => string;
   statsFields: (n: number) => string;
   statsRelations: (n: number) => string;
-  modelHierarchyHint: string;
   moreFields: (n: number) => string;
 
   // Search panel
@@ -1468,7 +1467,6 @@ const cs: Translations = {
   statsEnums: (n: number) => `${n} ${csPlural(n, 'výčet', 'výčty', 'výčtů')}`,
   statsFields: (n: number) => `${n} ${csPlural(n, 'pole', 'pole', 'polí')}`,
   statsRelations: (n: number) => `${n} ${csPlural(n, 'relace', 'relace', 'relací')}`,
-  modelHierarchyHint: 'Hierarchická mapa · klikněte na kontejner pro zvýraznění',
   moreFields: (n: number) => `+${n} dalších…`,
 
   // Search panel
@@ -2386,7 +2384,6 @@ const en: Translations = {
   statsEnums: (n: number) => `${n} enum${n === 1 ? '' : 's'}`,
   statsFields: (n: number) => `${n} field${n === 1 ? '' : 's'}`,
   statsRelations: (n: number) => `${n} relation${n === 1 ? '' : 's'}`,
-  modelHierarchyHint: 'Hierarchy map · click a container to highlight',
   moreFields: (n: number) => `+${n} more…`,
 
   // Search panel
