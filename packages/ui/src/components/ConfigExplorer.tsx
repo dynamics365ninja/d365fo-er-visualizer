@@ -27,6 +27,8 @@ import {
   AppsListDetailRegular,
   AddRegular,
   SearchRegular,
+  ArrowUploadRegular,
+  ArrowDownloadRegular,
 } from '@fluentui/react-icons';
 import { whereUsedQueryFor } from '../utils/where-used-query';
 import { t, useLocale } from '../i18n';
@@ -1274,6 +1276,15 @@ const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded,
         <span className="tree-chevron-placeholder" aria-hidden="true" />
       )}
       <span className="icon">{getExplorerNodeIcon(node)}</span>
+      {inKindGroup && kindLabel && (
+        // The format's direction is a property of the row, not a second
+        // label competing with the name for width — an icon with a tooltip.
+        <span className="tree-node-direction" title={kindLabel} aria-label={kindLabel} role="img">
+          {node.data?.content?.kind === 'Format' && node.data.content.direction === ERDirection.Import
+            ? <ArrowDownloadRegular fontSize={12} />
+            : <ArrowUploadRegular fontSize={12} />}
+        </span>
+      )}
       <span className="tree-node-label" title={resolvedLabel ? `${displayName} — ${resolvedLabel}` : displayName}>
         <span className={`tree-node-name${isActiveMappingDefinition ? ' tree-node-name--active' : ''}`}>{displayName}</span>
         {resolvedLabel && <span className="tree-node-sublabel">{resolvedLabel}</span>}
@@ -1284,7 +1295,7 @@ const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded,
       {version != null && version !== '' && node.type === 'file' && (
         <span className="tree-node-version-pill" title={`v${version}`}>v{version}</span>
       )}
-      {kindLabel && <span className="tree-node-kind-pill">{kindLabel}</span>}
+      {!inKindGroup && kindLabel && <span className="tree-node-kind-pill">{kindLabel}</span>}
       {showRowMenu && (
         <Menu>
           <MenuTrigger disableButtonEnhancement>

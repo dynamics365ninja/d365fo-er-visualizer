@@ -569,7 +569,6 @@ export interface Translations {
   statsEnums: (n: number) => string;
   statsFields: (n: number) => string;
   statsRelations: (n: number) => string;
-  modelHierarchyHint: string;
   moreFields: (n: number) => string;
 
   // Search panel
@@ -692,6 +691,8 @@ export interface Translations {
   kindFormat: string;
   nodeTypeLabel: (type: string) => string;
   closeTab: (label: string) => string;
+  closeOtherTabs: string;
+  closeAllTabs: string;
   splitOpenBeside: string;
   splitOpenLeft: string;
   splitOpenRight: string;
@@ -1466,7 +1467,6 @@ const cs: Translations = {
   statsEnums: (n: number) => `${n} ${csPlural(n, 'výčet', 'výčty', 'výčtů')}`,
   statsFields: (n: number) => `${n} ${csPlural(n, 'pole', 'pole', 'polí')}`,
   statsRelations: (n: number) => `${n} ${csPlural(n, 'relace', 'relace', 'relací')}`,
-  modelHierarchyHint: 'Hierarchická mapa · klikněte na kontejner pro zvýraznění',
   moreFields: (n: number) => `+${n} dalších…`,
 
   // Search panel
@@ -1606,6 +1606,8 @@ const cs: Translations = {
     section: 'Sekce',
   } as Record<string, string>)[type] ?? type,
   closeTab: (label: string) => `Zavřít ${label}`,
+  closeOtherTabs: 'Zavřít ostatní karty',
+  closeAllTabs: 'Zavřít všechny karty',
   splitOpenBeside: 'Otevřít vedle',
   splitOpenLeft: 'Otevřít vlevo',
   splitOpenRight: 'Otevřít vpravo',
@@ -2382,7 +2384,6 @@ const en: Translations = {
   statsEnums: (n: number) => `${n} enum${n === 1 ? '' : 's'}`,
   statsFields: (n: number) => `${n} field${n === 1 ? '' : 's'}`,
   statsRelations: (n: number) => `${n} relation${n === 1 ? '' : 's'}`,
-  modelHierarchyHint: 'Hierarchy map · click a container to highlight',
   moreFields: (n: number) => `+${n} more…`,
 
   // Search panel
@@ -2522,6 +2523,8 @@ const en: Translations = {
     section: 'Section',
   } as Record<string, string>)[type] ?? type,
   closeTab: (label: string) => `Close ${label}`,
+  closeOtherTabs: 'Close other tabs',
+  closeAllTabs: 'Close all tabs',
   splitOpenBeside: 'Open to the side',
   splitOpenLeft: 'Open on the left',
   splitOpenRight: 'Open on the right',

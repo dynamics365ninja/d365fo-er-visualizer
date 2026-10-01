@@ -9,7 +9,7 @@ import {
   mergeClasses,
   shorthands,
 } from '@fluentui/react-components';
-import { DismissRegular, CompassNorthwestRegular, SplitVerticalRegular } from '@fluentui/react-icons';
+import { DismissRegular, DismissSquareMultipleRegular, CompassNorthwestRegular, SplitVerticalRegular } from '@fluentui/react-icons';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore, isSplitView, tabsInPane, type DesignerPane } from '../state/store';
 import { t, useLocale } from '../i18n';
@@ -148,6 +148,7 @@ export function TabStrip({ pane }: { pane: DesignerPane }) {
   const mainTabCount = useAppStore(s => tabsInPane(s, 'main').length);
   const setActiveTab = useAppStore(s => s.setActiveTab);
   const closeTab = useAppStore(s => s.closeTab);
+  const closeAllTabs = useAppStore(s => s.closeAllTabs);
   const moveTabToPane = useAppStore(s => s.moveTabToPane);
   const reorderTab = useAppStore(s => s.reorderTab);
   const closePane = useAppStore(s => s.closePane);
@@ -257,6 +258,17 @@ export function TabStrip({ pane }: { pane: DesignerPane }) {
           );
         })}
       </div>
+      {tabs.length > 1 && (
+        <Button
+          appearance="subtle"
+          size="small"
+          icon={<DismissSquareMultipleRegular />}
+          className={styles.groupClose}
+          title={t.closeAllTabs}
+          aria-label={t.closeAllTabs}
+          onClick={closeAllTabs}
+        />
+      )}
       {split && (
         <Button
           appearance="subtle"
@@ -283,6 +295,19 @@ export function TabStrip({ pane }: { pane: DesignerPane }) {
             {menu && (
               <MenuItem icon={<DismissRegular />} onClick={() => closeTab(menu.tabId)}>
                 {t.closeTab(tabs.find(tab => tab.id === menu.tabId)?.label ?? '')}
+              </MenuItem>
+            )}
+            {menu && tabs.length > 1 && (
+              <MenuItem
+                icon={<DismissSquareMultipleRegular />}
+                onClick={() => tabs.filter(tab => tab.id !== menu.tabId).forEach(tab => closeTab(tab.id))}
+              >
+                {t.closeOtherTabs}
+              </MenuItem>
+            )}
+            {menu && (
+              <MenuItem icon={<DismissSquareMultipleRegular />} onClick={closeAllTabs}>
+                {t.closeAllTabs}
               </MenuItem>
             )}
           </MenuList>

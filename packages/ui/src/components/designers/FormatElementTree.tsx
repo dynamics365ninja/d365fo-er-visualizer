@@ -490,7 +490,7 @@ const FormatElementRow = React.memo(function FormatElementRow({ row, bindingMap,
 
         {/* Unbound indicator — leaf element with no data binding */}
         {!mainBinding && element.children && element.children.length === 0 && (
-          <span className="fmt-unbound-marker">○ {t.unbound}</span>
+          <span className="fmt-unbound-marker" title={t.unbound} aria-label={t.unbound} />
         )}
 
         {/* Row actions — the explorer only follows the designer from here. */}

@@ -218,6 +218,17 @@ describe('side-by-side tabs', () => {
     expect(useAppStore.getState()).toMatchObject({ activeTabId: 'cfg-0', splitTabId: null, sideTabIds: [], focusedPane: 'main' });
   });
 
+  it('closes every tab in both groups, leaving the configurations loaded', () => {
+    loadTwoFormats();
+    useAppStore.getState().openTabToSide('cfg-0');
+    useAppStore.getState().openDrillDownTab('model.Invoice.Date', 0, 'Date');
+    useAppStore.getState().closeAllTabs();
+    expect(useAppStore.getState()).toMatchObject({
+      openTabs: [], activeTabId: null, splitTabId: null, sideTabIds: [], focusedPane: 'main', canNavigateBack: false,
+    });
+    expect(useAppStore.getState().configurations).toHaveLength(2);
+  });
+
   it('shows the neighbour when the shown tab of a group closes', () => {
     loadTwoFormats();
     useAppStore.getState().openTabToSide('cfg-0');

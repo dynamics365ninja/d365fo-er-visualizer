@@ -13,7 +13,6 @@ import {
   Caption1,
   Caption1Strong,
   Body1Strong,
-  Spinner,
 } from '@fluentui/react-components';
 import {
   ExpandUpRightRegular,
@@ -674,18 +673,14 @@ export function App() {
 
 /** Neutral placeholder while a lazily loaded panel arrives. */
 function PanelLoading() {
+  // A skeleton of the toolbar and a few rows, not a lone spinner: the panel
+  // keeps the shape it is about to have, so it does not jump when it arrives.
   return (
-    <div
-      role="status"
-      style={{
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
-      }}
-    >
-      <Spinner size="small" label={t.landingLoading} />
+    <div className="panel-skeleton" role="status" aria-label={t.landingLoading}>
+      <div className="panel-skeleton__bar" />
+      {[78, 64, 86, 52, 70, 60].map((w, i) => (
+        <div key={i} className="panel-skeleton__row" style={{ ['--skeleton-w' as string]: `${w}%` }} />
+      ))}
     </div>
   );
 }
