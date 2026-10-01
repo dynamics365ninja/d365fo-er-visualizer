@@ -10,6 +10,7 @@ import {
 } from '@xyflow/react';
 import { BoxRegular, DataBarVerticalFilled, HomeRegular, TextCaseTitleRegular } from '@fluentui/react-icons';
 import { DataModelList } from './DataModelList';
+import { FilterField } from '../FilterField';
 import { useAppStore, resolveDeepExpression } from '../../state/store';
 import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
@@ -139,6 +140,7 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const configIndex = useAppStore(s => s.configurations.indexOf(config));
   const [view, setView] = useState<'list' | 'graph'>(readModelView);
+  const [listFilter, setListFilter] = useState('');
   const chooseView = (next: 'list' | 'graph') => {
     setView(next);
     try { window.localStorage.setItem(MODEL_VIEW_KEY, next); } catch { /* a convenience only */ }
@@ -370,10 +372,21 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
           ))}
         </div>
         <DesignerHint text={t.modelHierarchyHint} />
+        {/* Same place and width as the filter in the format toolbar. */}
+        {view === 'list' && (
+          <div className="dm-header-filter">
+            <FilterField
+              value={listFilter}
+              onChange={setListFilter}
+              placeholder={t.modelListFilterPlaceholder}
+              ariaLabel={t.modelListFilterPlaceholder}
+            />
+          </div>
+        )}
       </div>
       {view === 'list' ? (
         <div style={{ flex: 1, minHeight: 0 }}>
-          <DataModelList containers={dm.containers} configIndex={configIndex} />
+          <DataModelList containers={dm.containers} configIndex={configIndex} filter={listFilter} />
         </div>
       ) : (
       <div style={{ flex: 1 }}>

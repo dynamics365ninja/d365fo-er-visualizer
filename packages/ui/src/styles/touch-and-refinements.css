@@ -1391,9 +1391,17 @@ div.path-tooltip-card {
   min-height: 0;
 }
 
-.dm-list__filter {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--er-border);
+/* The filter lives in the designer header, beside the list/graph switch. */
+.dm-header-filter {
+  flex: 0 1 240px;
+  width: 240px;
+  min-width: 180px;
+  margin-left: auto;
+}
+
+/* The filter takes the right edge, so the switch stays with the title. */
+.fmt-header:has(.dm-header-filter) .dm-view-toggle {
+  margin-left: 0;
 }
 
 .dm-list__rows {

@@ -7,7 +7,6 @@ import { quotePathSegment } from '../../utils/ds-path';
 import { getConsultantFieldTypeLabel } from '../../utils/consultant-labels';
 import { buildLabelPool, labelDisplayText, labelLanguageTag } from '../../utils/label-resolver';
 import { DrillDownTrigger } from '../DrillDownPanel';
-import { FilterField } from '../FilterField';
 
 /** How many matches a filter lists before asking for a narrower one. */
 const MAX_FILTER_RESULTS = 300;
@@ -55,10 +54,9 @@ export function collectFieldPaths(containers: ERDataContainerDescriptor[]): Fiel
  * every field, and from each field its drill-down (what fills it) and where
  * it is used. The graph stays for the overview; this is for finding things.
  */
-export function DataModelList({ containers, configIndex }: { containers: ERDataContainerDescriptor[]; configIndex: number }) {
+export function DataModelList({ containers, configIndex, filter }: { containers: ERDataContainerDescriptor[]; configIndex: number; filter: string }) {
   const locale = useLocale();
   const configurations = useAppStore(s => s.configurations);
-  const [filter, setFilter] = useState('');
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
 
   const labels = useMemo(() => buildLabelPool(configurations, configIndex), [configurations, configIndex]);
@@ -141,14 +139,6 @@ export function DataModelList({ containers, configIndex }: { containers: ERDataC
 
   return (
     <div className="dm-list">
-      <div className="dm-list__filter">
-        <FilterField
-          value={filter}
-          onChange={setFilter}
-          placeholder={t.modelListFilterPlaceholder}
-          ariaLabel={t.modelListFilterPlaceholder}
-        />
-      </div>
       <div className="dm-list__rows" role="tree" aria-label={t.modelListLabel}>
         {query ? (
           matches.length === 0 ? (
