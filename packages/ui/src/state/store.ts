@@ -238,6 +238,8 @@ export interface AppState {
   /** `side` opens the drill-down next to the active tab instead of in its place. */
   openDrillDownTab: (expression: string, configIndex: number, elementName?: string, options?: { side?: boolean }) => void;
   closeTab: (id: string) => void;
+  /** Close every open tab (both groups); the configurations stay loaded. */
+  closeAllTabs: () => void;
   setActiveTab: (id: string) => void;
   /** Show tab `id` to the right of the active tab. */
   openTabToSide: (id: string) => void;
@@ -770,6 +772,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       navigationForward,
       canNavigateBack: navigationHistory.length > 0,
       canNavigateForward: navigationForward.length > 0,
+    });
+  },
+
+  closeAllTabs: () => {
+    set({
+      openTabs: [],
+      activeTabId: null,
+      splitTabId: null,
+      sideTabIds: [],
+      focusedPane: 'main',
+      navigationHistory: [],
+      navigationForward: [],
+      canNavigateBack: false,
+      canNavigateForward: false,
     });
   },
 

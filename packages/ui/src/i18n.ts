@@ -692,6 +692,8 @@ export interface Translations {
   kindFormat: string;
   nodeTypeLabel: (type: string) => string;
   closeTab: (label: string) => string;
+  closeOtherTabs: string;
+  closeAllTabs: string;
   splitOpenBeside: string;
   splitOpenLeft: string;
   splitOpenRight: string;
@@ -1606,6 +1608,8 @@ const cs: Translations = {
     section: 'Sekce',
   } as Record<string, string>)[type] ?? type,
   closeTab: (label: string) => `Zavřít ${label}`,
+  closeOtherTabs: 'Zavřít ostatní karty',
+  closeAllTabs: 'Zavřít všechny karty',
   splitOpenBeside: 'Otevřít vedle',
   splitOpenLeft: 'Otevřít vlevo',
   splitOpenRight: 'Otevřít vpravo',
@@ -2522,6 +2526,8 @@ const en: Translations = {
     section: 'Section',
   } as Record<string, string>)[type] ?? type,
   closeTab: (label: string) => `Close ${label}`,
+  closeOtherTabs: 'Close other tabs',
+  closeAllTabs: 'Close all tabs',
   splitOpenBeside: 'Open to the side',
   splitOpenLeft: 'Open on the left',
   splitOpenRight: 'Open on the right',
