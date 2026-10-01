@@ -873,17 +873,16 @@ export const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandl
         onToggleFormulas={toggleAllFormulas}
       />
       {groups.length === 0 && (
-        <div style={{ color: 'var(--er-text-muted)', fontSize: 12, padding: 12 }}>{t.noResults}</div>
+        <div className="ds-empty">{t.noResults}</div>
       )}
       {layout === 'tree'
         ? groups.map(([type, items]) => <DatasourceGroupRows key={type} items={items} ctx={ctx} scrollRef={scrollRef} />)
         : groups.map(([type, items]) => {
             const isCollapsed = effectiveCollapsedGroups.has(type);
             return (
-              <div key={type}>
+              <div key={type} style={{ ['--ds-group-color' as string]: getDatasourceGroupColor(type) }}>
                 <div
                   className="ds-group-header"
-                  style={{ ['--ds-group-color' as string]: getDatasourceGroupColor(type) }}
                   onClick={() => toggleGroup(type)}
                 >
                   <span className={`tree-chevron ${!isCollapsed ? 'open' : ''}`} />

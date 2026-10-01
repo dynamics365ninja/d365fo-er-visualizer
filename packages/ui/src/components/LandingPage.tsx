@@ -51,6 +51,31 @@ const useStyles = makeStyles({
     backgroundColor: 'var(--er-bg)',
     color: 'var(--er-text)',
   },
+  // Soft colour wash behind the launcher: the three kind hues, very faint,
+  // so the page reads as a place and not an empty sheet. Decorative only.
+  backdrop: {
+    position: 'relative',
+    isolation: 'isolate',
+    backgroundImage:
+      'radial-gradient(60% 50% at 88% -8%, color-mix(in srgb, var(--er-model) 11%, transparent), transparent 70%),' +
+      'radial-gradient(50% 45% at 100% 38%, color-mix(in srgb, var(--er-mapping) 7%, transparent), transparent 70%),' +
+      'radial-gradient(55% 50% at -4% 6%, color-mix(in srgb, var(--er-accent) 10%, transparent), transparent 70%)',
+  },
+  hero: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 420px)',
+    alignItems: 'center',
+    columnGap: '48px',
+    '@media (max-width: 960px)': {
+      gridTemplateColumns: 'minmax(0, 1fr)',
+    },
+  },
+  heroText: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px',
+    minWidth: 0,
+  },
   topbar: {
     display: 'flex',
     alignItems: 'center',
@@ -282,6 +307,46 @@ const useStyles = makeStyles({
   },
 });
 
+/**
+ * A decorative miniature of the workspace — the three kinds in the explorer
+ * and a value path traced through them. Sample names only, no strings to
+ * translate; hidden from assistive tech and from narrow screens (see
+ * `.landing-preview` in the stylesheet).
+ */
+function LandingPreview() {
+  return (
+    <div className="landing-preview" aria-hidden="true">
+      <div className="landing-preview__chrome">
+        <span /><span /><span />
+      </div>
+      <div className="landing-preview__body">
+        <div className="landing-preview__row landing-preview__row--model">
+          <DataBarVerticalRegular fontSize={14} />
+          <b>TaxDeclarationModel</b>
+          <i>v136</i>
+        </div>
+        <div className="landing-preview__row landing-preview__row--mapping">
+          <LinkRegular fontSize={14} />
+          <b>TaxDeclarationMapping</b>
+          <i>v136.306</i>
+        </div>
+        <div className="landing-preview__row landing-preview__row--format">
+          <DocumentRegular fontSize={14} />
+          <b>VATStatementFormat</b>
+          <i>v136.115</i>
+        </div>
+        <div className="landing-preview__trace">
+          <span className="landing-preview__node landing-preview__node--format">Tax_Base</span>
+          <span className="landing-preview__arrow" />
+          <span className="landing-preview__node landing-preview__node--mapping">$TaxAmount</span>
+          <span className="landing-preview__arrow" />
+          <span className="landing-preview__node landing-preview__node--model">TaxTrans</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface LandingPageProps {
   onFilesLoaded: () => void;
 }
@@ -385,7 +450,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
 
   return (
     <div
-      className={styles.root}
+      className={mergeClasses(styles.root, styles.backdrop)}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -430,12 +495,17 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
       </header>
 
       <main className={mergeClasses(styles.main, wideLayout && styles.mainWide)}>
-        <span className={styles.badge}>
-          <span className={styles.badgeDot} aria-hidden="true" />
-          {t.landingBadge}
-        </span>
-        <h1 className={styles.title}>{t.landingTitle}</h1>
-        <p className={styles.lead}>{t.landingSub}</p>
+        <div className={mergeClasses(styles.hero, 'landing-hero')}>
+          <div className={styles.heroText}>
+            <span className={styles.badge}>
+              <span className={styles.badgeDot} aria-hidden="true" />
+              {t.landingBadge}
+            </span>
+            <h1 className={styles.title}>{t.landingTitle}</h1>
+            <p className={styles.lead}>{t.landingSub}</p>
+          </div>
+          {!wideLayout && <LandingPreview />}
+        </div>
 
         <section className={styles.card}>
           <div className={styles.cardTabs} role="tablist" aria-label={t.landingSourceLabel}>
