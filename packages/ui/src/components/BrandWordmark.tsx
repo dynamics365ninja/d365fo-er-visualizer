@@ -9,28 +9,22 @@ const useStyles = makeStyles({
     whiteSpace: 'nowrap',
   },
   vendor: {
-    fontSize: '9.5px',
-    fontWeight: 700,
-    letterSpacing: '0.16em',
-    textTransform: 'uppercase',
+    fontSize: 'var(--er-text-xs)',
+    fontWeight: 600,
+    letterSpacing: '0.04em',
     color: 'var(--er-text-subtle)',
   },
   rule: {
     width: '1px',
-    height: '14px',
+    height: '12px',
     backgroundColor: 'var(--er-border-strong)',
   },
+  // Plain text, the way VS Code titles its window: the colour-coding belongs
+  // to the configurations, not to the app's name.
   name: {
-    fontFamily: 'var(--er-font-display)',
-    fontSize: '14px',
-    fontWeight: 700,
-    letterSpacing: '-0.01em',
-    // The three configuration hues the whole app is colour-coded by, read
-    // left to right the way a configuration flows: model → mapping → format.
-    backgroundImage: 'linear-gradient(100deg, var(--er-model), var(--er-mapping) 55%, var(--er-format))',
-    backgroundClip: 'text',
-    WebkitBackgroundClip: 'text',
-    color: 'transparent',
+    fontSize: 'var(--er-text-md)',
+    fontWeight: 600,
+    color: 'var(--er-text)',
   },
 });
 

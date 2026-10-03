@@ -28,7 +28,7 @@ export function ClickablePath({ expression, configIndex, mode = 'auto', style, i
   const segments = useMemo(() => parseExpressionSegments(expression, mode), [expression, mode]);
 
   return (
-    <span style={{ fontFamily: 'monospace', fontSize: 11, ...style }}>
+    <span style={{ fontFamily: 'var(--er-font-mono)', fontSize: 11, ...style }}>
       {segments.map((seg, i) => (
         <SmartSegment key={i} segment={seg} configIndex={configIndex} interactive={interactive} highlight={highlight} />
       ))}

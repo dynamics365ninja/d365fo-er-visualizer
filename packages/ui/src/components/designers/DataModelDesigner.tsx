@@ -16,7 +16,7 @@ import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
 import { t } from '../../i18n';
 import { type ERConfiguration, type ERDataModelContent } from '@er-visualizer/core';
-import { ExpressionDetailLink, enumLabelFor, fieldTypeLabel } from './shared';
+import { ExpressionDetailLink, SlidingTabs, enumLabelFor, fieldTypeLabel } from './shared';
 
 /**
  * Restrict a solution's mapping definitions to the one that actually owns the
@@ -320,7 +320,7 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
               strokeWidth: isRecordList ? 2 : 1,
               strokeDasharray: item.type === 10 ? '5,3' : undefined,
             },
-            labelStyle: { fontSize: 9, fill: 'var(--syn-edge-label)', fontFamily: 'monospace' },
+            labelStyle: { fontSize: 9, fill: 'var(--syn-edge-label)', fontFamily: 'var(--er-font-mono)' },
             labelBgStyle: { fill: 'var(--bg-primary)', fillOpacity: 0.8 },
             type: 'smoothstep',
           });
@@ -358,29 +358,27 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
           <span className="fmt-stat">{t.statsFields(stats.fields)}</span>
           <span className="fmt-stat">{t.statsRelations(stats.edges)}</span>
         </div>
-        <div className="search-scope-toggle dm-view-toggle" role="group" aria-label={t.modelViewLabel}>
-          {(['list', 'graph'] as const).map(v => (
-            <button
-              key={v}
-              type="button"
-              className={`search-scope-toggle__btn ${view === v ? 'active' : ''}`}
-              aria-pressed={view === v}
-              onClick={() => chooseView(v)}
-            >
-              {v === 'list' ? t.modelViewList : t.modelViewGraph}
-            </button>
-          ))}
-        </div>
-        {/* Same place and width as the filter in the format toolbar. */}
+      </div>
+      {/* List / Graph as tabs in the toolbar row, like the sub-views of the
+          format and mapping designers: tabs on the left never move, the filter
+          (list only) takes the right edge. */}
+      <div className="fmt-toolbar">
+        <SlidingTabs
+          tabs={[
+            { id: 'list' as const, label: t.modelViewList },
+            { id: 'graph' as const, label: t.modelViewGraph },
+          ]}
+          activeId={view}
+          onChange={chooseView}
+        />
         {view === 'list' && (
-          <div className="dm-header-filter">
-            <FilterField
-              value={listFilter}
-              onChange={setListFilter}
-              placeholder={t.modelListFilterPlaceholder}
-              ariaLabel={t.modelListFilterPlaceholder}
-            />
-          </div>
+          <FilterField
+            value={listFilter}
+            onChange={setListFilter}
+            placeholder={t.modelListFilterPlaceholder}
+            ariaLabel={t.modelListFilterPlaceholder}
+            style={{ width: 180, marginLeft: 'auto' }}
+          />
         )}
       </div>
       {view === 'list' ? (

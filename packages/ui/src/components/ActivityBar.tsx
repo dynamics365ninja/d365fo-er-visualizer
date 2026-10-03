@@ -2,7 +2,6 @@ import {
   Tooltip,
   CounterBadge,
   makeStyles,
-  shorthands,
   tokens,
   mergeClasses,
 } from '@fluentui/react-components';
@@ -40,10 +39,10 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '2px',
-    width: '52px',
-    padding: '8px 0',
-    backgroundColor: 'var(--er-surface)',
+    gap: 0,
+    width: 'var(--wb-activitybar-w)',
+    padding: '4px 0',
+    backgroundColor: 'var(--er-chrome)',
     borderRight: '1px solid var(--er-border)',
     flexShrink: 0,
   },
@@ -63,34 +62,35 @@ const useStyles = makeStyles({
     display: 'flex',
     justifyContent: 'center',
   },
+  // VS Code activity bar: full-width square cells, muted icons, the active
+  // view marked by a bar on the leading edge rather than a tinted tile.
   btn: {
+    position: 'relative',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: '36px',
-    width: '36px',
-    height: '36px',
+    minWidth: 'var(--wb-activitybar-w)',
+    width: 'var(--wb-activitybar-w)',
+    height: 'var(--wb-activitybar-w)',
     padding: 0,
-    borderRadius: 'var(--er-radius-lg)',
-    border: '1px solid transparent',
+    borderRadius: 0,
+    border: 'none',
     backgroundColor: 'transparent',
     color: 'var(--er-text-muted)',
     cursor: 'pointer',
     fontFamily: tokens.fontFamilyBase,
-    transitionProperty: 'background-color, color, border-color',
-    transitionDuration: '140ms',
+    transitionProperty: 'color',
+    transitionDuration: 'var(--er-duration-fast)',
     ':hover': {
-      backgroundColor: 'var(--er-surface-2)',
+      backgroundColor: 'transparent',
       color: 'var(--er-text)',
     },
   },
   btnActive: {
-    color: 'var(--er-accent)',
-    backgroundColor: 'var(--er-accent-soft)',
-    ...shorthands.borderColor('var(--er-accent-border)'),
+    color: 'var(--er-text)',
+    boxShadow: 'inset 2px 0 0 var(--er-accent-fill)',
     ':hover': {
-      backgroundColor: 'var(--er-accent-soft)',
-      color: 'var(--er-accent)',
+      color: 'var(--er-text)',
     },
   },
   /** Text in place of an icon (the language code), sized to the 18px icons. */
@@ -213,7 +213,7 @@ function ActivityButton({ Icon, glyph, label, onClick, active, shortcut, badge }
           aria-pressed={active}
           className={mergeClasses('activity-bar__btn', styles.btn, active && styles.btnActive)}
         >
-          {Icon ? <Icon fontSize={18} /> : <span className={styles.glyph} aria-hidden>{glyph}</span>}
+          {Icon ? <Icon fontSize={22} /> : <span className={styles.glyph} aria-hidden>{glyph}</span>}
         </button>
       </Tooltip>
       {typeof badge === 'number' && badge > 0 && (

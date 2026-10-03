@@ -6,15 +6,18 @@
 @import "@er-visualizer/design-tokens/theme.css";
 
 
-/* The app's own styles, split by area but kept in their original order: later
-   files still override earlier ones, as the single file did. New overrides go
-   at the end of the last file. */
-@import "./styles/base.css"; /* Base aliases, theme-specific values, core element styles */
-@import "./styles/designers.css"; /* Designers: clickable paths, React Flow chrome, format/mapping/datasource rows */
-@import "./styles/ingest-where-used.css"; /* F&O ingest progress and the where-used panel */
-@import "./styles/drill-down.css"; /* Drill-down panel: hero, value path, expression renderer, error boundary */
-@import "./styles/landing-explorer-dialogs.css"; /* Landing look, explorer, labels, drill-down dialog */
-@import "./styles/reset-and-polish.css"; /* VS Code reset and the 2026 dark/light polish */
-@import "./styles/modern-ux.css"; /* Micro-interactions, scrollbars, drill-down tree view */
-@import "./styles/explorer-panels.css"; /* Explorer legibility pass and the 2026 panels redesign */
-@import "./styles/touch-and-refinements.css"; /* Touch/tablet layer and the refinements after it (appended last) */
+/* The app's own styles. Every selector lives in the file of the component it
+   styles, and the files are ordered so that a later one only wins where it has
+   to: globals.css carries the few cross-cutting rules that must beat component
+   rules (the focus ring, panel resize handles, Fluent surface overrides).
+   Media queries sit next to the rules they adapt. */
+@import "./styles/app-tokens.css"; /* App aliases over the shared tokens + the VS Code workbench palette */
+@import "./styles/base.css"; /* Document, scrollbars, keyframes, generic elements */
+@import "./styles/controls.css"; /* Shared widgets: filter field, expand slider, badges, tooltips, expressions */
+@import "./styles/shell.css"; /* Activity bar, status bar */
+@import "./styles/explorer.css"; /* Explorer tree and the workspace manager */
+@import "./styles/designers.css"; /* Format, mapping, data source and data model designers */
+@import "./styles/drill-down.css"; /* Drill-down panel, dialog and lineage */
+@import "./styles/panels.css"; /* Search, where-used, property inspector */
+@import "./styles/landing.css"; /* Landing page, recent work, F&O connect and ingest */
+@import "./styles/globals.css"; /* Cross-cutting rules that must win over components */

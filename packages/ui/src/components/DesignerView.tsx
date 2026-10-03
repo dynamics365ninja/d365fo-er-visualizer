@@ -466,7 +466,7 @@ function FormatElementFocusTab({ node, configIndex }: { node: any; configIndex: 
                     {showTechnicalDetails && b.promotedFromChild && b.rawElementType && (
                       <span className="fmt-binding-origin">{t.bindingVia} {b.rawElementType}</span>
                     )}
-                    <div style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 11 }}>
+                    <div style={{ marginTop: 4, fontFamily: 'var(--er-font-mono)', fontSize: 11 }}>
                       <DrillDownTrigger
                         expression={b.expressionAsString}
                         configIndex={configIndex}

@@ -51,15 +51,10 @@ const useStyles = makeStyles({
     backgroundColor: 'var(--er-bg)',
     color: 'var(--er-text)',
   },
-  // Soft colour wash behind the launcher: the three kind hues, very faint,
-  // so the page reads as a place and not an empty sheet. Decorative only.
+  // Plain ground, like VS Code's Welcome page: the content carries the page.
   backdrop: {
     position: 'relative',
     isolation: 'isolate',
-    backgroundImage:
-      'radial-gradient(60% 50% at 88% -8%, color-mix(in srgb, var(--er-model) 11%, transparent), transparent 70%),' +
-      'radial-gradient(50% 45% at 100% 38%, color-mix(in srgb, var(--er-mapping) 7%, transparent), transparent 70%),' +
-      'radial-gradient(55% 50% at -4% 6%, color-mix(in srgb, var(--er-accent) 10%, transparent), transparent 70%)',
   },
   hero: {
     display: 'grid',
@@ -177,18 +172,17 @@ const useStyles = makeStyles({
   },
   title: {
     margin: 0,
-    fontFamily: 'var(--er-font-display)',
-    fontSize: 'clamp(30px, 4vw, 44px)',
-    lineHeight: 1.1,
-    fontWeight: 700,
-    letterSpacing: '-0.02em',
+    fontSize: 'clamp(26px, 3vw, 32px)',
+    lineHeight: 1.2,
+    fontWeight: 400,
+    letterSpacing: 0,
     maxWidth: '18ch',
   },
   lead: {
     margin: 0,
     maxWidth: '62ch',
     color: 'var(--er-text-muted)',
-    fontSize: '15px',
+    fontSize: '14px',
     lineHeight: 1.6,
   },
   // ── workspace card ──
