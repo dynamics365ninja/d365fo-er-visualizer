@@ -24,11 +24,11 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    padding: '0 12px',
-    backgroundColor: 'var(--er-surface)',
+    padding: '0 8px',
+    backgroundColor: 'var(--er-chrome)',
     borderBottom: '1px solid var(--er-border)',
-    height: '48px',
-    minHeight: '48px',
+    height: 'var(--wb-titlebar-h)',
+    minHeight: 'var(--wb-titlebar-h)',
     flexShrink: 0,
   },
   brand: {
@@ -58,7 +58,7 @@ const useStyles = makeStyles({
     gap: '2px',
   },
   sep: {
-    height: '20px',
+    height: '16px',
     margin: '0 2px',
   },
   hiddenInput: {
@@ -140,7 +140,7 @@ export function Toolbar() {
         />
         <Tooltip content={t.loadXml} relationship="label" withArrow>
           <Button
-            appearance="primary"
+            appearance="subtle"
             size="small"
             icon={<FolderOpenRegular />}
             onClick={handleOpenFiles}

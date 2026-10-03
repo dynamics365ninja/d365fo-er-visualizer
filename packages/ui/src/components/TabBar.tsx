@@ -7,7 +7,6 @@ import {
   MenuPopover,
   makeStyles,
   mergeClasses,
-  shorthands,
 } from '@fluentui/react-components';
 import { DismissRegular, DismissSquareMultipleRegular, CompassNorthwestRegular, SplitVerticalRegular } from '@fluentui/react-icons';
 import { useShallow } from 'zustand/react/shallow';
@@ -16,64 +15,60 @@ import { t, useLocale } from '../i18n';
 import { draggedTabId, isTabDrag, startTabDrag } from '../utils/tab-drag';
 
 const useStyles = makeStyles({
+  // VS Code editor tab strip: the strip is chrome, the active tab is cut
+  // from the editor below it (same ground, no rule underneath) and carries
+  // a line along its top edge.
   root: {
     display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    // 5 + 28px tab + 6 + 1px rule = 40. An even 6px above left the tabs 27px
-    // of room, so the strip's overflow clip shaved off their bottom border.
-    padding: '5px 8px 6px',
-    backgroundColor: 'var(--er-surface)',
-    borderBottomWidth: '1px',
-    borderBottomStyle: 'solid',
-    borderBottomColor: 'var(--er-border)',
+    alignItems: 'stretch',
+    gap: 0,
+    padding: 0,
+    backgroundColor: 'var(--er-chrome)',
+    // An inset rule instead of a border, so the active tab can paint over it.
+    boxShadow: 'inset 0 -1px 0 var(--er-border)',
     overflowX: 'auto',
     overflowY: 'hidden',
-    // 40px including the rule, so the bar lines up with the explorer header
-    // and the right panel's tab strip either side of it.
     boxSizing: 'border-box',
-    height: '40px',
-    minHeight: '40px',
+    height: 'var(--wb-header-h)',
+    minHeight: 'var(--wb-header-h)',
   },
   tab: {
     position: 'relative',
     display: 'inline-flex',
     alignItems: 'center',
     gap: '6px',
-    height: '28px',
+    height: '100%',
     maxWidth: '240px',
-    paddingLeft: '11px',
-    paddingRight: '28px',
-    borderRadius: 'var(--er-radius-md)',
-    ...shorthands.border('1px', 'solid', 'transparent'),
+    paddingLeft: '12px',
+    paddingRight: '30px',
+    borderRadius: 0,
+    border: 'none',
+    borderRight: '1px solid var(--er-border)',
     backgroundColor: 'transparent',
     color: 'var(--er-text-muted)',
-    fontSize: '12px',
-    fontWeight: 500,
+    fontSize: 'var(--er-text-md)',
+    fontWeight: 400,
     cursor: 'pointer',
     userSelect: 'none',
     whiteSpace: 'nowrap',
-    transitionProperty: 'background-color, color, border-color',
-    transitionDuration: '120ms',
+    transitionProperty: 'color',
+    transitionDuration: 'var(--er-duration-fast)',
     '&:hover': {
-      backgroundColor: 'var(--er-surface-2)',
       color: 'var(--er-text)',
     },
   },
   tabActive: {
-    backgroundColor: 'var(--er-accent-soft)',
-    ...shorthands.borderColor('var(--er-accent-border)'),
-    color: 'var(--er-accent)',
-    fontWeight: 600,
+    backgroundColor: 'var(--er-bg-soft)',
+    color: 'var(--er-text)',
+    boxShadow: 'inset 0 1px 0 var(--er-accent-fill)',
     '&:hover': {
-      backgroundColor: 'var(--er-accent-soft)',
-      color: 'var(--er-accent)',
+      color: 'var(--er-text)',
     },
   },
   /** The tab on screen in the group without focus: marked, but quieter than the focused one. */
   tabSide: {
-    ...shorthands.borderColor('var(--er-accent-border)'),
-    ...shorthands.borderStyle('dashed'),
+    backgroundColor: 'var(--er-bg-soft)',
+    boxShadow: 'inset 0 1px 0 var(--er-border-strong)',
     color: 'var(--er-text)',
   },
   tabDrillDown: {
@@ -91,8 +86,8 @@ const useStyles = makeStyles({
   },
   tabs: {
     display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
+    alignItems: 'stretch',
+    gap: 0,
     flex: 1,
     minWidth: 0,
     height: '100%',
@@ -111,6 +106,8 @@ const useStyles = makeStyles({
     flex: 1,
   },
   groupClose: {
+    alignSelf: 'center',
+    margin: '0 2px',
     flexShrink: 0,
     minWidth: '24px',
     width: '24px',

@@ -1,0 +1,77 @@
+/* Shell: the workbench frame that is not styled in TSX — the activity bar's
+   theme switch and the status bar. */
+
+.app-statusbar button,
+.app-statusbar span {
+  line-height: 1.1;
+}
+
+@media (pointer: coarse) {
+  .app-shell .activity-bar__btn {
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .app-shell .app-statusbar {
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .app-shell .app-statusbar > span {
+    min-height: 30px;
+    box-sizing: border-box;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+}
+
+/* ── Activity bar: the shared theme switch sits in the rail as one more cell ── */
+.activity-bar .er-theme-switch {
+  border-color: transparent;
+  width: var(--wb-activitybar-w);
+  min-width: var(--wb-activitybar-w);
+  height: var(--wb-activitybar-w);
+  border-radius: 0;
+}
+
+.activity-bar .er-theme-switch:hover {
+  border-color: transparent;
+  background: var(--er-surface-2);
+  color: var(--er-text);
+  border-radius: 0;
+}
+
+@media (pointer: coarse) {
+  .app-shell .activity-bar .er-theme-switch {
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+}
+
+.app-statusbar {
+  box-shadow: none;
+}
+
+.app-shell .activity-bar .er-theme-switch {
+  border: 0;
+  background: transparent;
+  color: var(--er-text-muted);
+}
+
+.app-shell .activity-bar .er-theme-switch:hover {
+  width: var(--wb-activitybar-w);
+  min-width: var(--wb-activitybar-w);
+  height: var(--wb-activitybar-w);
+  border: 0;
+  background: transparent;
+  color: var(--er-text);
+}
+
+.app-shell .activity-bar .er-theme-switch > svg {
+  width: 20px;
+  height: 20px;
+}

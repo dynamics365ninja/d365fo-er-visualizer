@@ -1,15 +1,22 @@
-/* ═══════════════════════════════════════════════════════
-   DRILL-DOWN PANEL  (interactive DS chain navigation)
-   ═══════════════════════════════════════════════════════ */
+/* Drill-down: the expression panel in its dialog and as a pinned tab — hero,
+   value path (lineage), dependency prompts, graph view. */
+
+.prop-grid .prop-value.expression {
+  font-family: var(--font-mono);
+  font-size: var(--er-text-sm);
+  color: var(--syn-literal);
+}
+
+.fmt-bind-row-expr > .dd-trigger-expr {
+  display: block;
+  width: 100%;
+}
 
 .dd-panel {
   margin-top: 8px;
   border: 1px solid var(--border-color);
-  border-radius: var(--er-radius-lg);
-  background: var(--bg-secondary);
   font-size: var(--er-text-md);
   overflow: hidden;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--shadow-color) 18%, transparent);
   /* flex column so ddt-canvas flex:1 can fill the remaining space */
   display: flex;
   flex-direction: column;
@@ -19,20 +26,25 @@
   background: var(--bg-secondary);
 }
 
-/* ─── Empty state (no selection / no expression) ───────────────────────── */
 .dd-empty-state {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   padding: 18px 16px;
 }
+
 .dd-empty-state__icon {
   font-size: 28px;
   line-height: 1;
   flex-shrink: 0;
   opacity: 0.8;
 }
-.dd-empty-state__body { flex: 1; min-width: 0; }
+
+.dd-empty-state__body {
+  flex: 1;
+  min-width: 0;
+}
+
 .dd-empty-state__title {
   font-size: var(--er-text-lg);
   font-weight: 700;
@@ -40,25 +52,17 @@
   margin-bottom: 4px;
   letter-spacing: 0.2px;
 }
+
 .dd-empty-state__text {
   font-size: var(--er-text-md);
   line-height: 1.55;
   color: var(--er-text-muted);
 }
 
-/* ─── Hero header ──────────────────────────────────────────────────────── */
 .dd-hero {
-  background:
-    radial-gradient(circle at 92% 6%, color-mix(in srgb, var(--er-accent) 22%, transparent) 0%, transparent 42%),
-    radial-gradient(circle at 8% 120%, color-mix(in srgb, var(--er-success) 14%, transparent) 0%, transparent 46%),
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--er-accent) 12%, transparent) 0%,
-      color-mix(in srgb, var(--er-accent) 3%, transparent) 100%);
   border-bottom: 1px solid var(--border-color);
-  padding: 10px 12px 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
 }
 
 .dd-hero__top {
@@ -72,17 +76,13 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 10px;
-  border-radius: var(--er-radius-pill);
-  font-size: var(--er-text-sm);
-  font-weight: 700;
   letter-spacing: 0.3px;
-  color: #fff;
-  background: linear-gradient(135deg, var(--er-accent) 0%, color-mix(in srgb, var(--er-accent) 70%, #8b5cf6) 100%);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--er-accent) 35%, transparent);
   text-transform: uppercase;
 }
-.dd-hero__badge-icon { font-size: var(--er-text-md); }
+
+.dd-hero__badge-icon {
+  font-size: var(--er-text-md);
+}
 
 .dd-hero__meta {
   font-size: var(--er-text-xs);
@@ -108,86 +108,29 @@
   font-size: var(--er-text-sm);
   font-weight: 600;
   padding: 4px 10px;
-  border-radius: var(--er-radius-md);
   transition: all 0.14s ease;
   line-height: 1.2;
 }
+
 .dd-hero__btn:hover {
   border-color: var(--er-accent);
   color: var(--er-accent);
   transform: translateY(-1px);
 }
+
 .dd-hero__btn--ghost {
   background: transparent;
   color: var(--er-text-muted);
 }
+
 .dd-hero__btn--ghost:hover {
   background: color-mix(in srgb, var(--bg-primary) 60%, transparent);
 }
-
-/* Breadcrumb (always visible) */
-.dd-hero__crumbs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-  font-size: var(--er-text-sm);
-}
-.dd-hero__crumb {
-  background: transparent;
-  border: none;
-  color: var(--er-accent);
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: var(--er-radius-sm);
-  font-size: var(--er-text-sm);
-  font-weight: 500;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  white-space: normal;
-  text-align: left;
-  line-height: 1.35;
-}
-.dd-hero__crumb:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--er-accent) 14%, transparent);
-}
-.dd-hero__crumb.is-active {
-  color: var(--er-text);
-  font-weight: 700;
-  cursor: default;
-  background: color-mix(in srgb, var(--er-accent) 8%, transparent);
-}
-.dd-hero__crumb:disabled { cursor: default; }
-.dd-hero__crumb-sep {
-  color: var(--er-text-muted);
-  opacity: 0.5;
-  font-size: var(--er-text-md);
-}
-
-/* Current expression under breadcrumb */
-.dd-hero__expr-wrap .er-expr {
-  padding: 10px 12px;
-  font-size: var(--er-text-md);
-  line-height: 1.75;
-}
-
-/* ─── Legacy breadcrumb (kept for any other usage; unused now) ─────────── */
 
 /* Frame content area */
 .dd-frame-content {
   padding: 10px 12px 12px;
   min-height: 0;
-}
-
-/* ─── Value path (data lineage) ─────────────────────────────────────────── */
-.lin {
-  display: grid;
-  /* The cards may shrink below their content — the rows ellipsize instead of
-     pushing the panel wider than a side-by-side pane. */
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  padding: 2px;
 }
 
 .lin-summary,
@@ -270,8 +213,8 @@
   font-weight: 700;
   color: var(--er-text-muted);
   background: color-mix(in srgb, var(--er-accent) 14%, transparent);
-  border-radius: var(--er-radius-pill);
   padding: 1px 8px;
+  border-radius: 9px;
 }
 
 .lin-summary__hint {
@@ -287,8 +230,6 @@
   font-style: italic;
   color: var(--er-text-muted);
 }
-
-/* ── Label translation card ───────────────────────────────────────────────── */
 
 .lin-label__meta {
   display: grid;
@@ -408,14 +349,6 @@
   white-space: nowrap;
 }
 
-.lin-chip__type {
-  font-size: var(--er-text-2xs);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  opacity: 0.75;
-}
-
 /* The outline itself */
 .lin-tree,
 .lin-children {
@@ -453,11 +386,6 @@
   background: color-mix(in srgb, var(--er-accent) 18%, transparent);
   border-color: color-mix(in srgb, var(--er-accent) 55%, transparent);
   animation: lin-reveal 0.9s ease-out;
-}
-
-@keyframes lin-reveal {
-  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--er-accent) 55%, transparent); }
-  100% { box-shadow: 0 0 0 8px transparent; }
 }
 
 .lin-row--origin {
@@ -501,21 +429,21 @@
 .lin-row__stage {
   flex-shrink: 0;
   font-size: var(--er-text-2xs);
-  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--er-text-muted);
+  font-weight: 600;
 }
 
 .lin-row__name {
   font-size: var(--er-text-md);
-  font-weight: 700;
   color: var(--er-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   flex-shrink: 0;
   max-width: 45%;
+  font-weight: 600;
 }
 
 .lin-row__detail {
@@ -547,10 +475,10 @@
 }
 
 .lin-row__def-label {
-  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
   flex-shrink: 0;
+  font-weight: 600;
 }
 
 .lin-row__def-value {
@@ -569,11 +497,11 @@
   margin-left: auto;
   flex-shrink: 0;
   font-size: var(--er-text-2xs);
-  font-weight: 700;
   color: var(--er-accent);
   background: color-mix(in srgb, var(--er-accent) 13%, transparent);
   border-radius: var(--er-radius-pill);
   padding: 0 6px;
+  font-weight: 600;
 }
 
 .lin-formula {
@@ -588,33 +516,10 @@
   display: block;
   padding: 4px 9px 0;
   font-size: var(--er-text-2xs);
-  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--er-text-muted);
-}
-
-.lin-formula .er-expr {
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  background: transparent;
-  padding: 3px 9px 8px;
-  max-height: 180px;
-  overflow: auto;
-}
-
-/* Tokens are informative here, not navigational. */
-/* ─── Dependency chain ─────────────────────────────────────────────────── */
-
-.dd-dep-filter.is-active {
-  border-color: color-mix(in srgb, var(--er-accent) 62%, transparent);
-  background: color-mix(in srgb, var(--er-accent) 18%, transparent);
-  color: var(--er-text);
-}
-
-.dd-dep-filter.is-active .dd-dep-filter__count {
-  color: var(--er-text);
+  font-weight: 600;
 }
 
 /* Light-mode overrides (triggered by the app's [data-theme] attribute) */
@@ -624,158 +529,862 @@
 }
 
 :root[data-theme='light'] .dd-hero {
-  background:
-    linear-gradient(180deg,
+  background: linear-gradient(180deg,
       color-mix(in srgb, var(--er-accent) 7%, var(--bg-secondary)) 0%,
       var(--bg-secondary) 100%);
 }
 
-/* ─── Interactive ER expression renderer ─────────────────────────────────── */
-/* Syntax-highlighted, tokenised, clickable expression viewer inside drill-down */
-
-.er-expr {
-  font-family: var(--font-mono);
-  font-size: var(--er-text-sm);
-  line-height: 1.65;
-  word-break: break-word;
-  white-space: pre-wrap;
-  padding: 8px 10px;
+.dd-collapsible__trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
   color: var(--er-text);
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--bg-primary) 70%, transparent) 0%,
-      color-mix(in srgb, var(--bg-primary) 92%, transparent) 100%);
-  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
-  border-radius: var(--er-radius-lg);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 5%, transparent);
-}
-
-/* ER built-in functions (IF, AND, NOT, FILTER, …) */
-.er-token-func {
-  color: var(--er-accent);
-  font-weight: 600;
-}
-
-/* Datasource / path nodes — each segment is independently clickable */
-.er-token-ds-path {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1px;
-  margin: 0 1px;
-}
-
-.er-token-ds-dot {
-  color: var(--er-text-muted);
-  opacity: 0.65;
-  padding: 0 1px;
-}
-
-.er-token-ds-segment {
-  display: inline-flex;
-  align-items: center;
-  border-radius: var(--er-radius-md);
-  padding: 1px 6px;
-  /* Calmer fill than the border, so a dense expression reads as text with
-     accents rather than a wall of chips. Matches the marketing site. */
-  background: color-mix(in srgb, var(--er-accent) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--er-accent) 30%, transparent);
-  color: var(--syn-identifier);
+  font-size: var(--er-text-md);
   cursor: pointer;
+  text-align: left;
+  user-select: none;
+}
+
+.dd-collapsible__trigger:hover {
+  background: rgba(3, 131, 135, 0.06);
+}
+
+.dd-collapsible__label {
   font-weight: 600;
-  transition: background 0.12s ease, transform 0.12s ease, border-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
-}
-
-.er-token-ds-segment:hover {
-  background: color-mix(in srgb, var(--er-accent) 27%, transparent);
-  border-color: color-mix(in srgb, var(--er-accent) 62%, transparent);
   color: var(--er-text);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 10px color-mix(in srgb, var(--er-accent) 22%, transparent);
 }
 
-/* The part currently being drilled — "you are here", not a click target. */
-.er-token-ds-segment--self,
-.er-token-ds-segment--self:hover {
-  cursor: default;
-  transform: none;
+.dd-collapsible__trigger::after {
+  content: '';
+  margin-left: auto;
+}
+
+.dd-trigger-expr {
+  display: inline-block;
+  cursor: pointer;
+  border-radius: var(--er-radius-sm);
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+  outline: none;
+}
+
+.dd-trigger-expr:hover {
+  background: color-mix(in srgb, var(--er-accent) 12%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--er-accent) 55%, transparent);
+}
+
+.dd-trigger-expr:focus-visible {
+  background: color-mix(in srgb, var(--er-accent) 12%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--er-accent) 45%, transparent);
+}
+
+.fmt-binding-detail-row .dd-trigger-expr,
+.fmt-detail-binding .dd-trigger-expr {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.fmt-binding-formula > .dd-trigger-expr,
+.fmt-detail-binding > div > .dd-trigger-expr {
+  display: block;
+  width: 100%;
+}
+
+.dd-panel--tab {
+  flex: 1;
+  margin: 0;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  border-bottom: none;
+  box-shadow: none;
+}
+
+.dd-panel--tab .dd-hero {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.dd-dialog-surface {
+  max-width: min(99vw, 99dvw) !important;
+  width: min(99vw, 99dvw);
+  max-height: min(99vh, 99dvh) !important;
+  height: min(99vh, 99dvh);
+}
+
+/* Keep the grip clear of the dialog's own content. */
+.dd-dialog-surface--resizable .dd-dialog-body {
+  padding-bottom: 10px !important;
+}
+
+.dd-dialog-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 0 !important;
+  position: relative;
+}
+
+.dd-dialog-titlebar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 10px 56px 8px 16px !important;
+}
+
+.dd-dialog-close {
+  position: absolute !important;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+}
+
+.dd-dialog-content {
+  padding: 0 !important;
+  max-height: none;
+  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.dd-dialog-content > .dd-panel--dialog {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.dd-dialog-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--er-text);
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.35;
+}
+
+.dd-dialog-title__name {
+  color: var(--er-text);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.dd-panel--dialog .dd-hero {
+  border-radius: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.dd-hero__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dd-validation-summary {
+  margin-top: 8px;
+  border: 1px solid color-mix(in srgb, var(--ui-stroke-1, var(--border-color)) 82%, transparent);
+  border-radius: var(--er-radius-lg);
+  background: color-mix(in srgb, var(--ui-surface-1, var(--bg-secondary)) 72%, transparent);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dd-validation-summary__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dd-validation-summary__title {
+  font-size: var(--er-text-sm);
   font-weight: 700;
-  color: var(--er-text);
-  background: color-mix(in srgb, var(--er-accent) 34%, transparent);
-  border-color: color-mix(in srgb, var(--er-accent) 78%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--er-accent) 18%, transparent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
-.er-token-ds-segment--self::after {
-  content: '◉';
-  font-size: var(--er-text-2xs);
-  margin-left: 4px;
+.dd-validation-summary__meta {
+  font-size: var(--er-text-sm);
+  color: var(--er-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dd-validation-summary__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dd-validation-summary__rule {
+  border: 1px solid color-mix(in srgb, var(--ui-stroke-2, var(--border-color)) 72%, transparent);
+  border-radius: var(--er-radius-md);
+  background: color-mix(in srgb, var(--ui-surface-0, var(--bg-primary)) 82%, transparent);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dd-validation-summary__rule-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dd-validation-summary__rule-index {
+  font-size: var(--er-text-sm);
+  font-weight: 700;
+  color: var(--er-text-muted);
+}
+
+.dd-validation-summary__rule-action {
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  border-radius: var(--er-radius-pill);
+  padding: 1px 8px;
+  border: 1px solid color-mix(in srgb, var(--er-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--er-accent) 11%, transparent);
+}
+
+.dd-validation-summary__expr-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dd-validation-summary__expr-label {
+  font-size: var(--er-text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--er-text-muted);
+}
+
+.drilldown-tab-host {
+  height: 100%;
+  overflow: auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  background-image: none !important;
+  background: var(--ui-surface-0) !important;
+}
+
+.dd-panel {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-color: var(--ui-stroke-1) !important;
+  background: var(--ui-surface-0) !important;
+}
+
+.dd-hero__btn {
+  transform: none !important;
+  animation: none !important;
+  box-shadow: none !important;
+  border-radius: var(--ui-radius) !important;
+}
+
+.ddt-canvas {
+  /* flex:1 works because dd-panel is now display:flex flex-direction:column */
+  flex: 1 1 0;
+  min-height: 380px;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+/* The tree needs the vertical room, so the header shrinks to the essentials. */
+.dd-panel--tree .dd-hero {
+  padding: 6px 10px;
+}
+
+.ddt-auto-compact-hint {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 4;
+  border: 1px solid color-mix(in srgb, var(--er-accent) 58%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  color: var(--er-text);
+  border-radius: var(--er-radius-pill);
+  padding: 4px 10px;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dd-panel--tab   > .ddt-canvas,
+.dd-panel--dialog > .ddt-canvas {
+  min-height: 520px;
+}
+
+.ddt-node {
+  background: var(--ddt-bg, var(--bg-secondary));
+  border: 1.5px solid var(--ddt-border, var(--border-color));
+  border-radius: var(--er-radius-lg);
+  padding: 0;
+  overflow: hidden;
+  font-family: var(--font-sans, inherit);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.12s;
+  width: 100%;
+}
+
+.react-flow__node.ddt-node-wrap--dim .ddt-node {
+  opacity: 0.58;
+}
+
+.react-flow__node.ddt-node-wrap--path .ddt-node {
+  opacity: 0.94;
+}
+
+.react-flow__node.ddt-node-wrap--selected .ddt-node,
+.ddt-node--selected {
+  border-color: var(--er-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--er-accent) 55%, transparent), 0 6px 20px color-mix(in srgb, var(--er-accent) 24%, transparent);
+  opacity: 1;
+}
+
+.ddt-node--clickable {
+  cursor: pointer;
+}
+
+.ddt-node--clickable:hover {
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--er-accent) 28%, transparent);
+  border-color: var(--er-accent);
+  transform: translateY(-2px);
+}
+
+.ddt-node__head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px 4px;
+  background: color-mix(in srgb, var(--ddt-bg, var(--bg-secondary)) 78%, black 6%);
+  border-bottom: 1px solid color-mix(in srgb, var(--ddt-border, var(--border-color)) 72%, transparent);
+}
+
+.ddt-node__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ddt-fg, var(--er-text));
+  opacity: 0.85;
+  font-size: var(--er-text-lg);
+}
+
+.ddt-node__badge {
+  /* Same uppercase micro-label as .dd-workbench__panel-head. Size stays under
+     the 13px icon that sets the head's line box, so estimateTreeNodeHeight()
+     in DrillDownPanel.tsx keeps holding. */
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--ddt-fg, var(--er-text-muted));
   opacity: 0.8;
 }
 
-/* A part that leads nowhere must not advertise itself as a click target. */
-.er-token-ds-segment--static,
-.er-token-ds-segment--static:hover {
-  cursor: default;
-  transform: none;
-  box-shadow: none;
-  background: color-mix(in srgb, var(--er-text-muted) 10%, transparent);
-  border-color: color-mix(in srgb, var(--border-color) 60%, transparent);
-  color: var(--er-text-muted);
+.ddt-node__pin {
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ddt-fg, var(--er-text));
+  opacity: 0.5;
 }
 
-/* Comparison / arithmetic operators (=, <>, +, -, …) */
-.er-token-op   { color: var(--er-text-muted); }
-
-/* String literals ("value") */
-.er-token-str  { color: var(--syn-literal); }
-
-/* Numeric literals */
-.er-token-num  { color: var(--syn-resolved); }
-
-/* Parentheses () */
-.er-token-paren { color: var(--er-text-muted); opacity: 0.75; }
-
-/* Comma separator */
-.er-token-sep  { color: var(--er-text-muted); }
-
-/* ─────────────────────────────────────────────
-   Error boundary
-   ───────────────────────────────────────────── */
-.error-boundary {
-  padding: 24px; height: 100%; overflow: auto;
-  display: flex; align-items: flex-start; justify-content: center;
-  background: var(--bg-primary);
+.ddt-node__label {
+  font-size: var(--er-text-md);
+  font-weight: 600;
+  color: var(--ddt-fg, var(--er-text));
+  padding: 6px 10px 2px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
-.error-boundary__card {
-  max-width: 720px; width: 100%;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-left: 4px solid var(--er-danger);
-  border-radius: var(--er-radius-lg);
-  padding: 20px 24px;
-}
-.error-boundary__eyebrow {
-  text-transform: uppercase;
-  font-size: var(--er-text-sm); letter-spacing: 0.8px;
-  color: var(--er-danger); font-weight: 700; margin-bottom: 4px;
-}
-.error-boundary__title { margin: 0 0 8px 0; color: var(--er-text); font-size: 18px; }
-.error-boundary__text { margin: 0 0 12px 0; color: var(--er-text-muted); line-height: 1.5; }
-.error-boundary__details {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--er-radius-md);
-  padding: 10px;
-  font-size: var(--er-text-sm);
-  max-height: 240px;
-  overflow: auto;
+
+.ddt-node__sub {
+  font-size: var(--er-text-xs);
+  font-family: var(--font-mono, monospace);
+  color: color-mix(in srgb, var(--ddt-fg, var(--er-text-muted)) 72%, transparent);
+  padding: 0 10px 5px;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ddt-node--compact .ddt-node__label,
+.ddt-node--compact .ddt-node__sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ddt-node__actions {
+  display: flex;
+  gap: 5px;
+  flex-wrap: nowrap;
+  padding: 4px 10px 8px;
+}
+
+.ddt-node__action {
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  color: var(--er-text);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  border-radius: var(--er-radius-md);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.ddt-node__action:hover {
+  border-color: color-mix(in srgb, var(--er-accent) 58%, transparent);
+  background: color-mix(in srgb, var(--er-accent) 16%, transparent);
+}
+
+.ddt-node--root {
+  border-width: 2px;
+}
+
+.ddt-node--root .ddt-node__label {
+  font-size: var(--er-text-sm);
+  font-family: var(--font-mono, monospace);
+  font-weight: 500;
+}
+
+.ddt-node--table .ddt-node__head,
+.ddt-node--leaf.ddt-node--table .ddt-node__head {
+  background: color-mix(in srgb, var(--er-success-soft) 80%, transparent);
+}
+
+.ddt-node--enum .ddt-node__head {
+  background: color-mix(in srgb, var(--er-warning-soft) 80%, transparent);
+}
+
+.ddt-node--class .ddt-node__head {
+  background: color-mix(in srgb, var(--er-accent) 12%, transparent);
+}
+
+/* Push the toggle to the far right of dd-hero__top */
+.dd-hero__top .dd-view-toggle {
+  margin-left: auto;
+}
+
+.dd-view-toggle {
+  transform: none !important;
+  animation: none !important;
+  box-shadow: none !important;
+  border-radius: var(--ui-radius) !important;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  height: var(--wb-control-h);
+  padding: 1px;
+  gap: 1px;
+  border: 1px solid var(--er-input-border);
+  border-radius: var(--er-radius-md);
+  background: transparent;
+}
+
+.dd-view-toggle__btn {
+  border-radius: var(--er-radius-sm) !important;
+  border-radius: var(--ui-radius) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--er-radius-sm);
+  font-weight: 400;
+}
+
+.dd-view-toggle__btn:hover {
+  background: color-mix(in srgb, var(--er-surface-3) 80%, transparent);
+  color: var(--er-text);
+}
+
+.dd-view-toggle__btn.is-active {
+  background: var(--er-surface-3);
+  color: var(--er-text);
+}
+
+.dd-view-toggle__label {
+  /* hide on very small panels */
+  display: inline;
+}
+
+.dd-tree-debug-toggle {
+  margin-left: 8px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+  color: var(--er-text-muted);
+  border-radius: var(--er-radius-lg);
+  padding: 4px 10px;
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dd-tree-debug-toggle:hover {
+  border-color: color-mix(in srgb, var(--er-accent) 58%, transparent);
+  color: var(--er-text);
+}
+
+.dd-tree-label-toggle {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--er-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+}
+
+.dd-tree-label-toggle__btn {
+  border: none;
+  background: transparent;
+  color: var(--er-text-muted);
+  border-radius: var(--er-radius-md);
+  padding: 4px 10px;
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dd-tree-label-toggle__btn:hover {
+  color: var(--er-text);
+  background: color-mix(in srgb, var(--er-surface-3) 80%, transparent);
+}
+
+.dd-tree-label-toggle__btn.is-active {
+  background: var(--er-accent);
+  color: #fff;
+}
+
+.dd-tree-debug-toggle.is-active {
+  border-color: color-mix(in srgb, var(--er-accent) 72%, transparent);
+  background: color-mix(in srgb, var(--er-accent) 18%, transparent);
+  color: var(--er-text);
+}
+
+.dep-prompt {
+  max-width: 520px;
+}
+
+.dep-prompt__body {
+  margin: 0 0 12px;
+  font-size: var(--er-text-md);
+  line-height: 1.5;
   color: var(--er-text-muted);
 }
-.error-boundary__btn {
-  margin-top: 12px;
-  background: var(--er-danger); color: var(--er-bg); border: none;
-  padding: 6px 14px; border-radius: var(--er-radius-md); cursor: pointer; font-weight: 500;
+
+.dep-prompt__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
-.error-boundary__btn:hover { background: color-mix(in srgb, var(--er-danger) 85%, var(--er-text)); }
+
+.dep-prompt__row {
+  padding: 4px 6px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface);
+}
+
+.dep-prompt__row--datamodel {
+  box-shadow: inset 3px 0 0 var(--er-model);
+}
+
+.dep-prompt__row--modelmapping {
+  box-shadow: inset 3px 0 0 var(--er-mapping);
+}
+
+.dep-prompt__row--format {
+  box-shadow: inset 3px 0 0 var(--er-format);
+}
+
+.dep-prompt__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dep-prompt__name {
+  font-size: var(--er-text-md);
+  font-weight: 600;
+  color: var(--er-text);
+}
+
+.dep-prompt__meta {
+  font-family: var(--er-font-mono);
+  font-size: var(--er-text-xs);
+  color: var(--er-text-subtle);
+}
+
+@media (pointer: coarse) {
+  .app-shell .lin-row,
+  .app-shell .dd-collapsible__trigger {
+    min-height: 40px;
+  }
+
+  .app-shell .dd-hero__btn,
+  .app-shell .lin-chip {
+    min-height: 36px;
+  }
+
+  .app-shell .lin-row__toggle {
+    min-width: 26px;
+    min-height: 26px;
+  }
+
+}
+
+@media (max-width: 900px) {
+  /* Drill-down dialogs are sized for a desktop window. */
+  .dd-dialog-surface {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0;
+  }
+
+}
+
+/* Inside a raised dialog the panel is the dialog: no second, darker box. */
+.dd-panel--dialog {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.dd-panel--dialog .dd-frame-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: transparent;
+}
+
+.lin-summary__head--toggle {
+  width: 100%;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lin-summary__head--toggle:hover .lin-summary__title {
+  color: var(--er-accent);
+}
+
+.lin-group {
+  margin-top: 8px;
+}
+
+.lin-group__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0 4px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lin-group__count {
+  padding: 0 5px;
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-2xs);
+  font-variant-numeric: tabular-nums;
+  border-radius: 9px;
+}
+
+/* Drill-down dialog: pin it as a tab, or open it next to the active tab. */
+.dd-dialog-title__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 12px;
+  font-weight: 400;
+}
+
+/* Drill-down cut off by its depth or node limit: said, not hidden. */
+.dd-truncated {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--er-warning) 40%, transparent);
+  border-radius: var(--er-radius-md);
+  background: color-mix(in srgb, var(--er-warning) 10%, var(--er-surface));
+  color: var(--er-text);
+  font-size: var(--er-text-sm);
+  line-height: 1.45;
+}
+
+.dd-truncated > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--er-warning);
+}
+
+.dd-truncated--floating {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 5;
+  margin: 0;
+  box-shadow: var(--er-shadow-2, 0 2px 8px rgb(0 0 0 / 0.12));
+}
+
+/* A formula that opens its drill-down stays inline text: as an inline-block
+   it could not be cut with an ellipsis and wrapped whole onto a clipped
+   second line, leaving only the arrow on the row. */
+.fmt-binding-inline > .dd-trigger-expr {
+  display: inline;
+}
+
+.mm-binding-expr > .dd-trigger-expr,
+.fmt-bind-row-expr > .dd-trigger-expr {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dd-hero {
+    animation: none;
+  }
+
+}
+
+/* The drill-down header band. Its gradient is switched off app-wide, which
+   left it a flat slab of the same colour as everything else; a wash of the
+   accent over the raised surface gives the dialog a head again. */
+.dd-hero {
+  background-image: none !important;
+  padding: 9px 11px;
+  gap: 8px;
+  background: var(--ui-surface-1) !important;
+  border-bottom-color: var(--ui-stroke-1) !important;
+  background-color: color-mix(in srgb, var(--er-accent) 7%, var(--er-surface-raised));
+  animation: none;
+}
+
+.app-shell .lin-summary__title,
+.app-shell .lin-summary__count,
+.dd-dialog-surface .lin-summary__title,
+.dd-dialog-surface .lin-row__stage,
+.dd-dialog-surface .lin-row__name,
+.dd-dialog-surface .lin-formula__label,
+.dd-dialog-surface .lin-row__def-label,
+.dd-dialog-surface .lin-row__more,
+.dd-dialog-surface .lin-summary__count,
+.dd-dialog-surface .dd-hero__badge {
+  font-weight: 600;
+}
+
+.dd-hero__badge {
+  border-radius: var(--ui-radius);
+  padding: 2px 8px;
+  font-size: var(--er-text-xs);
+  background: var(--er-accent-fill);
+  color: var(--er-on-accent-fill);
+  box-shadow: none;
+  font-weight: 600;
+}
+
+.fui-DialogSurface .dd-view-toggle {
+  box-sizing: border-box;
+  height: var(--wb-control-h);
+  padding: 1px;
+  gap: 1px;
+  border: 1px solid var(--er-input-border);
+  border-radius: var(--er-radius-md);
+  background: transparent;
+}
+
+.app-shell .dd-view-toggle__btn {
+  min-height: 0;
+}
+
+.fui-DialogSurface .dd-view-toggle__btn {
+  height: 20px;
+  min-height: 0;
+  padding: 0 8px;
+  border-radius: var(--er-radius-sm);
+  font-weight: 400;
+}
+
+.fui-DialogSurface .dd-view-toggle__btn.is-active {
+  background: var(--er-surface-3);
+  color: var(--er-text);
+}
+
+.dd-panel--tab .dd-frame-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+@keyframes lin-reveal {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--er-accent) 55%, transparent); }
+  100% { box-shadow: 0 0 0 8px transparent; }
+}

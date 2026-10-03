@@ -1,0 +1,1643 @@
+/* Explorer: the configuration tree in the side bar and the workspace
+   manager dialog. */
+
+/* Tree node styles — flat VS Code Explorer rows */
+.tree-node {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--er-text-md);
+  line-height: 1.3;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  border: none;
+  position: relative;
+  transition: background 0.12s ease;
+}
+
+.tree-node.selected {
+  color: var(--er-text);
+}
+
+.tree-node.ancestor {
+  background: transparent;
+  color: var(--er-text);
+}
+
+.tree-node-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 400;
+  /* The name is the row's primary content: keep a floor so the version /
+     kind pills can never squeeze it to zero in a narrow Explorer. */
+  min-width: 5rem;
+  flex: 1 1 auto;
+}
+
+.tree-node-kind-pill {
+  flex-shrink: 0;
+  padding: 0 6px;
+  height: 15px;
+  line-height: 15px;
+  border-radius: var(--er-radius-sm);
+  font-size: var(--er-text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--er-text-muted);
+  background: transparent;
+  border: none;
+}
+
+/* Root configuration rows — subtle, no card */
+.tree-node[data-depth="0"] {
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 0;
+  font-size: var(--er-text-md);
+  font-weight: 600;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.tree-node[data-depth="0"] .tree-chevron {
+  opacity: 0.7;
+}
+
+.tree-node[data-depth="0"]:hover {
+  transform: none;
+}
+
+/* Accent classes: only the kind-pill label gets a subtle colour hint */
+.tree-node-accent-model .tree-node-kind-pill {
+  color: var(--er-info);
+}
+
+.tree-node-accent-mapping .tree-node-kind-pill {
+  color: var(--er-success);
+}
+
+.tree-node-accent-format .tree-node-kind-pill {
+  color: var(--er-warning);
+}
+
+.tree-node[data-depth="0"].tree-node-accent-model:hover,
+.tree-node[data-depth="0"].tree-node-accent-mapping:hover,
+.tree-node[data-depth="0"].tree-node-accent-format:hover {
+  background: var(--er-surface-3);
+  border-color: transparent;
+}
+
+/* Root rows: no tinted background — neutral like VS Code tree */
+.tree-node[data-depth="0"].tree-node-accent-model,
+.tree-node[data-depth="0"].tree-node-accent-mapping,
+.tree-node[data-depth="0"].tree-node-accent-format {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.tree-node.selected.tree-node-accent-model,
+.tree-node.selected.tree-node-accent-mapping,
+.tree-node.selected.tree-node-accent-format,
+.tree-node.ancestor.tree-node-accent-model,
+.tree-node.ancestor.tree-node-accent-mapping,
+.tree-node.ancestor.tree-node-accent-format {
+  box-shadow: none;
+}
+
+.explorer-panel-header .explorer-workspace-button {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.explorer-panel-spacer {
+  flex: 1;
+}
+
+/* Kind groups read as sections, not as nested cards. */
+.explorer-kind-group {
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
+.explorer-kind-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--er-text-muted);
+}
+
+.explorer-kind-group.collapsed .explorer-kind-group-body {
+  display: none;
+}
+
+/* Group labels carry the shared per-kind hue used across app and site. */
+.explorer-kind-group-model .explorer-kind-group-header {
+  color: var(--er-model);
+}
+
+.explorer-kind-group-mapping .explorer-kind-group-header {
+  color: var(--er-mapping);
+}
+
+.explorer-kind-group-format .explorer-kind-group-header {
+  color: var(--er-format);
+}
+
+.explorer-dropzone {
+  position: relative;
+}
+
+.explorer-dropzone-dragging {
+  background: color-mix(in srgb, var(--er-accent) 10%, transparent);
+}
+
+/* Panel header — VS Code "EXPLORER" style uppercase label */
+.explorer-toolbar {
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.config-explorer-toolbar {
+  align-items: stretch;
+}
+
+.explorer-toolbar-filter {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+/* Use: <span className={`tree-chevron ${open ? 'open' : ''}`} /> */
+.tree-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--er-text-muted);
+  transition: transform 0.12s ease;
+  user-select: none;
+  font-size: var(--er-text-lg);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.tree-chevron::before {
+  content: '›';
+}
+
+.tree-chevron.open {
+  transform: rotate(90deg);
+}
+
+.tree-chevron-placeholder {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.fmt-toggle:hover .tree-chevron,
+.ds-row-expander:hover .tree-chevron {
+  color: var(--er-text);
+}
+
+.explorer-kind-chip.active .explorer-kind-chip-icon {
+  opacity: 1;
+}
+
+.explorer-kind-group.collapsed .explorer-kind-group-header-btn {
+  border-bottom-color: transparent !important;
+}
+
+/* Version pill on root config nodes */
+.tree-node-version-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 15px;
+  padding: 0 5px;
+  flex-shrink: 0;
+  border-radius: var(--er-radius-sm);
+  font-size: var(--er-text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--er-accent) 85%, var(--er-text));
+  background: color-mix(in srgb, var(--er-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--er-accent) 30%, transparent);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, 'JetBrains Mono', monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Quick actions button (kebab) */
+.tree-node-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--er-radius-md);
+  background: transparent;
+  color: var(--er-text-muted);
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.tree-node:hover .tree-node-actions,
+.tree-node.selected .tree-node-actions,
+.tree-node-actions[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.tree-node-actions:hover {
+  background: color-mix(in srgb, var(--er-accent) 18%, transparent);
+  color: var(--er-text);
+}
+
+.tree-node {
+  transform: none !important;
+  animation: none !important;
+  box-shadow: none !important;
+  margin: 0;
+  border-radius: var(--ui-radius) !important;
+  border-color: transparent;
+  padding: 4px 7px;
+  min-height: 25px;
+}
+
+.tree-node:hover {
+  transform: none !important;
+  animation: none !important;
+  box-shadow: none !important;
+  background: var(--ui-surface-1);
+  border-color: var(--ui-stroke-2);
+}
+
+.tree-node.selected {
+  transform: none !important;
+  animation: none !important;
+  box-shadow: none !important;
+  background: color-mix(in srgb, var(--er-accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--er-accent) 46%, transparent);
+}
+
+.explorer-tree-shell .tree-node {
+  border-radius: var(--er-radius-md) !important;
+  border: 1px solid transparent;
+}
+
+.explorer-tree-shell .tree-node.selected {
+  border-color: color-mix(in srgb, var(--er-accent) 50%, transparent);
+}
+
+.explorer-tree-shell .tree-node[data-depth='0'] {
+  margin: 3px 6px;
+  min-height: 28px;
+  font-weight: 620;
+}
+
+/* Indentation rails, one per ancestor level — rows are flat siblings in the
+   DOM, so the hierarchy has to be drawn on the row itself. */
+.explorer-tree-shell .tree-node::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 8px;
+  width: calc(var(--depth, 0) * 16px);
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0 15px,
+    color-mix(in srgb, var(--ui-stroke-2) 70%, transparent) 15px 16px
+  );
+  pointer-events: none;
+  display: none;
+}
+
+.explorer-tree-shell .tree-node.selected::before,
+.explorer-tree-shell .tree-node.ancestor::before {
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0 15px,
+    color-mix(in srgb, var(--er-accent) 48%, transparent) 15px 16px
+  );
+}
+
+.explorer-tree-shell .tree-node-section {
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+}
+
+/* Folder-like section rows read as folders, not as shouted labels. */
+.explorer-tree-shell .tree-node-section .tree-node-label {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.explorer-tree-shell .tree-node-group {
+  margin: 2px 8px;
+  border-left: 2px solid color-mix(in srgb, var(--ui-stroke-1) 76%, transparent);
+  background: color-mix(in srgb, var(--ui-surface-1) 66%, transparent);
+}
+
+.explorer-tree-shell .tree-node-group .tree-node-label {
+  font-weight: 600;
+  color: var(--er-text);
+}
+
+.explorer-tree-shell .tree-node-parent:not(.tree-node-group) {
+  border-left: 1px solid color-mix(in srgb, var(--ui-stroke-2) 70%, transparent);
+}
+
+.explorer-tree-shell .tree-node-section-kind-bindingGroup {
+  margin: 2px 8px 2px 12px;
+  border-left: 2px solid color-mix(in srgb, var(--er-accent) 56%, transparent);
+  background: color-mix(in srgb, var(--ui-surface-1) 74%, transparent);
+}
+
+.explorer-tree-shell .tree-node-section-kind-bindingGroup .tree-node-label {
+  font-weight: 600;
+  color: var(--er-text);
+}
+
+.explorer-tree-shell .tree-node-binding,
+.explorer-tree-shell .tree-node-validation {
+  margin-left: 10px;
+}
+
+.explorer-tree-shell .tree-node-version-pill {
+  border-color: color-mix(in srgb, var(--er-accent) 34%, transparent);
+}
+
+.explorer-tree-shell .explorer-kind-group {
+  border-color: color-mix(in srgb, var(--ui-stroke-1) 88%, transparent);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.explorer-tree-shell .explorer-kind-group-header-btn {
+  border-bottom: 1px solid color-mix(in srgb, var(--ui-stroke-2) 72%, transparent);
+}
+
+.explorer-tree-shell .explorer-kind-group-header-btn:hover {
+  background: color-mix(in srgb, var(--er-accent) 7%, var(--ui-surface-1));
+}
+
+/* ── Explorer hierarchy view ── */
+.explorer-hierarchy-view .explorer-model-hierarchy-group {
+  margin-bottom: 4px;
+}
+
+.explorer-orphan-section {
+  margin-top: 8px;
+}
+
+.explorer-tree-shell .tree-node:hover {
+  border-color: transparent;
+  border-left-color: var(--er-border-strong, var(--er-border));
+}
+
+.explorer-tree-shell .tree-node.selected {
+  border-left-color: var(--er-accent);
+}
+
+.explorer-tree-shell .tree-node.ancestor {
+  border-left-color: color-mix(in srgb, var(--er-accent) 40%, transparent);
+}
+
+/* Root configuration rows anchor the tree — give them weight. */
+.explorer-tree-shell .tree-node[data-depth="0"] {
+  border-top: 1px solid var(--er-border);
+  border-bottom: 1px solid var(--er-border);
+  margin-top: 4px;
+}
+
+.explorer-tree-shell .tree-node-version-pill,
+.explorer-tree-shell .tree-node-kind-pill {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Kind group headers stay visible while scrolling a long configuration list. */
+.explorer-sections .explorer-kind-group-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.ws-section-head--spaced {
+  margin-top: 18px;
+}
+
+.ws-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  border: 1px solid var(--er-border);
+  background: var(--er-surface-2);
+  color: var(--er-text);
+  font-variant-numeric: tabular-nums;
+  border-radius: 9px;
+}
+
+.ws-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Panel header — title, count and the Explorer's own actions. Expand /
+   collapse used to live both here and in the filter row; one home only. */
+/* 40px, like the editor tab bar and the right panel's tab strip: the rule
+   under the top bar has to run unbroken across all three columns. */
+.explorer-panel-header {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+  height: var(--wb-header-h);
+  padding: 0 4px 0 12px;
+  border-bottom: 0;
+  background: var(--er-chrome);
+}
+
+.explorer-panel-title {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--er-font-display);
+  color: var(--er-text);
+  gap: 6px;
+  font-size: var(--er-text-xs);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.explorer-panel-title svg {
+  color: var(--er-accent);
+  display: none;
+}
+
+.config-explorer-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 8px 6px;
+  border-bottom: 1px solid var(--er-border);
+  background: var(--er-surface);
+}
+
+/* Kind chips: a segmented row that always fits on one line. */
+/* Kind filters: VS Code's input toggles (Match Case, Whole Word…) — quiet
+   until on, then outlined in the focus blue. */
+.explorer-chip-row {
+  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+
+.explorer-kind-chip {
+  display: inline-flex;
+  align-items: center;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: all 160ms ease;
+  transform: none !important;
+  animation: none !important;
+  box-shadow: none !important;
+  height: 24px;
+  padding: 0 6px 0 5px;
+  gap: 4px;
+  min-width: 0;
+  justify-content: flex-start;
+  border-radius: var(--er-radius-md);
+  border: 1px solid var(--er-border);
+  background: var(--er-surface);
+  color: var(--er-text-muted);
+  box-shadow: none;
+  transform: none;
+  font-size: var(--px-caption);
+  font-weight: 600;
+}
+
+.explorer-kind-chip-label {
+  display: inline;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.explorer-kind-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  opacity: 1;
+}
+
+.explorer-kind-chip--model .explorer-kind-chip-icon {
+  color: var(--er-model);
+}
+
+.explorer-kind-chip--mapping .explorer-kind-chip-icon {
+  color: var(--er-mapping);
+}
+
+.explorer-kind-chip--format .explorer-kind-chip-icon {
+  color: var(--er-format);
+}
+
+.explorer-kind-chip:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--er-accent) 48%, var(--border-color));
+  height: 24px;
+  padding: 0 6px 0 5px;
+  gap: 4px;
+  min-width: 0;
+  justify-content: flex-start;
+  border-radius: var(--er-radius-md);
+  border: 1px solid var(--er-border);
+  box-shadow: none;
+  transform: none;
+  font-size: var(--px-caption);
+  font-weight: 600;
+  color: var(--er-text);
+  background: var(--er-surface-2);
+}
+
+.explorer-kind-chip.active {
+  border-color: color-mix(in srgb, var(--er-accent) 60%, transparent);
+  height: 24px;
+  padding: 0 6px 0 5px;
+  gap: 4px;
+  min-width: 0;
+  justify-content: flex-start;
+  border-radius: var(--er-radius-md);
+  border: 1px solid var(--er-border);
+  background: var(--er-surface);
+  box-shadow: none;
+  transform: none;
+  font-size: var(--px-caption);
+  font-weight: 600;
+  color: var(--er-text);
+}
+
+.explorer-kind-chip--model.active {
+  background: var(--er-model-soft);
+  border-color: color-mix(in srgb, var(--er-model) 45%, transparent);
+}
+
+.explorer-kind-chip--mapping.active {
+  background: var(--er-mapping-soft);
+  border-color: color-mix(in srgb, var(--er-mapping) 45%, transparent);
+}
+
+.explorer-kind-chip--format.active {
+  background: var(--er-format-soft);
+  border-color: color-mix(in srgb, var(--er-format) 45%, transparent);
+}
+
+.explorer-kind-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.explorer-result-info {
+  padding: 0 2px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-size: var(--px-caption);
+  color: var(--er-text-muted);
+}
+
+.explorer-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 0 16px;
+}
+
+.explorer-kind-group + .explorer-kind-group {
+  margin-top: 0;
+}
+
+.explorer-sections .explorer-kind-group-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 10px 0 8px;
+  gap: 6px;
+  border: 0;
+  border-bottom: 1px solid var(--er-border);
+  background: var(--er-surface);
+  box-shadow: none;
+  color: var(--er-text-muted);
+  font-size: var(--px-caption);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+}
+
+/* Group header as button with chevron */
+.explorer-kind-group-header-btn {
+  font: inherit;
+  transition: background 140ms ease;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 10px 0 8px;
+  gap: 6px;
+  border: 0;
+  border-bottom: 1px solid var(--er-border);
+  background: var(--er-surface);
+  box-shadow: none;
+  color: var(--er-text-muted);
+  font-size: var(--px-caption);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+  height: var(--wb-row-h);
+  border-radius: 0;
+}
+
+.explorer-kind-group-header-btn:hover {
+  background: var(--er-surface-2);
+  color: var(--er-text);
+}
+
+.explorer-kind-group-header-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-kind-group-header-left::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: var(--er-radius-sm);
+  flex-shrink: 0;
+  margin-right: 2px;
+  background: var(--er-text-subtle);
+  display: none;
+}
+
+.explorer-kind-group-model .explorer-kind-group-header-left::before {
+  background: var(--er-model);
+}
+
+.explorer-kind-group-mapping .explorer-kind-group-header-left::before {
+  background: var(--er-mapping);
+}
+
+.explorer-kind-group-format .explorer-kind-group-header-left::before {
+  background: var(--er-format);
+}
+
+.explorer-kind-group-model .explorer-kind-group-header,
+.explorer-kind-group-mapping .explorer-kind-group-header,
+.explorer-kind-group-format .explorer-kind-group-header {
+  box-shadow: none;
+}
+
+.explorer-kind-group-chevron {
+  opacity: 0.75;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  color: var(--er-text-subtle);
+  font-size: var(--er-text-md);
+}
+
+.explorer-kind-group-body {
+  animation: panel-body-in 150ms ease;
+  padding: 2px 0 4px;
+}
+
+.explorer-kind-group-empty {
+  padding: 8px 12px;
+  font-size: var(--px-text-sm);
+  color: var(--er-text-subtle);
+}
+
+.explorer-orphan-header {
+  opacity: 0.7;
+  padding: 8px 10px 4px;
+  font-size: var(--px-caption);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--er-text-subtle);
+}
+
+.explorer-tree-shell .tree-node {
+  min-height: var(--px-row);
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-right: 6px;
+  gap: 4px;
+  margin: 0 4px;
+  border-radius: var(--er-radius-sm);
+  border-left: 0;
+  border-top: 0;
+  border-bottom: 0;
+  font-size: var(--px-text);
+  font-weight: 400;
+  line-height: 1.25;
+  color: var(--er-text);
+  background: transparent;
+  transition: background var(--er-duration-fast) var(--er-ease);
+}
+
+/* Indent guide for the row's own level — the flat rows gave no sense of depth. */
+.explorer-tree-shell .tree-node:not([data-depth="0"])::before {
+  content: '';
+  position: absolute;
+  left: calc(12px + (var(--depth, 1) - 1) * var(--px-indent));
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: color-mix(in srgb, var(--er-border) 80%, transparent);
+}
+
+.explorer-tree-shell .tree-node:hover {
+  background: var(--er-surface-2);
+}
+
+.explorer-tree-shell .tree-node.selected,
+.explorer-tree-shell .tree-node.selected:hover {
+  background: var(--er-accent-soft);
+  color: var(--er-text);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--er-accent);
+}
+
+.explorer-tree-shell .tree-node.selected .tree-node-sublabel {
+  font-weight: 400;
+}
+
+.explorer-tree-shell .tree-chevron {
+  width: 14px;
+  height: 14px;
+  font-size: var(--er-text-lg);
+  color: var(--er-text-subtle);
+}
+
+.explorer-tree-shell .tree-chevron-placeholder {
+  width: 14px;
+}
+
+/* Root configuration rows anchor the tree: taller, kind-tinted icon, version pill. */
+.explorer-tree-shell .tree-node[data-depth="0"] {
+  min-height: var(--px-root);
+  margin: 2px 4px 0;
+  padding-left: 8px !important;
+  font-size: var(--er-text-md);
+  font-weight: 600;
+  background: var(--er-surface-2);
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-md);
+}
+
+.explorer-tree-shell .tree-node[data-depth="0"]:hover {
+  background: color-mix(in srgb, var(--er-surface-2) 60%, var(--er-surface-3));
+}
+
+.explorer-tree-shell .tree-node[data-depth="0"].selected {
+  background: var(--er-accent-soft);
+  border-color: var(--er-accent-border);
+}
+
+/* Section rows (Model definition, Data sources, …) read as labels. */
+.explorer-tree-shell .tree-node-group {
+  font-size: var(--px-caption);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--er-text-muted);
+}
+
+.explorer-tree-shell .tree-node-kind-pill {
+  height: 16px;
+  line-height: 14px;
+  padding: 0 5px;
+  border-radius: var(--er-radius-pill);
+  border: 1px solid var(--er-border);
+  background: var(--er-surface);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.explorer-tree-shell .tree-node-version-pill {
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.explorer-tree-shell .tree-node-actions {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--er-radius-sm);
+  background: transparent;
+  color: var(--er-text-subtle);
+  cursor: pointer;
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.explorer-tree-shell .tree-node:hover .tree-node-actions,
+.explorer-tree-shell .tree-node.selected .tree-node-actions,
+.explorer-tree-shell .tree-node-actions:focus-visible {
+  opacity: 1;
+}
+
+.explorer-tree-shell .tree-node-actions:hover {
+  background: var(--er-surface-3);
+  color: var(--er-text);
+}
+
+/* Hierarchy view: model → children rail. */
+.explorer-hierarchy-view {
+  padding: 6px 0 16px;
+}
+
+.explorer-model-hierarchy-group + .explorer-model-hierarchy-group {
+  margin-top: 6px;
+}
+
+.explorer-model-hierarchy-group > div[style] {
+  margin-left: 12px !important;
+  padding-left: 6px !important;
+  border-left-color: color-mix(in srgb, var(--er-model) 45%, transparent) !important;
+}
+
+/* Empty state */
+.explorer-empty-state {
+  line-height: 1.6;
+  padding: 24px 16px;
+  color: var(--er-text-muted);
+  font-size: var(--px-text);
+  text-align: center;
+}
+
+.explorer-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.explorer-dropzone-overlay {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  padding: 4px 12px;
+  font-size: var(--er-text-md);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  z-index: 5;
+  border-radius: var(--er-radius-lg);
+  border: 2px dashed var(--er-accent);
+  background: color-mix(in srgb, var(--er-accent-soft) 85%, transparent);
+  color: var(--er-accent);
+  font-weight: 600;
+}
+
+.ws-surface {
+  /* Roomier by default — the workspace routinely holds a dozen files whose
+     names are long. `resize` lets the user drag it larger still; it needs a
+     non-visible overflow to render the grip. */
+  width: min(1100px, calc(100vw - 48px));
+  max-width: calc(100vw - 32px);
+  /* Height follows the lists (they carry their own vh caps), so a workspace of
+     three files gets a three-file dialog instead of 820px with the sections
+     stranded at either end. Dragging the grip still sets an explicit height. */
+  height: auto;
+  /* The native <dialog> stretches its child, which turned `height: auto` into
+     the max-height; centring it lets the surface keep its content height. */
+  align-self: center;
+  justify-self: center;
+  min-width: 460px;
+  min-height: 300px;
+  max-height: calc(100vh - 64px);
+  overflow: hidden;
+}
+
+.ws-dialog-body {
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.ws-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ws-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ws-title-counts {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.ws-count--model {
+  background: var(--er-model-soft);
+  border-color: color-mix(in srgb, var(--er-model) 45%, transparent);
+}
+
+.ws-count--mapping {
+  background: var(--er-mapping-soft);
+  border-color: color-mix(in srgb, var(--er-mapping) 45%, transparent);
+}
+
+.ws-count--format {
+  background: var(--er-format-soft);
+  border-color: color-mix(in srgb, var(--er-format) 45%, transparent);
+}
+
+.ws-title-counts .ws-count {
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  padding: 0 7px;
+  line-height: 18px;
+}
+
+.ws-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.ws-filter {
+  flex: 1;
+  min-width: 120px;
+}
+
+.ws-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  font-size: var(--px-caption);
+  letter-spacing: 0.08em;
+  color: var(--er-text-muted);
+}
+
+.ws-section-spacer {
+  flex: 1;
+}
+
+/* Sized by its rows, not by the dialog: growing to a 3:2 share left a short
+   list floating above 200px of nothing, with the second section stranded at
+   the bottom edge. No vh cap either — that cap was what kept the dialog short
+   on a tall screen while its own lists scrolled inside it. The surface's
+   max-height does the limiting, and the lists shrink and scroll once it is
+   reached. */
+.ws-list {
+  list-style: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  padding: 2px 0;
+}
+
+.ws-list--available {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+
+.ws-row {
+  display: flex;
+  align-items: center;
+  position: relative;
+  gap: 8px;
+  padding: 5px 6px 5px calc(8px + var(--ws-depth, 0) * 18px);
+  border: 1px solid transparent;
+  border-radius: var(--er-radius-md);
+  background: transparent;
+  box-shadow: none;
+}
+
+.ws-row:hover {
+  background: var(--er-surface-2);
+  border-color: var(--er-border);
+}
+
+.ws-subhead {
+  padding: 10px 8px 2px;
+  list-style: none;
+  font-size: var(--px-caption);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--er-text-subtle);
+}
+
+/* Wide enough for the longest kind in either language ("Mapování modelu"),
+   and no wider than it needs to be: a fixed 112px column cut that label in
+   half. The minimum keeps the names below it lined up across rows. */
+.ws-kind {
+  flex-shrink: 0;
+  text-align: center;
+  border: 1px solid var(--er-border);
+  background: var(--er-surface-2);
+  color: var(--er-text);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+  min-width: 136px;
+  justify-content: flex-start;
+  padding: 2px 7px;
+  border-radius: var(--er-radius-pill);
+  font-size: var(--er-text-xs);
+  letter-spacing: 0.03em;
+  text-transform: none;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ws-kind svg {
+  flex-shrink: 0;
+}
+
+.ws-kind--model {
+  border-color: var(--kind-model);
+  background: var(--er-model-soft);
+  color: var(--er-model);
+}
+
+.ws-kind--mapping {
+  border-color: var(--kind-mapping);
+  background: var(--er-mapping-soft);
+  color: var(--er-mapping);
+}
+
+.ws-kind--format {
+  border-color: var(--kind-format);
+  background: var(--er-format-soft);
+  color: var(--er-format);
+}
+
+.ws-kind--unknown {
+  color: var(--er-text-muted);
+}
+
+.ws-row-name {
+  font-weight: 600;
+  color: var(--er-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--er-text-md);
+}
+
+.ws-row-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--er-font-sans);
+  font-size: var(--px-caption);
+  color: var(--er-text-muted);
+}
+
+.ws-version {
+  font-family: var(--er-font-mono);
+  font-size: var(--er-text-xs);
+  padding: 0 5px;
+  border-radius: var(--er-radius-pill);
+  border: 1px solid var(--er-border);
+  background: var(--er-surface);
+  color: var(--er-text-muted);
+}
+
+.ws-source {
+  font-size: var(--er-text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0 5px;
+  border-radius: var(--er-radius-sm);
+  background: color-mix(in srgb, var(--er-text) 8%, transparent);
+  color: var(--er-text-muted);
+}
+
+.ws-source--fno {
+  background: var(--er-info-soft);
+  color: var(--er-info);
+}
+
+.ws-path {
+  font-family: var(--er-font-mono);
+  font-size: var(--er-text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  color: var(--er-text-subtle);
+}
+
+.ws-row-actions {
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0.55;
+  transition: opacity var(--er-duration-fast) var(--er-ease);
+}
+
+.ws-row:hover .ws-row-actions,
+.ws-row:focus-within .ws-row-actions {
+  opacity: 1;
+}
+
+.ws-empty {
+  margin: 0;
+  padding: 8px 8px 10px;
+  font-size: var(--px-text-sm);
+  color: var(--er-text-subtle);
+}
+
+.ws-hint {
+  margin: 14px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface-2);
+  font-size: var(--px-text-sm);
+  color: var(--er-text-muted);
+}
+
+/* Narrow-panel behaviour */
+.explorer-tree-shell .tree-node-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The mapping definition the loaded format actually binds to. */
+.tree-node-name--active {
+  font-weight: 800;
+  color: var(--er-text);
+}
+
+.tree-node-active-pill {
+  flex-shrink: 0;
+  padding: 0 6px;
+  height: 15px;
+  line-height: 15px;
+  border-radius: var(--er-radius-pill);
+  font-size: var(--er-text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--er-accent);
+  background: color-mix(in srgb, var(--er-accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--er-accent) 42%, transparent);
+}
+
+.config-explorer-toolbar {
+  container-type: inline-size;
+}
+
+.explorer-toolbar {
+  background-image: none !important;
+  display: flex;
+  flex-direction: column;
+  container-type: inline-size;
+  gap: 6px;
+  padding: 0 12px 8px;
+  border-bottom: 0;
+  background: var(--er-chrome);
+}
+
+@container (max-width: 230px) {
+  .explorer-kind-chip-label {
+    display: none;
+  }
+
+  .explorer-kind-chip {
+    justify-content: center;
+    padding: 0 4px;
+  }
+
+}
+
+.explorer-tree-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-size: var(--er-text-md);
+  container-type: inline-size;
+  background: var(--er-chrome);
+  --px-row: var(--wb-row-h);
+  --px-root: var(--wb-row-h);
+  --px-text: var(--er-text-md);
+  --px-text-sm: var(--er-text-sm);
+  --px-caption: var(--er-text-xs);
+}
+
+@container (max-width: 260px) {
+  .tree-node-sublabel {
+    display: none;
+  }
+
+}
+
+.explorer-tree-shell .tree-node.ancestor {
+  box-shadow: none;
+}
+
+.explorer-tree-shell .tree-node.ancestor > .tree-node-label > .tree-node-name {
+  font-weight: 500;
+}
+
+.tree-node-name {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: min(100%, 55%);
+}
+
+.tree-node-sublabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--px-text-sm);
+  font-weight: 400;
+  color: var(--er-text-muted);
+  flex: 1 1 0;
+}
+
+.explorer-tree-shell .tree-node.selected,
+.explorer-tree-shell .tree-node.selected:hover {
+  border-left: 2px solid var(--er-accent);
+  padding-left: calc(8px + var(--depth, 0) * 16px - 2px) !important;
+}
+
+.explorer-tree-shell .tree-node:not(.selected):not([data-depth="0"]) {
+  border-left: 0;
+  padding-left: calc(8px + var(--depth, 0) * 16px) !important;
+}
+
+/* A selected root row keeps its plain frame — the tint marks the selection,
+   no rail on the left edge. */
+.explorer-tree-shell .tree-node[data-depth="0"].selected,
+.explorer-tree-shell .tree-node[data-depth="0"].selected:hover {
+  border-left: 1px solid var(--er-accent-border);
+  padding-left: 8px !important;
+}
+
+.explorer-tree-shell .explorer-sections {
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
+@media (pointer: coarse) {
+  .app-shell .explorer-tree-shell .tree-node[data-depth='0'],
+  .app-shell .ws-row {
+    min-height: 40px;
+  }
+
+  .app-shell .tree-node,
+  .app-shell .explorer-tree-shell .tree-node {
+    min-height: 40px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+
+  .app-shell .explorer-kind-chip {
+    min-height: 36px;
+  }
+
+  /* The chevron is the expand/collapse target for the whole tree. */
+  .app-shell .tree-chevron,
+  .app-shell .tree-chevron-placeholder {
+    min-width: 26px;
+    min-height: 26px;
+  }
+
+  .app-shell .tree-node-actions,
+  .app-shell .explorer-tree-shell .tree-node-actions {
+    opacity: 1;
+    width: 36px;
+    height: 36px;
+  }
+
+}
+
+@media (max-width: 900px) {
+  .explorer-toolbar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+}
+
+/* Workspace manager: closed by the corner ✕, like the drill-down dialog — a
+   full-width action bar for a single "Close" was a row of chrome saying what
+   the ✕ already says. */
+.ws-dialog-close {
+  position: absolute !important;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+}
+
+.ws-titlebar {
+  padding-right: 40px;
+}
+
+@media (max-width: 900px), (pointer: coarse) {
+  .ws-surface {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    height: calc(100dvh - 40px) !important;
+    max-height: calc(100dvh - 40px) !important;
+  }
+
+}
+
+/* ── Explorer: version pills are second-line information ── */
+.explorer-tree-shell .tree-node-name {
+  flex: 1 1 auto;
+}
+
+/* Versions as VS Code "description" text, not as pills. */
+.explorer-tree-shell .tree-node-version-pill {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: var(--er-text-2xs);
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--er-text-subtle);
+  font-family: var(--er-font-sans);
+}
+
+.app-shell .explorer-panel-title {
+  color: var(--er-text-muted);
+}
+
+.app-shell .config-explorer-toolbar {
+  gap: 6px;
+  padding: 0 12px 8px;
+  border-bottom: 0;
+  background: var(--er-chrome);
+}
+
+.app-shell .explorer-kind-chip.active {
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--er-radius-md);
+  font-size: var(--er-text-sm);
+  font-weight: 400;
+}
+
+.app-shell .explorer-kind-chip--model.active,
+.app-shell .explorer-kind-chip--mapping.active,
+.app-shell .explorer-kind-chip--format.active {
+  background: color-mix(in srgb, var(--er-accent-fill) 14%, transparent);
+  border-color: var(--er-accent-fill);
+  color: var(--er-text);
+}
+
+/* Section headers: VS Code view-pane headers — 22px, bold uppercase, a rule
+   above, no colour swatch. */
+.app-shell .explorer-sections {
+  padding-bottom: 8px;
+}
+
+.app-shell .explorer-sections .explorer-kind-group-header {
+  min-height: var(--wb-row-h);
+  height: var(--wb-row-h);
+  padding: 0 8px 0 2px;
+  gap: 2px;
+  border: 0;
+  border-top: 1px solid var(--er-border);
+  border-radius: 0;
+  background: var(--er-chrome);
+  box-shadow: none;
+  color: var(--er-text);
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.app-shell .explorer-kind-group-header-btn {
+  min-height: var(--wb-row-h);
+  padding: 0 8px 0 2px;
+  gap: 2px;
+  border: 0;
+  border-top: 1px solid var(--er-border);
+  background: var(--er-chrome);
+  box-shadow: none;
+  color: var(--er-text);
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.app-shell .explorer-kind-group-header-btn:hover {
+  background: var(--er-chrome);
+  color: var(--er-text);
+}
+
+.app-shell .explorer-kind-group-chevron {
+  color: var(--er-text);
+}
+
+.app-shell .explorer-kind-group-body {
+  padding: 0 0 4px;
+}
+
+/* Rows: full-bleed 22px lines; hover and selection are flat bands. */
+.app-shell .explorer-tree-shell .tree-node[data-depth="0"] {
+  min-height: var(--wb-row-h);
+  height: var(--wb-row-h);
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: var(--er-text-md);
+  font-weight: 600;
+}
+
+.app-shell .explorer-tree-shell .tree-node {
+  min-height: var(--wb-row-h);
+  height: var(--wb-row-h);
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: var(--er-text-md);
+  font-weight: 400;
+  border-left: 0;
+  padding-left: calc(8px + var(--depth, 0) * 16px) !important;
+}
+
+.app-shell .explorer-tree-shell .tree-node:hover,
+.app-shell .explorer-tree-shell .tree-node[data-depth="0"]:hover {
+  background: var(--er-hover);
+}
+
+.app-shell .explorer-tree-shell .tree-node.selected,
+.app-shell .explorer-tree-shell .tree-node.selected:hover {
+  border-left: 0;
+  padding-left: calc(8px + var(--depth, 0) * 16px) !important;
+  background: var(--er-selected);
+  box-shadow: inset 0 0 0 1px var(--er-accent-fill);
+  font-weight: inherit;
+}
+
+.app-shell .explorer-tree-shell .tree-node[data-depth="0"].selected {
+  border-left: 0;
+  padding-left: calc(8px + var(--depth, 0) * 16px) !important;
+  background: var(--er-selected);
+  box-shadow: inset 0 0 0 1px var(--er-accent-fill);
+  font-weight: 600;
+}
+
+.app-shell .explorer-tree-shell .tree-node-group {
+  font-size: var(--er-text-md);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--er-text);
+}
+
+.app-shell .explorer-tree-shell .tree-node-section .tree-node-label {
+  font-size: var(--er-text-md);
+  font-weight: 400;
+  color: var(--er-text);
+}
+
+.app-shell .explorer-tree-shell .tree-node-kind-pill {
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--er-text-subtle);
+  font-family: var(--er-font-sans);
+  font-size: var(--er-text-sm);
+  font-weight: 400;
+}
+
+.app-shell .explorer-tree-shell .tree-node-version-pill {
+  font-size: var(--er-text-sm);
+  font-weight: 400;
+}
+
+.app-shell .explorer-tree-shell .tree-node-actions:hover {
+  background: var(--er-hover);
+}
+
+.app-shell .explorer-kind-chip {
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--er-radius-md);
+  background: transparent;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 400;
+  height: var(--wb-control-h);
+  min-height: 0;
+}
+
+.app-shell .explorer-kind-chip:hover:not(:disabled) {
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--er-radius-md);
+  font-size: var(--er-text-sm);
+  font-weight: 400;
+  background: var(--er-hover);
+  color: var(--er-text);
+  height: var(--wb-control-h);
+  min-height: 0;
+}
+
+.app-shell .explorer-kind-chip.active {
+  background: color-mix(in srgb, var(--er-accent-fill) 14%, transparent);
+  border-color: var(--er-accent-fill);
+  color: var(--er-text);
+  height: var(--wb-control-h);
+  min-height: 0;
+}
+
+@keyframes panel-body-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}

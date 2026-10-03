@@ -1,0 +1,366 @@
+/* App tokens: the aliases the stylesheets read (--bg-*, --kind-*, --syn-*, …)
+   over the shared `--er-*` brand tokens, and the VS Code "Light Modern" /
+   "Dark Modern" workbench palette that re-points those tokens for the app
+   only (the marketing site keeps the brand palette).
+
+   Dark is written twice — once for the OS preference, once for the explicit
+   switch; theme-tokens.test.ts keeps the two in step. */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --er-bg: #1f1f1f;
+    --er-bg-soft: #1f1f1f;
+    --er-surface: #1f1f1f;
+    --er-surface-2: #2a2d2e;
+    --er-surface-3: #37373d;
+    --er-surface-raised: #252526;
+    --er-surface-raised-2: #2d2d30;
+    --er-surface-sunken: #181818;
+    --er-selected: #04395e;
+    --er-border: #2b2b2b;
+    --er-border-strong: #474747;
+    --er-text: #cccccc;
+    --er-text-muted: #9d9d9d;
+    --er-text-subtle: #8b8b8b;
+    --er-accent: #4daafc;
+    --er-accent-hover: #6cbaff;
+    --er-accent-active: #3794ff;
+    --er-accent-soft: #10304a;
+    --er-accent-border: rgba(0, 120, 212, 0.6);
+    --er-accent-contrast: #ffffff;
+    --er-chrome: #181818;
+    --er-hover: #2a2d2e;
+    --er-input-bg: #313131;
+    --er-input-border: #3c3c3c;
+    --er-accent-fill: #0078d4;
+    --er-accent-fill-hover: #026ec1;
+    --er-on-accent-fill: #ffffff;
+    --er-badge-bg: #616161;
+    --er-badge-fg: #f8f8f8;
+    --er-scrim: rgba(0, 0, 0, 0.5);
+    --er-shadow-color: rgba(0, 0, 0, 0.36);
+    --er-shadow-1: none;
+    --er-shadow-2: 0 2px 8px rgba(0, 0, 0, 0.36);
+    --er-shadow-3: 0 4px 16px rgba(0, 0, 0, 0.45);
+  }
+
+}
+
+:root {
+  --font-display: var(--er-font-display);
+  --font-sans: var(--er-font-sans);
+  /* Single source of truth for the monospace stack — index.html preloads
+     JetBrains Mono, and every `font-family` for code/expressions/GUIDs reads
+     this token. Do not redefine it in a later theme block: those win on
+     specificity and silently swap the font back. */
+  --font-mono: var(--er-font-mono);
+  --bg-primary: var(--er-bg-soft);
+  --bg-secondary: var(--er-surface);
+  --bg-tertiary: var(--er-surface-2);
+  --border-color: var(--er-border);
+  --surface-purple-border: color-mix(in srgb, var(--er-model) 42%, transparent);
+  /* The three ER component kinds — one hue each, shared with the site. */
+  --kind-model: var(--er-model);
+  --kind-mapping: var(--er-mapping);
+  --kind-format: var(--er-format);
+  --format-type-file: var(--er-success);
+  --format-type-xml-element: var(--er-info);
+  --format-type-xml-attribute: var(--er-warning);
+  --format-type-xml-sequence: var(--er-model);
+  --format-type-string: var(--er-danger);
+  --format-type-numeric: var(--er-success);
+  --format-type-datetime: var(--er-warning);
+  --format-type-base64: var(--er-info);
+  --format-type-excel-cell: var(--syn-identifier);
+  --format-type-text-sequence: var(--er-model);
+  --format-type-text-line: var(--er-danger);
+  --format-type-pdf: var(--er-danger);
+  --statusbar-chip-bg: rgba(255, 255, 255, 0.14);
+  --statusbar-chip-border: rgba(255, 255, 255, 0.18);
+  --statusbar-mode-chip-bg: rgba(255, 255, 255, 0.18);
+  --statusbar-validator-ok: #22c55e;
+  --statusbar-validator-issues: #eab308;
+  --scrollbar-thumb: var(--er-border-strong);
+  --scrollbar-thumb-hover: var(--er-text-subtle);
+  --shadow-color: var(--er-shadow-color);
+  /* Syntax / semantic colors */
+  --syn-identifier: #9cdcfe;
+  --syn-path: #4fc1ff;
+  --syn-operator: #d4d4d4;
+  --syn-literal: #ce9178;
+  /* Separators and field types come from the text tokens: the fixed greys
+     they used to be fell under 3:1 against the surfaces. */
+  --syn-separator: var(--er-text-subtle);
+  --syn-resolved: #4ec9b0;
+  --syn-field-type: var(--er-text-muted);
+  --syn-calc: #6a9955;
+  /* Graph chrome follows the shared surfaces so designers, panels and the
+     marketing screenshots all read as the same material. */
+  --syn-node-bg: var(--er-surface);
+  --syn-node-border: var(--er-border);
+  --syn-root-header: var(--er-accent-soft);
+  --syn-enum-header: var(--er-format-soft);
+  --syn-record-header: var(--er-surface-2);
+  --syn-edge: var(--er-accent);
+  --syn-edge-label: var(--er-text-subtle);
+  --minimap-bg: var(--er-surface-2);
+  --minimap-node: var(--er-border-strong);
+  color-scheme: dark;
+  --ui-gap-xs: 4px;
+  --ui-gap-s: 7px;
+  --ui-gap-m: 10px;
+  --ui-surface-0: var(--bg-primary);
+  --ui-surface-1: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+  --ui-surface-2: color-mix(in srgb, var(--bg-tertiary) 86%, transparent);
+  --ui-stroke-1: color-mix(in srgb, var(--border-color) 92%, transparent);
+  --ui-stroke-2: color-mix(in srgb, var(--border-color) 72%, transparent);
+  --px-row: 24px;
+  --px-root: 28px;
+  --px-indent: 14px;
+  --px-text: 12px;
+  --px-text-sm: 11px;
+  --px-caption: 10.5px;
+  --er-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, Ubuntu, 'Droid Sans', sans-serif;
+  --er-font-display: var(--er-font-sans);
+  --er-font-mono: 'SF Mono', Menlo, Monaco, Consolas, 'Cascadia Mono', 'Ubuntu Mono', 'Courier New', monospace;
+  /* VS Code's own scale: 13px for rows and body, 11px for section labels. */
+  --er-text-2xs: 10px;
+  --er-text-xs: 11px;
+  --er-text-sm: 12px;
+  --er-text-md: 13px;
+  --er-text-lg: 13px;
+  --er-radius-sm: 2px;
+  --er-radius-md: 3px;
+  --er-radius-lg: 4px;
+  --er-radius-xl: 6px;
+  /* Tags and chips are VS Code labels (square-ish), not capsules. Counters
+     keep their round badge shape below. */
+  --er-radius-pill: 3px;
+  --er-duration-fast: 80ms;
+  --er-duration: 120ms;
+  /* Sizes of the workbench parts, shared by the TSX shell and the CSS. */
+  --wb-titlebar-h: 35px;
+  --wb-header-h: 35px;
+  --wb-statusbar-h: 22px;
+  --wb-activitybar-w: 48px;
+  --wb-row-h: 22px;
+  /* One height for every control that sits in a bar: inputs, text and icon
+     buttons, segmented switches. Fluent's `size="small"` buttons are 24px. */
+  --wb-control-h: 24px;
+  --er-bg: #ffffff;
+  --er-bg-soft: #ffffff;
+  --er-surface: #ffffff;
+  --er-surface-2: #f5f5f5;
+  --er-surface-3: #ebebeb;
+  --er-surface-raised: #ffffff;
+  --er-surface-raised-2: #f8f8f8;
+  --er-surface-sunken: #f8f8f8;
+  --er-selected: #e4e6f1;
+  --er-border: #e5e5e5;
+  --er-border-strong: #cecece;
+  --er-text: #1f1f1f;
+  --er-text-muted: #616161;
+  --er-text-subtle: #717171;
+  --er-accent: #005fb8;
+  --er-accent-hover: #0258a8;
+  --er-accent-active: #004f97;
+  --er-accent-soft: #e8f1fa;
+  --er-accent-border: rgba(0, 95, 184, 0.4);
+  --er-accent-contrast: #ffffff;
+  --er-chrome: #f8f8f8;
+  --er-hover: #f0f0f0;
+  --er-input-bg: #ffffff;
+  --er-input-border: #cecece;
+  --er-accent-fill: #005fb8;
+  --er-accent-fill-hover: #0258a8;
+  --er-on-accent-fill: #ffffff;
+  --er-badge-bg: #e0e0e0;
+  --er-badge-fg: #3b3b3b;
+  --er-scrim: rgba(0, 0, 0, 0.3);
+  --er-shadow-color: rgba(0, 0, 0, 0.16);
+  --er-shadow-1: none;
+  --er-shadow-2: 0 2px 8px rgba(0, 0, 0, 0.16);
+  --er-shadow-3: 0 4px 16px rgba(0, 0, 0, 0.18);
+  --landing-grid-primary: transparent;
+  --landing-grid-secondary: transparent;
+  --landing-grid-line: transparent;
+  --landing-hero-title-gradient: none;
+  --landing-hero-logo-gradient: none;
+  --landing-hero-logo-shadow: none;
+  --landing-card-hover-shadow: var(--er-shadow-2);
+  --surface-hover-accent: var(--er-hover);
+  --ui-radius: var(--er-radius-md);
+}
+
+:root[data-theme='dark'] {
+  --font-display: var(--er-font-display);
+  --font-sans: var(--er-font-sans);
+  --font-mono: var(--er-font-mono);
+  --bg-primary: var(--er-bg-soft);
+  --bg-secondary: var(--er-surface);
+  --bg-tertiary: var(--er-surface-2);
+  --border-color: var(--er-border);
+  --surface-purple-border: color-mix(in srgb, var(--er-model) 42%, transparent);
+  --kind-model: var(--er-model);
+  --kind-mapping: var(--er-mapping);
+  --kind-format: var(--er-format);
+  --format-type-file: var(--er-success);
+  --format-type-xml-element: var(--er-info);
+  --format-type-xml-attribute: var(--er-warning);
+  --format-type-xml-sequence: var(--er-model);
+  --format-type-string: var(--er-danger);
+  --format-type-numeric: var(--er-success);
+  --format-type-datetime: var(--er-warning);
+  --format-type-base64: var(--er-info);
+  --format-type-excel-cell: var(--syn-identifier);
+  --format-type-text-sequence: var(--er-model);
+  --format-type-text-line: var(--er-danger);
+  --format-type-pdf: var(--er-danger);
+  --statusbar-chip-bg: rgba(255, 255, 255, 0.14);
+  --statusbar-chip-border: rgba(255, 255, 255, 0.18);
+  --statusbar-mode-chip-bg: rgba(255, 255, 255, 0.18);
+  --statusbar-validator-ok: #22c55e;
+  --statusbar-validator-issues: #eab308;
+  --scrollbar-thumb: var(--er-border-strong);
+  --scrollbar-thumb-hover: var(--er-text-subtle);
+  --shadow-color: var(--er-shadow-color);
+  --syn-identifier: #9cdcfe;
+  --syn-path: #4fc1ff;
+  --syn-operator: #d4d4d4;
+  --syn-literal: #ce9178;
+  --syn-separator: var(--er-text-subtle);
+  --syn-resolved: #4ec9b0;
+  --syn-field-type: var(--er-text-muted);
+  --syn-calc: #6a9955;
+  --syn-node-bg: var(--er-surface);
+  --syn-node-border: var(--er-border);
+  --syn-root-header: var(--er-accent-soft);
+  --syn-enum-header: var(--er-format-soft);
+  --syn-record-header: var(--er-surface-2);
+  --syn-edge: var(--er-accent);
+  --syn-edge-label: var(--er-text-subtle);
+  --minimap-bg: var(--er-surface-2);
+  --minimap-node: var(--er-border-strong);
+  color-scheme: dark;
+  --ui-gap-xs: 4px;
+  --ui-gap-s: 7px;
+  --ui-gap-m: 10px;
+  --ui-surface-0: var(--bg-primary);
+  --ui-surface-1: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+  --ui-surface-2: color-mix(in srgb, var(--bg-tertiary) 86%, transparent);
+  --ui-stroke-1: color-mix(in srgb, var(--border-color) 92%, transparent);
+  --ui-stroke-2: color-mix(in srgb, var(--border-color) 72%, transparent);
+  --er-bg: #1f1f1f;
+  --er-bg-soft: #1f1f1f;
+  --er-surface: #1f1f1f;
+  --er-surface-2: #2a2d2e;
+  --er-surface-3: #37373d;
+  --er-surface-raised: #252526;
+  --er-surface-raised-2: #2d2d30;
+  --er-surface-sunken: #181818;
+  --er-selected: #04395e;
+  --er-border: #2b2b2b;
+  --er-border-strong: #474747;
+  --er-text: #cccccc;
+  --er-text-muted: #9d9d9d;
+  --er-text-subtle: #8b8b8b;
+  --er-accent: #4daafc;
+  --er-accent-hover: #6cbaff;
+  --er-accent-active: #3794ff;
+  --er-accent-soft: #10304a;
+  --er-accent-border: rgba(0, 120, 212, 0.6);
+  --er-accent-contrast: #ffffff;
+  --er-chrome: #181818;
+  --er-hover: #2a2d2e;
+  --er-input-bg: #313131;
+  --er-input-border: #3c3c3c;
+  --er-accent-fill: #0078d4;
+  --er-accent-fill-hover: #026ec1;
+  --er-on-accent-fill: #ffffff;
+  --er-badge-bg: #616161;
+  --er-badge-fg: #f8f8f8;
+  --er-scrim: rgba(0, 0, 0, 0.5);
+  --er-shadow-color: rgba(0, 0, 0, 0.36);
+  --er-shadow-1: none;
+  --er-shadow-2: 0 2px 8px rgba(0, 0, 0, 0.36);
+  --er-shadow-3: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --landing-grid-primary: transparent;
+  --landing-grid-secondary: transparent;
+  --landing-grid-line: transparent;
+  --landing-hero-title-gradient: none;
+  --landing-hero-logo-gradient: none;
+  --landing-hero-logo-shadow: none;
+  --landing-card-hover-shadow: var(--er-shadow-2);
+  --surface-hover-accent: var(--er-hover);
+  --ui-radius: var(--er-radius-md);
+}
+
+/* Light theme — the neutral/brand aliases above already flip with `--er-*`.
+   Only genuinely light-specific values live here: the code-syntax palette,
+   the graph canvas, and the on-brand status bar chips. */
+:root[data-theme='light'] {
+  --statusbar-chip-bg: rgba(0, 0, 0, 0.32);
+  --statusbar-chip-border: rgba(255, 255, 255, 0.55);
+  --statusbar-mode-chip-bg: rgba(0, 0, 0, 0.38);
+  --statusbar-validator-ok: #86efac;
+  --statusbar-validator-issues: #fde047;
+  --syn-identifier: #0451a5;
+  --syn-path: #005fb8;
+  --syn-operator: #383838;
+  --syn-literal: #a31515;
+  --syn-separator: var(--er-text-subtle);
+  --syn-resolved: #16825d;
+  --syn-field-type: var(--er-text-muted);
+  --syn-calc: #098658;
+  color-scheme: light;
+  /* Light panels sit on plain surfaces rather than the soft page ground;
+     from the tokens, so a palette change reaches them too. */
+  --ui-surface-0: var(--er-surface);
+  --ui-surface-1: color-mix(in srgb, var(--er-surface-2) 60%, var(--er-surface));
+  --ui-surface-2: var(--er-surface-2);
+  --ui-stroke-1: color-mix(in srgb, var(--er-border) 60%, var(--er-border-strong));
+  --ui-stroke-2: var(--er-border);
+  --er-bg: #ffffff;
+  --er-bg-soft: #ffffff;
+  --er-surface: #ffffff;
+  --er-surface-2: #f5f5f5;
+  --er-surface-3: #ebebeb;
+  --er-surface-raised: #ffffff;
+  --er-surface-raised-2: #f8f8f8;
+  --er-surface-sunken: #f8f8f8;
+  --er-selected: #e4e6f1;
+  --er-border: #e5e5e5;
+  --er-border-strong: #cecece;
+  --er-text: #1f1f1f;
+  --er-text-muted: #616161;
+  --er-text-subtle: #717171;
+  --er-accent: #005fb8;
+  --er-accent-hover: #0258a8;
+  --er-accent-active: #004f97;
+  --er-accent-soft: #e8f1fa;
+  --er-accent-border: rgba(0, 95, 184, 0.4);
+  --er-accent-contrast: #ffffff;
+  --er-chrome: #f8f8f8;
+  --er-hover: #f0f0f0;
+  --er-input-bg: #ffffff;
+  --er-input-border: #cecece;
+  --er-accent-fill: #005fb8;
+  --er-accent-fill-hover: #0258a8;
+  --er-on-accent-fill: #ffffff;
+  --er-badge-bg: #e0e0e0;
+  --er-badge-fg: #3b3b3b;
+  --er-scrim: rgba(0, 0, 0, 0.3);
+  --er-shadow-color: rgba(0, 0, 0, 0.16);
+  --er-shadow-1: none;
+  --er-shadow-2: 0 2px 8px rgba(0, 0, 0, 0.16);
+  --er-shadow-3: 0 4px 16px rgba(0, 0, 0, 0.18);
+  --landing-grid-primary: transparent;
+  --landing-grid-secondary: transparent;
+  --landing-grid-line: transparent;
+  --landing-hero-title-gradient: none;
+  --landing-hero-logo-gradient: none;
+  --landing-hero-logo-shadow: none;
+  --landing-card-hover-shadow: var(--er-shadow-2);
+  --surface-hover-accent: var(--er-hover);
+  --ui-radius: var(--er-radius-md);
+}

@@ -11,9 +11,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <!-- Both entries, so the browser chrome follows the OS the same way the shell
-       below and the marketing site do. Values are `--er-bg-soft`. -->
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f7f8" />
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1011" />
+       below does. Values are the workbench's `--er-chrome`. -->
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f8f8f8" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#181818" />
   <!-- Application shell — no indexable content. The marketing site at / is what search engines should see. -->
   <meta name="robots" content="noindex, follow" />
   <meta name="apple-mobile-web-app-title" content="ER Visualizer" />
@@ -38,9 +38,8 @@
        Electron's file:// load, /app/ for the web deployment). -->
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- No web fonts: the workbench uses the platform's UI and code faces, as
+       VS Code does (see src/styles/workbench.css). -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -51,10 +50,10 @@
        theme as soon as the module runs.
 
        Same fallback chain as design-tokens/tokens.css and the marketing site:
-       light unless the OS explicitly asks for dark. The literals are
-       `--er-bg-soft`, which the tokens are not loaded yet to provide. */
+       light unless the OS explicitly asks for dark. The literals are the
+       workbench `--er-bg-soft`, which the tokens are not loaded yet to provide. */
     html, body {
-      background: #f7f7f8;
+      background: #ffffff;
       /* `100vh` on iOS/iPadOS Safari measures the viewport as if the browser
          chrome were hidden, so a fixed shell gets clipped. `100dvh` tracks the
          live viewport; the `100vh` line stays as the fallback for engines
@@ -62,7 +61,7 @@
       height: 100vh;
       height: 100dvh;
       overflow: hidden;
-      font-family: 'Inter', 'Segoe UI', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, sans-serif;
       /* Suppress the 350 ms double-tap-to-zoom delay so taps register at once
          and the app's own double-click handlers stay reliable on touch.
          Pinch-zoom is unaffected. */
@@ -81,12 +80,12 @@
     }
 
     @media (prefers-color-scheme: dark) {
-      html, body { background: #0f1011; }
+      html, body { background: #1f1f1f; }
     }
 
     /* An explicit choice already on <html> wins over the OS, as in the tokens. */
-    html[data-theme='light'], html[data-theme='light'] body { background: #f7f7f8; }
-    html[data-theme='dark'], html[data-theme='dark'] body { background: #0f1011; }
+    html[data-theme='light'], html[data-theme='light'] body { background: #ffffff; }
+    html[data-theme='dark'], html[data-theme='dark'] body { background: #1f1f1f; }
   </style>
 </head>
 <body>

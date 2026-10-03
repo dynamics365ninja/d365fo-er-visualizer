@@ -1,0 +1,1093 @@
+/* Panels: the right-hand side bar — search, where-used and the property
+   inspector. */
+
+.prop-grid > .prop-label:first-of-type,
+.prop-grid > .prop-label:first-of-type + .prop-value {
+  border-top: none;
+}
+
+.property-empty {
+  padding: 16px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-md);
+}
+
+.property-empty-card {
+  margin: 12px;
+  border: 1px dashed var(--er-border-strong);
+  border-radius: var(--er-radius-xl);
+  background: var(--er-surface-2);
+  line-height: 1.6;
+}
+
+.property-empty-title {
+  margin-bottom: 6px;
+  color: var(--er-text);
+  font-weight: 600;
+}
+
+/* Name on the left, kind pill pinned to the top-right corner. */
+.prop-head__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.prop-head__top .prop-head__name {
+  min-width: 0;
+}
+
+.prop-head__kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: var(--er-radius-pill);
+  border: 1px solid var(--er-border);
+  background: var(--er-surface);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  color: var(--er-text-muted);
+  white-space: nowrap;
+}
+
+.prop-head__kind svg {
+  flex-shrink: 0;
+}
+
+.prop-head__kind--model {
+  color: var(--er-model);
+  border-color: color-mix(in srgb, var(--er-model) 38%, transparent);
+}
+
+.prop-head__kind--mapping {
+  color: var(--er-mapping);
+  border-color: color-mix(in srgb, var(--er-mapping) 38%, transparent);
+}
+
+.prop-head__kind--format {
+  color: var(--er-format);
+  border-color: color-mix(in srgb, var(--er-format) 38%, transparent);
+}
+
+.prop-head__owner {
+  margin: 0;
+  font-size: var(--er-text-sm);
+  color: var(--er-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Actions sit below the property table. */
+.prop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.prop-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--er-radius-md);
+  border: 1px solid var(--er-border);
+  background: var(--er-surface);
+  color: var(--er-text-muted);
+  font-family: inherit;
+  font-size: var(--er-text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  height: var(--wb-control-h);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.prop-action:hover {
+  background: var(--er-accent-soft);
+  border-color: var(--er-accent-border);
+  color: var(--er-accent);
+}
+
+.property-section-title {
+  display: flex;
+  align-items: center;
+  padding: 7px 10px;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--er-text-muted);
+  background: var(--er-surface-2);
+  border-bottom: 1px solid var(--er-border);
+}
+
+.focused-node-tab-body .property-inspector {
+  padding: 0;
+}
+
+.search-panel {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.search-panel * {
+  box-sizing: border-box;
+}
+
+/* ── New flat layout ── */
+.search-panel__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 10px 10px 0;
+  gap: 8px;
+}
+
+.search-panel__field {
+  flex-shrink: 0;
+}
+
+.search-panel__kpis {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.search-panel__kpi {
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  color: var(--er-text-muted);
+  background: color-mix(in srgb, var(--er-accent) 10%, var(--bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--er-accent) 18%, var(--border-color));
+  border-radius: var(--er-radius-pill);
+  padding: 2px 9px;
+}
+
+.search-panel__hint {
+  font-size: var(--er-text-sm);
+  color: var(--er-text-muted);
+  line-height: 1.5;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.search-panel__results-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  padding: 4px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.search-panel__results-count {
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  color: var(--er-text-muted);
+  letter-spacing: 0.02em;
+  margin-right: auto;
+}
+
+.search-panel__results-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.search-panel__results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 12px;
+}
+
+.search-panel__empty {
+  font-size: var(--er-text-md);
+  color: var(--er-text-muted);
+  padding: 16px 0;
+  text-align: center;
+}
+
+/* ── Search hit card ── */
+.search-hit {
+  display: flex;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  color: var(--er-text);
+  font-family: inherit;
+  transition: background 0.1s ease, border-color 0.1s ease;
+  min-width: 0;
+}
+
+.search-hit:hover {
+  border-left-color: var(--er-accent);
+}
+
+.search-hit:disabled,
+.search-hit--no-nav {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.search-hit__body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  width: 100%;
+}
+
+.search-hit__row1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Kind tag — one recipe, hue supplied per variant. */
+.search-hit__tag {
+  flex-shrink: 0;
+  font-size: var(--er-text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: var(--er-radius-sm);
+  white-space: nowrap;
+  font-family: inherit;
+  background: var(--er-surface-2);
+  color: var(--er-text-muted);
+  border: 1px solid var(--er-border);
+}
+
+.search-hit__tag--table,
+.search-hit__tag--model {
+  color: var(--er-model);
+  border-color: color-mix(in srgb, var(--er-model) 38%, transparent);
+}
+
+.search-hit__tag--field,
+.search-hit__tag--format {
+  color: var(--er-mapping);
+  border-color: color-mix(in srgb, var(--er-mapping) 38%, transparent);
+}
+
+.search-hit__tag--enum {
+  color: var(--er-model);
+  border-color: color-mix(in srgb, var(--er-model) 38%, transparent);
+}
+
+.search-hit__tag--class,
+.search-hit__tag--edt {
+  color: var(--er-info);
+  border-color: color-mix(in srgb, var(--er-info) 38%, transparent);
+}
+
+.search-hit__tag--formula,
+.search-hit__tag--visibility {
+  color: var(--er-format);
+  border-color: color-mix(in srgb, var(--er-format) 38%, transparent);
+}
+
+.search-hit__tag--guid,
+.search-hit__tag--formatting,
+.search-hit__tag--property {
+  color: var(--er-text-subtle);
+}
+
+.wu-ref-leaf {
+  flex: 1 1 auto;
+  font-family: var(--font-mono);
+}
+
+.search-hit__expr {
+  font-family: var(--font-mono);
+  font-size: var(--er-text-xs);
+  color: var(--er-text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-hit__arrow {
+  flex-shrink: 0;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-md);
+  opacity: 0;
+  margin-left: auto;
+  transition: opacity 0.1s ease;
+}
+
+.search-hit__tab {
+  flex-shrink: 0;
+  font-size: var(--er-text-2xs);
+  color: var(--er-text-muted);
+  opacity: 0.75;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.search-hit:hover .search-hit__tab {
+  opacity: 0;
+}
+
+.search-hit:hover .search-hit__arrow {
+  opacity: 1;
+}
+
+/* ── Where-Used reference row styles ── */
+.wu-ref-breadcrumb {
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wu-ref-bc-sep {
+  margin: 0 3px;
+  color: var(--er-text-subtle);
+}
+
+.wu-ref-row--active {
+  background: var(--er-accent-soft) !important;
+  border-left-color: var(--er-accent);
+}
+
+.search-result-group-header[aria-expanded='false'] {
+  border-bottom: none;
+}
+
+.search-result-group-header:hover {
+  background: var(--er-surface-3);
+}
+
+.search-result-group-icon {
+  flex: none;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-lg);
+}
+
+.search-result-group-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+/* Names the data model a mapping binds to, so mappings of unrelated models
+   stay tellable apart once the search reach widens to "All". */
+.search-result-group-model {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: var(--er-radius-sm);
+  border: 1px solid var(--border-subtle, var(--border));
+  background: var(--bg-tertiary);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+}
+
+.search-result-group-body {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.search-cat {
+  --search-cat-color: var(--er-text-muted);
+  display: flex;
+  flex-direction: column;
+}
+
+.search-cat--structure {
+  --search-cat-color: var(--er-accent);
+}
+
+.search-cat--bindings {
+  --search-cat-color: var(--er-success);
+}
+
+.search-cat--expressions {
+  --search-cat-color: var(--er-model);
+}
+
+.search-cat--datasources {
+  --search-cat-color: var(--er-warning);
+}
+
+.search-cat--references {
+  --search-cat-color: #64748b;
+}
+
+.search-cat__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 3px 12px;
+  background: color-mix(in srgb, var(--search-cat-color) 8%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+}
+
+.search-cat:first-child .search-cat__header {
+  border-top: 0;
+}
+
+.search-cat__marker {
+  width: 3px;
+  align-self: stretch;
+  min-height: 12px;
+  background: var(--search-cat-color);
+}
+
+.search-cat__title {
+  font-size: var(--er-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--search-cat-color) 78%, var(--er-text));
+}
+
+.search-cat__count {
+  margin-left: auto;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  color: var(--er-text-muted);
+  background: color-mix(in srgb, var(--search-cat-color) 14%, transparent);
+  border-radius: var(--er-radius-sm);
+  padding: 0 6px;
+  line-height: 15px;
+}
+
+.search-cat__rows {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The rows sit inside a tinted section, so indent them to keep the
+   section marker readable as the left edge of the group. */
+/* Tint every row with its section colour so the kind of a hit reads at a
+   glance and the per-row type chip can be dropped. `--search-cat-color` is
+   inherited from the section, and mixing against `transparent` keeps the
+   wash equally light on both themes. The left border is widened to match
+   the section marker, so the two line up into one continuous rail. */
+.search-cat__rows .search-hit {
+  padding-left: 18px;
+  background: color-mix(in srgb, var(--search-cat-color) 7%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--search-cat-color) 32%, transparent);
+}
+
+.search-cat__rows .search-hit:hover {
+  background: color-mix(in srgb, var(--search-cat-color) 17%, transparent);
+  border-left-color: var(--search-cat-color);
+}
+
+/* The tint already separates the rows, so the divider only needs to hint.
+   Specificity has to clear the generic group divider defined further down. */
+.search-result-group-body .search-cat__rows .search-hit + .search-hit {
+  border-top-color: color-mix(in srgb, var(--search-cat-color) 20%, transparent);
+}
+
+.search-panel__reach {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  padding: 0 0 6px;
+}
+
+/* Pushes the expand slider to the far edge, whatever sits to its left. */
+.search-panel__reach .search-panel__results-actions {
+  margin-left: auto;
+}
+
+/* Divider between items */
+.search-result-group-body .search-hit + .search-hit {
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);
+}
+
+.wu-ref-breadcrumb {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  min-width: 0;
+}
+
+.wu-ref-bc-seg {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.wu-ref-bc-sep {
+  opacity: 0.5;
+  font-weight: 700;
+  padding: 0 1px;
+}
+
+.wu-ref-leaf {
+  font-weight: 700;
+  color: var(--er-text);
+  font-size: var(--er-text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.property-section {
+  border: 1px solid var(--er-border);
+  overflow: hidden;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.wu-empty {
+  padding: 8px 10px;
+  font-size: var(--er-text-sm);
+  color: var(--er-text-muted);
+  font-style: italic;
+  background: var(--bg-primary);
+  border-radius: var(--er-radius-sm) !important;
+}
+
+/* Highlight of the matched search term inside results */
+.search-highlight {
+  color: var(--er-warning, inherit);
+  padding: 0 2px;
+  border-radius: var(--er-radius-sm);
+  font-weight: 700;
+  background: color-mix(in srgb, var(--er-accent) 28%, transparent) !important;
+  box-shadow: none !important;
+}
+
+.search-panel {
+  background-image: none !important;
+  padding: 8px !important;
+  background: var(--er-chrome) !important;
+}
+
+.search-result-group {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--border-color) 74%, transparent);
+  overflow: hidden;
+  /* accent left bar when expanded */
+  border-left: 3px solid color-mix(in srgb, var(--er-accent) 30%, var(--border-color));
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-color: var(--ui-stroke-1) !important;
+  background: var(--ui-surface-0) !important;
+}
+
+/* Search + Where-used redesign */
+.search-example-board {
+  border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
+  border-radius: var(--er-radius-sm);
+  background: color-mix(in srgb, var(--bg-primary) 80%, transparent);
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.search-example-board__title {
+  font-size: var(--er-text-sm);
+  font-weight: 700;
+  color: var(--er-text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.search-example-board__group {
+  display: grid;
+  gap: 6px;
+}
+
+.search-example-board__group-title {
+  font-size: var(--er-text-sm);
+  color: var(--er-text-muted);
+  font-weight: 600;
+}
+
+/* One preset per line: these read as questions, and a wrapped pill cloud
+   makes a sentence hard to scan. */
+.search-example-board__chips {
+  display: grid;
+  gap: 3px;
+}
+
+.search-example-chip {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: var(--er-radius-sm);
+  background: transparent;
+  color: var(--er-text);
+  padding: 5px 8px;
+  cursor: pointer;
+  max-width: 100%;
+}
+
+.search-example-chip:hover {
+  border-color: color-mix(in srgb, var(--er-accent) 34%, var(--border-color));
+  background: color-mix(in srgb, var(--er-surface-3) 78%, transparent);
+}
+
+.search-example-chip__label {
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+/* The query the preset stands for, kept visible so the mapping from question
+   to search term is learnable rather than magic. */
+.search-example-chip__query {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--er-text-xs);
+  color: var(--er-text-muted);
+  background: color-mix(in srgb, var(--border-color) 40%, transparent);
+  border-radius: var(--er-radius-sm);
+  padding: 1px 5px;
+  white-space: nowrap;
+  font-weight: 400;
+}
+
+.search-example-chip:hover .search-example-chip__query {
+  color: var(--er-text);
+  background: color-mix(in srgb, var(--er-accent) 20%, transparent);
+}
+
+/* Grouping by config file */
+.search-results {
+  min-width: 0;
+  flex-direction: column;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.search-scope-toggle {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: var(--wb-control-h);
+  padding: 1px;
+  gap: 1px;
+  border: 1px solid var(--er-input-border);
+  border-radius: var(--er-radius-md);
+  background: transparent;
+}
+
+.search-scope-toggle__btn {
+  background: transparent;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  cursor: pointer;
+  border: 0;
+  box-shadow: none;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--er-radius-sm);
+  font-weight: 400;
+}
+
+.search-scope-toggle__btn.active {
+  background: color-mix(in srgb, var(--er-accent) 24%, transparent);
+  color: var(--er-text);
+  box-shadow: none;
+}
+
+@media (max-width: 880px) {
+  .search-example-chip {
+    max-width: 100%;
+  }
+
+}
+
+.wu-ref-row--active {
+  border-color: color-mix(in srgb, var(--er-accent) 58%, var(--border-color));
+  background: color-mix(in srgb, var(--er-accent) 11%, transparent);
+}
+
+/* Enhanced empty state */
+.property-empty-icon-stack {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 8px;
+}
+
+.property-empty-hint {
+  font-size: var(--er-text-md);
+  color: var(--er-text-muted);
+  opacity: 0.7;
+  line-height: 1.4;
+  text-align: center;
+  max-width: 180px;
+}
+
+.wu-ref-row--active {
+  animation: ref-row-activate 200ms ease;
+}
+
+/* ── PropertyInspector empty state tips ── */
+.property-empty-tips {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  max-width: 200px;
+}
+
+.property-empty-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--er-text-xs);
+}
+
+.property-empty-tip-key {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: var(--er-radius-sm);
+  background: rgba(128,128,128,0.18);
+  border: 1px solid rgba(128,128,128,0.28);
+  font-family: var(--font-mono);
+  font-size: var(--er-text-2xs);
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--er-text);
+}
+
+.property-empty-tip-label {
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+}
+
+.property-inspector {
+  display: flex;
+  flex-direction: column;
+  background-image: none !important;
+  padding: 10px;
+  gap: 10px;
+  background: var(--er-chrome) !important;
+}
+
+/* ── Inspector header: what this is, where it lives, what you can do with it ── */
+/* Property inspector: a VS Code properties view — label / value lines with
+   hairlines between them, no boxed table and no header card. */
+.prop-head {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  padding: 10px 12px;
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--er-border);
+  box-shadow: none;
+}
+
+.prop-head__name {
+  margin: 0;
+  font-family: var(--er-font-display);
+  line-height: 1.25;
+  color: var(--er-text);
+  word-break: break-word;
+  font-size: var(--er-text-lg);
+  font-weight: 650;
+  letter-spacing: -0.005em;
+}
+
+/* Property grid
+   
+   Property rows: label left, value right, hairline between rows — no filled
+   cells or grid gaps pretending to be a spreadsheet. */
+.prop-grid {
+  display: grid;
+  grid-template-columns: minmax(88px, 34%) 1fr;
+  overflow: hidden;
+  font-size: var(--px-text);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.prop-grid .prop-label {
+  line-height: 1.35;
+  border-top: 1px solid var(--er-border);
+  padding: 6px 10px;
+  font-size: var(--px-text-sm);
+  font-weight: 500;
+  color: var(--er-text-muted);
+  background: color-mix(in srgb, var(--er-surface-2) 55%, transparent);
+}
+
+.prop-grid .prop-value {
+  color: var(--er-text);
+  word-break: break-word;
+  min-width: 0;
+  line-height: 1.45;
+  border-top: 1px solid var(--er-border);
+  padding: 6px 10px;
+  font-size: var(--px-text);
+}
+
+.property-card {
+  border: 1px solid var(--er-border);
+  overflow: hidden;
+  background: var(--er-surface);
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-radius: var(--er-radius-md);
+}
+
+.property-card-title {
+  display: flex;
+  align-items: center;
+  padding: 7px 10px;
+  background: var(--er-surface-2);
+  border-bottom: 1px solid var(--er-border);
+  font-size: var(--px-caption);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--er-text-muted);
+}
+
+/* Result rows read as a dense list, not as cards: square edges let the
+   coloured category rail on the left run unbroken down the section. */
+.search-hit {
+  border-radius: 0;
+  font-size: var(--px-text);
+}
+
+.search-hit:hover {
+  background: var(--er-surface-2);
+}
+
+.search-hit__location {
+  flex: 1 1 auto;
+  /* Keep the identifier readable in a narrow side panel — it is the reason the
+     row exists, so it wins space over the kind tag and the tab hint. */
+  min-width: 6rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--px-text-sm);
+  color: var(--er-text-muted);
+}
+
+.search-result-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 9px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+  cursor: pointer;
+  min-width: 0;
+  text-align: left;
+  transition: background 0.12s ease;
+  background-image: none !important;
+  background: var(--ui-surface-1) !important;
+  border-color: var(--ui-stroke-1) !important;
+  min-height: 30px;
+  font-size: var(--px-caption);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--er-text-muted);
+}
+
+.search-result-group-count {
+  flex: none;
+  padding: 1px 7px;
+  min-width: 20px;
+  text-align: center;
+  background: color-mix(in srgb, var(--er-text) 8%, transparent);
+  color: var(--er-text);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  border-radius: 9px;
+}
+
+@media (pointer: coarse) {
+  .app-shell .search-hit {
+    min-height: 40px;
+  }
+
+  /* Scope/reach pills sit in a dense header row, so they get a touch target
+     without inheriting the generic button sizing that would wrap the row. */
+  .app-shell .search-scope-toggle__btn {
+    min-height: 30px;
+    padding: 5px 12px;
+    font-size: var(--er-text-sm);
+  }
+
+  .app-shell .search-hit__arrow,
+  .app-shell .search-hit__tab {
+    opacity: 1;
+  }
+
+}
+
+/* The search reach filter, folded into the results bar as one toggle. */
+.search-reach-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  height: var(--wb-control-h);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.search-reach-toggle:hover {
+  border-color: var(--er-border-strong);
+  color: var(--er-text);
+}
+
+.search-reach-toggle.active {
+  border-color: var(--er-accent-border);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+/* How many hits the related-only filter is holding back. */
+.search-reach-toggle__badge {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Search results come a page at a time; the next page is one click away. */
+.search-panel__more {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px dashed var(--er-border-strong);
+  border-radius: var(--er-radius-md);
+  background: transparent;
+  color: var(--er-accent);
+  font: inherit;
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.search-panel__more:hover {
+  background: var(--er-accent-soft);
+  border-color: var(--er-accent-border);
+}
+
+.app-shell .search-scope-toggle__btn:hover:not(.active) {
+  background: var(--er-hover);
+  color: var(--er-text);
+}
+
+.app-shell .search-scope-toggle__btn.active {
+  background: var(--er-surface-3);
+  color: var(--er-text);
+}
+
+.app-shell .prop-label {
+  background: transparent;
+  color: var(--er-text-muted);
+  border-color: var(--er-border);
+}
+
+.app-shell .prop-value {
+  border-color: var(--er-border);
+}
+
+.app-shell .prop-action {
+  background: transparent;
+  border-color: var(--er-input-border);
+}
+
+.app-shell .prop-action:hover {
+  background: var(--er-hover);
+}
+
+/* Search: the examples are a list in the side bar, not a card on it. */
+.app-shell .search-example-board {
+  background: transparent;
+  border: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.app-shell .search-example-chip {
+  border-color: transparent;
+}
+
+.app-shell .search-example-chip:hover {
+  background: var(--er-hover);
+}
+
+.app-shell .search-example-chip__query {
+  background: var(--er-badge-bg);
+  color: var(--er-badge-fg);
+}
+
+.app-shell .search-scope-toggle__btn {
+  background: transparent;
+  color: var(--er-text-muted);
+  min-height: 0;
+}
+
+@keyframes ref-row-activate {
+  0%   { background-color: transparent; }
+  40%  { background-color: color-mix(in srgb, var(--er-accent) 20%, transparent); }
+  100% { background-color: color-mix(in srgb, var(--er-accent) 10%, transparent); }
+}
