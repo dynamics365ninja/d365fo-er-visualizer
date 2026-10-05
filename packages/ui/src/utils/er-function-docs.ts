@@ -3,7 +3,7 @@
  * Article slugs follow `er-functions-<category>-<name>`; the list mirrors
  * the articles listed in the ER function categories on Learn.
  */
-import type { Locale } from '../i18n';
+import { getTranslations, type Locale } from '../i18n';
 
 const LEARN_BASE = 'https://learn.microsoft.com';
 const LEARN_PATH = 'dynamics365/fin-ops-core/dev-itpro/analytics';
@@ -118,8 +118,7 @@ const ER_FUNCTION_DOC_SLUGS: Record<string, string> = {
 };
 
 function learnUrl(slug: string, locale: Locale): string {
-  const culture = locale === 'cs' ? 'cs-cz' : 'en-us';
-  return `${LEARN_BASE}/${culture}/${LEARN_PATH}/${slug}`;
+  return `${LEARN_BASE}/${getTranslations(locale).learnCulture}/${LEARN_PATH}/${slug}`;
 }
 
 /** The Learn page describing `name`, or `undefined` when Learn has none. */

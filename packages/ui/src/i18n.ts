@@ -269,6 +269,8 @@ export interface Translations {
   lineageShowInPath: (name: string) => string;
   lineageOpenSegment: (path: string) => string;
   erFunctionOpenDocs: (name: string) => string;
+  /** Microsoft Learn culture segment of documentation links. */
+  learnCulture: string;
   lineagePeekTitle: string;
   lineagePeekEmpty: string;
   lineagePeekClose: string;
@@ -1177,6 +1179,7 @@ const cs: Translations = {
   lineageShowInPath: (name: string) => `Ukázat ${name} v cestě hodnoty`,
   lineageOpenSegment: (path: string) => `Zobrazit, co vrací ${path}`,
   erFunctionOpenDocs: (name: string) => `Otevřít popis funkce ${name} na Microsoft Learn`,
+  learnCulture: 'cs-cz',
   lineagePeekTitle: 'Vybraná část výrazu',
   lineagePeekEmpty: 'Tato část výrazu nevede k žádnému datovému zdroji — je to jen mezikrok v cestě.',
   lineagePeekClose: 'Zpět na celý výraz',
@@ -2101,6 +2104,7 @@ const en: Translations = {
   lineageShowInPath: (name: string) => `Show ${name} in the value path`,
   lineageOpenSegment: (path: string) => `Show what ${path} returns`,
   erFunctionOpenDocs: (name: string) => `Open the ${name} function reference on Microsoft Learn`,
+  learnCulture: 'en-us',
   lineagePeekTitle: 'Selected part of the expression',
   lineagePeekEmpty: 'This part of the path does not lead to a data source of its own — it is only an intermediate hop.',
   lineagePeekClose: 'Back to the whole expression',
