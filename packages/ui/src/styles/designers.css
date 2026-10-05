@@ -3380,3 +3380,26 @@
 .app-shell .fmt-bind-card.is-focused {
   background: color-mix(in srgb, var(--er-accent) 10%, var(--er-surface-2));
 }
+
+/* By-model layout: same ruled, tinted rows as the model mapping. Its rows sit
+   in `.mm-tree-node`, not the mapping's virtualised `.mm-flat-row`, so the
+   mapping rules above never reached them and the fields ran together. */
+.app-shell .mm-tree .mm-tree-node > .mm-tree-row {
+  border: 0;
+  border-bottom: 1px solid var(--er-border);
+}
+
+/* Bound fields indent by depth like their parent branch. */
+.app-shell .mm-tree .mm-tree-node > .mm-tree-row.mm-binding-row {
+  margin-left: calc(12px + var(--mm-indent));
+  padding: 6px 10px;
+}
+
+/* Only the top-level nodes are tinted; everything under them is ruled off. */
+.app-shell .mm-tree > .mm-tree-node > .mm-tree-row {
+  background: var(--er-surface-2);
+}
+
+.app-shell .mm-tree .mm-tree-node > .mm-tree-row:hover {
+  background: color-mix(in srgb, var(--er-text) 8%, var(--er-surface));
+}
