@@ -58,6 +58,7 @@ import { useResizableDialog } from '../utils/resizable-dialog';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { resolveLabel, buildLabelPool, collectLabelTranslations, getUserLanguageTag } from '../utils/label-resolver';
 import { useCoarsePointer } from '../utils/responsive';
+import { erFunctionDocUrl, isDocumentedErFunction } from '../utils/er-function-docs';
 import type { ERLabel } from '@er-visualizer/core';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -364,7 +365,11 @@ export function tokenizeERExpr(expr: string): ERToken[] {
       const name = expr.slice(i, j);
       const upper = name.toUpperCase();
 
-      if (ER_FUNCTIONS.has(upper)) {
+      // Functions outside the curated set count only when called, so a
+      // datasource named e.g. `List` or `Text` stays a datasource.
+      let afterName = j;
+      while (afterName < n && /\s/.test(expr[afterName])) afterName++;
+      if (ER_FUNCTIONS.has(upper) || (expr[afterName] === '(' && isDocumentedErFunction(name))) {
         tokens.push({ kind: 'func', raw: name }); i = j; continue;
       }
       if (ER_KEYWORDS.has(name.toLowerCase())) {
@@ -683,6 +688,23 @@ export function ExpressionView({ expr, configIndex, onSegment, activeSegment, le
           func: 'er-token-func', op: 'er-token-op', str: 'er-token-str',
           num: 'er-token-num', paren: 'er-token-paren', sep: 'er-token-sep',
         };
+        if (tok.kind === 'func') {
+          const docUrl = erFunctionDocUrl(tok.raw, getLocale());
+          if (docUrl) {
+            return (
+              <a
+                key={idx}
+                className="er-token-func er-token-func--doc"
+                href={docUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={t.erFunctionOpenDocs(tok.raw.toUpperCase())}
+              >
+                {tok.raw}
+              </a>
+            );
+          }
+        }
         const c = cls[tok.kind];
         return c
           ? <span key={idx} className={c}>{tok.raw}</span>

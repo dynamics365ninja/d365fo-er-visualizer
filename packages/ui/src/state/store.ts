@@ -126,8 +126,14 @@ export interface FnoIngestItem {
   finishedAt?: number;
 }
 
+/** The steps of the ingest dialog, in the order a run goes through them. */
+export const FNO_INGEST_PHASES = ['prepare', 'dm', 'fm', 'mm', 'finalize'] as const;
+export type FnoIngestPhase = typeof FNO_INGEST_PHASES[number];
+
 export interface FnoIngestProgress {
   active: boolean;
+  /** Furthest phase reached; it never moves back within a run. */
+  phase: FnoIngestPhase;
   startedAt: number | null;
   finishedAt: number | null;
   items: FnoIngestItem[];
@@ -254,7 +260,7 @@ export interface AppState {
   closeSplit: () => void;
   rebuildDerivedState: () => void;
   setShowTechnicalDetails: (show: boolean) => void;
-  setFnoIngestStatus: (status: string) => void;
+  setFnoIngestStatus: (status: string, phase?: FnoIngestPhase) => void;
   /** Re-issue the configurations array so label-dependent views re-resolve against the (grown) harvested pool. */
   refreshLabelPool: () => void;
   /**
@@ -381,7 +387,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeWhereUsedRefKey: null,
   showTechnicalDetails: readStoredTechnicalDetails(),
   fnoIngestStatus: '',
-  fnoIngestProgress: { active: false, startedAt: null, finishedAt: null, items: [] },
+  fnoIngestProgress: { active: false, phase: 'prepare', startedAt: null, finishedAt: null, items: [] },
   landingRequest: null,
   requestLanding: (tab) => set(state => ({ landingRequest: { tab, version: (state.landingRequest?.version ?? 0) + 1 } })),
   themeMode: initialThemeMode,
@@ -627,6 +633,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       fnoIngestProgress: {
         active: true,
+        phase: 'prepare',
         startedAt: Date.now(),
         finishedAt: null,
         items: items.map(i => ({ ...i, status: 'queued' as const })),
@@ -892,7 +899,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ showTechnicalDetails: show });
   },
 
-  setFnoIngestStatus: (status: string) => set({ fnoIngestStatus: status }),
+  setFnoIngestStatus: (status: string, phase?: FnoIngestPhase) => {
+    const progress = get().fnoIngestProgress;
+    // Late passes (a DataModel found through a mapping, inherited labels)
+    // revisit earlier kinds of work; the stepper still only moves forward.
+    const advances = phase && progress.active
+      && FNO_INGEST_PHASES.indexOf(phase) > FNO_INGEST_PHASES.indexOf(progress.phase);
+    set(advances
+      ? { fnoIngestStatus: status, fnoIngestProgress: { ...progress, phase } }
+      : { fnoIngestStatus: status });
+  },
 
   refreshLabelPool: () => set(state => ({ configurations: [...state.configurations] })),
 

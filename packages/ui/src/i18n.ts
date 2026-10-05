@@ -268,6 +268,7 @@ export interface Translations {
   lineageCollapse: string;
   lineageShowInPath: (name: string) => string;
   lineageOpenSegment: (path: string) => string;
+  erFunctionOpenDocs: (name: string) => string;
   lineagePeekTitle: string;
   lineagePeekEmpty: string;
   lineagePeekClose: string;
@@ -317,7 +318,6 @@ export interface Translations {
   importNoLinkedMappings: string;
   // Landing page – hero
   landingBadge: string;
-  landingTitle: string;
   landingSub: string;
   landingDocsLink: string;
   landingHomeLinkLabel: string;
@@ -866,6 +866,11 @@ export interface Translations {
   mmDesignerHint: string;
   mmRuleCount: (n: number) => string;
   mmBranchBindingCount: (n: number) => string;
+  mmBranchUnmappedCount: (n: number) => string;
+  mmScopeAria: string;
+  mmScopeLabels: { all: string; mapped: string; unmapped: string };
+  mmScopeNeedsModel: string;
+  mmUnmappedField: string;
 
   // ─── Search panel (SearchPanel.tsx) ───
   searchExampleSections: { mapping: string; calc: string; output: string };
@@ -1171,6 +1176,7 @@ const cs: Translations = {
   lineageCollapse: 'Sbalit',
   lineageShowInPath: (name: string) => `Ukázat ${name} v cestě hodnoty`,
   lineageOpenSegment: (path: string) => `Zobrazit, co vrací ${path}`,
+  erFunctionOpenDocs: (name: string) => `Otevřít popis funkce ${name} na Microsoft Learn`,
   lineagePeekTitle: 'Vybraná část výrazu',
   lineagePeekEmpty: 'Tato část výrazu nevede k žádnému datovému zdroji — je to jen mezikrok v cestě.',
   lineagePeekClose: 'Zpět na celý výraz',
@@ -1222,7 +1228,6 @@ const cs: Translations = {
 
   // Landing page
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',
-  landingTitle: 'D365FO ER Visualizer',
   landingSub: 'Načtěte ER konfigurace z disku nebo přímo z prostředí Finance & Operations a začněte trasovat vazby formátů přes mapování až ke zdrojové tabulce, třídě nebo výčtu.',
   landingDocsLink: 'Dokumentace',
   landingHomeLinkLabel: 'Zpět na úvodní stránku D365FO ER Visualizer',
@@ -1790,6 +1795,11 @@ const cs: Translations = {
   mmDesignerHint: 'Klikněte na řádek pro vlastnosti, na výraz pro rozpad hodnoty',
   mmRuleCount: (n: number) => `Počet pravidel: ${n}`,
   mmBranchBindingCount: (n: number) => `Počet vazeb v této větvi: ${n}`,
+  mmBranchUnmappedCount: (n: number) => `Nenamapovaná pole v této větvi: ${n}`,
+  mmScopeAria: 'Zobrazená pole datového modelu',
+  mmScopeLabels: { all: 'Vše', mapped: 'Namapované', unmapped: 'Nenamapované' },
+  mmScopeNeedsModel: 'Nenamapovaná pole jsou vidět po načtení datového modelu.',
+  mmUnmappedField: 'nenamapováno',
 
   // ─── Search panel (SearchPanel.tsx) ───
   searchExampleSections: { mapping: 'Odkud se berou data', calc: 'Výpočty a podmínky', output: 'Podoba výstupu' },
@@ -2090,6 +2100,7 @@ const en: Translations = {
   lineageCollapse: 'Collapse',
   lineageShowInPath: (name: string) => `Show ${name} in the value path`,
   lineageOpenSegment: (path: string) => `Show what ${path} returns`,
+  erFunctionOpenDocs: (name: string) => `Open the ${name} function reference on Microsoft Learn`,
   lineagePeekTitle: 'Selected part of the expression',
   lineagePeekEmpty: 'This part of the path does not lead to a data source of its own — it is only an intermediate hop.',
   lineagePeekClose: 'Back to the whole expression',
@@ -2139,7 +2150,6 @@ const en: Translations = {
 
   // Landing page
   landingBadge: 'D365 Finance & Operations · Electronic Reporting',
-  landingTitle: 'D365FO ER Visualizer',
   landingSub: 'Load ER configurations from disk or straight from a Finance & Operations environment, then trace format bindings through the model mapping down to the source table, class, or enum.',
   landingDocsLink: 'Documentation',
   landingHomeLinkLabel: 'Back to the D365FO ER Visualizer homepage',
@@ -2707,6 +2717,11 @@ const en: Translations = {
   mmDesignerHint: 'Click a row for properties, the formula for its value breakdown',
   mmRuleCount: (n: number) => `Number of rules: ${n}`,
   mmBranchBindingCount: (n: number) => `Number of bindings in this branch: ${n}`,
+  mmBranchUnmappedCount: (n: number) => `Unmapped fields in this branch: ${n}`,
+  mmScopeAria: 'Data model fields shown',
+  mmScopeLabels: { all: 'Show all', mapped: 'Show mapped', unmapped: 'Show unmapped' },
+  mmScopeNeedsModel: 'Load the data model to see its unmapped fields.',
+  mmUnmappedField: 'unmapped',
 
   // ─── Search panel (SearchPanel.tsx) ───
   searchExampleSections: { mapping: 'Where the data comes from', calc: 'Calculations and conditions', output: 'Shape of the output' },

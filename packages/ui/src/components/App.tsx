@@ -35,12 +35,30 @@ import { Toolbar } from './Toolbar';
  * configuration is open. Neither belongs in the bundle that renders the
  * landing page.
  */
+const loadDesignerView = () => import('./DesignerView');
+const loadSearchPanel = () => import('./SearchPanel');
 const DesignerView = React.lazy(() =>
-  import('./DesignerView').then(m => ({ default: m.DesignerView })),
+  loadDesignerView().then(m => ({ default: m.DesignerView })),
 );
 const SearchPanel = React.lazy(() =>
-  import('./SearchPanel').then(m => ({ default: m.SearchPanel })),
+  loadSearchPanel().then(m => ({ default: m.SearchPanel })),
 );
+
+/**
+ * Fetch the split chunks once the landing page is idle. The files then come
+ * from the build the page was loaded with — a deploy in between would
+ * otherwise leave the first designer open asking for files that are gone —
+ * and opening a configuration no longer waits on the download.
+ */
+function prefetchWorkspaceChunks(): () => void {
+  const run = () => { void loadDesignerView().catch(() => {}); void loadSearchPanel().catch(() => {}); };
+  if (typeof window.requestIdleCallback === 'function') {
+    const id = window.requestIdleCallback(run, { timeout: 4000 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = window.setTimeout(run, 1500);
+  return () => window.clearTimeout(id);
+}
 import { LandingPage } from './LandingPage';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ToastHost } from './ToastHost';
@@ -360,6 +378,7 @@ export function App() {
   const [rightFullscreen, setRightFullscreen] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const landingRequest = useAppStore(s => s.landingRequest);
+  useEffect(() => prefetchWorkspaceChunks(), []);
   useEffect(() => {
     if (landingRequest) setShowLanding(true);
   }, [landingRequest]);

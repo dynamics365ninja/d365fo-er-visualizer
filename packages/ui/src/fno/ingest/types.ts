@@ -14,7 +14,7 @@ import type {
   ErSolutionSummary,
   FnoConnection,
 } from '@er-visualizer/fno-client';
-import type { FnoIngestItem, ToastKind } from '../../state/store';
+import type { FnoIngestItem, FnoIngestPhase, ToastKind } from '../../state/store';
 
 /** The F&O calls the pipeline makes — `fnoSession` in the app. */
 export interface FnoIngestClient {
@@ -52,8 +52,12 @@ export type FnoIngestQueuedItem = Pick<FnoIngestItem, 'key' | 'name' | 'kind' | 
 /** Where the pipeline reports progress — the ingest dialog in the app. */
 export interface FnoIngestProgressSink {
   begin(items: FnoIngestQueuedItem[]): void;
-  /** One-line phase description; `''` once the run is over. */
-  status(text: string): void;
+  /**
+   * One-line description of the current work; `''` once the run is over.
+   * `phase` moves the dialog's stepper — named by the pipeline, since the text
+   * alone ("formats and mappings", "referenced DataModels") misleads a guess.
+   */
+  status(text: string, phase?: FnoIngestPhase): void;
   updateItem(item: Pick<FnoIngestItem, 'key' | 'name' | 'kind'> & Partial<FnoIngestItem>): void;
   /** The download log as it stands (rows are also updated by the client). */
   items(): readonly FnoIngestItem[];

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, nativeTheme } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, nativeTheme, shell } from 'electron';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -41,6 +41,21 @@ function getRendererEntryUrl(): string {
  * which would let a navigated-to local page drive the IPC surface. Query and
  * hash are ignored (the SPA may use them); the path must match.
  */
+/**
+ * Hosts the renderer links out to: the ER function reference on Microsoft
+ * Learn (drill-down) and the project README (landing page).
+ */
+const EXTERNAL_REFERENCE_HOSTS = new Set(['learn.microsoft.com', 'github.com']);
+
+function isExternalReferenceUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'https:' && EXTERNAL_REFERENCE_HOSTS.has(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 function isTrustedRendererUrl(raw: string): boolean {
   let url: URL;
   try {
@@ -115,7 +130,12 @@ function createWindow() {
   win.webContents.on('will-navigate', (event, url) => {
     if (!isTrustedRendererUrl(url)) event.preventDefault();
   });
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // A `target="_blank"` link to a known reference site opens in the system
+  // browser; anything else stays blocked.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (isExternalReferenceUrl(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
 
   if (isDev) {
     win.loadURL(DEV_SERVER_ORIGIN);

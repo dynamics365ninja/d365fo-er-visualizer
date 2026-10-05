@@ -1,6 +1,7 @@
 import './index.css';
 import { applyResolvedTheme, readThemeMode, resolveThemeMode } from './theme';
 import { installFnoDebugHandle } from './fno/debug';
+import { reloadOnceForChunkError } from './utils/chunk-load-error';
 
 /* Before anything else: the store chunk is fetched asynchronously below, and
    until `data-theme` is on <html> the CSS falls back to dark. Resolve it here
@@ -10,6 +11,14 @@ applyResolvedTheme(resolveThemeMode(readThemeMode()));
 /* `window.__erFnoDebug` from the very first paint: it is how anyone checks
    whether the build they are looking at can record F&O diagnostics at all. */
 installFnoDebugHandle();
+
+/* Vite reports a chunk (or its stylesheet) that cannot be fetched here before
+   the import rejects. Most often a deploy replaced the hashed files under an
+   open tab; reload once to pick up the new build. Left alone, the import
+   rejects and the ErrorBoundary explains it. */
+window.addEventListener('vite:preloadError', event => {
+  if (reloadOnceForChunkError()) event.preventDefault();
+});
 
 function formatRuntimeError(value: unknown): string {
   if (value instanceof Error) {

@@ -1,5 +1,5 @@
 /**
- * The letters of `public/favicon.svg` — keep the two in step. The gradient reads
+ * The letters of `public/favicon.svg` and the app's `BrandWordmark` — keep the three in step. The gradient reads
  * the theme's configuration hues, so the mark follows the theme switch and sits
  * on any background without a tile.
  */

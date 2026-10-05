@@ -1388,3 +1388,18 @@
   0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--er-accent) 55%, transparent); }
   100% { box-shadow: 0 0 0 8px transparent; }
 }
+
+/* ER function names link to their Microsoft Learn reference */
+.er-token-func--doc,
+.er-token-func--doc:visited {
+  color: var(--er-accent);
+  text-decoration: none;
+  border-radius: var(--er-radius-sm);
+  cursor: pointer;
+}
+
+.er-token-func--doc:hover,
+.er-token-func--doc:focus-visible {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}

@@ -14,70 +14,29 @@ import { FilterField } from '../FilterField';
 import { t, useLocale } from '../../i18n';
 import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../../utils/filter-suggestions';
 import { useTabState } from '../../utils/tab-view-state';
-import { findTreeNodeByMatch, DesignerHint, SlidingTabs, datasourceFocusKey, collectDatasourceTerms, EMPTY_STRING_SET, RevealInExplorerMenu } from './shared';
+import { findTreeNodeByMatch, DesignerHint, SlidingTabs, datasourceFocusKey, collectDatasourceTerms, EMPTY_STRING_SET, RevealInExplorerMenu, fieldTypeLabel } from './shared';
 import { type GroupedDatasourceListHandle, GroupedDatasourceList } from './DatasourceTree';
 import { flattenVisibleTree } from '../../utils/flat-tree';
+import { buildFieldTree, pruneFieldTree, type BindingTreeNode, type MappingFieldScope } from '../../utils/mapping-field-tree';
 import { useVirtualTree } from '../../utils/use-virtual-tree';
 
 // ─── Mapping Designer ───
 
-interface BindingTreeNode {
-  /** Full binding path — also the collapse-state key. */
-  key: string;
-  /** Last path segment, i.e. what the F&O designer shows at this level. */
-  name: string;
-  /** Label of the data model field at this path, when the model is loaded. */
-  label?: string;
-  children: BindingTreeNode[];
-  binding?: any;
-  /** Number of bindings in this subtree, including this node. */
-  count: number;
-}
-
 /**
- * Turn the flat `parent/child/leaf` binding paths into the nested structure the
- * F&O model-mapping designer shows. Intermediate levels that carry no binding
- * of their own are still materialised so the hierarchy stays continuous.
- * Exported for tests.
+ * The bound paths nested into the F&O designer's hierarchy, without the data
+ * model's unbound fields. Exported for tests.
  */
 export function buildBindingTree(
   bindings: any[],
   labelFor: (path: string) => string | undefined = () => undefined,
 ): BindingTreeNode[] {
-  const roots: BindingTreeNode[] = [];
-  const index = new Map<string, BindingTreeNode>();
-
-  const ensure = (path: string): BindingTreeNode => {
-    const existing = index.get(path);
-    if (existing) return existing;
-    const slash = path.lastIndexOf('/');
-    const node: BindingTreeNode = {
-      key: path,
-      name: slash >= 0 ? path.slice(slash + 1) : path,
-      label: labelFor(path),
-      children: [],
-      count: 0,
-    };
-    index.set(path, node);
-    if (slash >= 0) ensure(path.slice(0, slash)).children.push(node);
-    else roots.push(node);
-    return node;
-  };
-
-  for (const b of bindings) ensure(b.path).binding = b;
-
-  // Alphabetical by name at every level, as the F&O model-mapping designer
-  // lists the model — the order paths happen to appear in the XML means nothing.
-  const byName = (left: BindingTreeNode, right: BindingTreeNode) =>
-    left.name.localeCompare(right.name, undefined, { sensitivity: 'base', numeric: true });
-  const tally = (node: BindingTreeNode): number => {
-    node.children.sort(byName);
-    node.count = (node.binding ? 1 : 0) + node.children.reduce((sum, c) => sum + tally(c), 0);
-    return node.count;
-  };
-  for (const root of roots) tally(root);
-  return roots.sort(byName);
+  return buildFieldTree(bindings, labelFor);
 }
+
+/** Trivial constants (`Enabled = false` and the like) say nothing about the mapping. */
+const isTrivialExpr = (expr: string) => /^(false|true|0|1|""|'')$/i.test(String(expr ?? '').trim());
+
+const FIELD_SCOPES: MappingFieldScope[] = ['all', 'mapped', 'unmapped'];
 
 /** The definition's own name for consultants; its descriptor too in technical mode. */
 function definitionDisplayName(mm: any, technical: boolean): string {
@@ -166,11 +125,11 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
     selectNode(`cfg-${configIndex}-mapping-${index}`, { revealInExplorer: false });
   }, [configIndex, selectNode]);
 
-  /* Labels of the data model fields the bindings fill, as the F&O designer
-     shows them next to each name. */
-  const labelForPath = useMemo(() => {
+  /* The loaded data model definition this mapping fills: its field labels go
+     next to each name, and its unbound fields make up "all" / "unmapped". */
+  const mappedModel = useMemo(() => {
     const descriptor = String(mm.dataContainerDescriptor ?? '').trim();
-    if (!descriptor) return () => undefined;
+    if (!descriptor) return null;
     const models = configurations.flatMap((cfg, index) => (cfg.content.kind === 'DataModel'
       ? [{ model: (cfg.content as ERDataModelContent).version.model, index }]
       : []));
@@ -179,9 +138,15 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
       descriptor,
       new Set([normGuid(mm.modelId)].filter(Boolean)),
     );
-    if (!model) return () => undefined;
+    if (!model) return null;
+    return { model, descriptor, configIndex: models.find(m => m.model === model)?.index ?? configIndex };
+  }, [mm.dataContainerDescriptor, mm.modelId, configurations, configIndex]);
+
+  const labelForPath = useMemo(() => {
+    if (!mappedModel) return () => undefined;
+    const { model, descriptor } = mappedModel;
     const fieldAt = indexDataModel(model, descriptor);
-    const labels = buildLabelPool(configurations, models.find(m => m.model === model)?.index ?? configIndex);
+    const labels = buildLabelPool(configurations, mappedModel.configIndex);
     const lang = labelLanguageTag(activeLocale);
     const cache = new Map<string, string | undefined>();
     return (path: string): string | undefined => {
@@ -192,8 +157,12 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
       cache.set(path, text);
       return text;
     };
-  }, [mm.dataContainerDescriptor, mm.modelId, configurations, configIndex, activeLocale]);
+  }, [mappedModel, configurations, activeLocale]);
   const [filter, setFilter] = useTabState(tabId, 'mapping.filter', '');
+  // Show all / Show mapped / Show unmapped, as in the F&O designer. Without
+  // the data model loaded there is nothing unbound to show.
+  const [fieldScope, setFieldScope] = useTabState<MappingFieldScope>(tabId, 'mapping.fieldScope', 'mapped');
+  const effectiveScope: MappingFieldScope = mappedModel ? fieldScope : 'mapped';
   const [view, setView] = useTabState<'bindings' | 'datasources' | 'validations'>(tabId, 'mapping.view', 'bindings');
   // What the datasource list counts enum values in, next to its own calculated fields.
   const mappingExpressions = useMemo(() => [
@@ -254,37 +223,41 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
     return () => clearTimeout(timer);
   }, [focusBindingPath]);
 
-  // Trivial constant detector — same logic as Format bindings
-  const isTrivialExpr = (expr: string) => /^(false|true|0|1|""|'')$/i.test(expr.trim());
-
-  // Deduplicated, filtered bindings arranged as the designer's own hierarchy
-  const bindingTree = useMemo(() => {
-    // 1. Deduplicate by path
+  // Every bound path once, on top of every field of the model when it is loaded.
+  const fieldTree = useMemo(() => {
     const seen = new Set<string>();
     const deduped: any[] = [];
-    for (const b of mm.bindings) {
+    for (const b of mm.bindings ?? []) {
       if (!seen.has(b.path)) {
         seen.add(b.path);
         deduped.push(b);
       }
     }
+    return buildFieldTree(deduped, labelForPath, mappedModel ?? undefined);
+  }, [mm.bindings, labelForPath, mappedModel]);
 
-    // 2. Remove trivial constant expressions (e.g. Enabled = false)
-    const meaningful = deduped.filter((b: any) => !isTrivialExpr(b.expressionAsString));
+  const scopeCounts = useMemo(() => ({
+    mapped: pruneFieldTree(fieldTree, 'mapped', node => !node.binding || !isTrivialExpr(node.binding.expressionAsString))
+      .reduce((n, root) => n + root.count, 0),
+    unmapped: fieldTree.reduce((n, root) => n + root.unmappedCount, 0),
+  }), [fieldTree]);
 
-    // 3. Apply text filter
+  // What the scope and the text filter leave, arranged as the designer's own hierarchy.
+  const matchesFilter = useCallback((node: BindingTreeNode) => {
+    if (!filter) return true;
     const lower = filter.toLowerCase();
-    const textFiltered = filter
-      ? meaningful.filter((b: any) =>
-          b.path.toLowerCase().includes(lower) ||
-          b.expressionAsString.toLowerCase().includes(lower) ||
-          Boolean(labelForPath(b.path)?.toLowerCase().includes(lower))
-        )
-      : meaningful;
-
-    // 4. Nest by path segments
-    return buildBindingTree(textFiltered, labelForPath);
-  }, [mm.bindings, filter, labelForPath]);
+    return node.key.toLowerCase().includes(lower)
+      || Boolean(node.binding?.expressionAsString?.toLowerCase().includes(lower))
+      || Boolean(node.label?.toLowerCase().includes(lower));
+  }, [filter]);
+  // "Mapped" leaves out trivial constants, as the format bindings do.
+  const mappedTree = useMemo(() => pruneFieldTree(fieldTree, 'mapped', node =>
+    !(node.binding && isTrivialExpr(node.binding.expressionAsString)) && matchesFilter(node),
+  ), [fieldTree, matchesFilter]);
+  const bindingTree = useMemo(
+    () => (effectiveScope === 'mapped' ? mappedTree : pruneFieldTree(fieldTree, effectiveScope, matchesFilter)),
+    [effectiveScope, mappedTree, fieldTree, matchesFilter],
+  );
 
   const toggleGroup = useCallback((g: string) => {
     setCollapsedGroups(prev => {
@@ -342,21 +315,24 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
   // clicks down through it. This runs once per mapping (not on every filter
   // keystroke, which used to re-collapse everything and hide filter matches)
   // and keeps the path to a focused binding open.
-  const collapseInitForRef = useRef<unknown>(null);
+  // A switch of the field scope brings a different tree, so it starts closed too.
+  const collapseInitForRef = useRef<{ mm: unknown; scope: MappingFieldScope } | null>(null);
   useEffect(() => {
-    if (collapseInitForRef.current === mm) return;
+    const done = collapseInitForRef.current;
+    if (done && done.mm === mm && done.scope === effectiveScope) return;
     if (bindingTree.length === 0 || filter) return;
-    collapseInitForRef.current = mm;
+    collapseInitForRef.current = { mm, scope: effectiveScope };
     const next = new Set(collapseAllKeys(bindingTree));
     if (focusBindingPath) for (const key of bindingAncestorKeys(focusBindingPath)) next.delete(key);
     setCollapsedGroups(next);
-  }, [mm, bindingTree, filter, collapseAllKeys, focusBindingPath]);
+  }, [mm, effectiveScope, bindingTree, filter, collapseAllKeys, focusBindingPath]);
 
   // While a text filter is active every match must be visible, so the
   // user's manual collapse state is suspended (and restored when cleared).
   const effectiveCollapsedGroups = filter ? EMPTY_STRING_SET : collapsedGroups;
 
-  const totalShown = bindingTree.reduce((n, g) => n + g.count, 0);
+  // The bindings tab counts bindings whichever fields are shown.
+  const totalShown = mappedTree.reduce((n, g) => n + g.count, 0);
 
   const validations: any[] = mm.validations ?? NO_VALIDATIONS;
   const filteredValidations = useMemo(() => {
@@ -478,6 +454,33 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
         </div>
       </div>
 
+      {view === 'bindings' && (
+        <div className="fmt-bind-intent-bar">
+          <div className="fmt-bind-layout" role="radiogroup" aria-label={t.mmScopeAria}>
+            {FIELD_SCOPES.map(scope => {
+              const disabled = !mappedModel && scope !== 'mapped';
+              const count = scope === 'mapped' ? scopeCounts.mapped : scope === 'unmapped' ? scopeCounts.unmapped : null;
+              return (
+                <button
+                  key={scope}
+                  type="button"
+                  role="radio"
+                  aria-checked={effectiveScope === scope}
+                  className={effectiveScope === scope ? 'active' : ''}
+                  disabled={disabled}
+                  title={disabled ? t.mmScopeNeedsModel : undefined}
+                  onClick={() => setFieldScope(scope)}
+                >
+                  {t.mmScopeLabels[scope]}
+                  {count !== null && !disabled && <span className="mm-scope-count">{count}</span>}
+                </button>
+              );
+            })}
+          </div>
+          {!mappedModel && <span className="mm-scope-hint">{t.mmScopeNeedsModel}</span>}
+        </div>
+      )}
+
       {/* Content */}
       <div className="designer-scroll-pane" ref={scrollPaneRef}>
         {view === 'bindings' && (
@@ -485,6 +488,8 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
             ? <div style={{ color: 'var(--er-text-muted)', fontSize: 12, padding: 12 }}>{t.noResults}</div>
             : <VirtualBindingTree
                 roots={bindingTree}
+                scope={effectiveScope}
+                technical={showTechnicalDetails}
                 scrollRef={scrollPaneRef}
                 collapsed={effectiveCollapsedGroups}
                 onToggle={toggleGroup}
@@ -615,9 +620,11 @@ const BINDING_ROW_ESTIMATE = 58;
  * from each row now (see `.mm-flat-row` in the styles).
  */
 function VirtualBindingTree({
-  roots, scrollRef, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding, onRevealBinding,
+  roots, scope, technical, scrollRef, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding, onRevealBinding,
 }: {
   roots: BindingTreeNode[];
+  scope: MappingFieldScope;
+  technical: boolean;
   scrollRef: React.RefObject<HTMLDivElement | null>;
   collapsed: ReadonlySet<string>;
   onToggle: (key: string) => void;
@@ -679,6 +686,8 @@ function VirtualBindingTree({
             >
               <BindingTreeRow
                 node={row.node}
+                scope={scope}
+                technical={technical}
                 level={row.depth + 1}
                 collapsed={collapsed}
                 onToggle={onToggle}
@@ -703,9 +712,11 @@ function VirtualBindingTree({
  * the drill-down, so a node that is both keeps a single row.
  */
 function BindingTreeRow({
-  node, level, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding, onRevealBinding,
+  node, scope, technical, level, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding, onRevealBinding,
 }: {
   node: BindingTreeNode;
+  scope: MappingFieldScope;
+  technical: boolean;
   level: number;
   collapsed: ReadonlySet<string>;
   onToggle: (key: string) => void;
@@ -722,10 +733,12 @@ function BindingTreeRow({
   const binding = node.binding;
   const isFocused = !!binding && node.key === focusBindingPath;
   const navFlash = isFocused && flashBindingPath === node.key;
+  // A field of the model that nothing binds — listed by "all" and "unmapped".
+  const unmapped = node.inModel && !binding && !hasChildren;
 
   const classes = [
     'mm-tree-row',
-    binding ? 'mm-binding-row' : 'mm-tree-branch',
+    binding ? 'mm-binding-row' : unmapped ? 'mm-unmapped-row' : 'mm-tree-branch',
     hasChildren ? 'mm-tree-expandable' : '',
     isFocused ? 'search-match' : '',
     navFlash ? 'nav-flash' : '',
@@ -756,16 +769,17 @@ function BindingTreeRow({
         ) : (
           <span className="mm-tree-toggle mm-tree-toggle--leaf" aria-hidden />
         )}
-        <span className={binding ? 'mm-binding-name' : 'mm-tree-branch-name'}>{node.name}</span>
+        <span className={binding || unmapped ? 'mm-binding-name' : 'mm-tree-branch-name'}>{node.name}</span>
         {node.label && node.label !== node.name && (
           <span className="mm-tree-label" title={node.label}>{node.label}</span>
         )}
-        {hasChildren && (
-          <span
-            className="mm-group-count"
-            title={t.mmBranchBindingCount(node.count)}
-          >{node.count}</span>
+        {unmapped && technical && node.fieldType !== undefined && (
+          <span className="mm-field-type">{fieldTypeLabel(node.fieldType)}</span>
         )}
+        {unmapped && <span className="mm-unmapped-tag">{t.mmUnmappedField}</span>}
+        {hasChildren && (scope === 'unmapped'
+          ? <span className="mm-group-count mm-group-count--unmapped" title={t.mmBranchUnmappedCount(node.unmappedCount)}>{node.unmappedCount}</span>
+          : <span className="mm-group-count" title={t.mmBranchBindingCount(node.count)}>{node.count}</span>)}
         {binding && onRevealBinding && <RevealInExplorerMenu onReveal={() => onRevealBinding(node.key)} />}
       </div>
       {binding && (
