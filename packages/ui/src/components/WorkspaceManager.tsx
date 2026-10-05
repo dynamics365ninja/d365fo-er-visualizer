@@ -279,12 +279,12 @@ export function WorkspaceManager({
             <DialogContent className="ws-content" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <div className="ws-toolbar">
                 <Input
-                  size="small"
+                  size="medium"
                   className="ws-filter"
                   value={query}
                   onChange={(_, d) => setQuery(d.value)}
                   placeholder={t.workspaceFilterPlaceholder}
-                  contentBefore={<SearchRegular fontSize={14} />}
+                  contentBefore={<SearchRegular fontSize={16} />}
                   contentAfter={query ? (
                     <Button appearance="transparent" size="small" icon={<DismissRegular />} aria-label={t.clearFilter} onClick={() => setQuery('')} />
                   ) : undefined}
