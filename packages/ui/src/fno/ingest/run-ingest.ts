@@ -95,7 +95,7 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
   // is hidden from the very first moment (fnoIngestStatus gate in LandingPage).
   // Without this, Phase 0 scout downloads run with fnoIngestStatus='', leaving
   // the Open button visible for several seconds while the user has cached configs.
-  progress.status(t.fnoStatusPreparing);
+  progress.status(t.fnoStatusPreparing, 'prepare');
   let ok = 0;
   let skippedEmpty = 0;
   let finalToLoad: ErConfigSummary[] = [];
@@ -318,7 +318,7 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
     const DM_BATCH_SIZE = 2;
     for (let batch = 0; batch < dataModels.length; batch += DM_BATCH_SIZE) {
       const slice = dataModels.slice(batch, batch + DM_BATCH_SIZE);
-      progress.status(t.fnoStatusDownloadingDM(Math.min(batch + DM_BATCH_SIZE, dataModels.length)));
+      progress.status(t.fnoStatusDownloadingDM(Math.min(batch + DM_BATCH_SIZE, dataModels.length)), 'dm');
       const results = await Promise.allSettled(
         slice.map(async component => {
           const download = await client.downloadConfiguration(connection, component, ingestSignal);
@@ -362,7 +362,7 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
     // --- Concurrent task A: download selected Formats + ModelMappings ---
     const downloadSelectedTask = async () => {
       if (nonDataModels.length === 0) return;
-      progress.status(t.fnoStatusDownloadingFM(nonDataModels.length));
+      progress.status(t.fnoStatusDownloadingFM(nonDataModels.length), 'fm');
       const PARALLEL_BATCH_SIZE = 2;
       for (let batch = 0; batch < nonDataModels.length; batch += PARALLEL_BATCH_SIZE) {
         const slice = nonDataModels.slice(batch, batch + PARALLEL_BATCH_SIZE);
@@ -841,7 +841,7 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
     }; // end mappingListingScanTask
 
     // ── Run listing scan concurrently with Format/ModelMapping downloads ──
-    progress.status(t.fnoStatusScanMappings);
+    progress.status(t.fnoStatusScanMappings, 'fm');
     await Promise.all([downloadSelectedTask(), mappingListingScanTask()]);
 
     // ── Import format: post-download ModelMapping listing scan ──
@@ -903,7 +903,7 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
     // ── Synth pass: needs parsed DM data from store, runs sequentially ──
 
     // ── Synthesized ModelMapping fetches via the X++ AOT fallback ──
-    progress.status(t.fnoStatusDownloadingMM);
+    progress.status(t.fnoStatusDownloadingMM, 'mm');
     //
     // Per X++ source (ERConfigurationStorageService.getModelMappingByID,
     // confirmed against the D365FO VM), the second resolution branch
@@ -1586,7 +1586,7 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
       return { settles, link };
     };
     if (allMappingDownloads.length > 0) {
-      progress.status(t.fnoStatusDownloadingMMCount(allMappingDownloads.length));
+      progress.status(t.fnoStatusDownloadingMMCount(allMappingDownloads.length), 'mm');
       // Track DM GUIDs for which a mapping was *successfully* downloaded.
       // Once a branch for a given DM GUID returns real XML, all remaining
       // branches for that DM are skipped. Branches that return empty content
@@ -1912,7 +1912,7 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
         }
 
         if (retryDownloads.length > 0) {
-          progress.status(t.fnoStatusDownloadingMMCount(retryDownloads.length));
+          progress.status(t.fnoStatusDownloadingMMCount(retryDownloads.length), 'mm');
           for (let batch = 0; batch < retryDownloads.length; batch += MAPPING_BATCH_SIZE) {
             const slice = retryDownloads.slice(batch, batch + MAPPING_BATCH_SIZE);
             const pending = slice.filter(item => !downloadedMappingDmGuids.has(item.dmGuid));
@@ -2034,7 +2034,7 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
     // DataModel GUIDs discovered from ModelMapping XML in the synth pass.
     // Covers import formats: their ModelMapping XML carries the correct Model= attribute.
     if (lateModelFollowUps.size > 0) {
-      progress.status(t.fnoStatusLateDM);
+      progress.status(t.fnoStatusLateDM, 'finalize');
       const lateEntries = Array.from(lateModelFollowUps.values());
       const LATE_BATCH_SIZE = 2;
       for (let lb = 0; lb < lateEntries.length; lb += LATE_BATCH_SIZE) {

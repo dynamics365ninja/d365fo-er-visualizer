@@ -23,7 +23,7 @@ import {
 } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
 import { ThemeSwitch } from './ThemeSwitch';
-import { BrandWordmark } from './BrandWordmark';
+import { BrandMark, BrandWordmark } from './BrandWordmark';
 import { setLocale, t, useLocale } from '../i18n';
 import { RecentWork } from './RecentWork';
 import { FnoConnectPanel } from './FnoConnectPanel';
@@ -170,13 +170,37 @@ const useStyles = makeStyles({
     borderRadius: '50%',
     backgroundColor: 'var(--er-accent)',
   },
+  // The app's logo: the "ER" mark beside "D365FO" over "ER Visualizer".
   title: {
     margin: 0,
-    fontSize: 'clamp(26px, 3vw, 32px)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px',
+  },
+  titleMark: {
+    width: 'clamp(44px, 5vw, 56px)',
+    height: 'clamp(44px, 5vw, 56px)',
+    flexShrink: 0,
+  },
+  titleText: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    minWidth: 0,
+  },
+  titleVendor: {
+    fontSize: '12px',
     lineHeight: 1.2,
-    fontWeight: 400,
-    letterSpacing: 0,
-    maxWidth: '18ch',
+    fontWeight: 600,
+    letterSpacing: '0.14em',
+    color: 'var(--er-text-subtle)',
+  },
+  titleName: {
+    fontSize: 'clamp(26px, 3vw, 34px)',
+    lineHeight: 1.1,
+    fontWeight: 600,
+    letterSpacing: '-0.01em',
+    color: 'var(--er-text)',
   },
   lead: {
     margin: 0,
@@ -456,7 +480,7 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
           title={t.landingHomeLinkLabel}
           aria-label={t.landingHomeLinkLabel}
         >
-          <BrandWordmark />
+          <BrandWordmark short />
         </a>
         <div className={styles.topbarActions}>
           <a className={styles.docsLink} href={docsHref()} target="_blank" rel="noreferrer noopener">
@@ -495,7 +519,13 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
               <span className={styles.badgeDot} aria-hidden="true" />
               {t.landingBadge}
             </span>
-            <h1 className={styles.title}>{t.landingTitle}</h1>
+            <h1 className={styles.title}>
+              <BrandMark className={styles.titleMark} />
+              <span className={styles.titleText}>
+                <span className={styles.titleVendor}>D365FO</span>
+                <span className={styles.titleName}>{t.appName}</span>
+              </span>
+            </h1>
             <p className={styles.lead}>{t.landingSub}</p>
           </div>
           {!wideLayout && <LandingPreview />}

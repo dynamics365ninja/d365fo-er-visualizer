@@ -28,7 +28,7 @@ function appIngestDeps(): FnoIngestDeps {
     },
     progress: {
       begin: items => store().beginFnoIngest(items),
-      status: text => store().setFnoIngestStatus(text),
+      status: (text, phase) => store().setFnoIngestStatus(text, phase),
       updateItem: item => store().updateFnoIngestItem(item),
       items: () => store().fnoIngestProgress.items,
       end: () => store().endFnoIngest(),

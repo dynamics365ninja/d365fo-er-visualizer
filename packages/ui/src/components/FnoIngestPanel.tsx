@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@fluentui/react-components';
 import {
   ArrowSyncRegular,
@@ -9,27 +9,23 @@ import {
   SubtractCircleRegular,
 } from '@fluentui/react-icons';
 import { t, useLocale } from '../i18n';
-import { useAppStore, type FnoIngestItem, type FnoIngestProgress } from '../state/store';
+import { useAppStore, FNO_INGEST_PHASES, type FnoIngestItem, type FnoIngestProgress } from '../state/store';
 import { DependencyKindIcon, dependencyKindLabel } from './DependencyPromptDialog';
 
-const INGEST_STEPS = [
-  { key: 'prepare' },
-  { key: 'dm' },
-  { key: 'fm' },
-  { key: 'mm' },
-  { key: 'finalize' },
-] as const;
+/** Highest the bar goes while the run is still going. */
+const RUNNING_PERCENT_CAP = 95;
 
-/** Map the free-text ingest status onto one of the five pipeline phases. */
-export function activeIngestStep(status: string): number {
-  const s = status.toLowerCase();
-  if (!s) return -1;
-  if (s.includes('přípravu') || s.includes('prepar')) return 0;
-  if (s.includes('datamodel') || s.includes('datov')) return 1;
-  if (s.includes('mapping') || s.includes('mapov')) return 3;
-  if (s.includes('form') || s.includes('konfigurace') || s.includes('configuration')) return 2;
-  if (s.includes('dokon') || s.includes('řeš') || s.includes('resolv') || s.includes('cross')) return 4;
-  return 2;
+/**
+ * What the progress bar shows. Rows keep arriving during a run — mappings
+ * found by the listing scan, models they reference — so done/total can drop.
+ * The bar holds its furthest point instead of sliding back, and stops short
+ * of the end until the run has actually finished.
+ */
+export function ingestBarPercent(finished: number, total: number, active: boolean, peak: number): number {
+  if (total === 0) return active ? peak : 0;
+  const raw = Math.round((finished / total) * 100);
+  if (!active) return raw;
+  return Math.max(peak, Math.min(raw, RUNNING_PERCENT_CAP));
 }
 
 function statusLabel(status: FnoIngestItem['status']): string {
@@ -79,14 +75,18 @@ export function FnoIngestPanel({ variant = 'overlay', onClose }: {
   const cancelIngest = useAppStore(s => s.cancelFnoIngest);
   const elapsed = useElapsedSeconds(progress.startedAt, progress.finishedAt);
   const active = progress.active || Boolean(status);
-  const step = activeIngestStep(status);
+  const step = FNO_INGEST_PHASES.indexOf(progress.phase);
 
   const items = progress.items;
   const failed = items.filter(i => i.status === 'failed').length;
   const empty = items.filter(i => i.status === 'empty').length;
   const finished = items.filter(i => i.status !== 'queued' && i.status !== 'downloading').length;
   const total = items.length;
-  const percent = total > 0 ? Math.round((finished / total) * 100) : 0;
+  // Peak per run: a new batch (new startedAt) starts the bar from zero.
+  const peak = useRef({ startedAt: progress.startedAt, value: 0 });
+  if (peak.current.startedAt !== progress.startedAt) peak.current = { startedAt: progress.startedAt, value: 0 };
+  const percent = ingestBarPercent(finished, total, progress.active, peak.current.value);
+  peak.current.value = percent;
 
   const isOverlay = variant === 'overlay';
 
@@ -112,12 +112,12 @@ export function FnoIngestPanel({ variant = 'overlay', onClose }: {
       </div>
 
       <ol className="fno-ingest__steps">
-        {INGEST_STEPS.map((s, i) => {
+        {FNO_INGEST_PHASES.map((key, i) => {
           const state = !active ? 'done' : i < step ? 'done' : i === step ? 'active' : 'pending';
           return (
-            <li key={s.key} className={`fno-ingest__step fno-ingest__step--${state}`}>
+            <li key={key} className={`fno-ingest__step fno-ingest__step--${state}`}>
               <span className="fno-ingest__step-dot" />
-              <span className="fno-ingest__step-label">{t.fnoIngestSteps[s.key]}</span>
+              <span className="fno-ingest__step-label">{t.fnoIngestSteps[key]}</span>
             </li>
           );
         })}

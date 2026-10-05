@@ -37,7 +37,7 @@ export async function resolveInheritedLabels(
     inheritors.get(base)!.push({ filePath: cfg.filePath, kind: cfg.kind as Inheritor['kind'] });
   }
   if (queue.length === 0) return;
-  progress.status(t.fnoStatusResolvingLabels);
+  progress.status(t.fnoStatusResolvingLabels, 'finalize');
   const visited = new Set<string>();
   const MAX_ANCESTORS = 8;
   const allVersions = [50, 40, 30, 20, 15, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];

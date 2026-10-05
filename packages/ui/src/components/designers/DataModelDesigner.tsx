@@ -1,22 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  type Node,
-  type Edge,
-  Position,
-} from '@xyflow/react';
-import { BoxRegular, DataBarVerticalFilled, HomeRegular, TextCaseTitleRegular } from '@fluentui/react-icons';
+import { DataBarVerticalFilled } from '@fluentui/react-icons';
 import { DataModelList } from './DataModelList';
+import { DataModelGraph } from './DataModelGraph';
 import { FilterField } from '../FilterField';
 import { useAppStore, resolveDeepExpression } from '../../state/store';
 import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
 import { t } from '../../i18n';
 import { type ERConfiguration, type ERDataModelContent } from '@er-visualizer/core';
-import { ExpressionDetailLink, SlidingTabs, enumLabelFor, fieldTypeLabel } from './shared';
+import { ExpressionDetailLink, SlidingTabs, enumLabelFor } from './shared';
 
 /**
  * Restrict a solution's mapping definitions to the one that actually owns the
@@ -40,89 +32,6 @@ function scopeDefinitionsToDatasource(definitions: any[], selected: any): any[] 
 }
 
 // ─── Model Designer ───
-
-const NODE_W = 280;
-const NODE_H_BASE = 56; // header
-const NODE_H_FIELD = 20; // per field
-const H_GAP = 60;
-const V_GAP = 80;
-
-/** Compute a hierarchical left-to-right layout for model containers */
-function buildModelLayout(containers: any[]) {
-  const containerMap = new Map(containers.map(c => [c.id, c]));
-
-  // Build adjacency: which containers reference which (via typeDescriptor)
-  const children = new Map<string, string[]>(); // parent id → child ids
-  const parentCount = new Map<string, number>(); // child id → count of parents
-  for (const c of containers) {
-    for (const item of c.items) {
-      if (item.typeDescriptor && containerMap.has(item.typeDescriptor)) {
-        if (!children.has(c.id)) children.set(c.id, []);
-        const existing = children.get(c.id)!;
-        if (!existing.includes(item.typeDescriptor)) {
-          existing.push(item.typeDescriptor);
-          parentCount.set(item.typeDescriptor, (parentCount.get(item.typeDescriptor) ?? 0) + 1);
-        }
-      }
-    }
-  }
-
-  // Separate: roots (isRoot), enums, records
-  const roots = containers.filter(c => c.isRoot);
-  const enums = containers.filter(c => c.isEnum);
-  const records = containers.filter(c => !c.isRoot && !c.isEnum);
-
-  // BFS level assignment starting from roots
-  const level = new Map<string, number>();
-  const queue: { id: string; lv: number }[] = roots.map(r => ({ id: r.id, lv: 0 }));
-  while (queue.length > 0) {
-    const { id, lv } = queue.shift()!;
-    if (level.has(id)) continue;
-    level.set(id, lv);
-    for (const child of children.get(id) ?? []) {
-      if (!level.has(child)) queue.push({ id: child, lv: lv + 1 });
-    }
-  }
-  // Records not reached by BFS go at end
-  for (const c of records) {
-    if (!level.has(c.id)) level.set(c.id, (Math.max(...Array.from(level.values()), -1) + 1));
-  }
-  // Enums: separate column on the right
-  const maxLevel = Math.max(...Array.from(level.values()), 0);
-
-  // Group by level
-  const byLevel = new Map<number, string[]>();
-  for (const [id, lv] of level) {
-    if (!byLevel.has(lv)) byLevel.set(lv, []);
-    byLevel.get(lv)!.push(id);
-  }
-
-  // Compute node heights
-  const nodeHeight = (c: any) => NODE_H_BASE + c.items.length * NODE_H_FIELD + 8;
-
-  // Assign X/Y positions — nodes at the same level stack vertically
-  const positions = new Map<string, { x: number; y: number }>();
-  const colWidth = NODE_W + H_GAP;
-
-  for (const [lv, ids] of byLevel) {
-    let y = 0;
-    for (const id of ids) {
-      const c = containerMap.get(id);
-      positions.set(id, { x: lv * colWidth, y });
-      y += nodeHeight(c) + V_GAP;
-    }
-  }
-
-  // Enums: far right column
-  const enumColX = (maxLevel + 1) * colWidth;
-  let enumY = 0;
-  for (const c of enums) {
-    positions.set(c.id, { x: enumColX, y: enumY });
-    enumY += nodeHeight(c) + V_GAP;
-  }
-
-  return { positions, nodeHeight };
-}
 
 /** The list is where fields are found; the graph gives the overview. Remembered per browser. */
 const MODEL_VIEW_KEY = 'er-visualizer.model-view';
@@ -167,169 +76,6 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
       }
     }
   }, [focusNode]);
-
-  const { nodes, edges } = useMemo(() => {
-    const nodes: Node[] = [];
-    const edges: Edge[] = [];
-    const containerMap = new Map(dm.containers.map(c => [c.id, c]));
-    const { positions, nodeHeight } = buildModelLayout(dm.containers);
-
-    dm.containers.forEach(container => {
-      const pos = positions.get(container.id) ?? { x: 0, y: 0 };
-      const isSelected = selectedId === container.id;
-
-      // Color scheme per container kind
-      const headerBg = container.isRoot
-        ? 'var(--er-model-soft)'
-        : container.isEnum
-          ? 'var(--er-format-soft)'
-          : 'var(--er-surface-2)';
-      const headerColor = container.isRoot
-        ? 'var(--er-model)'
-        : container.isEnum
-          ? 'var(--er-format)'
-          : 'var(--er-text-muted)';
-
-      nodes.push({
-        id: container.id,
-        position: pos,
-        data: {
-          label: (
-            <div
-              onClick={() => setSelectedId(id => id === container.id ? null : container.id)}
-              style={{ textAlign: 'left', width: NODE_W, cursor: 'pointer' }}
-            >
-              {/* Header */}
-              <div style={{
-                fontWeight: 700,
-                padding: '5px 10px',
-                background: headerBg,
-                color: headerColor,
-                borderRadius: '5px 5px 0 0',
-                fontSize: 12,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}>
-                <span style={{ display: 'inline-flex' }} aria-hidden>
-                  {container.isRoot ? <HomeRegular fontSize={14} /> : container.isEnum ? <TextCaseTitleRegular fontSize={14} /> : <BoxRegular fontSize={14} />}
-                </span>
-                <span>{container.name}</span>
-                {container.isRoot && (
-                  <span style={{
-                    marginLeft: 'auto',
-                    fontSize: 9,
-                    background: 'var(--er-info-soft)',
-                    border: '1px solid var(--er-info-border)',
-                    padding: '1px 5px',
-                    borderRadius: 3,
-                    color: 'var(--er-info)',
-                    fontWeight: 600,
-                  }}>{t.modelRootBadge}</span>
-                )}
-                {container.isEnum && (
-                  <span style={{
-                    marginLeft: 'auto',
-                    fontSize: 9,
-                    background: 'var(--er-warning-soft)',
-                    border: '1px solid var(--er-warning-border)',
-                    padding: '1px 5px',
-                    borderRadius: 3,
-                    color: 'var(--er-warning)',
-                    fontWeight: 600,
-                  }}>{t.modelEnumBadge}</span>
-                )}
-                <span style={{
-                  marginLeft: container.isRoot || container.isEnum ? 0 : 'auto',
-                  fontSize: 9,
-                  color: 'var(--er-text-muted)',
-                  fontWeight: 400,
-                }}>{t.statsFields(container.items.length)}</span>
-              </div>
-              {/* Fields */}
-              <div style={{
-                padding: '4px 0',
-                fontSize: 11,
-                background: 'var(--syn-node-bg)',
-                borderRadius: '0 0 5px 5px',
-                maxHeight: 240,
-                overflow: 'hidden',
-              }}>
-                {container.items.slice(0, 14).map((f: any, fi: number) => (
-                  <div key={fi} style={{
-                    padding: '1px 10px',
-                    display: 'flex',
-                    gap: 6,
-                    alignItems: 'center',
-                    borderBottom: fi < container.items.length - 1 ? '1px solid var(--border-color)' : 'none',
-                  }}>
-                    <span style={{ color: 'var(--syn-identifier)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {f.name}
-                    </span>
-                    {showTechnicalDetails && (
-                      <span style={{
-                        color: f.typeDescriptor ? 'var(--er-info)' : 'var(--syn-field-type)',
-                        fontSize: 10,
-                        fontWeight: f.typeDescriptor ? 600 : 400,
-                        flexShrink: 0,
-                      }}>
-                        {f.typeDescriptor ? `→ ${containerMap.get(f.typeDescriptor)?.name ?? f.typeDescriptor.slice(1, 9)}` : fieldTypeLabel(f.type)}
-                      </span>
-                    )}
-                  </div>
-                ))}
-                {container.items.length > 14 && (
-                  <div style={{ padding: '2px 10px', color: 'var(--er-text-muted)', fontSize: 10 }}>
-                    {t.moreFields(container.items.length - 14)}
-                  </div>
-                )}
-              </div>
-            </div>
-          ),
-        },
-        type: 'default',
-        // Explicit width/height (not just `style`): React Flow's MiniMap skips
-        // any node without dimensions on the node object itself, which is why
-        // the minimap used to render an empty frame.
-        width: NODE_W,
-        height: nodeHeight(container),
-        style: {
-          background: 'var(--er-surface)',
-          border: `1px solid ${isSelected ? 'var(--er-accent)' : 'var(--er-border)'}`,
-          borderRadius: 'var(--er-radius-lg)',
-          padding: 0,
-          width: NODE_W,
-          boxShadow: isSelected ? '0 0 0 2px var(--er-accent-border)' : 'var(--er-shadow-1)',
-        },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
-      });
-
-      // TypeDescriptor edges
-      container.items.forEach((item: any) => {
-        if (item.typeDescriptor && containerMap.has(item.typeDescriptor)) {
-          const isRecordList = item.type === 11;
-          edges.push({
-            id: `${container.id}-${item.name}-${item.typeDescriptor}`,
-            source: container.id,
-            target: item.typeDescriptor,
-            label: item.name,
-            animated: isRecordList,
-            style: {
-              stroke: isRecordList ? 'var(--er-success)' : 'var(--syn-edge)',
-              strokeWidth: isRecordList ? 2 : 1,
-              strokeDasharray: item.type === 10 ? '5,3' : undefined,
-            },
-            labelStyle: { fontSize: 9, fill: 'var(--syn-edge-label)', fontFamily: 'var(--er-font-mono)' },
-            labelBgStyle: { fill: 'var(--bg-primary)', fillOpacity: 0.8 },
-            type: 'smoothstep',
-          });
-        }
-      });
-    });
-
-    return { nodes, edges };
-  }, [dm, selectedId, showTechnicalDetails]);
 
   // Stats
   const stats = useMemo(() => ({
@@ -386,24 +132,8 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
           <DataModelList containers={dm.containers} configIndex={configIndex} filter={listFilter} />
         </div>
       ) : (
-      <div style={{ flex: 1 }}>
-        <ReactFlow nodes={nodes} edges={edges} fitView nodesConnectable={false} nodesDraggable proOptions={{ hideAttribution: true }}>
-          <Background color="var(--er-border)" gap={20} variant={'dots' as any} />
-          <Controls />
-          <MiniMap
-            pannable
-            zoomable
-            className="er-minimap"
-            maskColor="color-mix(in srgb, var(--er-bg-soft) 72%, transparent)"
-            /* Full-strength kind hues: the soft surface tints used before were
-               within a shade of the minimap background, so it read as empty. */
-            nodeColor={(n) => {
-              const c = dm.containers.find(c => c.id === n.id);
-              if (!c) return 'var(--er-border-strong)';
-              return c.isRoot ? 'var(--er-model)' : c.isEnum ? 'var(--er-format)' : 'var(--er-mapping)';
-            }}
-          />
-        </ReactFlow>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <DataModelGraph containers={dm.containers} selectedId={selectedId} showTechnicalDetails={showTechnicalDetails} />
       </div>
       )}
     </div>

@@ -3114,3 +3114,252 @@
     box-shadow: 0 0 0 0 transparent;
   }
 }
+
+/* ─── Data model graph ───
+   Plain classes instead of per-node inline styles, and no resting shadow:
+   with a hundred containers every shadow is repainted on each zoom step. */
+.dm-node {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  text-align: left;
+  background: var(--er-surface);
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  cursor: pointer;
+}
+
+.dm-node.is-selected {
+  border-color: var(--er-accent);
+  box-shadow: 0 0 0 2px var(--er-accent-border);
+}
+
+.dm-node__handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dm-node__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--er-surface-2);
+  color: var(--er-text-muted);
+}
+
+.dm-node--root .dm-node__head {
+  background: var(--er-model-soft);
+  color: var(--er-model);
+}
+
+.dm-node--enum .dm-node__head {
+  background: var(--er-format-soft);
+  color: var(--er-format);
+}
+
+.dm-node__icon {
+  display: inline-flex;
+}
+
+.dm-node__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dm-node__badge {
+  margin-left: auto;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.dm-node__badge--root {
+  background: var(--er-info-soft);
+  border: 1px solid var(--er-info-border);
+  color: var(--er-info);
+}
+
+.dm-node__badge--enum {
+  background: var(--er-warning-soft);
+  border: 1px solid var(--er-warning-border);
+  color: var(--er-warning);
+}
+
+.dm-node__count {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--er-text-muted);
+  white-space: nowrap;
+}
+
+.dm-node__badge + .dm-node__count {
+  margin-left: 0;
+}
+
+.dm-node__fields {
+  padding: 4px 0;
+  font-size: 11px;
+  background: var(--syn-node-bg);
+}
+
+.dm-node__field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.dm-node__field:last-child {
+  border-bottom: none;
+}
+
+.dm-node__field-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--syn-identifier);
+}
+
+.dm-node__field-type {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--syn-field-type);
+}
+
+.dm-node__field-type.is-reference {
+  font-weight: 600;
+  color: var(--er-info);
+}
+
+.dm-node__more {
+  height: 20px;
+  padding: 0 10px;
+  line-height: 20px;
+  font-size: 10px;
+  color: var(--er-text-muted);
+}
+
+.dm-graph .dm-edge .react-flow__edge-path {
+  stroke: var(--syn-edge);
+  stroke-width: 1;
+}
+
+.dm-graph .dm-edge--record .react-flow__edge-path {
+  stroke-dasharray: 5 3;
+}
+
+.dm-graph .dm-edge--list .react-flow__edge-path {
+  stroke: var(--er-success);
+  stroke-width: 2;
+}
+
+.dm-graph .dm-edge .react-flow__edge-text {
+  font-size: 9px;
+  font-family: var(--er-font-mono);
+  fill: var(--syn-edge-label);
+}
+
+.dm-graph .dm-edge .react-flow__edge-textbg {
+  fill: var(--bg-primary);
+  fill-opacity: 0.8;
+}
+
+/* ─── Model mapping: Show all / mapped / unmapped ─── */
+.fmt-bind-layout button:disabled {
+  color: var(--er-text-subtle);
+  cursor: not-allowed;
+}
+
+.mm-scope-count {
+  margin-left: 6px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--er-text-muted);
+}
+
+.mm-scope-hint {
+  font-size: var(--er-text-xs);
+  color: var(--er-text-muted);
+}
+
+/* A model field nothing binds: present, but quieter than a bound one. */
+.mm-unmapped-row .mm-binding-name {
+  color: var(--er-text-muted);
+  font-weight: 400;
+}
+
+.mm-field-type {
+  flex-shrink: 0;
+  font-family: var(--er-font-mono);
+  font-size: var(--er-text-xs);
+  color: var(--syn-field-type);
+}
+
+.mm-unmapped-tag {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: var(--er-radius-pill);
+  border: 1px dashed var(--er-border-strong);
+  font-size: var(--er-text-2xs);
+  line-height: 14px;
+  color: var(--er-text-muted);
+}
+
+.mm-group-count--unmapped {
+  color: var(--er-warning);
+}
+
+/* Bound and unmapped rows indent by their depth like the branches above them.
+   The flat-list reset of `.mm-binding-row` zeroed the margin that carries the
+   indent, so bound fields sat left of their own parent. */
+.mm-flat-row > .mm-tree-row.mm-binding-row,
+.mm-flat-row > .mm-tree-row.mm-unmapped-row {
+  margin-left: calc(12px + var(--mm-indent));
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.mm-flat-row > .mm-tree-row.mm-unmapped-row {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+/* Model-mapping rows used to run together: a binding's formula read as part
+   of the next field. A hairline closes every row, bound rows get room around
+   their formula, and branches carry a tint so each group reads as one.
+   Prefixed with `.app-shell .mm-tree` to outrank the workbench reset that
+   strips row borders and backgrounds. */
+.app-shell .mm-tree .mm-flat-row > .mm-tree-row {
+  border: 0;
+  border-bottom: 1px solid var(--er-border);
+}
+
+.app-shell .mm-tree .mm-flat-row > .mm-tree-row.mm-binding-row {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.app-shell .mm-tree .mm-flat-row > .mm-tree-row.mm-binding-row .mm-binding-expr {
+  margin-top: 2px;
+}
+
+.app-shell .mm-tree .mm-flat-row > .mm-tree-row.mm-tree-branch,
+.app-shell .mm-tree .mm-flat-row > .mm-tree-row.mm-tree-expandable {
+  background: var(--er-surface-2);
+}
+
+.app-shell .mm-tree .mm-flat-row > .mm-tree-row:hover {
+  background: color-mix(in srgb, var(--er-text) 8%, var(--er-surface));
+}

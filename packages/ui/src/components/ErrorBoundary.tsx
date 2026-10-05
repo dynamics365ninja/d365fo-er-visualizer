@@ -1,6 +1,6 @@
 import React from 'react';
 import { t } from '../i18n';
-import { isChunkLoadError } from '../utils/chunk-load-error';
+import { isChunkLoadError, reloadOnceForChunkError } from '../utils/chunk-load-error';
 
 interface Props {
   children: React.ReactNode;
@@ -12,6 +12,8 @@ interface Props {
 
 interface State {
   error: Error | null;
+  /** A chunk failed and the page is already reloading to fetch the new build. */
+  reloading: boolean;
 }
 
 /**
@@ -20,21 +22,28 @@ interface State {
  * region does not take down the whole UI.
  */
 export class ErrorBoundary extends React.Component<Props, State> {
-  state: State = { error: null };
+  state: State = { error: null, reloading: false };
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { error };
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
+    // Usually a deploy replaced the hashed files under an open tab: a reload
+    // fetches the new build, so do it rather than make the user click.
+    if (isChunkLoadError(error) && reloadOnceForChunkError()) {
+      this.setState({ reloading: true });
+      return;
+    }
     console.error(`[ErrorBoundary${this.props.label ? ` · ${this.props.label}` : ''}]`, error, info);
   }
 
-  private reset = () => this.setState({ error: null });
+  private reset = () => this.setState({ error: null, reloading: false });
 
   render(): React.ReactNode {
-    const { error } = this.state;
+    const { error, reloading } = this.state;
     if (!error) return this.props.children;
+    if (reloading) return null;
     if (this.props.fallback) return this.props.fallback(error, this.reset);
 
     // A chunk that failed to download stays failed: React.lazy keeps the
