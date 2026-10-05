@@ -1359,6 +1359,12 @@
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
+  /* The standard properties switch off the custom ::-webkit-scrollbar track,
+     which reserved a gutter: the sticky kind headers stopped short of it and
+     the thumb ran along the panel border, breaking the edge. Native overlay
+     scrollbars (macOS default) take no space, as in VS Code. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 @media (pointer: coarse) {
