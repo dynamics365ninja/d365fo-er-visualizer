@@ -66,19 +66,10 @@
   background: transparent;
 }
 
-/* Resizable panel handles — VS Code-style thin */
-[data-panel-group-direction="horizontal"] > [data-resize-handle] {
-  width: 1px;
-  background: var(--border-color);
-  transition: background 0.15s, width 0.15s;
-}
-
-[data-panel-group-direction="horizontal"] > [data-resize-handle]:hover,
-[data-panel-group-direction="horizontal"] > [data-resize-handle][data-resize-handle-state="drag"] {
-  width: 3px;
-  background: var(--er-accent);
-}
-
+/* Resizable panel handles. Horizontal ones are the VS Code sash styled in
+   App.tsx (4px, -2px margins, net width 0); overriding their width here made
+   the net width negative, so the editor slid 3px over the Explorer and hid
+   its right border. */
 [data-panel-group-direction="vertical"] > [data-resize-handle] {
   height: 1px;
   background: var(--border-color);
