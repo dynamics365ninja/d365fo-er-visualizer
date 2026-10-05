@@ -100,8 +100,20 @@
   height: var(--wb-control-h);
 }
 
-.fui-DialogSurface .ws-toolbar .fui-Button:not(:has(> :not(.fui-Button__icon))),
-.fui-DialogSurface .ws-section-head .fui-Button:not(:has(> :not(.fui-Button__icon))) {
+/* The filter is the dialog's main control: taller than a bar control, and
+   the add buttons next to it match its height. (An icon-only width rule used
+   to sit here, but a button's label is a bare text node that `:has()` cannot
+   see, so it squeezed every labelled button to a 24px square.) */
+.fui-DialogSurface .ws-toolbar > .fui-Input,
+.fui-DialogSurface .ws-toolbar > .fui-Button {
+  min-height: 32px;
+  height: 32px;
+}
+
+/* The clear button inside the filter stays a small square. */
+.fui-DialogSurface .ws-toolbar .fui-Input .fui-Button {
   min-width: var(--wb-control-h);
   width: var(--wb-control-h);
+  min-height: var(--wb-control-h);
+  height: var(--wb-control-h);
 }

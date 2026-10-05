@@ -3363,3 +3363,20 @@
 .app-shell .mm-tree .mm-flat-row > .mm-tree-row:hover {
   background: color-mix(in srgb, var(--er-text) 8%, var(--er-surface));
 }
+
+/* Format binding cards read as one run of text next to the model mapping's
+   tinted, ruled rows. Same surface and hairline, so a binding looks like a
+   binding in both designers. */
+.app-shell .fmt-bind-card {
+  margin-left: 12px;
+  background: var(--er-surface-2);
+  border-bottom: 1px solid var(--er-border);
+}
+
+.app-shell .fmt-bind-card:hover {
+  background: color-mix(in srgb, var(--er-text) 8%, var(--er-surface));
+}
+
+.app-shell .fmt-bind-card.is-focused {
+  background: color-mix(in srgb, var(--er-accent) 10%, var(--er-surface-2));
+}
