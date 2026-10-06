@@ -5,24 +5,35 @@ export const metadata = docMetadata('search-and-where-used');
 
 <DocHeader slug="search-and-where-used" />
 
-Search answers "where is this?". Where-used answers "what breaks if I change this?". They share a
-panel and a single index built across every configuration you have loaded.
+Search answers "where is this?". Where-used answers "what reads this — and what breaks if I change
+it?". They share a panel; both work across every configuration you have loaded.
 
 ## Search
 
 Open it from the activity bar, from the **Search** tab of the right-hand panel, or with `Ctrl+F` —
 the cursor is already in the box — and type. Results appear as you type, from two characters on;
 with the box empty, the panel suggests a few searches framed as questions, such as **Where amounts
-get rounded**. The index covers data models, model mappings, and formats at once, so a search for
-a container name finds it in the model, in the mapping that fills it, and in the format elements
-that consume it — in one list.
+get rounded**.
 
-Each result carries its source context: which configuration it came from and where inside it the
-match sits. That context is what lets you tell apart the four `Amount` fields that a large
-solution inevitably contains.
+The search covers everything a configuration names:
 
-Clicking a result selects the node — in the Explorer, in the designer, and in the Properties
-panel — and highlights it so you can see where you landed.
+- format elements (by name and label) and the bindings of format elements,
+- data model records, fields and enum values — including their **labels in every language the
+  configuration carries**, so `Číslo faktury` and `Invoice number` both find `InvoiceId`,
+- model mapping bindings, calculated fields, user parameters, group-bys and datasources of every
+  kind — a table datasource is also found by its table name,
+- validations, format enums and transformations,
+- the **full text of every expression**, so `ROUND`, `WHERE(` or a field name used deep inside a
+  formula is found.
+
+Accents are optional (`cislo faktury` finds `Číslo faktury`), and a query of several words also
+finds results that contain every word somewhere (`Lines ItemId`).
+
+Each result shows what it is (element, model field, mapping binding, calculation, table, …), where
+it sits (its path or record), the label that matched, and an excerpt of the expression around the
+match. Clicking a result selects the node — in the Explorer, in the designer, and in the Properties
+panel. A model field or a datasource result has a magnifier that starts **Where used** for exactly
+that item.
 
 In the box, `Escape` clears the query, and a second `Escape` leaves the box. `Ctrl+F` with the
 panel already open puts the cursor back in the box; pressing it again while you are in the box
@@ -30,50 +41,54 @@ closes the panel.
 
 ### How results are organised
 
-Results are ranked by relevance: an exact name first, then names that start with the query, names
-with a word that starts with it, matches in the path, and last the hits that only occur inside an
-expression. The first 100 are shown; **Show the next 100** below the list brings in more (the last
-batch reads **Show the remaining …**), and the count above the list reads *shown / total* while
-some are still held back.
+Results are ranked by where the match is: an exact name first, then names that start with the
+query, names with a word that starts with it, label matches, table names, paths, and last the hits
+that only occur inside an expression. The first 100 are shown; **Show the next 100** below the list
+brings in more.
 
-Results are grouped by the configuration they came from, and inside each configuration by what
-kind of hit it is: **Structure**, **Bindings**, **Expressions**, **Data sources** and
-**References**. A name that appears as a model container, as the binding that fills it, and inside
-three expressions lands in three separate sections rather than one undifferentiated list.
+Results are grouped by the configuration they came from (and, in a mapping with several
+definitions, by **Definition**), and inside each group by kind: **Format structure**, **Data
+model**, **Bindings**, **Calculations & validations** and **Data sources**. The section holding the
+best hit comes first — a table query opens on the data sources, a label query on the model.
 
-When a configuration defines several mapping definitions, each one gets its own group labelled
-**Definition:** followed by the definition name, because sibling definitions usually map the same
-paths and would otherwise look like duplicates.
-
-Two independent filters sit above the results:
-
-- **All / Format / Mappings / Model** — restricts results to one component type.
-- The filter button next to them — the *reach*. See below.
-
-The slider on the right expands or collapses every group at once.
+The chips above the results narrow the list to one kind and show how many hits each kind has. The
+slider on the right expands or collapses every group at once.
 
 ### Reach: "Related only" vs "All"
 
 A workspace often holds several unrelated model trees, and an unscoped search reports hits from
-all of them. So the reach defaults to **Related only**: the open configuration, its data model,
-mappings of that same model — and, when the open configuration is a format, the one mapping
-definition that format actually goes through. "Open" means the tab in the focused
-[tab group](/docs/designers#tabs-and-tab-groups).
+all of them. So in search the reach defaults to **Related only**: the open configuration, its data
+model (only the records the open format reaches), mappings of that same model — and, when the open
+configuration is a format, the one mapping definition that format actually goes through. "Open"
+means the tab in the focused [tab group](/docs/designers#tabs-and-tab-groups).
 
-In search, the reach is the filter button beside the scope chips. While it is on, a badge on it
-counts the hits it is holding back, so you always know there is more to see. Turn it off to include
-unrelated models (**All**); results from the related tree stay at the top of the list.
-
-The toggle only appears when there is an open configuration to be related *to*, and something
-outside it to leave out.
+The reach is the filter button above the results. While it is on, a badge on it counts the hits it
+is holding back. Turn it off to include unrelated models (**All**).
 
 ## Where used
 
-Where-used runs the reference graph backwards. Open it from the activity bar, the **Where used**
-tab of the right-hand panel, or with `Ctrl+U`, and enter the name of a table, enum, class, or
-datasource — the placeholder suggests `TaxTrans`, `CustTable`, or a calculated field name, and with
-the box empty the panel offers examples such as **What breaks if a table changes**. The trace runs
-as you type.
+Where-used is an impact analysis. Open it from the activity bar, the **Where used** tab of the
+right-hand panel, or with `Ctrl+U`, and enter a table, a table field (`CustInvoiceTrans.ItemId`),
+an enum, a class, a datasource, or a data model field — by name or by its label. The trace runs as
+you type.
+
+It does not stop at the places where the name is spelled out. It follows the value through
+calculated fields, record lists, group-bys and the model mapping:
+
+> `CustInvoiceTrans` → read by the calculated list `$Lines` → which fills the model field
+> `InvoiceBase/Lines` and, through `@.ItemId`, `InvoiceBase/Lines/ItemId` → which the XML, the CSV
+> and the Excel formats write into their `ItemId` elements.
+
+For every matching item the panel shows a card with:
+
+- **Fills model fields** — the mapping bindings (per mapping definition) whose value comes from it,
+- one section per **format** — the elements whose value ends up reading it, with the model path
+  they reach it through.
+
+Each row is tagged with its role. Rows without a tag deliver the value. **condition** means the
+item decides whether the element is written; **fills** marks the mapping binding of a model field.
+Items that only *select* records — the table in a `WHERE` filter, the list an element iterates — are
+**indirect** use; they are hidden by default and **Show indirect use too** brings them in.
 
 It is usually quicker to start from the thing itself. For a datasource, a model field or record, or
 an enum, **Where used** is available:
@@ -81,25 +96,18 @@ an enum, **Where used** is available:
 - as a button in the Properties panel,
 - in the row's ⋮ menu in the Explorer,
 - as the magnifier at the end of a datasource row in the **Data Sources** lists, and of a field row
-  in the data model's **List** view.
+  in the data model's **List** view,
+- as the magnifier on a model field or datasource search result.
 
-Each of these fills in the name and runs the trace straight away.
+Started this way, where-used traces exactly that item — the `ItemId` field of the
+`InvoiceLine_1` record, not every field called `ItemId` — and its card comes first and is
+highlighted.
 
-Results are grouped by the configuration they were found in — and by mapping definition within it
-— so you can see immediately whether a change is contained in one format or spreads across the
-whole solution. Inside each group the references are split into colour-coded sections:
-
-- **Mapping bindings** — model paths filled from it
-- **Expressions and validations** — expressions and validation rules that read it
-- **Format elements** — format elements whose bindings reach it
-
-An **All / Mappings / Format** scope toggle above the results narrows them to one side of the
-trace — useful when a table is read by a dozen mapping bindings but you only care about which
-output elements change. The reach applies here too, as a **Related only** / **All** switch; when it
-hides everything, the panel says so and points you at **All**.
-
-A datasource that exists but that nothing references is listed as a **Dead datasource** — a
-candidate for cleanup rather than a place where a change would land.
+An **All / Mappings / Format** scope toggle narrows the result to one side of the trace. The reach
+defaults to **All** here — the question is "what breaks anywhere?" — and **Related only** keeps you
+inside the open configuration's own model tree. Text occurrences of the query that the analysis
+could not tie to a source (a name inside an expression it cannot resolve) are listed in a collapsed
+section at the end.
 
 ## The workflow this is for
 
@@ -109,14 +117,12 @@ particular transaction table.
 
 1. Load every configuration in the solution — formats, mappings, and the data models they build
    on. Coverage is only as complete as what you loaded.
-2. Run where-used on the table or field in question. Switch the reach to **All** — the default
-   keeps you inside the open configuration's own model tree, which is not what you want when the
-   question is "what breaks anywhere?".
-3. Work through the format bindings in the result. Each one is a place where the output would
-   change.
-4. For anything non-obvious, click the binding's formula to open the
-   [drill-down](/docs/expression-drill-down) and see the full chain rather than guessing from the
-   path.
+2. Run where-used on the table or field in question.
+3. Work through the format sections of its card. Each element listed is a place where the output
+   would change; switch on indirect use to also see the elements whose *records* depend on it.
+4. For anything non-obvious, open the format's [Specification](/docs/designers#specification) or
+   click the element's formula to open the [drill-down](/docs/expression-drill-down) and see the full
+   chain rather than guessing from the path.
 
 ## Keyboard reference
 
