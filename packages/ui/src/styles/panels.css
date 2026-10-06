@@ -1240,3 +1240,68 @@
   color: var(--er-text-muted);
   padding: 4px 2px;
 }
+
+/* ── Full-text search over the typed index: kind facets, one row per
+   document with its kind, detail, path / label and expression excerpt ── */
+.search-facets { display: flex; flex-wrap: wrap; gap: 3px; padding: 0 0 6px; }
+.search-facet {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  font: inherit;
+  font-size: var(--er-text-2xs);
+  color: var(--er-text);
+  background: var(--bg-primary);
+  border: 1px solid var(--ui-stroke-1);
+  border-radius: var(--er-radius-pill);
+  cursor: pointer;
+}
+.search-facet:hover { background: var(--er-hover); }
+.search-facet.active { color: var(--er-accent); border-color: var(--er-accent-border); background: var(--er-accent-soft); }
+.search-facet__count { color: var(--er-text-muted); }
+.search-cat--model .search-cat__marker { background: var(--er-model); }
+
+.search-doc { cursor: pointer; }
+.search-doc__icon { display: inline-flex; flex-shrink: 0; color: var(--er-text-muted); }
+.search-doc__kind {
+  flex-shrink: 0;
+  font-size: var(--er-text-2xs);
+  color: var(--er-text-muted);
+  white-space: nowrap;
+}
+.search-doc__detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--er-text-2xs);
+  font-family: var(--font-mono);
+  color: var(--er-text-subtle);
+}
+.search-doc__where-used {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 18px;
+  margin-left: auto;
+  padding: 0;
+  color: var(--er-text-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--er-radius-md);
+  cursor: pointer;
+  opacity: 0;
+}
+.search-doc:hover .search-doc__where-used, .search-doc__where-used:focus-visible { opacity: 1; }
+.search-doc__where-used:hover { color: var(--er-accent); border-color: var(--er-accent-border); }
+.search-doc__where-used + .search-hit__arrow { margin-left: 0; }
+.search-doc__meta { display: flex; flex-wrap: wrap; gap: 0 8px; min-width: 0; font-size: var(--er-text-2xs); }
+.search-doc__path { color: var(--er-text-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100%; }
+.search-doc__label { color: var(--er-text-muted); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+@media (hover: none) {
+  .search-doc__where-used { opacity: 1; }
+}

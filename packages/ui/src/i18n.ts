@@ -1056,6 +1056,16 @@ export interface Translations {
   impactPaths: (paths: string) => string;
   impactStartedFrom: string;
   impactIntro: string;
+
+  // ─── Search results (components/SearchResultsView.tsx) ───
+  searchCategoryLabels: Record<'structure' | 'model' | 'bindings' | 'expressions' | 'datasources', string>;
+  searchCategoryShort: Record<'all' | 'structure' | 'model' | 'bindings' | 'expressions' | 'datasources', string>;
+  searchDocKindLabels: Record<'formatElement' | 'formatBinding' | 'modelRecord' | 'modelEnum' | 'modelField' | 'enumValue' | 'mappingBinding' | 'datasource' | 'calculatedField' | 'validation' | 'formatEnum' | 'transformation', string>;
+  searchFacetsAria: string;
+  searchWhereUsedHint: (name: string) => string;
+  searchMatchedLabel: string;
+  searchRootRecord: string;
+  searchIntro: string;
 }
 
 // ─── Translation dictionaries ─────────────────────────────────────────────
@@ -2070,6 +2080,16 @@ const cs: Translations = {
   impactPaths: (paths: string) => `Cesty: ${paths}`,
   impactStartedFrom: 'Hledáno od vybrané položky',
   impactIntro: 'Zadejte tabulku, pole, výčet, třídu, zdroj dat nebo pole modelu. Výsledek ukáže, která pole modelu se z něj plní a které prvky kterých formátů ho nakonec čtou — i přes výpočty a seznamy.',
+
+  // ─── Search results (components/SearchResultsView.tsx) ───
+  searchCategoryLabels: { structure: 'Struktura formátu', model: 'Datový model', bindings: 'Vazby', expressions: 'Výpočty a validace', datasources: 'Zdroje dat' },
+  searchCategoryShort: { all: 'Vše', structure: 'Formát', model: 'Model', bindings: 'Vazby', expressions: 'Výpočty', datasources: 'Zdroje' },
+  searchDocKindLabels: { formatElement: 'Prvek', formatBinding: 'Vazba formátu', modelRecord: 'Záznam', modelEnum: 'Výčet modelu', modelField: 'Pole modelu', enumValue: 'Hodnota výčtu', mappingBinding: 'Vazba mapování', datasource: 'Zdroj dat', calculatedField: 'Výpočet', validation: 'Validace', formatEnum: 'Výčet formátu', transformation: 'Transformace' },
+  searchFacetsAria: 'Druh výsledků',
+  searchWhereUsedHint: (name: string) => `Kde se používá ${name}`,
+  searchMatchedLabel: 'popisek',
+  searchRootRecord: 'kořen',
+  searchIntro: 'Hledá v názvech prvků formátu, polí a záznamů modelu, v popiscích (česky i anglicky, i bez diakritiky), ve vazbách, výpočtech, zdrojích dat, validacích a v celém textu výrazů.',
 };
 
 const en: Translations = {
@@ -3077,6 +3097,16 @@ const en: Translations = {
   impactPaths: (paths: string) => `Paths: ${paths}`,
   impactStartedFrom: 'Started from the selected item',
   impactIntro: 'Type a table, field, enum, class, data source or model field. The result shows which model fields are filled from it and which elements of which formats end up reading it — through calculations and lists as well.',
+
+  // ─── Search results (components/SearchResultsView.tsx) ───
+  searchCategoryLabels: { structure: 'Format structure', model: 'Data model', bindings: 'Bindings', expressions: 'Calculations & validations', datasources: 'Data sources' },
+  searchCategoryShort: { all: 'All', structure: 'Format', model: 'Model', bindings: 'Bindings', expressions: 'Calculations', datasources: 'Sources' },
+  searchDocKindLabels: { formatElement: 'Element', formatBinding: 'Format binding', modelRecord: 'Record', modelEnum: 'Model enum', modelField: 'Model field', enumValue: 'Enum value', mappingBinding: 'Mapping binding', datasource: 'Data source', calculatedField: 'Calculation', validation: 'Validation', formatEnum: 'Format enum', transformation: 'Transformation' },
+  searchFacetsAria: 'Kind of results',
+  searchWhereUsedHint: (name: string) => `Where ${name} is used`,
+  searchMatchedLabel: 'label',
+  searchRootRecord: 'root',
+  searchIntro: 'Searches the names of format elements, model fields and records, their labels (in every language, accents optional), bindings, calculations, data sources, validations and the full text of expressions.',
 };
 
 export let t: Translations = locale === 'cs' ? cs : en;

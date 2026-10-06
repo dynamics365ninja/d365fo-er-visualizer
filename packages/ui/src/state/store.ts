@@ -140,7 +140,7 @@ export interface FnoIngestProgress {
   items: FnoIngestItem[];
 }
 
-/** Shortest free-text query `executeSearch` runs; shorter ones yield no results. */
+/** Shortest free-text query the search panel runs; shorter ones yield no results. */
 export const MIN_SEARCH_QUERY_LENGTH = 2;
 
 // ─── App State ───
@@ -189,7 +189,6 @@ export interface AppState {
   /** Tab being dragged from a tab strip; the groups show drop zones meanwhile. */
   draggingTabId: string | null;
   searchQuery: string;
-  searchResults: any[];
   searchPanelMode: 'search' | 'where-used';
   whereUsedQuery: string;
   /** The item a where-used was started from (a model field of one record, a datasource of one definition). */
@@ -280,7 +279,6 @@ export interface AppState {
   /** Called by the `prefers-color-scheme` listener while the mode is `system`. */
   syncSystemTheme: () => void;
   setSearchQuery: (query: string) => void;
-  executeSearch: () => void;
   setSearchPanelMode: (mode: 'search' | 'where-used') => void;
   setWhereUsedQuery: (query: string) => void;
   executeWhereUsed: (query?: string, target?: WhereUsedTarget | null) => void;
@@ -383,7 +381,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   focusedPane: 'main',
   draggingTabId: null,
   searchQuery: '',
-  searchResults: [],
   searchPanelMode: 'search',
   whereUsedQuery: '',
   whereUsedTarget: null,
@@ -584,10 +581,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       canNavigateForward: navigationForward.length > 0,
       recentSessions: nextRecentSessions,
     });
-    // Search / where-used results carry config indices that just shifted —
-    // recompute them against the new registry instead of showing stale hits.
+    // Where-used text occurrences carry config indices that just shifted —
+    // recompute them instead of showing stale hits. Search and the impact
+    // analysis derive from the configurations and follow on their own.
     const after = get();
-    if (after.searchQuery.trim()) after.executeSearch();
     if (after.whereUsedQuery.trim()) after.executeWhereUsed();
   },
 
@@ -713,7 +710,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       canNavigateForward: false,
       searchPanelMode: 'search',
       searchQuery: '',
-      searchResults: [],
       whereUsedQuery: '',
       whereUsedTarget: null,
       whereUsedResults: [],
@@ -976,19 +972,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setSearchQuery: (query: string) => set({ searchQuery: query }),
-
-  executeSearch: () => {
-    const state = get();
-    // A single character matches nearly every cross-reference, and each hit
-    // is resolved and rendered by the panel — not worth it for a query that
-    // is almost certainly still being typed.
-    if (state.searchQuery.trim().length < MIN_SEARCH_QUERY_LENGTH) {
-      set({ searchResults: [] });
-      return;
-    }
-    const results = state.registry.search(state.searchQuery);
-    set({ searchResults: results });
-  },
 
   setSearchPanelMode: (mode) => set({ searchPanelMode: mode }),
 
@@ -1264,8 +1247,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         canNavigateForward: false,
         searchPanelMode: 'search',
         searchQuery: '',
-        searchResults: [],
-        whereUsedQuery: '',
+          whereUsedQuery: '',
         whereUsedTarget: null,
         whereUsedResults: [],
         whereUsedScope: 'all',
