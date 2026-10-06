@@ -26,6 +26,8 @@ import { findTreeNodeByMatch, SlidingTabs, datasourceFocusKey, collectDatasource
 import { type GroupedDatasourceListHandle, GroupedDatasourceList } from './DatasourceTree';
 import { MappingDesigner } from './ModelMappingDesigner';
 import { FormatPreview } from './FormatPreview';
+import { FieldSpecView, type SpecMode } from './FieldSpecView';
+import { buildFormatLineage } from '../../utils/format-lineage';
 import { FormatTypeBadge } from './format-type';
 import { FormatStructureTree } from './FormatElementTree';
 import { BINDING_OUTLINE_THRESHOLD, ModelUsageView, BindingIntentBar, BindingListEmpty, FormatElementBindingGroup } from './FormatBindingsView';
@@ -80,14 +82,14 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
   const toolsInHeader = useCompactLayout();
 
   const [filter, setFilter] = useTabState(tabId, 'format.filter', '');
-  const [view, setView] = useTabState<'structure' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping'>(tabId, 'format.view', 'structure');
+  const [view, setView] = useTabState<'structure' | 'spec' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping'>(tabId, 'format.view', 'structure');
+  const [specMode, setSpecMode] = useTabState<SpecMode>(tabId, 'format.specMode', 'all');
   // Start collapsed: a fully expanded format tree buries the top level under
   // hundreds of rows. Expand-all is one click away in the toolbar.
   const [structureExpandMode, setStructureExpandMode] = useState<'all' | 'none'>('none');
   const [structureExpandVersion, setStructureExpandVersion] = useState(0);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [selectedEmbeddedMappingIdx, setSelectedEmbeddedMappingIdx] = useTabState(tabId, 'format.embeddedMapping', 0);
-  const [structureBindingFilter, setStructureBindingFilter] = useTabState<'all' | 'bound' | 'unbound'>(tabId, 'format.bindingFilter', 'all');
 
   // For import formats: find all loaded standalone ModelMapping configs that reference this format
   const linkedMappings = useMemo(() => {
@@ -106,9 +108,16 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
     return result;
   }, [fc.direction, fmt.id, configurations, configIndex]);
 
+  // A selection made inside this designer (the specification, the preview)
+  // comes back as the focus node; it must not yank the view to Structure.
+  const internalSelectionRef = useRef<string | null>(null);
   useEffect(() => {
     if (!focusNode) return;
     if (focusNode.type === 'formatElement' && focusNode.data?.id) {
+      if (internalSelectionRef.current === focusNode.data.id) {
+        internalSelectionRef.current = null;
+        return;
+      }
       setView('structure');
       setSelectedElementId(focusNode.data.id);
       return;
@@ -131,6 +140,10 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
     [rootElement, fmtMap.bindings],
   );
   const bindingMap = bindingPresentation.bindingMap;
+
+  // How every element is filled, through the mapping down to D365FO — the
+  // specification, the preview and the header counts all read this.
+  const lineage = useMemo(() => buildFormatLineage(configurations, configIndex), [configurations, configIndex]);
 
   // Transformation lookup: GUID → transformation
   const transformationMap = useMemo(() => {
@@ -169,6 +182,11 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
     countElements(rootElement);
     return { totalElements, boundElements, unboundElements, structuralElements, typeCount, bindings: fmtMap.bindings.length, datasources: countDeclaredDatasources(fmtMap.datasources), enums: fmt.enumDefinitions.length, transformations: fmt.transformations.length };
   }, [rootElement, bindingMap, fmtMap, fmt]);
+
+  const fieldStats = useMemo(() => ({
+    bound: lineage ? lineage.stats.fields - lineage.stats.unbound : stats.boundElements,
+    unbound: lineage ? lineage.stats.unbound : stats.unboundElements,
+  }), [lineage, stats]);
 
   // Bindings view. Elements whose only bindings are trivial switches
   // (`Enabled ← false`) stay out of both layouts.
@@ -440,6 +458,7 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
       const rootNode = treeNodes[configIndex];
       if (rootNode) {
         const match = findTreeNodeByMatch(rootNode, n => n.type === 'formatElement' && n.data?.id === elementId);
+        internalSelectionRef.current = match ? elementId : null;
         if (match) selectNode(match.id, { revealInExplorer: false });
       }
     }
@@ -448,13 +467,18 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
   // The same two words as the model-mapping designer, in both view modes: the
   // consultant-mode aliases ("Links" / "Zdroje dat") named the very things F&O
   // itself calls bindings and data sources.
-  type FormatViewId = 'structure' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping';
+  type FormatViewId = 'structure' | 'spec' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping';
   const formatTabs = useMemo<Array<{ id: FormatViewId; label: React.ReactNode; title: string }>>(() => {
     const tabs: Array<{ id: FormatViewId; label: React.ReactNode; title: string }> = [
       {
         id: 'structure',
         label: `${t.structure} (${stats.totalElements})`,
         title: t.fmtTabStructureTitle,
+      },
+      {
+        id: 'spec',
+        label: t.fmtTabSpec,
+        title: t.fmtTabSpecTitle,
       },
       {
         id: 'bindings',
@@ -542,18 +566,20 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
           {getFormatDirectionLabel(fc.direction)}
         </span>
         <div className="fmt-header-stats">
+          {/* Counted per field (a value node folded into its XML element is one
+              field), so "not bound" lists the fields that really stay empty. */}
           <button
             type="button"
-            className={`fmt-stat fmt-stat-bound fmt-stat-btn ${view === 'structure' && structureBindingFilter === 'bound' ? 'active' : ''}`}
-            title={`${stats.boundElements} ${t.bound}`}
-            onClick={() => { setView('structure'); setStructureBindingFilter(f => f === 'bound' ? 'all' : 'bound'); }}
-          ><CheckmarkCircleRegular fontSize={13} /> {stats.boundElements} <span className="fmt-stat-btn__word">{t.bound}</span></button>
+            className={`fmt-stat fmt-stat-bound fmt-stat-btn ${view === 'spec' && specMode === 'fields' ? 'active' : ''}`}
+            title={t.specBoundTitle(fieldStats.bound)}
+            onClick={() => { setView('spec'); setSpecMode(mode => (mode === 'fields' && view === 'spec' ? 'all' : 'fields')); }}
+          ><CheckmarkCircleRegular fontSize={13} /> {fieldStats.bound} <span className="fmt-stat-btn__word">{t.bound}</span></button>
           <button
             type="button"
-            className={`fmt-stat fmt-stat-unbound fmt-stat-btn ${view === 'structure' && structureBindingFilter === 'unbound' ? 'active' : ''}`}
-            title={`${stats.unboundElements} ${t.unbound}`}
-            onClick={() => { setView('structure'); setStructureBindingFilter(f => f === 'unbound' ? 'all' : 'unbound'); }}
-          ><CircleRegular fontSize={13} /> {stats.unboundElements} <span className="fmt-stat-btn__word">{t.unbound}</span></button>
+            className={`fmt-stat fmt-stat-unbound fmt-stat-btn ${view === 'spec' && specMode === 'unbound' ? 'active' : ''}`}
+            title={t.specUnboundTitle(fieldStats.unbound)}
+            onClick={() => { setView('spec'); setSpecMode(mode => (mode === 'unbound' && view === 'spec' ? 'all' : 'unbound')); }}
+          ><CircleRegular fontSize={13} /> {fieldStats.unbound} <span className="fmt-stat-btn__word">{t.unbound}</span></button>
         </div>
         {toolsInHeader && <div className="fmt-header-tools">{designerTools}</div>}
       </div>
@@ -632,10 +658,26 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
               selectedId={selectedElementId}
               onSelect={handleSelectFormatElement}
               showTechnicalDetails={showTechnicalDetails}
-              bindingFilter={structureBindingFilter}
               treeIndex={treeIndex}
               selectedAncestors={selectedAncestors}
               onReveal={revealFormatElementInExplorer}
+            />
+          )}
+
+          {view === 'spec' && lineage && (
+            <FieldSpecView
+              lineage={lineage}
+              configIndex={configIndex}
+              filter={filter}
+              mode={specMode}
+              onModeChange={setSpecMode}
+              scrollRef={listPaneRef}
+              selectedId={selectedElementId}
+              onSelect={handleSelectFormatElement}
+              onOpenStructure={elementId => {
+                setView('structure');
+                handleSelectFormatElement(elementId);
+              }}
             />
           )}
 

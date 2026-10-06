@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { type ModelUsageNode } from '../../utils/format-model-usage';
 import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
+import { ElementDrillDown } from './lineage-parts';
 import { t } from '../../i18n';
 import { getConsultantBindingLabel } from '../../utils/consultant-labels';
 import { getFormatBindingDisplayLabel, groupFormatBindingsByCategory, type NormalizedFormatBinding, type NormalizedFormatBindingGroup } from '../../utils/format-binding-display';
@@ -421,13 +422,14 @@ export function FormatElementBindingGroup({ row, bindings, focused, cardRef, con
               )}
               <span className="fmt-bind-row-arrow" aria-hidden="true">←</span>
               <span className="fmt-bind-row-expr">
-                <DrillDownTrigger
+                <ElementDrillDown
                   expression={binding.expressionAsString}
                   configIndex={configIndex}
+                  elementId={row.componentId}
                   elementName={row.elementName}
                 >
                   <ExpressionDetailLink expression={binding.expressionAsString} configIndex={configIndex} interactive={false} />
-                </DrillDownTrigger>
+                </ElementDrillDown>
               </span>
             </div>
           );
