@@ -1091,3 +1091,217 @@
   40%  { background-color: color-mix(in srgb, var(--er-accent) 20%, transparent); }
   100% { background-color: color-mix(in srgb, var(--er-accent) 10%, transparent); }
 }
+
+/* ── Where-used as impact analysis: one card per matching table, field,
+   datasource or model field; inside it what the mappings fill from it and
+   which format elements read it ── */
+.impact { display: flex; flex-direction: column; gap: 6px; }
+.impact__summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: var(--er-text-xs);
+  color: var(--er-text-muted);
+  padding: 0 2px 2px;
+}
+.impact__indirect {
+  margin-left: auto;
+  font: inherit;
+  font-size: var(--er-text-2xs);
+  color: var(--er-accent);
+  background: none;
+  border: 1px dashed color-mix(in srgb, var(--er-accent) 45%, transparent);
+  border-radius: var(--er-radius-md);
+  padding: 1px 6px;
+  cursor: pointer;
+}
+.impact__indirect:hover { background: var(--er-accent-soft); }
+.impact__indirect--inline { margin: 4px 8px; }
+
+.impact-card {
+  border: 1px solid var(--ui-stroke-1);
+  border-radius: var(--er-radius-lg);
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+.impact-card--target { border-color: var(--er-accent-border); box-shadow: 0 0 0 1px var(--er-accent-border); }
+.impact-card__head {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-areas: "chev kind name" ". sub sub";
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 1px;
+  width: 100%;
+  padding: 5px 8px;
+  font: inherit;
+  text-align: left;
+  color: var(--er-text);
+  background: var(--bg-secondary);
+  border: none;
+  cursor: pointer;
+}
+.impact-card__head:hover { background: var(--er-hover); }
+.impact-card__head .tree-chevron { grid-area: chev; }
+.impact-kind {
+  grid-area: kind;
+  font-size: var(--er-text-2xs);
+  font-weight: 600;
+  padding: 0 5px;
+  height: 17px;
+  line-height: 17px;
+  border-radius: var(--er-radius-pill);
+  color: var(--kind-color, var(--er-text-muted));
+  background: color-mix(in srgb, var(--kind-color, var(--er-text-muted)) 12%, transparent);
+  white-space: nowrap;
+}
+.impact-kind--table, .impact-kind--field { --kind-color: var(--er-format); }
+.impact-kind--modelField { --kind-color: var(--er-model); }
+.impact-kind--datasource { --kind-color: var(--er-mapping); }
+.impact-kind--enum { --kind-color: var(--er-info); }
+.impact-kind--class, .impact-kind--parameter { --kind-color: var(--er-success); }
+.impact-card__name { grid-area: name; font-weight: 600; font-family: var(--font-mono); font-size: var(--er-text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.impact-card__subtitle { grid-area: sub; display: flex; gap: 8px; min-width: 0; font-size: var(--er-text-2xs); color: var(--er-text-muted); }
+.impact-card__counts { white-space: nowrap; color: var(--er-text); }
+.impact-card__subtitle-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.impact-card__body { display: flex; flex-direction: column; padding: 2px 0 4px; }
+
+.impact-section { padding: 2px 0; }
+.impact-section + .impact-section { border-top: 1px solid var(--ui-stroke-2); }
+.impact-section__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 2px;
+  font-size: var(--er-text-2xs);
+  font-weight: 600;
+  color: var(--er-text-muted);
+}
+.impact-section--mapping .impact-section__head svg { color: var(--er-mapping); }
+.impact-section--format .impact-section__head svg { color: var(--er-format); }
+.impact-section__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.impact-section__count { margin-left: auto; font-weight: 400; }
+.impact-section__rows { display: flex; flex-direction: column; }
+.impact-section__more {
+  align-self: flex-start;
+  margin: 2px 10px 4px 26px;
+  font: inherit;
+  font-size: var(--er-text-2xs);
+  color: var(--er-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.impact-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 3px 10px 3px 26px;
+  font: inherit;
+  text-align: left;
+  color: var(--er-text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  min-width: 0;
+}
+.impact-row:hover { background: var(--er-hover); }
+.impact-row__main { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.impact-row__main > svg { flex-shrink: 0; opacity: 0.8; }
+.impact-row__leaf { font-size: var(--er-text-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.impact-row__type { font-size: var(--er-text-2xs); color: var(--er-text-subtle); white-space: nowrap; }
+.impact-row__arrow { margin-left: auto; flex-shrink: 0; opacity: 0; color: var(--er-text-muted); }
+.impact-row:hover .impact-row__arrow { opacity: 1; }
+.impact-row__path { font-size: var(--er-text-2xs); color: var(--er-text-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.impact-row__main .impact-row__path { min-width: 0; }
+.impact-row__expr { display: flex; flex-wrap: wrap; gap: 0 8px; font-family: var(--font-mono); font-size: var(--er-text-2xs); color: var(--er-text-muted); overflow: hidden; }
+.impact-row__via { color: var(--er-model); }
+
+.impact-role {
+  font-size: var(--er-text-2xs);
+  padding: 0 4px;
+  border-radius: var(--er-radius-pill);
+  white-space: nowrap;
+  border: 1px solid var(--ui-stroke-1);
+  color: var(--er-text-muted);
+}
+.impact-role--fills { color: var(--er-mapping); border-color: color-mix(in srgb, var(--er-mapping) 35%, transparent); }
+.impact-role--condition { color: var(--er-warning); border-color: var(--er-warning-border); background: var(--er-warning-soft); }
+.impact-role--context { border-style: dashed; }
+
+.impact-text { margin-top: 8px; }
+.impact-text > summary {
+  cursor: pointer;
+  font-size: var(--er-text-xs);
+  color: var(--er-text-muted);
+  padding: 4px 2px;
+}
+
+/* ── Full-text search over the typed index: kind facets, one row per
+   document with its kind, detail, path / label and expression excerpt ── */
+.search-facets { display: flex; flex-wrap: wrap; gap: 3px; padding: 0 0 6px; }
+.search-facet {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  font: inherit;
+  font-size: var(--er-text-2xs);
+  color: var(--er-text);
+  background: var(--bg-primary);
+  border: 1px solid var(--ui-stroke-1);
+  border-radius: var(--er-radius-pill);
+  cursor: pointer;
+}
+.search-facet:hover { background: var(--er-hover); }
+.search-facet.active { color: var(--er-accent); border-color: var(--er-accent-border); background: var(--er-accent-soft); }
+.search-facet__count { color: var(--er-text-muted); }
+.search-cat--model .search-cat__marker { background: var(--er-model); }
+
+.search-doc { cursor: pointer; }
+.search-doc__icon { display: inline-flex; flex-shrink: 0; color: var(--er-text-muted); }
+.search-doc__kind {
+  flex-shrink: 0;
+  font-size: var(--er-text-2xs);
+  color: var(--er-text-muted);
+  white-space: nowrap;
+}
+.search-doc__detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--er-text-2xs);
+  font-family: var(--font-mono);
+  color: var(--er-text-subtle);
+}
+.search-doc__where-used {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 18px;
+  margin-left: auto;
+  padding: 0;
+  color: var(--er-text-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--er-radius-md);
+  cursor: pointer;
+  opacity: 0;
+}
+.search-doc:hover .search-doc__where-used, .search-doc__where-used:focus-visible { opacity: 1; }
+.search-doc__where-used:hover { color: var(--er-accent); border-color: var(--er-accent-border); }
+.search-doc__where-used + .search-hit__arrow { margin-left: 0; }
+.search-doc__meta { display: flex; flex-wrap: wrap; gap: 0 8px; min-width: 0; font-size: var(--er-text-2xs); }
+.search-doc__path { color: var(--er-text-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100%; }
+.search-doc__label { color: var(--er-text-muted); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+@media (hover: none) {
+  .search-doc__where-used { opacity: 1; }
+}

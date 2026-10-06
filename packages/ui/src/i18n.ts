@@ -972,6 +972,127 @@ export interface Translations {
 
   // ─── Where-used text matches (state/where-used.ts) ───
   whereUsedTextMatchName: (query: string) => string;
+
+  // ─── Field specification (designers/FieldSpecView.tsx, utils/field-spec-export.ts) ───
+  fmtTabSpec: string;
+  fmtTabSpecTitle: string;
+  specColElement: string;
+  specColType: string;
+  specColFill: string;
+  specColValue: string;
+  specColModel: string;
+  specColSource: string;
+  fillKindLabels: Record<'constant' | 'model' | 'datasource' | 'calculated' | 'unbound' | 'structure', string>;
+  fillKindHints: Record<'constant' | 'model' | 'datasource' | 'calculated' | 'unbound' | 'structure', string>;
+  specModeLabels: Record<'all' | 'fields' | 'unbound' | 'calculated' | 'conditional' | 'repeating', string>;
+  specModeAria: string;
+  specRepeats: (source: string) => string;
+  specRepeatsInferred: string;
+  specRepeatBadge: string;
+  specOptionalBadge: string;
+  specOptionalHint: string;
+  specConditionBadge: string;
+  specCondition: (expression: string) => string;
+  specMaxLength: (n: number) => string;
+  specLengthRange: (min: number, max: number) => string;
+  specMinLength: (n: number) => string;
+  specLengthUnit: string;
+  specFormat: (format: string) => string;
+  specPadding: (ch: string, alignment?: string) => string;
+  specDelimiter: (d: string) => string;
+  specLineEnd: (e: string) => string;
+  specTransformation: (name: string) => string;
+  specNoMapping: string;
+  specMappingContext: (mapping: string) => string;
+  specNoDataModel: string;
+  specUnmapped: string;
+  specUnmappedHint: (path: string) => string;
+  specViaMapping: (definition: string, expression: string) => string;
+  specContextSources: string;
+  specConditionSources: string;
+  specExportCsv: string;
+  specExportHint: string;
+  specEmpty: string;
+  specOpenStructure: string;
+  specCsvHeaders: string[];
+  specOccurrence: Record<'always' | 'optional' | 'repeating' | 'conditional', string>;
+  sourceKindLabels: Record<'table' | 'field' | 'enum' | 'class' | 'parameter' | 'datasource' | 'importFormat', string>;
+  specFieldsCount: (n: number) => string;
+  specUnboundTitle: (n: number) => string;
+  specBoundTitle: (n: number) => string;
+
+  // ─── Element fill card (designers/ElementFillCard.tsx) ───
+  fillCardTitle: string;
+  fillCardValue: string;
+  fillCardModel: string;
+  fillCardMapping: string;
+  fillCardSource: string;
+  fillCardSelection: string;
+  fillCardCondition: string;
+  fillCardRules: string;
+  fillCardRepeats: string;
+  fillCardOther: string;
+  fillCardNoSource: string;
+  fillCardOpenSpec: string;
+
+  // ─── Where-used impact view (components/WhereUsedView.tsx) ───
+  impactKindLabels: Record<'table' | 'field' | 'enum' | 'class' | 'parameter' | 'datasource' | 'modelField', string>;
+  impactSummary: (entities: number, elements: number, formats: number) => string;
+  impactCounts: (fields: number, elements: number, formats: number) => string;
+  impactMappingSection: (definition: string) => string;
+  impactFillsTitle: string;
+  impactReadsTitle: string;
+  impactRoleLabels: Record<'fills' | 'value' | 'condition' | 'context', string>;
+  impactRoleHints: Record<'fills' | 'value' | 'condition' | 'context', string>;
+  impactVia: (path: string) => string;
+  impactIndirectToggle: (n: number) => string;
+  impactIndirectHide: string;
+  impactIndirectHint: string;
+  impactOnlyIndirect: (n: number) => string;
+  impactNoMatch: (query: string) => string;
+  impactTextSection: (n: number) => string;
+  impactTextHint: string;
+  impactShowAllRows: (n: number) => string;
+  impactPaths: (paths: string) => string;
+  impactStartedFrom: string;
+  impactIntro: string;
+
+  // ─── Search results (components/SearchResultsView.tsx) ───
+  searchCategoryLabels: Record<'structure' | 'model' | 'bindings' | 'expressions' | 'datasources', string>;
+  searchCategoryShort: Record<'all' | 'structure' | 'model' | 'bindings' | 'expressions' | 'datasources', string>;
+  searchDocKindLabels: Record<'formatElement' | 'formatBinding' | 'modelRecord' | 'modelEnum' | 'modelField' | 'enumValue' | 'mappingBinding' | 'datasource' | 'calculatedField' | 'validation' | 'formatEnum' | 'transformation', string>;
+  searchFacetsAria: string;
+  searchWhereUsedHint: (name: string) => string;
+  searchMatchedLabel: string;
+  searchRootRecord: string;
+  searchIntro: string;
+
+  // ─── Document preview (designers/DocumentPreview.tsx) ───
+  docPreviewModeLabels: Record<'sample' | 'source' | 'expression' | 'name', string>;
+  docPreviewModeHints: Record<'sample' | 'source' | 'expression' | 'name', string>;
+  docPreviewModeAria: string;
+  docPreviewRecords: string;
+  docPreviewNotes: string;
+  docPreviewNotesHint: string;
+  docPreviewHideUnbound: string;
+  docPreviewHideUnboundHint: string;
+  docPreviewRepeats: (source: string, n: number) => string;
+  docPreviewCondition: (expression: string) => string;
+  docPreviewOptional: string;
+  docPreviewLegendRepeat: string;
+  docPreviewLegendCondition: string;
+  docPreviewLegendUnbound: string;
+  docPreviewLegendConstant: string;
+  docPreviewLegendPadding: string;
+  docPreviewSelectHint: string;
+  docPreviewCopy: string;
+  docPreviewCopied: string;
+  docPreviewCopyHint: string;
+  docPreviewDownload: string;
+  docPreviewDownloadHint: string;
+  docPreviewClose: string;
+  docPreviewEmpty: string;
+  docPreviewRuler: string;
 }
 
 // ─── Translation dictionaries ─────────────────────────────────────────────
@@ -1902,6 +2023,127 @@ const cs: Translations = {
 
   // ─── Where-used text matches (state/where-used.ts) ───
   whereUsedTextMatchName: (query: string) => `"${query}" (výskyty ve výrazech)`,
+
+  // ─── Field specification (designers/FieldSpecView.tsx, utils/field-spec-export.ts) ───
+  fmtTabSpec: 'Specifikace',
+  fmtTabSpecTitle: 'Jak se plní jednotlivá pole — zdroj hodnoty, podmínky, opakování a omezení',
+  specColElement: 'Prvek',
+  specColType: 'Typ a délka',
+  specColFill: 'Plnění',
+  specColValue: 'Hodnota / výraz',
+  specColModel: 'Pole modelu',
+  specColSource: 'Zdroj v D365FO',
+  fillKindLabels: { constant: 'Konstanta', model: 'Pole modelu', datasource: 'Zdroj formátu', calculated: 'Výpočet', unbound: 'Nenavázáno', structure: 'Struktura' },
+  fillKindHints: { constant: 'Pevná hodnota zapsaná přímo ve formátu', model: 'Hodnota se přebírá z pole datového modelu, které plní mapování', datasource: 'Hodnota z datového zdroje definovaného ve formátu (výpočet, výčet, tabulka)', calculated: 'Hodnota se počítá výrazem přímo ve vazbě formátu', unbound: 'Prvek nemá vazbu — ve výstupu zůstane prázdný', structure: 'Strukturní prvek — hodnoty nesou jeho potomci' },
+  specModeLabels: { all: 'Vše', fields: 'Jen pole', unbound: 'Nenavázané', calculated: 'Výpočty', conditional: 'Podmíněné', repeating: 'Opakované' },
+  specModeAria: 'Které prvky zobrazit',
+  specRepeats: (source: string) => `Opakuje se pro každý záznam: ${source}`,
+  specRepeatsInferred: 'Pravděpodobně se opakuje — datový model není načten',
+  specRepeatBadge: 'opakuje se',
+  specOptionalBadge: 'nepovinné',
+  specOptionalHint: 'Prvek se ve výstupu může vynechat (násobnost 0..1)',
+  specConditionBadge: 'podmínka',
+  specCondition: (expression: string) => `Jen když: ${expression}`,
+  specMaxLength: (n: number) => `max ${n}`,
+  specLengthRange: (min: number, max: number) => (min === max ? `přesně ${max}` : `${min}–${max}`),
+  specMinLength: (n: number) => `min ${n}`,
+  specLengthUnit: 'znaků',
+  specFormat: (format: string) => `formát ${format}`,
+  specPadding: (ch: string, alignment?: string) => `doplnění „${ch === ' ' ? '␣' : ch}“${alignment ? `, zarovnání ${alignment}` : ''}`,
+  specDelimiter: (d: string) => `oddělovač ${d}`,
+  specLineEnd: (e: string) => `konec řádku ${e}`,
+  specTransformation: (name: string) => `transformace ${name}`,
+  specNoMapping: 'Mapování modelu, na kterém formát běží, není načteno — zdroje v D365FO nelze dohledat.',
+  specMappingContext: (mapping: string) => `Zdroje dohledány přes mapování ${mapping}`,
+  specNoDataModel: 'Datový model není načten — typy polí modelu a opakování jsou odhadnuté.',
+  specUnmapped: 'nenamapováno',
+  specUnmappedHint: (path: string) => `Pole modelu ${path} nemá v mapování vazbu — ve výstupu bude prázdné`,
+  specViaMapping: (definition: string, expression: string) => `Mapování ${definition}: ${expression}`,
+  specContextSources: 'Výběr záznamů (seznam, filtr)',
+  specConditionSources: 'Podmínka čte',
+  specExportCsv: 'Export CSV',
+  specExportHint: 'Stáhnout specifikaci polí jako CSV (otevře se v Excelu)',
+  specEmpty: 'Žádný prvek neodpovídá filtru.',
+  specOpenStructure: 'Zobrazit ve struktuře',
+  specCsvHeaders: ['Cesta', 'Prvek', 'Typ prvku', 'Datový typ', 'Výskyt', 'Min. délka', 'Max. délka', 'Formát', 'Plnění', 'Výraz vazby', 'Podmínka', 'Pole modelu', 'Popisek pole modelu', 'Výraz v mapování', 'Zdroj v D365FO', 'Výběr záznamů'],
+  specOccurrence: { always: 'vždy', optional: 'nepovinný (0..1)', repeating: 'opakovaný', conditional: 'podmíněný' },
+  sourceKindLabels: { table: 'Tabulka', field: 'Pole tabulky', enum: 'Výčet', class: 'Třída', parameter: 'Parametr uživatele', datasource: 'Zdroj dat', importFormat: 'Importní formát' },
+  specFieldsCount: (n: number) => `${n} ${csPlural(n, 'pole', 'pole', 'polí')}`,
+  specUnboundTitle: (n: number) => `${n} ${csPlural(n, 'pole bez vazby', 'pole bez vazby', 'polí bez vazby')} — zobrazit ve specifikaci`,
+  specBoundTitle: (n: number) => `${n} ${csPlural(n, 'pole se plní', 'pole se plní', 'polí se plní')} — zobrazit ve specifikaci`,
+
+  // ─── Element fill card (designers/ElementFillCard.tsx) ───
+  fillCardTitle: 'Jak se pole plní',
+  fillCardValue: 'Hodnota',
+  fillCardModel: 'Pole modelu',
+  fillCardMapping: 'Mapování',
+  fillCardSource: 'Zdroj v D365FO',
+  fillCardSelection: 'Výběr záznamů',
+  fillCardCondition: 'Podmínka',
+  fillCardRules: 'Pravidla',
+  fillCardRepeats: 'Opakování',
+  fillCardOther: 'Další vazby',
+  fillCardNoSource: 'Zdroj nelze dohledat',
+  fillCardOpenSpec: 'Otevřít ve specifikaci',
+
+  // ─── Where-used impact view (components/WhereUsedView.tsx) ───
+  impactKindLabels: { table: 'Tabulka', field: 'Pole tabulky', enum: 'Výčet', class: 'Třída', parameter: 'Parametr', datasource: 'Zdroj dat', modelField: 'Pole modelu' },
+  impactSummary: (entities: number, elements: number, formats: number) => `${entities} ${csPlural(entities, 'shoda', 'shody', 'shod')} · ${elements} ${csPlural(elements, 'prvek', 'prvky', 'prvků')} ve ${formats} ${csPlural(formats, 'formátu', 'formátech', 'formátech')}`,
+  impactCounts: (fields: number, elements: number, formats: number) => [fields ? `${fields} ${csPlural(fields, 'pole modelu', 'pole modelu', 'polí modelu')}` : '', elements ? `${elements} ${csPlural(elements, 'prvek', 'prvky', 'prvků')} · ${formats} ${csPlural(formats, 'formát', 'formáty', 'formátů')}` : ''].filter(Boolean).join(' · '),
+  impactMappingSection: (definition: string) => `Mapování ${definition}`,
+  impactFillsTitle: 'Plní pole modelu',
+  impactReadsTitle: 'Čte',
+  impactRoleLabels: { fills: 'plní', value: 'hodnota', condition: 'podmínka', context: 'výběr záznamů' },
+  impactRoleHints: { fills: 'Vazba mapování plní toto pole modelu', value: 'Hodnota prvku pochází přímo z této položky', condition: 'Položka rozhoduje, zda se prvek vypíše', context: 'Položka jen vybírá záznamy (filtr, seznam) — hodnota pochází odjinud' },
+  impactVia: (path: string) => `přes ${path}`,
+  impactIndirectToggle: (n: number) => `Zobrazit i nepřímé použití (${n})`,
+  impactIndirectHide: 'Skrýt nepřímé použití',
+  impactIndirectHint: 'Nepřímé = položka jen vybírá záznamy (filtr WHERE, seznam), hodnotu prvku nedodává',
+  impactOnlyIndirect: (n: number) => `Jen nepřímé použití (${n})`,
+  impactNoMatch: (query: string) => `„${query}“ se v načtených konfiguracích nepoužívá v žádné vazbě ani prvku.`,
+  impactTextSection: (n: number) => `Další textové výskyty ve výrazech (${n})`,
+  impactTextHint: 'Místa, kde se hledaný text objevuje ve výrazu, ale nepodařilo se je přiřadit ke konkrétnímu zdroji',
+  impactShowAllRows: (n: number) => `Zobrazit všech ${n}`,
+  impactPaths: (paths: string) => `Cesty: ${paths}`,
+  impactStartedFrom: 'Hledáno od vybrané položky',
+  impactIntro: 'Zadejte tabulku, pole, výčet, třídu, zdroj dat nebo pole modelu. Výsledek ukáže, která pole modelu se z něj plní a které prvky kterých formátů ho nakonec čtou — i přes výpočty a seznamy.',
+
+  // ─── Search results (components/SearchResultsView.tsx) ───
+  searchCategoryLabels: { structure: 'Struktura formátu', model: 'Datový model', bindings: 'Vazby', expressions: 'Výpočty a validace', datasources: 'Zdroje dat' },
+  searchCategoryShort: { all: 'Vše', structure: 'Formát', model: 'Model', bindings: 'Vazby', expressions: 'Výpočty', datasources: 'Zdroje' },
+  searchDocKindLabels: { formatElement: 'Prvek', formatBinding: 'Vazba formátu', modelRecord: 'Záznam', modelEnum: 'Výčet modelu', modelField: 'Pole modelu', enumValue: 'Hodnota výčtu', mappingBinding: 'Vazba mapování', datasource: 'Zdroj dat', calculatedField: 'Výpočet', validation: 'Validace', formatEnum: 'Výčet formátu', transformation: 'Transformace' },
+  searchFacetsAria: 'Druh výsledků',
+  searchWhereUsedHint: (name: string) => `Kde se používá ${name}`,
+  searchMatchedLabel: 'popisek',
+  searchRootRecord: 'kořen',
+  searchIntro: 'Hledá v názvech prvků formátu, polí a záznamů modelu, v popiscích (česky i anglicky, i bez diakritiky), ve vazbách, výpočtech, zdrojích dat, validacích a v celém textu výrazů.',
+
+  // ─── Document preview (designers/DocumentPreview.tsx) ───
+  docPreviewModeLabels: { sample: 'Ukázková data', source: 'Zdroj v D365FO', expression: 'Výraz', name: 'Název prvku' },
+  docPreviewModeHints: { sample: 'Věrohodné hodnoty podle typu, délky, formátu a výčtu pole', source: 'Místo hodnot tabulka a pole D365FO (nebo pole modelu), odkud hodnota pochází', expression: 'Místo hodnot výraz vazby formátu', name: 'Místo hodnot název prvku formátu' },
+  docPreviewModeAria: 'Co zobrazit místo hodnot',
+  docPreviewRecords: 'Záznamů v seznamu',
+  docPreviewNotes: 'Anotace',
+  docPreviewNotesHint: 'Zobrazit poznámky o opakování a podmínkách (nejsou součástí souboru)',
+  docPreviewHideUnbound: 'Skrýt nenavázané',
+  docPreviewHideUnboundHint: 'Vynechat prvky bez vazby — ukáže, jak bude soubor skutečně vypadat',
+  docPreviewRepeats: (source: string, n: number) => `opakuje se pro každý záznam ${source} — ${n === 1 ? 'ukázka 1 záznamu' : `ukázka ${n} záznamů`}`,
+  docPreviewCondition: (expression: string) => `vypíše se jen když ${expression}`,
+  docPreviewOptional: 'nepovinný prvek (0..1)',
+  docPreviewLegendRepeat: 'opakovaný blok',
+  docPreviewLegendCondition: 'podmíněný blok',
+  docPreviewLegendUnbound: 'nenavázáno',
+  docPreviewLegendConstant: 'konstanta',
+  docPreviewLegendPadding: 'doplnění',
+  docPreviewSelectHint: 'Klikněte na hodnotu nebo prvek — zobrazí se, jak se plní. Dvojklik otevře prvek ve struktuře.',
+  docPreviewCopy: 'Kopírovat',
+  docPreviewCopied: 'Zkopírováno',
+  docPreviewCopyHint: 'Zkopírovat náhled souboru (bez anotací) do schránky',
+  docPreviewDownload: 'Stáhnout ukázku',
+  docPreviewDownloadHint: 'Stáhnout náhled jako soubor',
+  docPreviewClose: 'Zavřít detail',
+  docPreviewEmpty: 'Formát nemá žádné prvky k zobrazení.',
+  docPreviewRuler: 'Pozice znaků',
 };
 
 const en: Translations = {
@@ -2825,6 +3067,127 @@ const en: Translations = {
 
   // ─── Where-used text matches (state/where-used.ts) ───
   whereUsedTextMatchName: (query: string) => `"${query}" (occurrences in expressions)`,
+
+  // ─── Field specification (designers/FieldSpecView.tsx, utils/field-spec-export.ts) ───
+  fmtTabSpec: 'Specification',
+  fmtTabSpecTitle: 'How each field is filled — value source, conditions, repetition and constraints',
+  specColElement: 'Element',
+  specColType: 'Type & length',
+  specColFill: 'Filled by',
+  specColValue: 'Value / expression',
+  specColModel: 'Model field',
+  specColSource: 'D365FO source',
+  fillKindLabels: { constant: 'Constant', model: 'Model field', datasource: 'Format data source', calculated: 'Calculation', unbound: 'Not bound', structure: 'Structure' },
+  fillKindHints: { constant: 'A fixed value written in the format', model: 'Taken from a data model field, which the model mapping fills', datasource: 'Comes from a data source defined in the format (calculation, enum, table)', calculated: 'Computed by an expression in the format binding', unbound: 'Not bound — it stays empty in the output', structure: 'A structural element — its children carry the values' },
+  specModeLabels: { all: 'All', fields: 'Fields only', unbound: 'Not bound', calculated: 'Calculations', conditional: 'Conditional', repeating: 'Repeating' },
+  specModeAria: 'Which elements to show',
+  specRepeats: (source: string) => `Repeats for every record of ${source}`,
+  specRepeatsInferred: 'Probably repeats — the data model is not loaded',
+  specRepeatBadge: 'repeats',
+  specOptionalBadge: 'optional',
+  specOptionalHint: 'May be left out of the output (multiplicity 0..1)',
+  specConditionBadge: 'condition',
+  specCondition: (expression: string) => `Only when: ${expression}`,
+  specMaxLength: (n: number) => `max ${n}`,
+  specLengthRange: (min: number, max: number) => (min === max ? `exactly ${max}` : `${min}–${max}`),
+  specMinLength: (n: number) => `min ${n}`,
+  specLengthUnit: 'chars',
+  specFormat: (format: string) => `format ${format}`,
+  specPadding: (ch: string, alignment?: string) => `padded with "${ch === ' ' ? '␣' : ch}"${alignment ? `, aligned ${alignment}` : ''}`,
+  specDelimiter: (d: string) => `delimiter ${d}`,
+  specLineEnd: (e: string) => `line end ${e}`,
+  specTransformation: (name: string) => `transformation ${name}`,
+  specNoMapping: 'The model mapping this format runs on is not loaded — D365FO sources cannot be traced.',
+  specMappingContext: (mapping: string) => `Sources traced through the mapping ${mapping}`,
+  specNoDataModel: 'The data model is not loaded — model field types and repetition are estimated.',
+  specUnmapped: 'not mapped',
+  specUnmappedHint: (path: string) => `Model field ${path} has no binding in the mapping — it will be empty in the output`,
+  specViaMapping: (definition: string, expression: string) => `Mapping ${definition}: ${expression}`,
+  specContextSources: 'Record selection (list, filter)',
+  specConditionSources: 'The condition reads',
+  specExportCsv: 'Export CSV',
+  specExportHint: 'Download the field specification as CSV (opens in Excel)',
+  specEmpty: 'No element matches the filter.',
+  specOpenStructure: 'Show in the structure',
+  specCsvHeaders: ['Path', 'Element', 'Element type', 'Data type', 'Occurrence', 'Min length', 'Max length', 'Format', 'Filled by', 'Binding expression', 'Condition', 'Model field', 'Model field label', 'Mapping expression', 'D365FO source', 'Record selection'],
+  specOccurrence: { always: 'always', optional: 'optional (0..1)', repeating: 'repeating', conditional: 'conditional' },
+  sourceKindLabels: { table: 'Table', field: 'Table field', enum: 'Enum', class: 'Class', parameter: 'User parameter', datasource: 'Data source', importFormat: 'Import format' },
+  specFieldsCount: (n: number) => `${n} ${n === 1 ? 'field' : 'fields'}`,
+  specUnboundTitle: (n: number) => `${n} ${n === 1 ? 'field' : 'fields'} without a binding — show in the specification`,
+  specBoundTitle: (n: number) => `${n} ${n === 1 ? 'field is' : 'fields are'} filled — show in the specification`,
+
+  // ─── Element fill card (designers/ElementFillCard.tsx) ───
+  fillCardTitle: 'How the field is filled',
+  fillCardValue: 'Value',
+  fillCardModel: 'Model field',
+  fillCardMapping: 'Mapping',
+  fillCardSource: 'D365FO source',
+  fillCardSelection: 'Record selection',
+  fillCardCondition: 'Condition',
+  fillCardRules: 'Rules',
+  fillCardRepeats: 'Repetition',
+  fillCardOther: 'Other bindings',
+  fillCardNoSource: 'The source cannot be traced',
+  fillCardOpenSpec: 'Open in the specification',
+
+  // ─── Where-used impact view (components/WhereUsedView.tsx) ───
+  impactKindLabels: { table: 'Table', field: 'Table field', enum: 'Enum', class: 'Class', parameter: 'Parameter', datasource: 'Data source', modelField: 'Model field' },
+  impactSummary: (entities: number, elements: number, formats: number) => `${entities} ${entities === 1 ? 'match' : 'matches'} · ${elements} ${elements === 1 ? 'element' : 'elements'} in ${formats} ${formats === 1 ? 'format' : 'formats'}`,
+  impactCounts: (fields: number, elements: number, formats: number) => [fields ? `${fields} model ${fields === 1 ? 'field' : 'fields'}` : '', elements ? `${elements} ${elements === 1 ? 'element' : 'elements'} · ${formats} ${formats === 1 ? 'format' : 'formats'}` : ''].filter(Boolean).join(' · '),
+  impactMappingSection: (definition: string) => `Mapping ${definition}`,
+  impactFillsTitle: 'Fills model fields',
+  impactReadsTitle: 'Reads',
+  impactRoleLabels: { fills: 'fills', value: 'value', condition: 'condition', context: 'record selection' },
+  impactRoleHints: { fills: 'The mapping binding fills this model field', value: 'The element takes its value from this item', condition: 'The item decides whether the element is written', context: 'The item only selects the records (filter, list) — the value comes from elsewhere' },
+  impactVia: (path: string) => `via ${path}`,
+  impactIndirectToggle: (n: number) => `Show indirect use too (${n})`,
+  impactIndirectHide: 'Hide indirect use',
+  impactIndirectHint: 'Indirect = the item only selects the records (a WHERE filter, a list) and does not supply the value',
+  impactOnlyIndirect: (n: number) => `Indirect use only (${n})`,
+  impactNoMatch: (query: string) => `"${query}" is not used by any binding or element of the loaded configurations.`,
+  impactTextSection: (n: number) => `Other text occurrences in expressions (${n})`,
+  impactTextHint: 'Places where the text appears in an expression but could not be tied to a specific source',
+  impactShowAllRows: (n: number) => `Show all ${n}`,
+  impactPaths: (paths: string) => `Paths: ${paths}`,
+  impactStartedFrom: 'Started from the selected item',
+  impactIntro: 'Type a table, field, enum, class, data source or model field. The result shows which model fields are filled from it and which elements of which formats end up reading it — through calculations and lists as well.',
+
+  // ─── Search results (components/SearchResultsView.tsx) ───
+  searchCategoryLabels: { structure: 'Format structure', model: 'Data model', bindings: 'Bindings', expressions: 'Calculations & validations', datasources: 'Data sources' },
+  searchCategoryShort: { all: 'All', structure: 'Format', model: 'Model', bindings: 'Bindings', expressions: 'Calculations', datasources: 'Sources' },
+  searchDocKindLabels: { formatElement: 'Element', formatBinding: 'Format binding', modelRecord: 'Record', modelEnum: 'Model enum', modelField: 'Model field', enumValue: 'Enum value', mappingBinding: 'Mapping binding', datasource: 'Data source', calculatedField: 'Calculation', validation: 'Validation', formatEnum: 'Format enum', transformation: 'Transformation' },
+  searchFacetsAria: 'Kind of results',
+  searchWhereUsedHint: (name: string) => `Where ${name} is used`,
+  searchMatchedLabel: 'label',
+  searchRootRecord: 'root',
+  searchIntro: 'Searches the names of format elements, model fields and records, their labels (in every language, accents optional), bindings, calculations, data sources, validations and the full text of expressions.',
+
+  // ─── Document preview (designers/DocumentPreview.tsx) ───
+  docPreviewModeLabels: { sample: 'Sample data', source: 'D365FO source', expression: 'Expression', name: 'Element name' },
+  docPreviewModeHints: { sample: 'Plausible values from the field type, length, format and enum', source: 'Instead of values, the D365FO table and field (or the model field) the value comes from', expression: 'Instead of values, the format binding expression', name: 'Instead of values, the name of the format element' },
+  docPreviewModeAria: 'What to show as values',
+  docPreviewRecords: 'Records per list',
+  docPreviewNotes: 'Annotations',
+  docPreviewNotesHint: 'Show notes on repetition and conditions (not part of the file)',
+  docPreviewHideUnbound: 'Hide unbound',
+  docPreviewHideUnboundHint: 'Leave out unbound elements — shows how the file will actually look',
+  docPreviewRepeats: (source: string, n: number) => `repeats for every record of ${source} — ${n === 1 ? 'one sample record' : `${n} sample records`}`,
+  docPreviewCondition: (expression: string) => `written only when ${expression}`,
+  docPreviewOptional: 'optional element (0..1)',
+  docPreviewLegendRepeat: 'repeating section',
+  docPreviewLegendCondition: 'conditional section',
+  docPreviewLegendUnbound: 'not bound',
+  docPreviewLegendConstant: 'constant',
+  docPreviewLegendPadding: 'padding',
+  docPreviewSelectHint: 'Click a value or an element to see how it is filled. Double-click opens it in the structure.',
+  docPreviewCopy: 'Copy',
+  docPreviewCopied: 'Copied',
+  docPreviewCopyHint: 'Copy the file preview (without annotations) to the clipboard',
+  docPreviewDownload: 'Download sample',
+  docPreviewDownloadHint: 'Download the preview as a file',
+  docPreviewClose: 'Close the detail',
+  docPreviewEmpty: 'The format has no elements to show.',
+  docPreviewRuler: 'Character positions',
 };
 
 export let t: Translations = locale === 'cs' ? cs : en;

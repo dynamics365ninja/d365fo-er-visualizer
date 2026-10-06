@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowSyncRegular } from '@fluentui/react-icons';
 import { useAppStore } from '../../state/store';
-import { DrillDownTrigger } from '../DrillDownPanel';
+import { ElementDrillDown } from './lineage-parts';
 import { t, useLocale } from '../../i18n';
 import { isTreeArrowKey, treeArrowAction } from '../../utils/tree-keyboard';
 import { getBindingCategoryLabel, getConsultantBindingLabel, isXmlNamespaceDeclaration } from '../../utils/consultant-labels';
@@ -478,13 +478,14 @@ const FormatElementRow = React.memo(function FormatElementRow({ row, bindingMap,
         {mainBinding && (
           <span className="fmt-binding-inline">
             ←{' '}
-            <DrillDownTrigger
+            <ElementDrillDown
               expression={mainBinding.expressionAsString}
               configIndex={configIndex}
+              elementId={element.id}
               elementName={element.name}
             >
               <ExpressionDetailLink expression={mainBinding.expressionAsString} configIndex={configIndex} interactive={false} highlight={filter} />
-            </DrillDownTrigger>
+            </ElementDrillDown>
           </span>
         )}
 
@@ -533,13 +534,14 @@ const FormatElementRow = React.memo(function FormatElementRow({ row, bindingMap,
                     <span className="fmt-binding-origin">{t.bindingVia} {b.rawElementType}</span>
                   )}
                   <span className="fmt-binding-formula">
-                    <DrillDownTrigger
+                    <ElementDrillDown
                       expression={b.expressionAsString}
                       configIndex={configIndex}
+                      elementId={element.id}
                       elementName={element.name}
                     >
                       <ExpressionDetailLink expression={b.expressionAsString} configIndex={configIndex} interactive={false} />
-                    </DrillDownTrigger>
+                    </ElementDrillDown>
                   </span>
                 </div>
               ))}

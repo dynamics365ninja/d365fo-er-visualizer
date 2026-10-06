@@ -11,6 +11,7 @@ import {
   getPreferredDescriptors,
 } from './mapping-definitions';
 import { findNodeByMatch, type WorkspaceTrees } from './tree-builder';
+import { isBarePath, substituteCurrent } from '../utils/er-references';
 
 // ─── Helper: find datasource by name (recursive through children) ───
 
@@ -490,6 +491,11 @@ export interface ResolvedModelPath {
   datasourceTreeNodeId: string | null;
   /** Label of the mapping definition the binding was found in. */
   definitionLabel?: string;
+  /**
+   * The bare path `@` stands for in the binding's expression — the expression
+   * of the nearest bound record list above it (`$Lines` for `Lines/ItemId`).
+   */
+  currentRecord?: string;
 }
 
 export interface ModelPathBinding {
@@ -692,6 +698,7 @@ export function resolveModelPath(
         datasourceConfigIndex,
         datasourceTreeNodeId,
         definitionLabel: mappingDefinitionLabel(source.mapping),
+        currentRecord: currentRecordFor(binding.path, bindings),
       };
     };
 
@@ -758,4 +765,37 @@ export function findModelPathBindings(
   }
 
   return out;
+}
+
+/**
+ * The bare path a binding's `@` refers to: the expression of the nearest
+ * ancestor binding, itself expanded when it starts at `@` too. `undefined`
+ * when there is none or it is not a plain path.
+ */
+export function currentRecordFor(path: string, bindings: readonly any[], depth = 0): string | undefined {
+  if (depth > 8) return undefined;
+  const segments = String(path ?? '').split(/[\\/.]/).filter(Boolean);
+  const byPath = new Map<string, any>();
+  for (const binding of bindings) {
+    const key = String(binding?.path ?? '').split(/[\\/.]/).filter(Boolean).join('/').toLowerCase();
+    if (key && !byPath.has(key)) byPath.set(key, binding);
+  }
+  for (let len = segments.length - 1; len > 0; len--) {
+    const ancestorPath = segments.slice(0, len).join('/');
+    const ancestor = byPath.get(ancestorPath.toLowerCase());
+    const expression = String(ancestor?.expressionAsString ?? '').trim();
+    if (!expression) continue;
+    if (!isBarePath(expression)) return undefined;
+    if (!expression.startsWith('@')) return expression;
+    const outer = currentRecordFor(ancestorPath, bindings, depth + 1);
+    return outer ? substituteCurrent(expression, outer) : undefined;
+  }
+  return undefined;
+}
+
+/** `expression` with its `@` expanded for the binding at `path`. */
+export function expandBindingCurrentRecord(path: string, expression: string, bindings: readonly any[]): string {
+  if (!expression.includes('@')) return expression;
+  const current = currentRecordFor(path, bindings);
+  return current ? substituteCurrent(expression, current) : expression;
 }

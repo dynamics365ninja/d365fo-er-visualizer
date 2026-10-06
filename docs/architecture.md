@@ -32,7 +32,7 @@ Pure TypeScript library, no UI dependencies.
 - **XML parser** — `parseERConfiguration(xml, filePath)`: detects component kind, unwraps `ErFnoBundle` / bare-content / base64 payloads, resolves the correct version node, returns a fully-typed `ERConfiguration`. `parseERConfigurations` additionally splits a bundle carrying a data model next to its mapping. Non-fatal findings (unknown format element types, unrecognised datasource handlers) are kept as `Unknown`/`Container` nodes and listed in `ERConfiguration.warnings`.
 - **Type system** — interfaces for every ER artifact: `ERDataModel`, `ERModelMapping`, `ERFormat`, `ERDatasource` (13 kinds plus `Unknown`), `ERBinding`, `ERFormatElement`, `ERLabel` (the solution's label dictionary), expression AST (`ERExprCall`, `ERExprIf`, `ERExprCase`, `ERExprBinaryOp`, …).
 - **Format element info** — `getFormatElementDataType()` and `getFormatElementExcelRange()` (`format/element-info.ts`): the two per-element facts the UI needs everywhere, derived from the raw element attributes in one place instead of in each view.
-- **GUID registry** — `indexConfiguration()` walks every loaded config in a single pass and builds a cross-reference index. The UI uses `indexConfiguration()`, `lookup()` and `search()`; `findRefsTo()`, `findRefsFrom()`, `getAllEntries()`, `register()` and `addCrossRef()` are part of the public API (covered by unit tests) but currently have no caller in the app — where-used (`state/where-used.ts`) walks the workspace trees directly.
+- **GUID registry** — `indexConfiguration()` walks every loaded config in a single pass and builds a cross-reference index. The UI uses `indexConfiguration()` and `lookup()` (GUID → component); `search()`, `findRefsTo()`, `findRefsFrom()`, `getAllEntries()`, `register()` and `addCrossRef()` are part of the public API (covered by unit tests) but currently have no caller in the app — full-text search runs on the UI's typed index (`utils/search-index.ts`) and where-used on the lineage-based impact index (`utils/impact-index.ts`).
 
 **Key design choices:**
 - Datasources use a flat interface with optional sub-objects (`tableInfo`, `enumInfo`, `classInfo`, …) — no class hierarchy, trivial JSON serialization.
@@ -63,7 +63,7 @@ from `store.ts` so importers keep using one path:
 | `persistence.ts` | Recent configurations and sessions in localStorage (metadata only), the technical-details preference |
 | `tree-builder.ts` | Explorer `TreeNode` hierarchy per configuration |
 | `expression-resolution.ts` | `resolveDatasource` / `resolveBinding` / `resolveModelPath` / `resolveDeepExpression` |
-| `where-used.ts` | The where-used walk over the workspace trees |
+| `where-used.ts` | Text occurrences of a where-used query that the impact analysis cannot tie to a source (and the older name-based walk, kept for its tests) |
 | `configuration-merge.ts` · `mapping-definitions.ts` · `config-warnings.ts` | Replacing a loaded configuration by path or solution GUID (older versions are dropped), which mapping definition a format binds to, non-fatal warnings |
 | `fno-profiles.ts` · `fno-session.ts` | F&O connection profiles and browsing state |
 
@@ -75,8 +75,8 @@ from `store.ts` so importers keep using one path:
 | `selectedNode` | Currently selected tree node |
 | `openTabs` / `activeTabId` | Designer tabs; `activeTabId` is the tab shown in the left (main) group |
 | `splitTabId` / `sideTabIds` / `focusedPane` | The right (side) tab group: its shown tab, its tabs, and which group has focus |
-| `searchQuery` / `searchResults` | Search box text and the registry hits (ranked in the panel) |
-| `whereUsedResults` / `whereUsedScope` | Result of the last where-used trace, and the all / mapping / format scope filter over it |
+| `searchQuery` | Search box text; the panel searches the typed index (`utils/search-index.ts`) itself |
+| `whereUsedQuery` / `whereUsedTarget` / `whereUsedScope` | The where-used query, the exact item it was started from (model field of one record, datasource of one definition), and the all / mapping / format scope; `whereUsedResults` holds the text occurrences |
 | `showTechnicalDetails` | Technical/consultant mode (persisted) |
 | `themeMode` / `resolvedTheme` | Preference (`system` by default, persisted only when explicit) and what it resolves to |
 | `navigationHistory` / `navigationForward` | Back/forward stacks behind `Alt+←` / `Alt+→` |
@@ -85,14 +85,32 @@ from `store.ts` so importers keep using one path:
 | `warnings` | Non-fatal parse findings surfaced per configuration |
 | `fnoIngestStatus` / `fnoIngestProgress` / `cancelFnoIngest` | Free-text phase label, the structured per-configuration download log, and the cancel handle of the running download |
 
-**Key actions:** `loadXmlFile` · `selectNode` · `openTab` / `openDrillDownTab` · `openTabToSide` / `moveTabToPane` / `reorderTab` / `closePane` · `resolveDatasource` · `resolveBinding` · `resolveModelPath` · `whereUsed` / `executeWhereUsed` · `loadCachedFile` / `loadRecentSession` · `closeConfigurationWithUndo` / `closeAllConfigurationsWithUndo` · `addInheritedLabels` / `refreshLabelPool` · `beginFnoIngest` / `updateFnoIngestItem` / `endFnoIngest`
+**Key actions:** `loadXmlFile` · `selectNode` · `openTab` / `openDrillDownTab` · `openTabToSide` / `moveTabToPane` / `reorderTab` / `closePane` · `resolveDatasource` · `resolveBinding` · `resolveModelPath` · `triggerWhereUsed` / `executeWhereUsed` · `loadCachedFile` / `loadRecentSession` · `closeConfigurationWithUndo` / `closeAllConfigurationsWithUndo` · `addInheritedLabels` / `refreshLabelPool` · `beginFnoIngest` / `updateFnoIngestItem` / `endFnoIngest`
 
 **Layout of `src/`:**
 - `components/` — the shell (`App`, `ActivityBar`, `Toolbar`, `LandingPage` + `RecentWork`, `ConfigExplorer`, `DesignerView` + `TabBar`, `PropertyInspector`, `SearchPanel`, `DrillDownPanel`, `WorkspaceManager`); `components/designers/` — one designer per component kind plus the shared pieces (`DataModelDesigner` / `DataModelList`, `ModelMappingDesigner`, `FormatDesigner` / `FormatElementTree` / `FormatBindingsView`, `DatasourceTree`, `FormatPreview` / `ExcelPreview`); `components/fno/` — the F&O browser (profiles, solution navigator, configuration browser, `useFnoIngest`).
 - `fno/` — host glue for `fno-client` (browser / Electron auth and transport, session, label harvesting) and `fno/ingest/`, the UI-independent ingest pipeline.
-- `utils/` — pure helpers, most with a test next to them: search ranking and node lookup, where-used query and categories, datasource trees, label resolver, xlsx parser, content cache, keyboard handling (`workspace-shortcuts.ts`, `tree-keyboard.ts`), virtualized trees (`flat-tree.ts`, `use-virtual-tree.ts`), tab drag and split ratio.
+- `utils/` — pure helpers, most with a test next to them: the lineage engine and the analyses on top of it (see *Lineage* below), where-used query and categories, datasource trees, label resolver, xlsx parser, content cache, keyboard handling (`workspace-shortcuts.ts`, `tree-keyboard.ts`), virtualized trees (`flat-tree.ts`, `use-virtual-tree.ts`), tab drag and split ratio.
 - `i18n.ts` — every user-facing string, Czech and English side by side (see below).
 - `index.css` + `styles/` — see [Styles](#styles).
+
+**Lineage — how a value is filled, and what reads what.** One engine answers the questions the
+analysis views share, so they always agree:
+
+| Module | Answers |
+|---|---|
+| `utils/er-references.ts` | The data paths of an ER expression — quoted segments, `@` (current record), method calls — function calls with their arguments, literals, bare paths; `substituteCurrent` spells `@` out as a list path |
+| `utils/datasource-lineage.ts` | `traceExpression`: the tables, table fields, enums, classes, user parameters and datasources an expression reads in one definition, through calculated fields, group-bys and record lists, each with a **role** — `value` (delivers the value), `context` (only selects records: the list, a `WHERE` filter), `condition`; `recordOrigin` (`ORDERBY(WHERE(T, …))` reads records of `T`) |
+| `utils/format-lineage.ts` | `buildFormatLineage`: per format element how it is filled (constant / model field / calculation / format data source / unbound), repetition, conditions, optional, length / format / padding / delimiter rules, the model paths it reads and — through the mapping definition the format runs on (`resolveFormatModelContext`) — the D365FO sources; unnamed value nodes fold into their XML element. `buildMappingLineage` does the same per model mapping binding, `@` resolved against the nearest bound list |
+| `utils/impact-index.ts` | `buildImpactIndex`: the lineage of every format and mapping inverted — for each table, field, enum, class, parameter, datasource and model field the mapping bindings that fill from it and the format elements that read it; `findImpactEntities` matches names and labels |
+| `utils/search-index.ts` | Typed full-text documents for every named thing, accent-insensitive, ranked by match location |
+| `utils/format-preview.ts` · `utils/sample-values.ts` | The preview document (XML / text lines with segments linked to elements, notes, bands) and the sample values (type, enum, mask, context aware, consistent per model field) |
+| `utils/field-spec-export.ts` | The specification as CSV |
+
+Views on top: `designers/FieldSpecView` (Specification tab), `designers/ElementFillCard` (inspector,
+preview), `designers/DocumentPreview`, `WhereUsedView`, `SearchResultsView`. All of them are pure
+functions of `configurations` and cached per configuration set (`WeakMap`), so nothing is stored in
+the Zustand store.
 
 **Persistence** — `utils/content-cache.ts` keeps full XML payloads in IndexedDB (`er-visualizer` /
 `file-content`); localStorage is too small (~5 MB) for several F&O format exports and holds only
@@ -181,7 +199,7 @@ loadXmlFile() in Zustand store
             ├─ ConfigExplorer    ← treeNodes
             ├─ DesignerView      ← open tabs, in one or two groups → per-kind designers
             ├─ PropertyInspector ← selectedNode
-            ├─ SearchPanel       ← registry.search() (ranked by utils/search-relevance) + whereUsed()
+            ├─ SearchPanel       ← utils/search-index (search) · utils/impact-index (where-used)
             ├─ ClickablePath     ← resolveDatasource / resolveBinding
             └─ DrillDownPanel    ← resolveDeepExpression
 ```
@@ -221,8 +239,10 @@ as a fullscreen overlay (`FnoIngestOverlay`) and a compact in-tree card in Confi
 - **Model mapping** (`ModelMappingDesigner`) — tabs for bindings (the flat binding paths nested into
   the tree the F&O designer shows), data sources and validations. The binding tree and the datasource
   lists are virtualized (`utils/use-virtual-tree.ts`, `@tanstack/react-virtual`).
-- **Format** (`FormatDesigner`) — tabs for the element structure (`FormatElementTree`), bindings
-  grouped by intent (`FormatBindingsView`), data sources, a preview, and any embedded model mapping.
+- **Format** (`FormatDesigner`) — tabs for the element structure (`FormatElementTree`), the field
+  specification (`FieldSpecView`), bindings grouped by intent (`FormatBindingsView`), data sources, a
+  preview (`FormatPreview` → `DocumentPreview` for XML / text, `ExcelPreview` for Excel), and any
+  embedded model mapping. The header's bound / unbound counts come from the lineage, per field.
 
 Clicking a formula (format structure rows, mapping bindings and validations, the Bindings view) or a
 datasource name opens the drill-down dialog; double-click or `Ctrl`+click opens it as a tab. Per-row
@@ -319,7 +339,7 @@ Type-checking the UI and Electron still reads the libraries' emitted `.d.ts`, so
 
 - **Vitest** (`core`): XML parser round-trips for all three component kinds (bundles, bare content, base64 payloads, unknown element types); GUID registry registration, lookup, and cross-reference search.
 - **Vitest** (`fno-client`): `/api/services` custom-service response parsing (solution/component listing, operation-name fallbacks, XML download extraction), shared HTTP response handling, path-key building, auth scope/authority helpers.
-- **Vitest** (`ui`): store, tab groups and navigation, undo and session restore, the F&O ingest pipeline and browser auth, format tree filtering, drill-down expression breakdown and resolution, search ranking and node lookup, where-used, data model list, keyboard shortcuts, label reference normalisation and pool precedence, the dark-palette token copies, xlsx template parsing (skipped unless `scripts/fixtures/template.b64` exists — the integration test writes it).
+- **Vitest** (`ui`): store, tab groups and navigation, undo and session restore, the F&O ingest pipeline and browser auth, format tree filtering, drill-down expression breakdown and resolution, expression references, datasource and format lineage, the impact index, the full-text search index, the preview document and sample values, where-used, data model list, keyboard shortcuts, label reference normalisation and pool precedence, the dark-palette token copies, xlsx template parsing (skipped unless `scripts/fixtures/template.b64` exists — the integration test writes it).
 - **Integration** (`pnpm test:integration`): `scripts/integration-test.ts` runs against a live F&O environment; see the README.
 
 `pnpm test` at the root runs all three Vitest suites; `pnpm lint` runs `tsc --noEmit` in every package, plus ESLint (`--max-warnings 0`) in `ui` — the Rules of Hooks and the i18n rule above.

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DocumentRegular,
   ArrowRightRegular,
@@ -8,18 +8,18 @@ import {
 } from '@fluentui/react-icons';
 import { useAppStore, focusedTabId, relatedMappingDefinitionLabels, MIN_SEARCH_QUERY_LENGTH } from '../state/store';
 import type { TreeNode } from '../state/store';
-import type { ERConfiguration } from '@er-visualizer/core';
 import { t, useLocale } from '../i18n';
 import { getConsultantFormatTypeLabel } from '../utils/consultant-labels';
 import { getFormatTypeThemeColor } from '../utils/theme-colors';
-import { relatedConfigIndices, relatedContainerRules, hitPassesContainerRule, type ScopeContainerRule } from '../utils/model-hierarchy';
+import { relatedConfigIndices, relatedContainerRules, hitPassesContainerRule } from '../utils/model-hierarchy';
 import { referenceCategory, WHERE_USED_CATEGORY_ORDER, type ReferenceCategory } from '../utils/where-used-category';
 import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 import { useSearchFocusTarget } from '../utils/search-focus';
-import { rankByRelevance } from '../utils/search-relevance';
+import { WhereUsedView } from './WhereUsedView';
 
 const SEARCH_PAGE_SIZE = 100;
-import { buildSearchNodeIndex, findNodeForSearchResult, type SearchRegistry, type SearchResultEntry } from '../utils/search-node-index';
+import { buildSearchIndex, searchIndex, SEARCH_CATEGORY_ORDER, type SearchCategory, type SearchDoc } from '../utils/search-index';
+import { SearchResultsView } from './SearchResultsView';
 
 
 /**
@@ -56,24 +56,6 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/**
- * Stable identity for a search result row, used to collapse duplicates.
- *
- * Generic "Formula" hits (calculated fields, binding/format-binding expressions)
- * are produced by scanning an expression for every `Datasource.Field`-like
- * reference it contains — a single expression with two references yields two
- * cross-refs that differ only by `target`. Since the rendered row shows the
- * whole expression once (not the individual matched identifier), those must
- * collapse into a single visible entry; `target` is excluded from their key.
- */
-function getSearchResultDedupeKey(r: SearchResultEntry): string {
-  if (r.targetType === 'Formula') {
-    return `formula|${r.sourceConfigPath}|${r.sourceComponent}|${r.sourceContext}`;
-  }
-  return `${r.sourceConfigPath}|${r.target}|${r.sourceComponent}|${r.sourceContext}`;
-}
-
-type NestedResult = { entry: SearchResultEntry; children: SearchResultEntry[] };
 type ExamplePreset = {
   /** What gets typed into the box. */
   query: string;
@@ -81,61 +63,6 @@ type ExamplePreset = {
   label: string;
   category: string;
 };
-
-/**
- * Nest "Binding for X: ..." and "Format binding expression: ..." sub-hits under
- * their parent binding entry when the parent is also present in the result set.
- * This avoids showing the same binding twice (once as parent, once per reference
- * inside its expression).
- */
-function nestBindingResults(items: SearchResultEntry[]): NestedResult[] {
-  // Index parents by a composite key matching what child sourceContexts carry
-  const parentByKey = new Map<string, SearchResultEntry>();
-  for (const r of items) {
-    if (r.sourceContext?.startsWith('Binding: ')) {
-      // "Binding: <path> = <expr>" — key on path
-      const after = r.sourceContext.slice('Binding: '.length);
-      const path = after.split(' = ')[0]?.trim();
-      if (path) parentByKey.set(`bind|${r.sourceComponent}|${path}`, r);
-    } else if (r.sourceContext?.startsWith('Format binding to component: ')) {
-      const expr = r.sourceContext.slice('Format binding to component: '.length).trim();
-      parentByKey.set(`fmt|${r.sourceComponent}|${expr}`, r);
-    }
-  }
-
-  const nested: NestedResult[] = [];
-  const seen = new Set<SearchResultEntry>();
-  const childrenMap = new Map<SearchResultEntry, SearchResultEntry[]>();
-
-  // Pass 1: assign each child to its parent if found
-  for (const r of items) {
-    const ctx = r.sourceContext ?? '';
-    let parent: SearchResultEntry | undefined;
-    if (ctx.startsWith('Binding for ')) {
-      const path = ctx.slice('Binding for '.length).split(':')[0]?.trim();
-      if (path) parent = parentByKey.get(`bind|${r.sourceComponent}|${path}`);
-    } else if (ctx.startsWith('Format binding expression:')) {
-      // Parent expression isn't in the child context directly, but child & parent share sourceComponent+original expression.
-      // Fallback: attach to any "Format binding to component" with same sourceComponent (1:1 common case).
-      for (const [key, p] of parentByKey.entries()) {
-        if (key.startsWith(`fmt|${r.sourceComponent}|`)) { parent = p; break; }
-      }
-    }
-    if (parent && parent !== r) {
-      const bucket = childrenMap.get(parent) ?? [];
-      bucket.push(r);
-      childrenMap.set(parent, bucket);
-      seen.add(r);
-    }
-  }
-
-  // Pass 2: build ordered top-level list, attaching children to their parents
-  for (const r of items) {
-    if (seen.has(r)) continue;
-    nested.push({ entry: r, children: childrenMap.get(r) ?? [] });
-  }
-  return nested;
-}
 
 function Highlight({ text, query }: { text: string | undefined | null; query: string }) {
   const safe = text ?? '';
@@ -207,11 +134,8 @@ export function SearchPanel() {
   const [resultLimit, setResultLimit] = useState(SEARCH_PAGE_SIZE);
   const searchQuery = useAppStore(s => s.searchQuery);
   const setSearchQuery = useAppStore(s => s.setSearchQuery);
-  const executeSearch = useAppStore(s => s.executeSearch);
-  const searchResults = useAppStore(s => s.searchResults);
   const mode = useAppStore(s => s.searchPanelMode);
   const setMode = useAppStore(s => s.setSearchPanelMode);
-  const registry = useAppStore(s => s.registry);
   const whereUsedQuery = useAppStore(s => s.whereUsedQuery);
   const setWhereUsedQuery = useAppStore(s => s.setWhereUsedQuery);
   const whereUsedResults = useAppStore(s => s.whereUsedResults);
@@ -226,18 +150,25 @@ export function SearchPanel() {
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const configurations = useAppStore(s => s.configurations);
   const whereUsedTrigger = useAppStore(s => s.whereUsedTrigger);
+  const whereUsedTarget = useAppStore(s => s.whereUsedTarget);
+  const [impactEmpty, setImpactEmpty] = useState(false);
   const consumeWhereUsedTrigger = useAppStore(s => s.consumeWhereUsedTrigger);
   const openTabs = useAppStore(s => s.openTabs);
   const activeTabId = useAppStore(focusedTabId);
 
   const [searchExpandSignal, setSearchExpandSignal] = useState<{ version: number; expanded: boolean }>({ version: 0, expanded: true });
   const [whereUsedExpandSignal, setWhereUsedExpandSignal] = useState<{ version: number; expanded: boolean }>({ version: 0, expanded: true });
-  const [searchScope, setSearchScope] = useState<'all' | 'format' | 'mapping' | 'model'>('all');
+  const [searchCategory, setSearchCategory] = useState<'all' | SearchCategory>('all');
   // A workspace often holds several unrelated model trees, and an unscoped
-  // registry search reports hits from all of them. Default to the open
-  // configuration's own tree; the "All" chip opts back into the full sweep.
-  const [relatedOnly, setRelatedOnly] = useState(true);
-  useEffect(() => { setResultLimit(SEARCH_PAGE_SIZE); }, [searchQuery, searchScope, relatedOnly]);
+  // search reports hits from all of them. Default to the open configuration's
+  // own tree; the "All" chip opts back into the full sweep.
+  const [searchRelatedOnly, setSearchRelatedOnly] = useState(true);
+  // Where-used answers "what breaks if this changes" — across every loaded
+  // configuration by default; the related-only reach is one click away.
+  const [whereUsedRelatedOnly, setWhereUsedRelatedOnly] = useState(false);
+  const relatedOnly = mode === 'search' ? searchRelatedOnly : whereUsedRelatedOnly;
+  const setRelatedOnly = mode === 'search' ? setSearchRelatedOnly : setWhereUsedRelatedOnly;
+  useEffect(() => { setResultLimit(SEARCH_PAGE_SIZE); }, [searchQuery, searchCategory, relatedOnly]);
 
   const activeConfigIndex = useMemo(() => {
     const tab = openTabs.find(tb => tb.id === activeTabId);
@@ -256,22 +187,17 @@ export function SearchPanel() {
     const definitions = relatedMappingDefinitionLabels(configurations, activeConfigIndex);
     if (!narrowsConfigs && rules.size === 0 && !definitions) return null;
 
-    const paths = new Set(
-      Array.from(indices).map(i => configurations[i]?.filePath).filter(Boolean) as string[],
-    );
-    const ruleByPath = new Map<string, ScopeContainerRule>();
-    rules.forEach((rule, idx) => {
-      const path = configurations[idx]?.filePath;
-      if (path) ruleByPath.set(path, rule);
-    });
-
+    const allowsConfigIndex = (idx: number) => !narrowsConfigs || indices.has(idx);
+    // Hits outside a mapping carry no definition and are never narrowed here.
+    const allowsDefinition = (definition?: string) => !definition || !definitions || definitions.has(definition);
     return {
-      allowsConfigIndex: (idx: number) => !narrowsConfigs || indices.has(idx),
-      // Hits outside a mapping carry no definition and are never narrowed here.
-      allowsDefinition: (definition?: string) => !definition || !definitions || definitions.has(definition),
-      allows: (r: SearchResultEntry) =>
-        (!narrowsConfigs || paths.has(r.sourceConfigPath))
-        && hitPassesContainerRule(ruleByPath.get(r.sourceConfigPath), r.sourceComponent),
+      allowsConfigIndex,
+      allowsDefinition,
+      allowsDoc: (doc: SearchDoc) =>
+        allowsConfigIndex(doc.configIndex)
+        && allowsDefinition(doc.definition)
+        // Records of the model the active format does not reach are noise.
+        && (doc.category !== 'model' || hitPassesContainerRule(rules.get(doc.configIndex), doc.path ?? doc.name)),
     };
   }, [configurations, activeConfigIndex]);
 
@@ -310,39 +236,25 @@ export function SearchPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentLocale]);
 
-  const handleSearch = useCallback(() => {
-    executeSearch();
-  }, [executeSearch]);
-
   // The panel unmounts whenever the right pane shows Properties, so a trigger
   // is acknowledged in the store once run — remounting must not replay it.
   useEffect(() => {
     if (!whereUsedTrigger || whereUsedTrigger.consumed) return;
     consumeWhereUsedTrigger(whereUsedTrigger.version);
     setMode('where-used');
-    executeWhereUsed(whereUsedTrigger.query);
+    executeWhereUsed(whereUsedTrigger.query, whereUsedTrigger.target ?? null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [whereUsedTrigger?.version]);
 
   const applySearchExample = useCallback((value: string) => {
     setMode('search');
     setSearchQuery(value);
-    executeSearch();
-  }, [executeSearch, setSearchQuery, setMode]);
+  }, [setSearchQuery, setMode]);
 
   const applyWhereUsedExample = useCallback((value: string) => {
     setMode('where-used');
     executeWhereUsed(value);
   }, [executeWhereUsed, setMode]);
-
-  useEffect(() => {
-    if (mode !== 'search') return;
-    const handle = window.setTimeout(() => {
-      executeSearch();
-    }, 200);
-
-    return () => window.clearTimeout(handle);
-  }, [executeSearch, mode, searchQuery]);
 
   useEffect(() => {
     if (mode !== 'where-used') return;
@@ -352,13 +264,6 @@ export function SearchPanel() {
 
     return () => window.clearTimeout(handle);
   }, [executeWhereUsed, mode, whereUsedQuery]);
-
-  // Datasources the where-used scan found but nothing references — the old
-  // per-datasource card surfaced these as "dead"; keep that signal inline.
-  const deadDatasources = useMemo(
-    () => whereUsedResults.filter(e => e.entityType !== 'TextMatch' && e.modelPaths.length === 0 && e.formatUsages.length === 0),
-    [whereUsedResults],
-  );
 
   const whereUsedGrouping = useMemo(() => {
     const refs: Reference[] = [];
@@ -432,26 +337,28 @@ export function SearchPanel() {
   // hides everything — otherwise the user is stranded on "nothing found".
   const whereUsedTotalRefs = whereUsedGrouping.totalRefs;
 
-  // Hits are resolved to tree nodes through an index built once per tree, not
-  // a full walk per hit; the grouped list below reuses the resulting map.
-  const searchNodeIndex = useMemo(
-    () => buildSearchNodeIndex(treeNodes, configurations),
-    [treeNodes, configurations],
+  // The index is built once per configuration set; typing only filters it.
+  const fullTextIndex = useMemo(() => buildSearchIndex(configurations), [configurations]);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const searchActive = mode === 'search' && deferredSearchQuery.trim().length >= MIN_SEARCH_QUERY_LENGTH;
+  const allMatches = useMemo(
+    () => (searchActive ? searchIndex(fullTextIndex, deferredSearchQuery) : []),
+    [searchActive, fullTextIndex, deferredSearchQuery],
   );
-  const navigableSearch = useMemo(() => {
-    const seen = new Set<string>();
-    const nodeByResult = new Map<SearchResultEntry, TreeNode>();
-    const results = (searchResults as SearchResultEntry[]).filter(r => {
-      const key = getSearchResultDedupeKey(r);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      const node = findNodeForSearchResult(r, configurations, searchNodeIndex, registry);
-      if (!node) return false;
-      nodeByResult.set(r, node);
-      return true;
-    });
-    return { results, nodeByResult };
-  }, [searchResults, configurations, searchNodeIndex, registry]);
+  const relatedMatches = useMemo(
+    () => (relatedOnly && relatedFilter ? allMatches.filter(match => relatedFilter.allowsDoc(match.doc)) : allMatches),
+    [allMatches, relatedOnly, relatedFilter],
+  );
+  const hiddenByRelated = allMatches.length - relatedMatches.length;
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<SearchCategory, number>();
+    for (const match of relatedMatches) counts.set(match.doc.category, (counts.get(match.doc.category) ?? 0) + 1);
+    return counts;
+  }, [relatedMatches]);
+  const visibleMatches = useMemo(
+    () => (searchCategory === 'all' ? relatedMatches : relatedMatches.filter(match => match.doc.category === searchCategory)),
+    [relatedMatches, searchCategory],
+  );
 
   const currentQuery = mode === 'search' ? searchQuery : whereUsedQuery;
   const trimmedCurrentQuery = currentQuery.trim();
@@ -463,8 +370,7 @@ export function SearchPanel() {
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      if (mode === 'search') handleSearch();
-      else executeWhereUsed(whereUsedQuery);
+      if (mode === 'where-used') executeWhereUsed(whereUsedQuery);
     } else if (e.key === 'Escape') {
       // First Escape clears the query, the next one leaves the box.
       e.preventDefault();
@@ -519,10 +425,10 @@ export function SearchPanel() {
           <>
             {!trimmedCurrentQuery && (
               <>
+                <p className="search-panel__hint">{t.searchIntro}</p>
                 {showTechnicalDetails && (
                   <div className="search-panel__kpis">
-                    <span className="search-panel__kpi">{registry.guidCount} GUID</span>
-                    <span className="search-panel__kpi">{registry.crossRefCount} cross-ref</span>
+                    <span className="search-panel__kpi">{fullTextIndex.docs.length} docs</span>
                   </div>
                 )}
                 <ExamplePalette
@@ -533,157 +439,92 @@ export function SearchPanel() {
               </>
             )}
 
-            {searchResults.length > 0 && (
-              <>
-                {(() => {
-                  const navigableResults = navigableSearch.results;
-                  const isRelatedResult = (r: SearchResultEntry) => !relatedFilter || (
-                    relatedFilter.allows(r)
-                    && relatedFilter.allowsDefinition(
-                      r.sourceDefinition ?? navigableSearch.nodeByResult.get(r)?.mappingDefinition,
-                    )
-                  );
-                  // Related-only runs first so the count on the "All" chip
-                  // tells the user exactly what turning it off would add.
-                  const relatedResults = relatedOnly && relatedFilter
-                    ? navigableResults.filter(isRelatedResult)
-                    : navigableResults;
-                  const hiddenByRelated = navigableResults.length - relatedResults.length;
-                  // Apply scope filter
-                  const scopedResults = searchScope === 'all' ? relatedResults : relatedResults.filter(r => {
-                    const kind = (configurations.find(c => c.filePath === r.sourceConfigPath) as any)?.kind ?? '';
-                    if (searchScope === 'format') return kind === 'Format';
-                    if (searchScope === 'mapping') return kind === 'ModelMapping';
-                    if (searchScope === 'model') return kind === 'DataModel';
-                    return true;
-                  });
-                  // Apply same per-group nesting to get accurate total count
-                  const groupMap = new Map<string, SearchResultEntry[]>();
-                  for (const r of scopedResults) {
-                    const gk = `${r.sourceConfigPath}`;
-                    const bucket = groupMap.get(gk) ?? [];
-                    bucket.push(r);
-                    groupMap.set(gk, bucket);
-                  }
-                  const totalNested = Array.from(groupMap.values()).reduce((sum, grp) => sum + nestBindingResults(grp).length, 0);
-                  // The list is capped, and the definitions of the other model
-                  // roots come first in file order — without this the active
-                  // definition would drop off the end when "All" is turned on.
-                  // Best matches first (exact name, then prefix, word start,
-                  // path, expression); with "All" on, the active definition's
-                  // hits still lead so they never drop off the end.
-                  const ranked = rankByRelevance(
-                    scopedResults,
-                    searchQuery,
-                    relatedFilter && !relatedOnly
-                      ? (a, b) => Number(isRelatedResult(b)) - Number(isRelatedResult(a))
-                      : undefined,
-                  );
-                  const capped = ranked.slice(0, resultLimit);
-                  const remaining = ranked.length - capped.length;
-                  return (
-                    <>
-                      {/* Count, scope, reach and the expand slider on one
-                          line. They used to take three, which in a 300px panel
-                          left the results themselves starting below the fold. */}
-                      <div className="search-panel__results-bar">
-                        <span
-                          className="search-panel__results-count"
-                          title={capped.length < totalNested
-                            ? t.searchShowingFirst(capped.length, totalNested)
-                            : undefined}
-                        >
-                          {capped.length < totalNested
-                            ? `${capped.length} / ${totalNested}`
-                            : t.searchResultCount(totalNested)}
-                        </span>
-                        <div className="search-scope-toggle" role="group" aria-label={t.searchScopeResultsAria}>
-                          {(['all', 'format', 'mapping', 'model'] as const).map(s => (
-                            <button key={s} type="button"
-                              className={`search-scope-toggle__btn ${searchScope === s ? 'active' : ''}`}
-                              onClick={() => setSearchScope(s)}
-                            >
-                              {s === 'all' ? t.searchScopeAll
-                                : s === 'format' ? t.searchScopeFormat
-                                : s === 'mapping' ? t.searchScopeMapping
-                                : t.searchScopeModel}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="search-panel__results-actions">
-                          {relatedFilter && (
-                            /* Two labelled buttons for a two-state switch cost
-                               more than the state is worth in this column; the
-                               badge says how many hits the filter is holding
-                               back, the tooltip says what it does. */
-                            <button
-                              type="button"
-                              className={`search-reach-toggle ${relatedOnly ? 'active' : ''}`}
-                              aria-pressed={relatedOnly}
-                              onClick={() => setRelatedOnly(v => !v)}
-                              title={relatedOnly
-                                ? `${t.searchRelatedOnly} — ${t.searchAllConfigsHint}`
-                                : `${t.searchAllConfigs} — ${t.searchRelatedOnlyHint}`}
-                            >
-                              <FilterRegular fontSize={14} />
-                              {relatedOnly && hiddenByRelated > 0 && (
-                                <span className="search-reach-toggle__badge">{hiddenByRelated}</span>
-                              )}
-                            </button>
-                          )}
-                          <ExpandCollapseSlider
-                            size="compact"
-                            expandLabel={t.expand}
-                            collapseLabel={t.collapse}
-                            expandIcon={<TextExpandRegular fontSize={16} />}
-                            collapseIcon={<TextCollapseRegular fontSize={16} />}
-                            onExpand={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
-                            onCollapse={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
-                          />
-                        </div>
-                      </div>
-                      <div className="search-panel__results">
-                        {scopedResults.length === 0 ? (
-                          <div className="search-panel__empty">
-                            {navigableResults.length === 0 ? t.noResults : t.searchNoResultsInScope}
-                          </div>
-                        ) : (
-                          <>
-                            <SearchResultsGrouped
-                              results={capped}
-                              nodeByResult={navigableSearch.nodeByResult}
-                              query={searchQuery}
-                              expandSignal={searchExpandSignal}
-                              configurations={configurations}
-                              registry={registry}
-                              navigateToTreeNode={navigateToTreeNode}
-                            />
-                            {remaining > 0 && (
-                              <button
-                                type="button"
-                                className="search-panel__more"
-                                onClick={() => setResultLimit(limit => limit + SEARCH_PAGE_SIZE)}
-                              >
-                                {t.searchShowMore(Math.min(remaining, SEARCH_PAGE_SIZE), remaining)}
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </>
-                  );
-                })()}
-              </>
+            {trimmedCurrentQuery && trimmedCurrentQuery.length < MIN_SEARCH_QUERY_LENGTH && (
+              <p className="search-panel__hint">{t.searchMinChars(MIN_SEARCH_QUERY_LENGTH)}</p>
             )}
 
-            {searchResults.length === 0 && trimmedCurrentQuery && (
-              trimmedCurrentQuery.length < MIN_SEARCH_QUERY_LENGTH
-                ? (
-                  <p className="search-panel__hint">
-                    {t.searchMinChars(MIN_SEARCH_QUERY_LENGTH)}
-                  </p>
-                )
-                : <div className="search-panel__empty">{t.noResults}</div>
+            {searchActive && (
+              <>
+                {/* Count, kind facets, reach and the expand slider: what the
+                    list holds, and the two ways to narrow it. */}
+                <div className="search-panel__results-bar">
+                  <span className="search-panel__results-count">
+                    {visibleMatches.length > resultLimit
+                      ? `${resultLimit} / ${visibleMatches.length}`
+                      : t.searchResultCount(visibleMatches.length)}
+                  </span>
+                  <div className="search-panel__results-actions">
+                    {relatedFilter && (
+                      <button
+                        type="button"
+                        className={`search-reach-toggle ${relatedOnly ? 'active' : ''}`}
+                        aria-pressed={relatedOnly}
+                        onClick={() => setRelatedOnly(v => !v)}
+                        title={relatedOnly
+                          ? `${t.searchRelatedOnly} — ${t.searchAllConfigsHint}`
+                          : `${t.searchAllConfigs} — ${t.searchRelatedOnlyHint}`}
+                      >
+                        <FilterRegular fontSize={14} />
+                        {relatedOnly && hiddenByRelated > 0 && (
+                          <span className="search-reach-toggle__badge">{hiddenByRelated}</span>
+                        )}
+                      </button>
+                    )}
+                    <ExpandCollapseSlider
+                      size="compact"
+                      expandLabel={t.expand}
+                      collapseLabel={t.collapse}
+                      expandIcon={<TextExpandRegular fontSize={16} />}
+                      collapseIcon={<TextCollapseRegular fontSize={16} />}
+                      onExpand={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
+                      onCollapse={() => setSearchExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
+                    />
+                  </div>
+                </div>
+                <div className="search-facets" role="group" aria-label={t.searchFacetsAria}>
+                  {(['all', ...SEARCH_CATEGORY_ORDER] as const).map(category => {
+                    const count = category === 'all' ? relatedMatches.length : (categoryCounts.get(category) ?? 0);
+                    if (category !== 'all' && count === 0) return null;
+                    return (
+                      <button
+                        key={category}
+                        type="button"
+                        className={`search-facet search-facet--${category} ${searchCategory === category ? 'active' : ''}`}
+                        aria-pressed={searchCategory === category}
+                        onClick={() => setSearchCategory(category)}
+                      >
+                        {t.searchCategoryShort[category]}
+                        <span className="search-facet__count">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="search-panel__results">
+                  {visibleMatches.length === 0 ? (
+                    <div className="search-panel__empty">
+                      {allMatches.length === 0 ? t.noResults : relatedMatches.length === 0 ? t.searchRelatedEmpty : t.searchNoResultsInScope}
+                    </div>
+                  ) : (
+                    <>
+                      <SearchResultsView
+                        matches={visibleMatches.slice(0, resultLimit)}
+                        query={deferredSearchQuery}
+                        expandSignal={searchExpandSignal}
+                        configurations={configurations}
+                      />
+                      {visibleMatches.length > resultLimit && (
+                        <button
+                          type="button"
+                          className="search-panel__more"
+                          onClick={() => setResultLimit(limit => limit + SEARCH_PAGE_SIZE)}
+                        >
+                          {t.searchShowMore(Math.min(visibleMatches.length - resultLimit, SEARCH_PAGE_SIZE), visibleMatches.length - resultLimit)}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </>
             )}
           </>
         )}
@@ -691,9 +532,9 @@ export function SearchPanel() {
         {/* ── Where-used mode ── */}
         {mode === 'where-used' && (
           <>
-            {!trimmedCurrentQuery && (
+            {!trimmedCurrentQuery && !whereUsedTarget && (
               <>
-                <p className="search-panel__hint">{t.whereUsedLabel}</p>
+                <p className="search-panel__hint">{t.impactIntro}</p>
                 <ExamplePalette
                   title={t.examples}
                   examples={whereUsedExamples}
@@ -702,344 +543,97 @@ export function SearchPanel() {
               </>
             )}
 
-            {(whereUsedFileGroups.length > 0 || whereUsedTotalRefs > 0) && (() => {
-              const totalVisible = whereUsedFileGroups.reduce(
-                (n, [, g]) => n + (whereUsedScope === 'all' ? g.refs.length : g.refs.filter(r => r.area === whereUsedScope).length), 0);
-              return (
-                <>
-                  <div className="search-panel__results-bar">
-                    <span className="search-panel__results-count">{t.found(totalVisible)}</span>
-                    <div className="search-scope-toggle" role="group" aria-label={t.whereUsedScopeAria}>
-                      {(['all', 'mapping', 'format'] as const).map(s => (
-                        <button key={s} type="button"
-                          className={`search-scope-toggle__btn ${whereUsedScope === s ? 'active' : ''}`}
-                          onClick={() => setWhereUsedScope(s)}
-                        >
-                          {s === 'all' ? t.searchScopeAll
-                            : s === 'mapping' ? t.searchScopeMapping
-                            : t.searchScopeFormat}
-                        </button>
-                      ))}
-                    </div>
+            {(trimmedCurrentQuery || whereUsedTarget) && (
+              <>
+                <div className="search-panel__results-bar">
+                  <div className="search-scope-toggle" role="group" aria-label={t.whereUsedScopeAria}>
+                    {(['all', 'mapping', 'format'] as const).map(s => (
+                      <button key={s} type="button"
+                        className={`search-scope-toggle__btn ${whereUsedScope === s ? 'active' : ''}`}
+                        onClick={() => setWhereUsedScope(s)}
+                      >
+                        {s === 'all' ? t.searchScopeAll
+                          : s === 'mapping' ? t.searchScopeMapping
+                          : t.searchScopeFormat}
+                      </button>
+                    ))}
                   </div>
-                  <div className="search-panel__reach">
-                    {relatedFilter && (
-                      <div className="search-scope-toggle" role="group" aria-label={t.searchReachAria}>
-                        <button
-                          type="button"
-                          className={`search-scope-toggle__btn ${relatedOnly ? 'active' : ''}`}
-                          onClick={() => setRelatedOnly(true)}
-                          title={t.searchRelatedOnlyHint}
-                        >
-                          {t.searchRelatedOnly}
-                        </button>
-                        <button
-                          type="button"
-                          className={`search-scope-toggle__btn ${relatedOnly ? '' : 'active'}`}
-                          onClick={() => setRelatedOnly(false)}
-                          title={t.searchAllConfigsHint}
-                        >
-                          {t.searchAllConfigs}
-                        </button>
+                  {relatedFilter && (
+                    <div className="search-scope-toggle" role="group" aria-label={t.searchReachAria}>
+                      <button
+                        type="button"
+                        className={`search-scope-toggle__btn ${relatedOnly ? 'active' : ''}`}
+                        onClick={() => setRelatedOnly(true)}
+                        title={t.searchRelatedOnlyHint}
+                      >
+                        {t.searchRelatedOnly}
+                      </button>
+                      <button
+                        type="button"
+                        className={`search-scope-toggle__btn ${relatedOnly ? '' : 'active'}`}
+                        onClick={() => setRelatedOnly(false)}
+                        title={t.searchAllConfigsHint}
+                      >
+                        {t.searchAllConfigs}
+                      </button>
+                    </div>
+                  )}
+                  <div className="search-panel__results-actions">
+                    <ExpandCollapseSlider
+                      size="compact"
+                      expandLabel={t.expand}
+                      collapseLabel={t.collapse}
+                      expandIcon={<TextExpandRegular fontSize={16} />}
+                      collapseIcon={<TextCollapseRegular fontSize={16} />}
+                      onExpand={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
+                      onCollapse={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
+                    />
+                  </div>
+                </div>
+                <div className="search-panel__results">
+                  <WhereUsedView
+                    query={whereUsedQuery}
+                    target={whereUsedTarget}
+                    scope={whereUsedScope}
+                    filter={relatedOnly ? relatedFilter : null}
+                    expandSignal={whereUsedExpandSignal}
+                    onEmpty={setImpactEmpty}
+                  />
+
+                  {whereUsedFileGroups.length > 0 && (
+                    <details className="impact-text" open={impactEmpty}>
+                      <summary title={t.impactTextHint}>{t.impactTextSection(whereUsedFileGroups.reduce((n, [, g]) => n + g.refs.length, 0))}</summary>
+                      <div className="search-results">
+                        {whereUsedFileGroups.map(([key, { configName, definition, refs }]) => (
+                          <FileReferenceGroup
+                            key={key}
+                            configName={configName}
+                            definition={definition}
+                            references={refs}
+                            scope={whereUsedScope}
+                            query={whereUsedQuery}
+                            expandSignal={whereUsedExpandSignal}
+                            activeRefKey={activeWhereUsedRefKey}
+                            onReferenceOpen={setActiveWhereUsedRefKey}
+                          />
+                        ))}
                       </div>
-                    )}
-                    <div className="search-panel__results-actions">
-                      <ExpandCollapseSlider
-                        size="compact"
-                        expandLabel={t.expand}
-                        collapseLabel={t.collapse}
-                        expandIcon={<TextExpandRegular fontSize={16} />}
-                        collapseIcon={<TextCollapseRegular fontSize={16} />}
-                        onExpand={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
-                        onCollapse={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
-                      />
-                    </div>
-                  </div>
-                  <div className="search-panel__results">
-                    <div className="search-results">
-                      {whereUsedFileGroups.length === 0 && (
-                        // Everything was filtered out by "Related only"; the
-                        // toggle above stays reachable so this is not a dead end.
-                        <div className="search-panel__empty">{t.searchRelatedEmpty}</div>
-                      )}
-                      {whereUsedFileGroups.map(([key, { configName, definition, refs }]) => (
-                        <FileReferenceGroup
-                          key={key}
-                          configName={configName}
-                          definition={definition}
-                          references={refs}
-                          scope={whereUsedScope}
-                          query={whereUsedQuery}
-                          expandSignal={whereUsedExpandSignal}
-                          activeRefKey={activeWhereUsedRefKey}
-                          onReferenceOpen={setActiveWhereUsedRefKey}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </>
-              );
-            })()}
+                    </details>
+                  )}
 
-            {deadDatasources.length > 0 && trimmedCurrentQuery && (
-              <div className="wu-empty search-panel__dead-datasources">
-                {deadDatasources.map(e => (
-                  <div key={`${e.datasource.configIndex}|${e.datasource.parentPath ?? ''}|${e.datasource.name}`}>
-                    <strong>{t.deadDatasource}:</strong>{' '}
-                    <Highlight text={e.datasource.name} query={whereUsedQuery} />
-                    {' '}<span className="search-panel__dead-datasources-config">({e.datasource.configName})</span>
-                    {' — '}{t.deadDatasourceDesc}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {whereUsedFileGroups.length === 0 && whereUsedTotalRefs === 0 && deadDatasources.length === 0 && trimmedCurrentQuery && (
-              <div className="search-panel__empty">{t.noResultsFor(whereUsedQuery)}</div>
+                  {impactEmpty && whereUsedFileGroups.length === 0 && trimmedCurrentQuery && (
+                    <div className="search-panel__empty">
+                      {relatedOnly && relatedFilter && whereUsedTotalRefs > 0 ? t.searchRelatedEmpty : t.impactNoMatch(whereUsedQuery)}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </>
         )}
       </div>
     </div>
   );
-}
-
-function SearchResultsGrouped({
-  results,
-  nodeByResult,
-  query,
-  expandSignal,
-  configurations,
-  registry,
-  navigateToTreeNode,
-}: {
-  /** Already deduplicated and filtered to navigable hits. */
-  results: SearchResultEntry[];
-  /** Tree node for each result, resolved once by the panel. */
-  nodeByResult: Map<SearchResultEntry, TreeNode>;
-  query: string;
-  expandSignal: { version: number; expanded: boolean };
-  configurations: ERConfiguration[];
-  registry: SearchRegistry;
-  navigateToTreeNode: (nodeId: string) => void;
-}) {
-  const groups = useMemo(() => {
-    // Group by config file name + kind + mapping definition. A mapping
-    // solution holds one definition per model root (SalesInvoice,
-    // TMSCommercialInvoice, …) whose datasources and bindings share names, so
-    // folding them into one group would make the hits unreadable.
-    const map = new Map<string, { configPath: string; kind: string; definition?: string; items: SearchResultEntry[] }>();
-    for (const r of results) {
-      const configPath = r.sourceConfigPath || '—';
-      const fileName = configPath.split(/[\\/]/).pop()?.replace(/\.xml$/i, '') ?? configPath;
-      const configDef = configurations.find(c => c.filePath === configPath);
-      const kind = (configDef as any)?.kind ?? '';
-      // The registry stamps the definition a mapping hit came from; fall back
-      // to the resolved node for hits indexed without one.
-      const definition = r.sourceDefinition ?? nodeByResult.get(r)?.mappingDefinition;
-      const key = `${fileName}__${kind}__${definition ?? ''}`;
-      const existing = map.get(key);
-      if (existing) existing.items.push(r);
-      else map.set(key, { configPath, kind, definition, items: [r] });
-    }
-    return Array.from(map.entries()).sort((a, b) => b[1].items.length - a[1].items.length);
-  }, [results, configurations, nodeByResult]);
-
-  return (
-    <div className="search-results">
-      {groups.map(([key, { configPath, kind, definition, items }]) => {
-        const fileName = configPath.split(/[\\/]/).pop()?.replace(/\.xml$/i, '') ?? configPath;
-        return (
-          <SearchResultGroup
-            key={key}
-            configPath={configPath}
-            fileName={fileName}
-            configKind={kind}
-            definition={definition}
-            items={items}
-            nodeByResult={nodeByResult}
-            query={query}
-            expandSignal={expandSignal}
-            registry={registry}
-            navigateToTreeNode={navigateToTreeNode}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-/** Maps a format binding propertyName to a human label + CSS kind key. */
-function formatBindingLabel(prop: string, showTechnicalDetails: boolean): { label: string; labelKind: string } {
-  const p = prop.trim().toLowerCase();
-  if (!p) return { label: t.searchLblFormatExpression, labelKind: 'formula' };
-  if (['enabled', 'visible', 'disabled', 'printable', 'active'].includes(p))
-    return { label: t.searchLblVisibility, labelKind: 'visibility' };
-  if (['format', 'encoding', 'transformation', 'locale', 'separator', 'decimalseparator', 'groupseparator', 'mask'].includes(p))
-    return { label: t.searchLblFormatting, labelKind: 'formatting' };
-  return { label: showTechnicalDetails ? prop : t.searchLblProperty, labelKind: 'property' };
-}
-
-type HitCategory = 'structure' | 'bindings' | 'expressions' | 'datasources' | 'references';
-
-type ParsedHit = {
-  /** Short tag label shown in the kind chip (e.g. "Tabulka", "Vazba", "Výraz") */
-  label: string;
-  /** CSS modifier for colour coding (reuses badge colour keys) */
-  labelKind: string;
-  /** Which section the hit is filed under inside its configuration group. */
-  category: HitCategory;
-  /** Primary location text — the path/name of where the match lives */
-  location: string;
-  /** Optional secondary line — the expression or value that contains the query */
-  expression: string;
-  /** Designer tab where the user will land: 'structure' | 'bindings' | 'datasources' | null */
-  tab: 'structure' | 'bindings' | 'datasources' | null;
-};
-
-const HIT_CATEGORY_ORDER: HitCategory[] = ['structure', 'bindings', 'expressions', 'datasources', 'references'];
-
-function hitCategoryLabel(category: HitCategory): string {
-  switch (category) {
-    case 'structure': return t.searchCatStructure;
-    case 'bindings': return t.searchCatBindings;
-    case 'expressions': return t.searchCatExpressions;
-    case 'datasources': return t.searchCatDatasources;
-    default: return t.searchCatReferences;
-  }
-}
-
-function parseSearchHit(
-  result: SearchResultEntry,
-  registry: SearchRegistry,
-  showTechnicalDetails: boolean,
-): ParsedHit {
-  const ctx = result.sourceContext ?? '';
-  const comp = result.sourceComponent ?? '';
-  const tgt  = result.target ?? '';
-
-  // ── Datasource usages ── show the matched *value* as primary, source as secondary
-  if (/^Datasource ".+" uses table "/.test(ctx)) {
-    return { label: t.searchLblTable, labelKind: 'table', category: 'datasources', location: tgt, expression: t.searchExprSource(comp), tab: 'datasources' };
-  }
-  if (/^Datasource ".+" uses enum "/.test(ctx)) {
-    return { label: t.searchLblEnum, labelKind: 'enum', category: 'datasources', location: tgt, expression: t.searchExprSource(comp), tab: 'datasources' };
-  }
-  if (/^Datasource ".+" uses class "/.test(ctx)) {
-    return { label: t.searchLblClass, labelKind: 'class', category: 'datasources', location: tgt, expression: t.searchExprSource(comp), tab: 'datasources' };
-  }
-  if (/^User parameter ".+" uses EDT "/.test(ctx)) {
-    return { label: showTechnicalDetails ? 'EDT' : t.searchLblParameter, labelKind: 'edt', category: 'datasources', location: tgt, expression: t.searchExprParam(comp), tab: 'datasources' };
-  }
-  if (ctx.startsWith('Selected field in datasource "')) {
-    return { label: t.searchLblField, labelKind: 'field', category: 'datasources', location: tgt, expression: t.searchExprSource(comp), tab: 'datasources' };
-  }
-
-  // ── Model binding: "Binding: path = expr" ─────────────────────────
-  if (ctx.startsWith('Binding: ')) {
-    const rest = ctx.slice('Binding: '.length);
-    const eq   = rest.indexOf(' = ');
-    const path = eq >= 0 ? rest.slice(0, eq) : rest;
-    const expr = eq >= 0 ? rest.slice(eq + 3) : '';
-    return { label: t.searchLblBinding, labelKind: 'binding', category: 'bindings', location: path, expression: expr, tab: 'bindings' as const };
-  }
-
-  // ── Formula inside binding: "Binding for path: expr" ──────────────
-  if (ctx.startsWith('Binding for ')) {
-    const rest = ctx.slice('Binding for '.length);
-    const col  = rest.indexOf(':');
-    const path = col >= 0 ? rest.slice(0, col).trim() : rest;
-    const expr = col >= 0 ? rest.slice(col + 1).trim() : '';
-    return { label: t.searchLblExpression, labelKind: 'formula', category: 'expressions', location: path, expression: expr, tab: 'bindings' as const };
-  }
-
-  // ── Format binding expression (optionally with [PropName]) ────────
-  if (ctx.startsWith('Format binding') && ctx.includes('expression')) {
-    const expr = ctx.slice(ctx.indexOf('expression') + 'expression'.length).replace(/^[\s:]+/, '').trim();
-    // Extract optional property name from "Format binding [PropName] expression"
-    const propMatch = ctx.match(/Format binding \[([^\]]+)\] expression/);
-    const prop = propMatch?.[1] ?? '';
-    const { label, labelKind } = formatBindingLabel(prop, showTechnicalDetails);
-    return { label, labelKind, category: 'bindings' as const, location: comp, expression: expr, tab: 'bindings' as const };
-  }
-
-  // ── Format binding to GUID component (optionally with [PropName]) ─
-  if (ctx.startsWith('Format binding') && ctx.includes('to component:')) {
-    const expr     = ctx.slice(ctx.indexOf('to component:') + 'to component:'.length).trim();
-    const resolved = registry.lookup(tgt, result.sourceConfigPath);
-    const propMatch = ctx.match(/Format binding \[([^\]]+)\] to component/);
-    const prop = propMatch?.[1] ?? '';
-    const { label, labelKind } = formatBindingLabel(prop, showTechnicalDetails);
-    return {
-      label,
-      labelKind,
-      category: 'bindings' as const,
-      location: resolved?.name ?? comp,
-      expression: expr,
-      tab: 'bindings' as const,
-    };
-  }
-
-  // ── Calculated field ──────────────────────────────────────────────
-  if (ctx.startsWith('Calculated field expression:')) {
-    const expr = ctx.slice('Calculated field expression:'.length).trim();
-    return { label: t.searchLblCalcField, labelKind: 'formula', category: 'expressions', location: comp, expression: expr, tab: 'datasources' as const };
-  }
-
-  // ── TypeDescriptor ────────────────────────────────────────────────
-  if (ctx === 'TypeDescriptor reference in model field') {
-    // The target is the TypeDescriptor's GUID — nothing to read for a consultant.
-    return { label: t.searchLblFieldType, labelKind: 'field', category: 'structure', location: comp, expression: showTechnicalDetails ? tgt : '', tab: 'structure' as const };
-  }
-
-  // ── Structural references ─────────────────────────────────────────
-  if (ctx === 'Model mapping references data model') {
-    return { label: t.searchLblModelRef, labelKind: 'model', category: 'references', location: comp, expression: '', tab: null };
-  }
-  if (ctx === 'Base model reference') {
-    return { label: t.searchLblBaseRef, labelKind: 'model', category: 'references', location: comp, expression: '', tab: null };
-  }
-  if (ctx === 'Format mapping references format definition') {
-    return { label: t.searchLblFormatRef, labelKind: 'format', category: 'references', location: comp, expression: '', tab: null };
-  }
-
-  // ── Generic formula: "context label: expr" ────────────────────────
-  if (result.targetType === 'Formula') {
-    const col  = ctx.indexOf(':');
-    const expr = col >= 0 ? ctx.slice(col + 1).trim() : ctx;
-    return { label: t.searchLblExpression, labelKind: 'formula', category: 'expressions', location: comp, expression: expr, tab: 'datasources' as const };
-  }
-
-  // ── GUID fallback ─────────────────────────────────────────────────
-  // Registry kinds ("MappingVersion", "FormatElement") and bare GUIDs are
-  // internals; the consultant view calls them references.
-  const referenceLabel = t.searchLblReference;
-  if (result.targetType === 'GUID') {
-    const resolved = registry.lookup(tgt, result.sourceConfigPath);
-    return {
-      label: showTechnicalDetails ? (resolved?.kind ?? 'GUID') : referenceLabel,
-      labelKind: 'guid',
-      category: 'references' as const,
-      location: resolved?.name ?? (showTechnicalDetails ? tgt : t.searchLblUnresolvedRef),
-      expression: '',
-      tab: null,
-    };
-  }
-
-  // ── Generic fallback ──────────────────────────────────────────────
-  return {
-    label: showTechnicalDetails ? (result.targetType ?? '') : referenceLabel,
-    labelKind: (result.targetType ?? '').toLowerCase(),
-    category: 'references' as const,
-    location: comp || tgt,
-    expression: ctx.length < 120 ? ctx : '',
-    tab: null,
-  };
-}
-
-function kindLabel(kind: string): string {
-  if (kind === 'Format' || kind === 'ModelMapping' || kind === 'DataModel') return t.searchKindLabels[kind];
-  return kind;
 }
 
 /** Names the mapping definition (model root) a group of hits belongs to. The
@@ -1051,171 +645,6 @@ function MappingDefinitionChip({ definition }: { definition?: string }) {
     <span className="search-result-group-model" title={t.searchGroupDefinitionHint(definition)}>
       {t.searchGroupDefinition(definition)}
     </span>
-  );
-}
-
-function SearchResultGroup({
-  configPath,
-  fileName,
-  configKind,
-  definition,
-  items,
-  nodeByResult,
-  query,
-  expandSignal,
-  registry,
-  navigateToTreeNode,
-}: {
-  configPath: string;
-  fileName: string;
-  configKind: string;
-  /** Mapping definition these hits come from; absent outside mappings. */
-  definition?: string;
-  items: SearchResultEntry[];
-  nodeByResult: Map<SearchResultEntry, TreeNode>;
-  query: string;
-  expandSignal: { version: number; expanded: boolean };
-  registry: SearchRegistry;
-  navigateToTreeNode: (nodeId: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(true);
-
-  // Items arrive deduplicated and navigable; the node lookup was done once by
-  // the panel so no row (or group) walks the tree again. Splitting them by hit
-  // category turns one long mixed list into short, self-describing sections.
-  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
-  const sections = useMemo(() => {
-    const nested = nestBindingResults(items.filter(r => nodeByResult.has(r)));
-    const byCategory = new Map<HitCategory, Array<{ entry: SearchResultEntry; node: TreeNode; hit: ParsedHit }>>();
-    for (const n of nested) {
-      const hit = parseSearchHit(n.entry, registry, showTechnicalDetails);
-      const bucket = byCategory.get(hit.category) ?? [];
-      bucket.push({ entry: n.entry, node: nodeByResult.get(n.entry)!, hit });
-      byCategory.set(hit.category, bucket);
-    }
-    return HIT_CATEGORY_ORDER
-      .filter(category => byCategory.has(category))
-      .map(category => ({ category, rows: byCategory.get(category)! }));
-  }, [items, nodeByResult, registry, showTechnicalDetails]);
-
-  const totalRows = useMemo(() => sections.reduce((n, s) => n + s.rows.length, 0), [sections]);
-
-  useEffect(() => {
-    if (expandSignal.version > 0) setExpanded(expandSignal.expanded);
-  }, [expandSignal.version, expandSignal.expanded]);
-
-  if (totalRows === 0) return null;
-
-  return (
-    <div className="search-result-group">
-      <button
-        type="button"
-        className="search-result-group-header"
-        onClick={() => setExpanded(e => !e)}
-        aria-expanded={expanded}
-      >
-        <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
-        <DocumentRegular className="search-result-group-icon" />
-        <span className="search-result-group-name" title={configPath}>
-          <Highlight text={fileName} query={query} />
-        </span>
-        {configKind && (
-          <span className={`badge badge-${configKind.toLowerCase()} badge-tiny`}>
-            {kindLabel(configKind)}
-          </span>
-        )}
-        <MappingDefinitionChip definition={definition} />
-        <span className="search-result-group-count">{totalRows}</span>
-      </button>
-      {expanded && (
-        <div className="search-result-group-body">
-          {sections.map(({ category, rows }) => (
-            <div key={category} className={`search-cat search-cat--${category}`}>
-              <div className="search-cat__header">
-                <span className="search-cat__marker" aria-hidden="true" />
-                <span className="search-cat__title">{hitCategoryLabel(category)}</span>
-                <span className="search-cat__count">{rows.length}</span>
-              </div>
-              <div className="search-cat__rows">
-                {rows.map(({ entry, node, hit }, i) => (
-                  <SearchResultCard
-                    key={`${entry.target}:${entry.sourceComponent}:${i}`}
-                    hit={hit}
-                    result={entry}
-                    targetNode={node}
-                    query={query}
-                    navigateToTreeNode={navigateToTreeNode}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SearchResultCard({
-  hit,
-  result,
-  targetNode,
-  query,
-  navigateToTreeNode,
-}: {
-  /** Parsed once by the group so the section split and the row agree. */
-  hit: ParsedHit;
-  result: SearchResultEntry;
-  /** Resolved by the group memo — do not re-walk the tree per row. */
-  targetNode: TreeNode;
-  query: string;
-  navigateToTreeNode: (nodeId: string) => void;
-}) {
-  const shortExpr = hit.expression.length > 100 ? `${hit.expression.slice(0, 100)}…` : hit.expression;
-  // A few cross-ref shapes carry the match only in the component name, which
-  // leaves the primary line blank; fall back so a row is never nameless.
-  const location = hit.location || result.sourceComponent || result.target;
-  const showExpr = shortExpr && shortExpr !== location;
-
-  if (!targetNode) return null;
-
-  // The destination tab is already implied by the section the row sits in, so
-  // only spell it out when it says something the section header does not.
-  const tabLabel = hit.tab === hit.category ? null
-    : hit.tab === 'structure' ? t.searchCatStructure
-    : hit.tab === 'bindings' ? t.searchCatBindings
-    : hit.tab === 'datasources' ? t.searchTabDatasources
-    : null;
-
-  // Structure, binding and expression rows carry a tag that restates their
-  // section; the section header and the row tint already say it. Data source
-  // and reference tags survive because they discriminate within their section
-  // (table vs enum vs class, format vs model vs mapping).
-  const showTag = hit.category === 'datasources' || hit.category === 'references';
-
-  return (
-    <button
-      type="button"
-      className={`search-hit search-hit--${hit.category}`}
-      onClick={() => navigateToTreeNode(targetNode.id)}
-      title={result.sourceComponent || result.target}
-    >
-      <div className="search-hit__body">
-        <div className="search-hit__row1">
-          <span className="search-hit__location">
-            <Highlight text={location} query={query} />
-          </span>
-          {showTag && <span className={`search-hit__tag search-hit__tag--${hit.labelKind}`}>{hit.label}</span>}
-          {tabLabel && <span className="search-hit__tab">{tabLabel}</span>}
-          <ArrowRightRegular className="search-hit__arrow" />
-        </div>
-        {showExpr && (
-          <div className="search-hit__expr">
-            <Highlight text={shortExpr} query={query} />
-          </div>
-        )}
-      </div>
-    </button>
   );
 }
 

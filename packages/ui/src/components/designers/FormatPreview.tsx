@@ -8,6 +8,8 @@ import { formatTypeLabelFor } from './shared';
 import { type BindingMap, type PreviewPlaceholderMode, type PreviewRenderOptions, previewValue } from './preview-values';
 import { ExcelVisualPreview } from './ExcelPreview';
 import { unwrapConverterRoot, detectFormatType } from './format-type';
+import { DocumentPreview } from './DocumentPreview';
+import { buildFormatLineage } from '../../utils/format-lineage';
 
 type DelimitedPreviewData = {
   delimiter: string;
@@ -39,7 +41,7 @@ function parseDelimitedPreview(text: string): DelimitedPreviewData | null {
   return { delimiter: best.delimiter, rows, columnCount };
 }
 
-export function FormatPreview({ rootElement, direction, bindingMap, configIndex, onNavigateToElement, tabId }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; onNavigateToElement?: (elementId: string) => void; tabId?: string }) {
+export function FormatPreview({ rootElement, direction, bindingMap, configIndex, onNavigateToElement, onSelectElement, selectedElementId, tabId }: { rootElement: ERFormatElement; direction: ERDirection | undefined; bindingMap: BindingMap; configIndex: number; onNavigateToElement?: (elementId: string) => void; onSelectElement?: (elementId: string) => void; selectedElementId?: string | null; tabId?: string }) {
   const isPdf = rootElement?.elementType === 'PDFFile';
   const previewRoot = unwrapConverterRoot(rootElement);
   const info = detectFormatType(previewRoot);
@@ -55,6 +57,8 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
     () => ({ placeholderMode, showTechnicalDetails }),
     [placeholderMode, showTechnicalDetails],
   );
+  const configurations = useAppStore(s => s.configurations);
+  const lineage = useMemo(() => buildFormatLineage(configurations, configIndex), [configurations, configIndex]);
   const preview = useMemo(() => generateFormatPreview(previewRoot, bindingMap, previewOptions), [previewRoot, bindingMap, previewOptions]);
   const delimitedPreview = useMemo(() => parseDelimitedPreview(preview), [preview]);
 
@@ -77,6 +81,32 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
 
   if (isPdf && previewRoot === rootElement) {
     return <div style={{ padding: 16, fontSize: 12, color: 'var(--er-text-muted)' }}><DocumentPdfRegular fontSize={13} aria-hidden /> {t.pdfNoSourceComponent}</div>;
+  }
+
+  // XML and text files are laid out from the lineage: values inline, records
+  // with their delimiters and widths, every value explaining where it is from.
+  if (lineage && (info.label === 'XML' || info.label === 'Text / CSV' || info.label === 'Text')) {
+    return (
+      <div className="doc-preview-host">
+        <div className="doc-preview-host__head">
+          {direction === ERDirection.Import
+            ? <><ArrowDownloadRegular fontSize={13} aria-hidden /> {t.excelInput}</>
+            : <><ArrowUploadRegular fontSize={13} aria-hidden /> {t.excelOutput}</>}
+          {isPdf && <span><DocumentPdfRegular fontSize={13} aria-hidden /> {t.pdfConvertedFrom(info.label)}</span>}
+        </div>
+        <DocumentPreview
+          lineage={lineage}
+          root={previewRoot}
+          kind={info.label === 'XML' ? 'xml' : 'text'}
+          configName={configurations[configIndex]?.solutionVersion.solution.name ?? 'format'}
+          configIndex={configIndex}
+          selectedId={selectedElementId ?? null}
+          onSelect={elementId => onSelectElement?.(elementId)}
+          onOpenStructure={elementId => onNavigateToElement?.(elementId)}
+          tabId={tabId}
+        />
+      </div>
+    );
   }
 
   const showDelimitedTable = (info.label === 'Text / CSV' || info.label === 'Text') && delimitedPreview !== null;

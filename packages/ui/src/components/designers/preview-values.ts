@@ -31,6 +31,8 @@ export type PreviewPlaceholderMode = 'sample' | 'omit' | 'braces';
 
 export type PreviewRenderOptions = {
   placeholderMode: PreviewPlaceholderMode;
+  /** Sample value from the format lineage — wins over the name-based guess. */
+  sampleFor?: (element: ERFormatElement) => string | undefined;
   /** Consultant mode must not see raw ER element type names in the preview. */
   showTechnicalDetails?: boolean;
 };
@@ -100,7 +102,7 @@ export function previewValue(el: ERFormatElement, bindingMap: BindingMap, option
     }
   }
   if (options.placeholderMode === 'omit') return '';
-  if (options.placeholderMode === 'sample') return sampleValueForElement(el);
+  if (options.placeholderMode === 'sample') return options.sampleFor?.(el) ?? sampleValueForElement(el);
   return `{${el.name}}`;
 }
 

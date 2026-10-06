@@ -50,7 +50,7 @@ const features = [
   },
   {
     title: 'Search and where-used',
-    body: 'Relevance-ranked search across every loaded configuration, plus a reverse trace — from the inspector, the Explorer, or Ctrl+U — that lists every format element, mapping binding, and expression referencing an element.',
+    body: 'Search every name, label and expression across all loaded configurations, plus an impact analysis that follows a table or field through calculated fields and the model mapping to every format element that reads it.',
     href: '/docs/search-and-where-used',
   },
   {

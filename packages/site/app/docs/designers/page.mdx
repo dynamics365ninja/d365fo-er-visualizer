@@ -85,11 +85,12 @@ magnifier on a datasource row runs where-used, and each row's ⋮ menu has **Rev
 ## Format designer
 
 A format is a tree of elements — the structure of the file that gets produced or read. The format
-designer shows it in several views: **Structure**, **Bindings**, **Data Sources**, **Preview**, and
-— for an import format that carries its own model mapping — **Mapping**. The header shows the file
-type, whether the format exports or imports, and how many elements are **bound** and **unbound**;
-clicking either count filters the structure to those elements. An import format also lists the
-**Model mappings** it is linked to.
+designer shows it in several views: **Structure**, **Specification**, **Bindings**, **Data Sources**,
+**Preview**, and — for an import format that carries its own model mapping — **Mapping**. The header
+shows the file type, whether the format exports or imports, and how many fields are **bound** and
+**unbound**; a value node folded into its XML element counts once, so **unbound** is the number of
+fields that really stay empty. Clicking either count opens the specification filtered to those
+fields. An import format also lists the **Model mappings** it is linked to.
 
 In **Structure**, each element shows its type, name, label, constant value, and the formula it is
 bound to. A leaf element with no binding at all is marked **unbound**, which is the fastest way to
@@ -125,13 +126,51 @@ the record list of the range or element around them, and calculated fields the f
 a model node (`$Split_Note`) count as a use of that node. Load the data model as well to see field
 labels next to the paths.
 
+### Specification
+
+**Specification** is the format as a field specification — the table a consultant otherwise writes
+by hand. One row per element, in the order of the file, with:
+
+- **Type & length** — the data type and the rules on it: maximum / minimum length (`1–20`,
+  `exactly 10`), format mask (`yyyy-MM-dd`, `0.00`), padding and alignment, delimiter and line end
+  of a text record, transformation.
+- **Filled by** — **Model field**, **Calculation** (an expression in the format binding), **Format
+  data source** (a calculated field, enum or table defined in the format), **Constant**, or **Not
+  bound**.
+- **Value / expression** — the binding (click it for the drill-down) and, under it, the condition
+  the element is written on.
+- **Model field** — the model path the element reads, with its label; **not mapped** marks a field
+  the loaded mapping never fills.
+- **D365FO source** — where the value finally comes from, traced through the model mapping:
+  `CustInvoiceTrans.ItemId`, `CompanyInfo.Name`, an enum, a class member.
+
+Badges mark elements that **repeat** (with the list they repeat over), that are **optional** (0..1)
+or that carry a **condition**. `@` paths are resolved against the list of the element around them,
+so a line field shows the table field it reads, not just `@.ItemId`. The chips above the table
+narrow it to fields only, unbound fields, calculations, conditional or repeating elements; matching
+rows keep their parent sections on screen. **Export CSV** downloads the whole specification —
+semicolon-separated with a BOM, so Excel opens it directly.
+
+The **Properties** panel shows the same analysis for the selected element under **How the field is
+filled**: binding → model field → mapping expression → D365FO source, what selects the records, the
+condition, and the rules.
+
 ### Preview
 
-**Preview** shows what the file will look like. For XML, text, and the other non-Excel formats it
-writes out a sample of the file: constant values are filled in from the bindings;
-dynamic values — datasource paths, functions — are shown as sample data, as `{placeholders}`, or
-left out, as you choose under **Unresolved values:**. XML output is syntax-highlighted, and a
-delimited text format can be shown as a table with **First row = header**.
+**Preview** shows the file the format writes. For XML and text formats it is laid out as the file
+itself — XML with the values inline, text records joined with their delimiter and ended with their
+line end, fixed-width fields padded and cut (a ruler shows the character positions) — and every
+value is linked to its element:
+
+- Values can be shown as **Sample data** (from the model field type, enum, length and format mask —
+  one model field reads the same everywhere in the file), as the **D365FO source** they come from,
+  as the binding **Expression**, or as the **Element name**.
+- A repeating section is written out for 1–5 sample **records per list**, and repeating, conditional
+  and optional sections are marked in the gutter and annotated (**Annotations** turns the notes
+  off). **Hide unbound** leaves out what has no binding, to show how the file will actually look.
+- Click a value or a tag to see **how it is filled** beside the document; double-click opens the
+  element in the structure.
+- **Copy** and **Download sample** take the file without annotations.
 
 ### Excel template formats
 

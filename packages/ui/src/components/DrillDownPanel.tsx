@@ -54,6 +54,8 @@ import {
 import { useAppStore, resolveDeepExpression, toModelRootedPath, selectMappingDefinition, getScopedMappingDefinitions } from '../state/store';
 import { t, getLocale, getTranslations, useLocale, type Locale } from '../i18n';
 import { dsPathToExpression } from '../utils/ds-path';
+import { substituteCurrent } from '../utils/er-references';
+import { expandBindingCurrentRecord } from '../state/expression-resolution';
 import { useResizableDialog } from '../utils/resizable-dialog';
 import { formatEnumDisplayName } from '../utils/enum-display';
 import { resolveLabel, buildLabelPool, collectLabelTranslations, getUserLanguageTag } from '../utils/label-resolver';
@@ -1661,9 +1663,13 @@ function buildTreeNode(
       children: [],
     };
 
-    // Resolve the binding expression's datasources
+    // Resolve the binding expression's datasources. `@.Field` reads the
+    // record list bound above it, so it is resolved as that list's field.
     if (bindingExpr) {
-      const dsTokens = uniqueDsTokens(tokenizeERExpr(bindingExpr));
+      const resolvableExpr = modelResult.currentRecord && bindingExpr.includes('@')
+        ? substituteCurrent(bindingExpr, modelResult.currentRecord)
+        : bindingExpr;
+      const dsTokens = uniqueDsTokens(tokenizeERExpr(resolvableExpr));
       dsTokens.forEach((tok, ti) => {
         const child = buildTreeNode(
           ctx, `${id}-m-ds${ti}`, tok.expression, bindingCi,
@@ -2018,7 +2024,7 @@ export function collectUsedSources(options: {
           .filter(binding => matchesSelectedPath(binding?.path));
         for (const binding of bindings.slice(0, 80)) {
           const bindingExpression = String(binding?.expressionAsString ?? '').trim();
-          if (bindingExpression) collectFromExpression(bindingExpression, ci);
+          if (bindingExpression) collectFromExpression(expandBindingCurrentRecord(binding.path, bindingExpression, definition?.bindings ?? []), ci);
         }
       }
     });

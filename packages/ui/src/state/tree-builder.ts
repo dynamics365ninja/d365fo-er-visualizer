@@ -40,6 +40,8 @@ export interface TreeNode {
    * binding names, so search results have to say which one they came from.
    */
   mappingDefinition?: string;
+  /** A data model field: the record (container) that declares it. */
+  ownerName?: string;
 }
 
 /** The part of the store the tree lookups and the where-used scan read. */
@@ -377,6 +379,7 @@ export function buildTreeForConfig(config: ERConfiguration, index: number, allCo
         type: 'field' as const,
         data: item,
         configIndex: index,
+        ownerName: c.name,
       })),
     }));
 

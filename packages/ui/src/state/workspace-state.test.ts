@@ -84,7 +84,6 @@ afterEach(() => {
     toasts: [],
     whereUsedTrigger: null,
     searchQuery: '',
-    searchResults: [],
   });
 });
 
@@ -276,15 +275,6 @@ describe('where-used trigger', () => {
     useAppStore.getState().triggerWhereUsed('CustTable');
     useAppStore.getState().consumeWhereUsedTrigger(trigger.version);
     expect(useAppStore.getState().whereUsedTrigger).toMatchObject({ query: 'CustTable', consumed: false });
-  });
-});
-
-describe('executeSearch', () => {
-  it('does not run a single-character query', () => {
-    useAppStore.getState().loadXmlFile(MODEL_XML, 'model.xml');
-    useAppStore.getState().setSearchQuery('R');
-    useAppStore.getState().executeSearch();
-    expect(useAppStore.getState().searchResults).toEqual([]);
   });
 });
 
