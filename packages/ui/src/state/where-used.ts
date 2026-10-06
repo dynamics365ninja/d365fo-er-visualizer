@@ -317,6 +317,15 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Every binding, calculated field, parameter, aggregation and validation
+ * expression that spells `query` as a word — the fallback next to the
+ * structural impact analysis, for names it cannot tie to a source.
+ */
+export function findTextOccurrences(state: WorkspaceTrees, query: string): WhereUsedEntry | null {
+  return collectExpressionTextMatches(state, query);
+}
+
 function collectExpressionTextMatches(state: WorkspaceTrees, query: string): WhereUsedEntry | null {
   const trimmed = query.trim();
   if (!trimmed) return null;

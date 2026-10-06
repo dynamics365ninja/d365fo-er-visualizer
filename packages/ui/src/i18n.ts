@@ -1034,6 +1034,28 @@ export interface Translations {
   fillCardOther: string;
   fillCardNoSource: string;
   fillCardOpenSpec: string;
+
+  // ─── Where-used impact view (components/WhereUsedView.tsx) ───
+  impactKindLabels: Record<'table' | 'field' | 'enum' | 'class' | 'parameter' | 'datasource' | 'modelField', string>;
+  impactSummary: (entities: number, elements: number, formats: number) => string;
+  impactCounts: (fields: number, elements: number, formats: number) => string;
+  impactMappingSection: (definition: string) => string;
+  impactFillsTitle: string;
+  impactReadsTitle: string;
+  impactRoleLabels: Record<'fills' | 'value' | 'condition' | 'context', string>;
+  impactRoleHints: Record<'fills' | 'value' | 'condition' | 'context', string>;
+  impactVia: (path: string) => string;
+  impactIndirectToggle: (n: number) => string;
+  impactIndirectHide: string;
+  impactIndirectHint: string;
+  impactOnlyIndirect: (n: number) => string;
+  impactNoMatch: (query: string) => string;
+  impactTextSection: (n: number) => string;
+  impactTextHint: string;
+  impactShowAllRows: (n: number) => string;
+  impactPaths: (paths: string) => string;
+  impactStartedFrom: string;
+  impactIntro: string;
 }
 
 // ─── Translation dictionaries ─────────────────────────────────────────────
@@ -2026,6 +2048,28 @@ const cs: Translations = {
   fillCardOther: 'Další vazby',
   fillCardNoSource: 'Zdroj nelze dohledat',
   fillCardOpenSpec: 'Otevřít ve specifikaci',
+
+  // ─── Where-used impact view (components/WhereUsedView.tsx) ───
+  impactKindLabels: { table: 'Tabulka', field: 'Pole tabulky', enum: 'Výčet', class: 'Třída', parameter: 'Parametr', datasource: 'Zdroj dat', modelField: 'Pole modelu' },
+  impactSummary: (entities: number, elements: number, formats: number) => `${entities} ${csPlural(entities, 'shoda', 'shody', 'shod')} · ${elements} ${csPlural(elements, 'prvek', 'prvky', 'prvků')} ve ${formats} ${csPlural(formats, 'formátu', 'formátech', 'formátech')}`,
+  impactCounts: (fields: number, elements: number, formats: number) => [fields ? `${fields} ${csPlural(fields, 'pole modelu', 'pole modelu', 'polí modelu')}` : '', elements ? `${elements} ${csPlural(elements, 'prvek', 'prvky', 'prvků')} · ${formats} ${csPlural(formats, 'formát', 'formáty', 'formátů')}` : ''].filter(Boolean).join(' · '),
+  impactMappingSection: (definition: string) => `Mapování ${definition}`,
+  impactFillsTitle: 'Plní pole modelu',
+  impactReadsTitle: 'Čte',
+  impactRoleLabels: { fills: 'plní', value: 'hodnota', condition: 'podmínka', context: 'výběr záznamů' },
+  impactRoleHints: { fills: 'Vazba mapování plní toto pole modelu', value: 'Hodnota prvku pochází přímo z této položky', condition: 'Položka rozhoduje, zda se prvek vypíše', context: 'Položka jen vybírá záznamy (filtr, seznam) — hodnota pochází odjinud' },
+  impactVia: (path: string) => `přes ${path}`,
+  impactIndirectToggle: (n: number) => `Zobrazit i nepřímé použití (${n})`,
+  impactIndirectHide: 'Skrýt nepřímé použití',
+  impactIndirectHint: 'Nepřímé = položka jen vybírá záznamy (filtr WHERE, seznam), hodnotu prvku nedodává',
+  impactOnlyIndirect: (n: number) => `Jen nepřímé použití (${n})`,
+  impactNoMatch: (query: string) => `„${query}“ se v načtených konfiguracích nepoužívá v žádné vazbě ani prvku.`,
+  impactTextSection: (n: number) => `Další textové výskyty ve výrazech (${n})`,
+  impactTextHint: 'Místa, kde se hledaný text objevuje ve výrazu, ale nepodařilo se je přiřadit ke konkrétnímu zdroji',
+  impactShowAllRows: (n: number) => `Zobrazit všech ${n}`,
+  impactPaths: (paths: string) => `Cesty: ${paths}`,
+  impactStartedFrom: 'Hledáno od vybrané položky',
+  impactIntro: 'Zadejte tabulku, pole, výčet, třídu, zdroj dat nebo pole modelu. Výsledek ukáže, která pole modelu se z něj plní a které prvky kterých formátů ho nakonec čtou — i přes výpočty a seznamy.',
 };
 
 const en: Translations = {
@@ -3011,6 +3055,28 @@ const en: Translations = {
   fillCardOther: 'Other bindings',
   fillCardNoSource: 'The source cannot be traced',
   fillCardOpenSpec: 'Open in the specification',
+
+  // ─── Where-used impact view (components/WhereUsedView.tsx) ───
+  impactKindLabels: { table: 'Table', field: 'Table field', enum: 'Enum', class: 'Class', parameter: 'Parameter', datasource: 'Data source', modelField: 'Model field' },
+  impactSummary: (entities: number, elements: number, formats: number) => `${entities} ${entities === 1 ? 'match' : 'matches'} · ${elements} ${elements === 1 ? 'element' : 'elements'} in ${formats} ${formats === 1 ? 'format' : 'formats'}`,
+  impactCounts: (fields: number, elements: number, formats: number) => [fields ? `${fields} model ${fields === 1 ? 'field' : 'fields'}` : '', elements ? `${elements} ${elements === 1 ? 'element' : 'elements'} · ${formats} ${formats === 1 ? 'format' : 'formats'}` : ''].filter(Boolean).join(' · '),
+  impactMappingSection: (definition: string) => `Mapping ${definition}`,
+  impactFillsTitle: 'Fills model fields',
+  impactReadsTitle: 'Reads',
+  impactRoleLabels: { fills: 'fills', value: 'value', condition: 'condition', context: 'record selection' },
+  impactRoleHints: { fills: 'The mapping binding fills this model field', value: 'The element takes its value from this item', condition: 'The item decides whether the element is written', context: 'The item only selects the records (filter, list) — the value comes from elsewhere' },
+  impactVia: (path: string) => `via ${path}`,
+  impactIndirectToggle: (n: number) => `Show indirect use too (${n})`,
+  impactIndirectHide: 'Hide indirect use',
+  impactIndirectHint: 'Indirect = the item only selects the records (a WHERE filter, a list) and does not supply the value',
+  impactOnlyIndirect: (n: number) => `Indirect use only (${n})`,
+  impactNoMatch: (query: string) => `"${query}" is not used by any binding or element of the loaded configurations.`,
+  impactTextSection: (n: number) => `Other text occurrences in expressions (${n})`,
+  impactTextHint: 'Places where the text appears in an expression but could not be tied to a specific source',
+  impactShowAllRows: (n: number) => `Show all ${n}`,
+  impactPaths: (paths: string) => `Paths: ${paths}`,
+  impactStartedFrom: 'Started from the selected item',
+  impactIntro: 'Type a table, field, enum, class, data source or model field. The result shows which model fields are filled from it and which elements of which formats end up reading it — through calculations and lists as well.',
 };
 
 export let t: Translations = locale === 'cs' ? cs : en;

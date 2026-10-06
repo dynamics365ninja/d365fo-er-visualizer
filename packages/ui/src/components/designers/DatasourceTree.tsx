@@ -324,7 +324,7 @@ function DatasourceRow({ node, ctx, depth }: {
             <button
               type="button"
               className="ds-row-where-used"
-              onClick={e => { e.stopPropagation(); triggerWhereUsed(ds.name); }}
+              onClick={e => { e.stopPropagation(); triggerWhereUsed(ds.name, { kind: 'datasource', configIndex: ctx.configIndex, name: ds.name, parentPath: ds.parentPath }); }}
               title={t.whereUsedAction}
               aria-label={`${t.whereUsedAction}: ${ds.name}`}
             >

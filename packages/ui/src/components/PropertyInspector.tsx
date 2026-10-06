@@ -18,7 +18,7 @@ import {
   ArrowSyncRegular,
   SearchRegular,
 } from '@fluentui/react-icons';
-import { whereUsedQueryFor } from '../utils/where-used-query';
+import { whereUsedQueryFor, whereUsedTargetFor } from '../utils/where-used-query';
 import { buildFormatLineage, elementFill } from '../utils/format-lineage';
 import { ElementFillCard } from './designers/ElementFillCard';
 
@@ -248,7 +248,7 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
             <button
               type="button"
               className="prop-action"
-              onClick={() => triggerWhereUsed(whereUsedQuery)}
+              onClick={() => triggerWhereUsed(whereUsedQuery, whereUsedTargetFor(node))}
               title={`${t.whereUsedAction} (Ctrl+U)`}
             >
               <SearchRegular fontSize={13} />

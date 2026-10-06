@@ -63,7 +63,8 @@ import {
   type ResolvedDatasource,
   type ResolvedModelPath,
 } from './expression-resolution';
-import { findWhereUsed, type WhereUsedEntry } from './where-used';
+import { findTextOccurrences, findWhereUsed, type WhereUsedEntry } from './where-used';
+import type { WhereUsedTarget } from '../utils/impact-index';
 
 // The store's helpers live in the modules imported above; everything that used
 // to be exported from here still is, so importers keep using './store'.
@@ -191,6 +192,9 @@ export interface AppState {
   searchResults: any[];
   searchPanelMode: 'search' | 'where-used';
   whereUsedQuery: string;
+  /** The item a where-used was started from (a model field of one record, a datasource of one definition). */
+  whereUsedTarget: WhereUsedTarget | null;
+  /** Text occurrences of the where-used query that the impact analysis cannot tie to a source. */
   whereUsedResults: WhereUsedEntry[];
   whereUsedScope: 'all' | 'mapping' | 'format';
   activeWhereUsedRefKey: string | null;
@@ -214,7 +218,7 @@ export interface AppState {
    * search panel has run it, so a later remount of the panel does not replay
    * a stale query.
    */
-  whereUsedTrigger: { query: string; version: number; consumed: boolean } | null;
+  whereUsedTrigger: { query: string; target?: WhereUsedTarget | null; version: number; consumed: boolean } | null;
 
   /** Global F&O download progress label, empty when idle. */
   fnoIngestStatus: string;
@@ -279,7 +283,7 @@ export interface AppState {
   executeSearch: () => void;
   setSearchPanelMode: (mode: 'search' | 'where-used') => void;
   setWhereUsedQuery: (query: string) => void;
-  executeWhereUsed: (query?: string) => void;
+  executeWhereUsed: (query?: string, target?: WhereUsedTarget | null) => void;
   clearWhereUsed: () => void;
   setWhereUsedScope: (scope: 'all' | 'mapping' | 'format') => void;
   setActiveWhereUsedRefKey: (key: string | null) => void;
@@ -345,7 +349,7 @@ export interface AppState {
    * Returns a flat list of trace links from the entity → datasource → model binding → format element.
    */
   whereUsed: (entityName: string) => WhereUsedEntry[];
-  triggerWhereUsed: (query: string) => void;
+  triggerWhereUsed: (query: string, target?: WhereUsedTarget | null) => void;
   /** Mark where-used trigger `version` as handled (no-op for any other version). */
   consumeWhereUsedTrigger: (version: number) => void;
 }
@@ -382,6 +386,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   searchResults: [],
   searchPanelMode: 'search',
   whereUsedQuery: '',
+  whereUsedTarget: null,
   whereUsedResults: [],
   whereUsedScope: 'all',
   activeWhereUsedRefKey: null,
@@ -710,6 +715,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       searchQuery: '',
       searchResults: [],
       whereUsedQuery: '',
+      whereUsedTarget: null,
       whereUsedResults: [],
       whereUsedScope: 'all',
       activeWhereUsedRefKey: null,
@@ -986,21 +992,27 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setSearchPanelMode: (mode) => set({ searchPanelMode: mode }),
 
-  setWhereUsedQuery: (query) => set({ whereUsedQuery: query }),
+  // Typing a query of one's own drops the item the search was started from.
+  setWhereUsedQuery: (query) => set({ whereUsedQuery: query, whereUsedTarget: null }),
 
-  executeWhereUsed: (query) => {
+  executeWhereUsed: (query, target) => {
     const state = get();
     const nextQuery = query ?? state.whereUsedQuery;
-    const results = nextQuery.trim() ? state.whereUsed(nextQuery) : [];
+    const nextTarget = target !== undefined ? target : (query !== undefined ? null : state.whereUsedTarget);
+    // The structural part is computed by the panel from the impact index;
+    // the store keeps the text occurrences it cannot tie to a source.
+    const text = nextQuery.trim() ? findTextOccurrences(state, nextQuery) : null;
     set({
       whereUsedQuery: nextQuery,
-      whereUsedResults: results,
+      whereUsedTarget: nextTarget,
+      whereUsedResults: text ? [text] : [],
       activeWhereUsedRefKey: null,
     });
   },
 
   clearWhereUsed: () => set({
     whereUsedQuery: '',
+    whereUsedTarget: null,
     whereUsedResults: [],
     activeWhereUsedRefKey: null,
   }),
@@ -1254,6 +1266,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         searchQuery: '',
         searchResults: [],
         whereUsedQuery: '',
+        whereUsedTarget: null,
         whereUsedResults: [],
         whereUsedScope: 'all',
         activeWhereUsedRefKey: null,
@@ -1330,8 +1343,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     return findWhereUsed(get(), entityName);
   },
 
-  triggerWhereUsed: (query) => set(state => ({
-    whereUsedTrigger: { query, version: (state.whereUsedTrigger?.version ?? 0) + 1, consumed: false },
+  triggerWhereUsed: (query, target) => set(state => ({
+    whereUsedTrigger: { query, target: target ?? null, version: (state.whereUsedTrigger?.version ?? 0) + 1, consumed: false },
   })),
 
   consumeWhereUsedTrigger: (version) => set(state => (

@@ -85,7 +85,7 @@ export function DataModelList({ containers, configIndex, filter }: { containers:
     return next;
   });
 
-  const renderField = (segments: string[], item: ERDataContainerItem, depth: number, path: string, showPath = false): React.ReactNode => {
+  const renderField = (segments: string[], item: ERDataContainerItem, owner: ERDataContainerDescriptor, depth: number, path: string, showPath = false): React.ReactNode => {
     const target = item.typeDescriptor ? byId.get(item.typeDescriptor) : undefined;
     const expandable = Boolean(target && !target.isEnum && target.items.length > 0);
     const expanded = expandable && open.has(path);
@@ -123,7 +123,7 @@ export function DataModelList({ containers, configIndex, filter }: { containers:
             <button
               type="button"
               className="ds-row-where-used"
-              onClick={() => useAppStore.getState().triggerWhereUsed(item.name)}
+              onClick={() => useAppStore.getState().triggerWhereUsed(item.name, { kind: 'modelField', container: owner.name, field: item.name })}
               title={t.whereUsedAction}
               aria-label={`${t.whereUsedAction}: ${item.name}`}
             >
@@ -132,7 +132,7 @@ export function DataModelList({ containers, configIndex, filter }: { containers:
           </div>
         </div>
         {expanded && target!.items.map(child =>
-          renderField([...segments, child.name], child, depth + 1, `${path}/${child.name}`))}
+          renderField([...segments, child.name], child, target!, depth + 1, `${path}/${child.name}`))}
       </React.Fragment>
     );
   };
@@ -146,7 +146,7 @@ export function DataModelList({ containers, configIndex, filter }: { containers:
           ) : (
             <>
               {matches.slice(0, MAX_FILTER_RESULTS).map(f =>
-                renderField(f.segments, f.item, 0, `match:${f.segments.join('/')}`, true))}
+                renderField(f.segments, f.item, f.owner, 0, `match:${f.segments.join('/')}`, true))}
               {matches.length > MAX_FILTER_RESULTS && (
                 <p className="dm-list__empty">{t.modelListMoreMatches(matches.length - MAX_FILTER_RESULTS)}</p>
               )}
@@ -160,7 +160,7 @@ export function DataModelList({ containers, configIndex, filter }: { containers:
                 {labelOf(root.label) && <span className="dm-list__root-label">{labelOf(root.label)}</span>}
                 <span className="ds-row-count">{root.items.length}</span>
               </div>
-              {root.items.map(item => renderField([item.name], item, 0, `${root.id}/${item.name}`))}
+              {root.items.map(item => renderField([item.name], item, root, 0, `${root.id}/${item.name}`))}
             </div>
           ))
         )}

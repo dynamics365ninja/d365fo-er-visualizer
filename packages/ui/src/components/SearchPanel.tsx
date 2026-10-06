@@ -17,6 +17,7 @@ import { referenceCategory, WHERE_USED_CATEGORY_ORDER, type ReferenceCategory } 
 import { ExpandCollapseSlider } from './ExpandCollapseSlider';
 import { useSearchFocusTarget } from '../utils/search-focus';
 import { rankByRelevance } from '../utils/search-relevance';
+import { WhereUsedView } from './WhereUsedView';
 
 const SEARCH_PAGE_SIZE = 100;
 import { buildSearchNodeIndex, findNodeForSearchResult, type SearchRegistry, type SearchResultEntry } from '../utils/search-node-index';
@@ -226,6 +227,8 @@ export function SearchPanel() {
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const configurations = useAppStore(s => s.configurations);
   const whereUsedTrigger = useAppStore(s => s.whereUsedTrigger);
+  const whereUsedTarget = useAppStore(s => s.whereUsedTarget);
+  const [impactEmpty, setImpactEmpty] = useState(false);
   const consumeWhereUsedTrigger = useAppStore(s => s.consumeWhereUsedTrigger);
   const openTabs = useAppStore(s => s.openTabs);
   const activeTabId = useAppStore(focusedTabId);
@@ -236,7 +239,12 @@ export function SearchPanel() {
   // A workspace often holds several unrelated model trees, and an unscoped
   // registry search reports hits from all of them. Default to the open
   // configuration's own tree; the "All" chip opts back into the full sweep.
-  const [relatedOnly, setRelatedOnly] = useState(true);
+  const [searchRelatedOnly, setSearchRelatedOnly] = useState(true);
+  // Where-used answers "what breaks if this changes" — across every loaded
+  // configuration by default; the related-only reach is one click away.
+  const [whereUsedRelatedOnly, setWhereUsedRelatedOnly] = useState(false);
+  const relatedOnly = mode === 'search' ? searchRelatedOnly : whereUsedRelatedOnly;
+  const setRelatedOnly = mode === 'search' ? setSearchRelatedOnly : setWhereUsedRelatedOnly;
   useEffect(() => { setResultLimit(SEARCH_PAGE_SIZE); }, [searchQuery, searchScope, relatedOnly]);
 
   const activeConfigIndex = useMemo(() => {
@@ -320,7 +328,7 @@ export function SearchPanel() {
     if (!whereUsedTrigger || whereUsedTrigger.consumed) return;
     consumeWhereUsedTrigger(whereUsedTrigger.version);
     setMode('where-used');
-    executeWhereUsed(whereUsedTrigger.query);
+    executeWhereUsed(whereUsedTrigger.query, whereUsedTrigger.target ?? null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [whereUsedTrigger?.version]);
 
@@ -352,13 +360,6 @@ export function SearchPanel() {
 
     return () => window.clearTimeout(handle);
   }, [executeWhereUsed, mode, whereUsedQuery]);
-
-  // Datasources the where-used scan found but nothing references — the old
-  // per-datasource card surfaced these as "dead"; keep that signal inline.
-  const deadDatasources = useMemo(
-    () => whereUsedResults.filter(e => e.entityType !== 'TextMatch' && e.modelPaths.length === 0 && e.formatUsages.length === 0),
-    [whereUsedResults],
-  );
 
   const whereUsedGrouping = useMemo(() => {
     const refs: Reference[] = [];
@@ -691,9 +692,9 @@ export function SearchPanel() {
         {/* ── Where-used mode ── */}
         {mode === 'where-used' && (
           <>
-            {!trimmedCurrentQuery && (
+            {!trimmedCurrentQuery && !whereUsedTarget && (
               <>
-                <p className="search-panel__hint">{t.whereUsedLabel}</p>
+                <p className="search-panel__hint">{t.impactIntro}</p>
                 <ExamplePalette
                   title={t.examples}
                   examples={whereUsedExamples}
@@ -702,100 +703,91 @@ export function SearchPanel() {
               </>
             )}
 
-            {(whereUsedFileGroups.length > 0 || whereUsedTotalRefs > 0) && (() => {
-              const totalVisible = whereUsedFileGroups.reduce(
-                (n, [, g]) => n + (whereUsedScope === 'all' ? g.refs.length : g.refs.filter(r => r.area === whereUsedScope).length), 0);
-              return (
-                <>
-                  <div className="search-panel__results-bar">
-                    <span className="search-panel__results-count">{t.found(totalVisible)}</span>
-                    <div className="search-scope-toggle" role="group" aria-label={t.whereUsedScopeAria}>
-                      {(['all', 'mapping', 'format'] as const).map(s => (
-                        <button key={s} type="button"
-                          className={`search-scope-toggle__btn ${whereUsedScope === s ? 'active' : ''}`}
-                          onClick={() => setWhereUsedScope(s)}
-                        >
-                          {s === 'all' ? t.searchScopeAll
-                            : s === 'mapping' ? t.searchScopeMapping
-                            : t.searchScopeFormat}
-                        </button>
-                      ))}
-                    </div>
+            {(trimmedCurrentQuery || whereUsedTarget) && (
+              <>
+                <div className="search-panel__results-bar">
+                  <div className="search-scope-toggle" role="group" aria-label={t.whereUsedScopeAria}>
+                    {(['all', 'mapping', 'format'] as const).map(s => (
+                      <button key={s} type="button"
+                        className={`search-scope-toggle__btn ${whereUsedScope === s ? 'active' : ''}`}
+                        onClick={() => setWhereUsedScope(s)}
+                      >
+                        {s === 'all' ? t.searchScopeAll
+                          : s === 'mapping' ? t.searchScopeMapping
+                          : t.searchScopeFormat}
+                      </button>
+                    ))}
                   </div>
-                  <div className="search-panel__reach">
-                    {relatedFilter && (
-                      <div className="search-scope-toggle" role="group" aria-label={t.searchReachAria}>
-                        <button
-                          type="button"
-                          className={`search-scope-toggle__btn ${relatedOnly ? 'active' : ''}`}
-                          onClick={() => setRelatedOnly(true)}
-                          title={t.searchRelatedOnlyHint}
-                        >
-                          {t.searchRelatedOnly}
-                        </button>
-                        <button
-                          type="button"
-                          className={`search-scope-toggle__btn ${relatedOnly ? '' : 'active'}`}
-                          onClick={() => setRelatedOnly(false)}
-                          title={t.searchAllConfigsHint}
-                        >
-                          {t.searchAllConfigs}
-                        </button>
+                  {relatedFilter && (
+                    <div className="search-scope-toggle" role="group" aria-label={t.searchReachAria}>
+                      <button
+                        type="button"
+                        className={`search-scope-toggle__btn ${relatedOnly ? 'active' : ''}`}
+                        onClick={() => setRelatedOnly(true)}
+                        title={t.searchRelatedOnlyHint}
+                      >
+                        {t.searchRelatedOnly}
+                      </button>
+                      <button
+                        type="button"
+                        className={`search-scope-toggle__btn ${relatedOnly ? '' : 'active'}`}
+                        onClick={() => setRelatedOnly(false)}
+                        title={t.searchAllConfigsHint}
+                      >
+                        {t.searchAllConfigs}
+                      </button>
+                    </div>
+                  )}
+                  <div className="search-panel__results-actions">
+                    <ExpandCollapseSlider
+                      size="compact"
+                      expandLabel={t.expand}
+                      collapseLabel={t.collapse}
+                      expandIcon={<TextExpandRegular fontSize={16} />}
+                      collapseIcon={<TextCollapseRegular fontSize={16} />}
+                      onExpand={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
+                      onCollapse={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
+                    />
+                  </div>
+                </div>
+                <div className="search-panel__results">
+                  <WhereUsedView
+                    query={whereUsedQuery}
+                    target={whereUsedTarget}
+                    scope={whereUsedScope}
+                    filter={relatedOnly ? relatedFilter : null}
+                    expandSignal={whereUsedExpandSignal}
+                    onEmpty={setImpactEmpty}
+                  />
+
+                  {whereUsedFileGroups.length > 0 && (
+                    <details className="impact-text" open={impactEmpty}>
+                      <summary title={t.impactTextHint}>{t.impactTextSection(whereUsedFileGroups.reduce((n, [, g]) => n + g.refs.length, 0))}</summary>
+                      <div className="search-results">
+                        {whereUsedFileGroups.map(([key, { configName, definition, refs }]) => (
+                          <FileReferenceGroup
+                            key={key}
+                            configName={configName}
+                            definition={definition}
+                            references={refs}
+                            scope={whereUsedScope}
+                            query={whereUsedQuery}
+                            expandSignal={whereUsedExpandSignal}
+                            activeRefKey={activeWhereUsedRefKey}
+                            onReferenceOpen={setActiveWhereUsedRefKey}
+                          />
+                        ))}
                       </div>
-                    )}
-                    <div className="search-panel__results-actions">
-                      <ExpandCollapseSlider
-                        size="compact"
-                        expandLabel={t.expand}
-                        collapseLabel={t.collapse}
-                        expandIcon={<TextExpandRegular fontSize={16} />}
-                        collapseIcon={<TextCollapseRegular fontSize={16} />}
-                        onExpand={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: true }))}
-                        onCollapse={() => setWhereUsedExpandSignal(s => ({ version: s.version + 1, expanded: false }))}
-                      />
-                    </div>
-                  </div>
-                  <div className="search-panel__results">
-                    <div className="search-results">
-                      {whereUsedFileGroups.length === 0 && (
-                        // Everything was filtered out by "Related only"; the
-                        // toggle above stays reachable so this is not a dead end.
-                        <div className="search-panel__empty">{t.searchRelatedEmpty}</div>
-                      )}
-                      {whereUsedFileGroups.map(([key, { configName, definition, refs }]) => (
-                        <FileReferenceGroup
-                          key={key}
-                          configName={configName}
-                          definition={definition}
-                          references={refs}
-                          scope={whereUsedScope}
-                          query={whereUsedQuery}
-                          expandSignal={whereUsedExpandSignal}
-                          activeRefKey={activeWhereUsedRefKey}
-                          onReferenceOpen={setActiveWhereUsedRefKey}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </>
-              );
-            })()}
+                    </details>
+                  )}
 
-            {deadDatasources.length > 0 && trimmedCurrentQuery && (
-              <div className="wu-empty search-panel__dead-datasources">
-                {deadDatasources.map(e => (
-                  <div key={`${e.datasource.configIndex}|${e.datasource.parentPath ?? ''}|${e.datasource.name}`}>
-                    <strong>{t.deadDatasource}:</strong>{' '}
-                    <Highlight text={e.datasource.name} query={whereUsedQuery} />
-                    {' '}<span className="search-panel__dead-datasources-config">({e.datasource.configName})</span>
-                    {' — '}{t.deadDatasourceDesc}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {whereUsedFileGroups.length === 0 && whereUsedTotalRefs === 0 && deadDatasources.length === 0 && trimmedCurrentQuery && (
-              <div className="search-panel__empty">{t.noResultsFor(whereUsedQuery)}</div>
+                  {impactEmpty && whereUsedFileGroups.length === 0 && trimmedCurrentQuery && (
+                    <div className="search-panel__empty">
+                      {relatedOnly && relatedFilter && whereUsedTotalRefs > 0 ? t.searchRelatedEmpty : t.impactNoMatch(whereUsedQuery)}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </>
         )}

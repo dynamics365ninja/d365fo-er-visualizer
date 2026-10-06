@@ -30,7 +30,7 @@ import {
   ArrowUploadRegular,
   ArrowDownloadRegular,
 } from '@fluentui/react-icons';
-import { whereUsedQueryFor } from '../utils/where-used-query';
+import { whereUsedQueryFor, whereUsedTargetFor } from '../utils/where-used-query';
 import { t, useLocale } from '../i18n';
 import { treeArrowAction } from '../utils/tree-keyboard';
 import { flattenVisibleTree, indexFlatRows, type FlatTreeRow } from '../utils/flat-tree';
@@ -1318,7 +1318,7 @@ const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded,
                 {t.explorerOpenInTab}
               </MenuItem>
               {whereUsedQuery && (
-                <MenuItem icon={<SearchRegular />} onClick={() => triggerWhereUsed(whereUsedQuery)}>
+                <MenuItem icon={<SearchRegular />} onClick={() => triggerWhereUsed(whereUsedQuery, whereUsedTargetFor(node))}>
                   {t.whereUsedAction}
                 </MenuItem>
               )}
