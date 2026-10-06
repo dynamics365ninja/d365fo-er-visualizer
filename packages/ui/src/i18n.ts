@@ -1066,6 +1066,33 @@ export interface Translations {
   searchMatchedLabel: string;
   searchRootRecord: string;
   searchIntro: string;
+
+  // ─── Document preview (designers/DocumentPreview.tsx) ───
+  docPreviewModeLabels: Record<'sample' | 'source' | 'expression' | 'name', string>;
+  docPreviewModeHints: Record<'sample' | 'source' | 'expression' | 'name', string>;
+  docPreviewModeAria: string;
+  docPreviewRecords: string;
+  docPreviewNotes: string;
+  docPreviewNotesHint: string;
+  docPreviewHideUnbound: string;
+  docPreviewHideUnboundHint: string;
+  docPreviewRepeats: (source: string, n: number) => string;
+  docPreviewCondition: (expression: string) => string;
+  docPreviewOptional: string;
+  docPreviewLegendRepeat: string;
+  docPreviewLegendCondition: string;
+  docPreviewLegendUnbound: string;
+  docPreviewLegendConstant: string;
+  docPreviewLegendPadding: string;
+  docPreviewSelectHint: string;
+  docPreviewCopy: string;
+  docPreviewCopied: string;
+  docPreviewCopyHint: string;
+  docPreviewDownload: string;
+  docPreviewDownloadHint: string;
+  docPreviewClose: string;
+  docPreviewEmpty: string;
+  docPreviewRuler: string;
 }
 
 // ─── Translation dictionaries ─────────────────────────────────────────────
@@ -2090,6 +2117,33 @@ const cs: Translations = {
   searchMatchedLabel: 'popisek',
   searchRootRecord: 'kořen',
   searchIntro: 'Hledá v názvech prvků formátu, polí a záznamů modelu, v popiscích (česky i anglicky, i bez diakritiky), ve vazbách, výpočtech, zdrojích dat, validacích a v celém textu výrazů.',
+
+  // ─── Document preview (designers/DocumentPreview.tsx) ───
+  docPreviewModeLabels: { sample: 'Ukázková data', source: 'Zdroj v D365FO', expression: 'Výraz', name: 'Název prvku' },
+  docPreviewModeHints: { sample: 'Věrohodné hodnoty podle typu, délky, formátu a výčtu pole', source: 'Místo hodnot tabulka a pole D365FO (nebo pole modelu), odkud hodnota pochází', expression: 'Místo hodnot výraz vazby formátu', name: 'Místo hodnot název prvku formátu' },
+  docPreviewModeAria: 'Co zobrazit místo hodnot',
+  docPreviewRecords: 'Záznamů v seznamu',
+  docPreviewNotes: 'Anotace',
+  docPreviewNotesHint: 'Zobrazit poznámky o opakování a podmínkách (nejsou součástí souboru)',
+  docPreviewHideUnbound: 'Skrýt nenavázané',
+  docPreviewHideUnboundHint: 'Vynechat prvky bez vazby — ukáže, jak bude soubor skutečně vypadat',
+  docPreviewRepeats: (source: string, n: number) => `opakuje se pro každý záznam ${source} — ${n === 1 ? 'ukázka 1 záznamu' : `ukázka ${n} záznamů`}`,
+  docPreviewCondition: (expression: string) => `vypíše se jen když ${expression}`,
+  docPreviewOptional: 'nepovinný prvek (0..1)',
+  docPreviewLegendRepeat: 'opakovaný blok',
+  docPreviewLegendCondition: 'podmíněný blok',
+  docPreviewLegendUnbound: 'nenavázáno',
+  docPreviewLegendConstant: 'konstanta',
+  docPreviewLegendPadding: 'doplnění',
+  docPreviewSelectHint: 'Klikněte na hodnotu nebo prvek — zobrazí se, jak se plní. Dvojklik otevře prvek ve struktuře.',
+  docPreviewCopy: 'Kopírovat',
+  docPreviewCopied: 'Zkopírováno',
+  docPreviewCopyHint: 'Zkopírovat náhled souboru (bez anotací) do schránky',
+  docPreviewDownload: 'Stáhnout ukázku',
+  docPreviewDownloadHint: 'Stáhnout náhled jako soubor',
+  docPreviewClose: 'Zavřít detail',
+  docPreviewEmpty: 'Formát nemá žádné prvky k zobrazení.',
+  docPreviewRuler: 'Pozice znaků',
 };
 
 const en: Translations = {
@@ -3107,6 +3161,33 @@ const en: Translations = {
   searchMatchedLabel: 'label',
   searchRootRecord: 'root',
   searchIntro: 'Searches the names of format elements, model fields and records, their labels (in every language, accents optional), bindings, calculations, data sources, validations and the full text of expressions.',
+
+  // ─── Document preview (designers/DocumentPreview.tsx) ───
+  docPreviewModeLabels: { sample: 'Sample data', source: 'D365FO source', expression: 'Expression', name: 'Element name' },
+  docPreviewModeHints: { sample: 'Plausible values from the field type, length, format and enum', source: 'Instead of values, the D365FO table and field (or the model field) the value comes from', expression: 'Instead of values, the format binding expression', name: 'Instead of values, the name of the format element' },
+  docPreviewModeAria: 'What to show as values',
+  docPreviewRecords: 'Records per list',
+  docPreviewNotes: 'Annotations',
+  docPreviewNotesHint: 'Show notes on repetition and conditions (not part of the file)',
+  docPreviewHideUnbound: 'Hide unbound',
+  docPreviewHideUnboundHint: 'Leave out unbound elements — shows how the file will actually look',
+  docPreviewRepeats: (source: string, n: number) => `repeats for every record of ${source} — ${n === 1 ? 'one sample record' : `${n} sample records`}`,
+  docPreviewCondition: (expression: string) => `written only when ${expression}`,
+  docPreviewOptional: 'optional element (0..1)',
+  docPreviewLegendRepeat: 'repeating section',
+  docPreviewLegendCondition: 'conditional section',
+  docPreviewLegendUnbound: 'not bound',
+  docPreviewLegendConstant: 'constant',
+  docPreviewLegendPadding: 'padding',
+  docPreviewSelectHint: 'Click a value or an element to see how it is filled. Double-click opens it in the structure.',
+  docPreviewCopy: 'Copy',
+  docPreviewCopied: 'Copied',
+  docPreviewCopyHint: 'Copy the file preview (without annotations) to the clipboard',
+  docPreviewDownload: 'Download sample',
+  docPreviewDownloadHint: 'Download the preview as a file',
+  docPreviewClose: 'Close the detail',
+  docPreviewEmpty: 'The format has no elements to show.',
+  docPreviewRuler: 'Character positions',
 };
 
 export let t: Translations = locale === 'cs' ? cs : en;

@@ -801,7 +801,7 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
           )}
 
           <div style={{ display: view === 'preview' ? 'contents' : 'none' }}>
-            <FormatPreview rootElement={rootElement} direction={fc.direction} bindingMap={bindingMap} configIndex={configIndex} tabId={tabId} onNavigateToElement={(elementId) => {
+            <FormatPreview rootElement={rootElement} direction={fc.direction} bindingMap={bindingMap} configIndex={configIndex} tabId={tabId} selectedElementId={selectedElementId} onSelectElement={handleSelectFormatElement} onNavigateToElement={(elementId) => {
               setStructureExpandMode('all');
               setStructureExpandVersion(v => v + 1);
               setView('structure');

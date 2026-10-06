@@ -7,6 +7,8 @@ import { resolveLabel, buildLabelPool, labelLanguageTag } from '../../utils/labe
 import { useTabState } from '../../utils/tab-view-state';
 import { parseXlsxBase64, colToLetter, type XlsxWorkbook, type XlsxCell as XlsxCellType, type XlsxMerge, type XlsxArea, type XlsxDrawing, type XlsxAnchorPoint } from '../../utils/xlsx-parser';
 import { type BindingMap, type PreviewRenderOptions, previewValue } from './preview-values';
+import { buildFormatLineage, elementFill } from '../../utils/format-lineage';
+import { createSampler } from '../../utils/format-preview';
 
 interface ExcelSheetData {
   name: string;
@@ -204,6 +206,7 @@ function ExcelTemplateGrid({
   pdfOutput,
   onSwitchToStructure,
   onElementClick,
+  configIndex,
 }: {
   workbook: XlsxWorkbook;
   filename: string;
@@ -213,11 +216,26 @@ function ExcelTemplateGrid({
   pdfOutput?: boolean;
   onSwitchToStructure: () => void;
   onElementClick?: (elementId: string) => void;
+  configIndex: number;
 }) {
   const [activeSheet, setActiveSheet] = useState(0);
   /** Cell the pointer is over — drives the highlight of the cell and its named area. */
   const [hoveredRef, setHoveredRef] = useState<string | null>(null);
-  const previewOptions = useMemo<PreviewRenderOptions>(() => ({ placeholderMode: 'sample' }), []);
+  // Values from the lineage: the model field type, enum and format mask
+  // decide what a cell shows, the same as in the XML and text previews.
+  const lineageConfigurations = useAppStore(s => s.configurations);
+  const lineage = useMemo(() => buildFormatLineage(lineageConfigurations, configIndex), [lineageConfigurations, configIndex]);
+  const previewOptions = useMemo<PreviewRenderOptions>(() => {
+    if (!lineage) return { placeholderMode: 'sample' };
+    const sample = createSampler(lineage);
+    return {
+      placeholderMode: 'sample',
+      sampleFor: element => {
+        const fill = elementFill(lineage, element.id);
+        return fill?.binding ? sample(fill, 0) : undefined;
+      },
+    };
+  }, [lineage]);
   // Cell labels are resolved in the app's language, so a switch re-resolves them.
   const labelLang = labelLanguageTag(useLocale());
   const cellBindings = useMemo(() => buildCellBindingMap(rootElement, bindingMap, labels, previewOptions, labelLang), [rootElement, bindingMap, labels, previewOptions, labelLang]);
@@ -858,6 +876,7 @@ export function ExcelVisualPreview({ rootElement, direction, bindingMap, configI
           pdfOutput={pdfOutput}
           onSwitchToStructure={() => setViewMode('structure')}
           onElementClick={onNavigateToElement}
+          configIndex={configIndex}
         />
       );
     }
