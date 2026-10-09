@@ -103,8 +103,12 @@ Once connected, the panel walks the ER hierarchy of the environment in two colum
 2. **Configurations** (right) — tick the ones you want. You can filter by component type or by
    name, drill into a configuration's children, use **Select all** or **Clear selection**, and keep
    selections across drill levels — the footer shows how many are selected in total. When you tick
-   a format, the panel offers its data model and model mapping from the same list (**Also load
-   related configurations?**).
+   a format, the panel offers what belongs with it (**Also load related configurations?**): the
+   data models from the root down to the format's own, and every model mapping of them, base and
+   derived alike, with each derivation indented under its base. The listing does not say which
+   mapping a format uses, so when several could be downloaded none is ticked and you pick; one that
+   F&amp;O gives no id for is listed greyed out. What you pick is what gets downloaded — no other
+   mapping is guessed on top of it.
 3. **Load selected** — downloads and parses everything you picked. **Cancel download** stops a
    download that is running.
 
@@ -114,8 +118,9 @@ through **Preparing**, **Data models**, **Formats &amp; mappings**, **Model mapp
 **selected** or **dependency** with its state — **Done**, **No own XML**, **Skipped** or
 **Failed**. Dependencies are why a load sometimes pulls in more configurations than you selected:
 data models and mappings referenced from the downloaded XML are fetched so bindings actually
-resolve. When something did not arrive, the dialog stays open after the download so you can see
-what and why.
+resolve. The dialog closes when the download ends. When something did not arrive, the message
+that closes the download says how many and why, and its **Details** button brings the dialog back
+with every row.
 
 Configurations loaded this way behave exactly like files opened from disk, and cross-reference
 them freely.

@@ -59,6 +59,8 @@ export interface FnoIngestProgressSink {
    */
   status(text: string, phase?: FnoIngestPhase): void;
   updateItem(item: Pick<FnoIngestItem, 'key' | 'name' | 'kind'> & Partial<FnoIngestItem>): void;
+  /** Drop a row that turned out to announce nothing (a probe that only found what was already there). */
+  removeItem(key: string): void;
   /** The download log as it stands (rows are also updated by the client). */
   items(): readonly FnoIngestItem[];
   end(): void;
@@ -101,4 +103,10 @@ export interface FnoIngestResult {
   queued: number;
   /** The signal was aborted: whatever arrived is loaded, but this is no success. */
   cancelled: boolean;
+  /**
+   * Why something the listing found did not arrive (no id from F&O, only other
+   * formats' mappings…). Shown with the summary that closes the run rather
+   * than as toasts of their own.
+   */
+  warnings: string[];
 }

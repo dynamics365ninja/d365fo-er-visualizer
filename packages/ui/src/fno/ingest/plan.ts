@@ -4,6 +4,7 @@
  */
 
 import type { ErConfigSummary } from '@er-visualizer/fno-client';
+import { inheritsFromOwnDataModel } from '../../utils/fno-model-guid';
 import { componentKey } from './shared';
 import type { FnoIngestRequest } from './types';
 
@@ -134,10 +135,17 @@ export function planIngest(
     // valid input for GetDataModelByIDAndRevision even when the DataModel
     // listing row itself carried no GUID. Typical for import formats whose
     // root DataModel was never browsed (allDataModelsSeen is empty).
-    if (c.referencedModelGuid) {
+    // `Base` names the model only for a configuration listed directly under
+    // it: a format derived from another format inherits from that FORMAT, and
+    // probing its id as a model came back empty after a dozen revisions — a
+    // "model" row in the download log that could never arrive.
+    if (c.referencedModelGuid && inheritsFromOwnDataModel(c)) {
+      // The model the format sits under, which is not the listing root when
+      // the format lives under a derived model.
+      const modelName = c.ownerDataModelName || rootSolName;
       const synthDm: ErConfigSummary = {
-        solutionName: rootSolName,
-        configurationName: rootSolName,
+        solutionName: modelName,
+        configurationName: modelName,
         componentType: 'DataModel',
         configurationGuid: c.referencedModelGuid,
         hasContent: true,

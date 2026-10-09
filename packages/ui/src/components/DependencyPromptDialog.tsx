@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import {
   Button,
   Checkbox,
@@ -19,6 +19,14 @@ export interface DependencyCandidate {
   kind: DependencyKind;
   name: string;
   meta?: string;
+  /** Steps below the first row of its kind in the derivation hierarchy; indents the row. */
+  depth?: number;
+  /** Ticked when the dialog opens (default). Off for a candidate the user has to choose. */
+  preselected?: boolean;
+  /** Why the candidate cannot be loaded; the row is shown, but cannot be ticked. */
+  unavailable?: string;
+  /** Hover text, e.g. what the configuration derives from. */
+  title?: string;
 }
 
 export interface DependencyPromptRequest {
@@ -26,7 +34,18 @@ export interface DependencyPromptRequest {
   subjectName: string;
   subjectKind: DependencyKind;
   body?: string;
+  /** Shown above the list, e.g. when the right mapping cannot be told from the listing. */
+  note?: string;
   candidates: DependencyCandidate[];
+}
+
+/** Keys ticked when the dialog opens. */
+export function initiallyChecked(request: DependencyPromptRequest | null): Set<string> {
+  return new Set(
+    (request?.candidates ?? [])
+      .filter(c => !c.unavailable && c.preselected !== false)
+      .map(c => c.key),
+  );
 }
 
 export function dependencyKindLabel(kind: DependencyKind | string | undefined): string {
@@ -60,7 +79,7 @@ export function DependencyPromptDialog({
   const [checked, setChecked] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    setChecked(new Set(request?.candidates.map(c => c.key) ?? []));
+    setChecked(initiallyChecked(request));
   }, [request]);
 
   if (!request) return null;
@@ -89,11 +108,18 @@ export function DependencyPromptDialog({
           <DialogTitle>{t.depPromptTitle}</DialogTitle>
           <DialogContent>
             <p className="dep-prompt__body">{body}</p>
+            {request.note && <p className="dep-prompt__note">{request.note}</p>}
             <ul className="dep-prompt__list">
               {request.candidates.map(c => (
-                <li key={c.key} className={`dep-prompt__row dep-prompt__row--${c.kind.toLowerCase()}`}>
+                <li
+                  key={c.key}
+                  className={`dep-prompt__row dep-prompt__row--${c.kind.toLowerCase()}${c.unavailable ? ' dep-prompt__row--unavailable' : ''}`}
+                  style={c.depth ? { '--dep-depth': c.depth } as CSSProperties : undefined}
+                  title={c.title}
+                >
                   <Checkbox
                     checked={checked.has(c.key)}
+                    disabled={Boolean(c.unavailable)}
                     onChange={() => toggle(c.key)}
                     label={(
                       <span className="dep-prompt__label">
@@ -103,6 +129,7 @@ export function DependencyPromptDialog({
                         </span>
                         <span className="dep-prompt__name">{c.name}</span>
                         {c.meta && <span className="dep-prompt__meta">{c.meta}</span>}
+                        {c.unavailable && <span className="dep-prompt__unavailable">{c.unavailable}</span>}
                       </span>
                     )}
                   />

@@ -20,7 +20,12 @@ import { fnoSession } from '../fno/session';
 import { clearRedirectPending, computeRedirectUri, peekRedirectPending } from '../fno/redirect-state';
 import { componentKey, isUsableGuid } from '../fno/ingest/shared';
 import { fnoUndownloadableReason } from '../utils/fno-downloadable';
-import { DependencyPromptDialog, type DependencyPromptRequest } from './DependencyPromptDialog';
+import {
+  DependencyPromptDialog,
+  type DependencyCandidate,
+  type DependencyKind,
+  type DependencyPromptRequest,
+} from './DependencyPromptDialog';
 import { ConfigurationBrowser } from './fno/ConfigurationBrowser';
 import { IngestFooter } from './fno/IngestFooter';
 import { ProfileEditorDialog, useProfileEditor } from './fno/ProfileEditorDialog';
@@ -31,6 +36,7 @@ import {
   annotateWithParentDataModel,
   componentMatchesQuery,
   promoteDmToSolutions,
+  relatedConfigurationsForFormat,
   rememberDataModels,
   scopeComponentsToModel,
 } from './fno/listing';
@@ -110,7 +116,10 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     activeProfile, solutionFilter, solutions, rootComponentCacheRef.current,
   );
 
-  const [depPrompt, setDepPrompt] = useState<(DependencyPromptRequest & { candidates: Array<{ key: string; kind: 'DataModel' | 'ModelMapping' | 'Format'; name: string; meta?: string; comp: ErConfigSummary }> }) | null>(null);
+  const [depPrompt, setDepPrompt] = useState<(DependencyPromptRequest & {
+    subject: ErConfigSummary;
+    candidates: Array<DependencyCandidate & { comp: ErConfigSummary }>;
+  }) | null>(null);
 
   // ── "Load selected" ──────────────────────────────────────────────────────
   // The pipeline lives in fno/ingest; the hook owns its AbortController and
@@ -514,45 +523,72 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
     toggleSelected(key, comp);
     if (wasSelected || comp.componentType !== 'Format') return;
 
-    // Ask whether to also pull the model and its mapping. Candidates come
-    // from the listing the user is looking at: the owning DataModel row and
-    // the ModelMapping rows under the same solution.
-    const ownerNames = new Set([comp.ownerDataModelName, comp.solutionName].filter(Boolean) as string[]);
-    const related = components.filter(c => {
-      if (componentKey(c) === key || selected.has(componentKey(c))) return false;
-      if (!isComponentDownloadable(c)) return false;
-      if (c.componentType === 'DataModel') {
-        return ownerNames.has(c.configurationName) || ownerNames.has(c.solutionName);
-      }
-      if (c.componentType === 'ModelMapping') {
-        return (c.ownerDataModelName ? ownerNames.has(c.ownerDataModelName) : false) || ownerNames.has(c.solutionName);
-      }
-      return false;
+    // Ask whether to also pull the models and mappings. They come from the
+    // full listing of the root model — the list on screen is scoped to one
+    // level of it — so the base configurations are offered next to the
+    // derived ones; which of them the format uses, the listing cannot say.
+    // A row that is on screen too is taken as shown: it carries the model the
+    // user drilled through, which can make a mapping downloadable.
+    const shown = new Map(components.map(c => [componentKey(c), c]));
+    const tree = rootComponentCacheRef.current.get(comp.solutionName)?.map(c => shown.get(componentKey(c)) ?? c)
+      ?? components;
+    const { candidates, mappingAmbiguous } = relatedConfigurationsForFormat(comp, tree, isComponentDownloadable);
+    const seen = new Set<string>([key]);
+    const related = candidates.filter(({ comp: c }) => {
+      const k = componentKey(c);
+      if (seen.has(k) || selected.has(k)) return false;
+      seen.add(k);
+      return true;
     });
     // Also consider the DataModel the user drilled through (left panel) when
     // the listing itself carries no DataModel row.
     const chainDm = dataModelChain[dataModelChain.length - 1];
-    if (chainDm && !related.some(c => c.componentType === 'DataModel') && isComponentDownloadable(chainDm)
-      && !selected.has(componentKey(chainDm)) && ownerNames.has(chainDm.configurationName)) {
-      related.unshift(chainDm);
+    const ownerNames = new Set([comp.ownerDataModelName, comp.solutionName].filter(Boolean) as string[]);
+    if (chainDm && !related.some(r => r.comp.componentType === 'DataModel') && isComponentDownloadable(chainDm)
+      && !seen.has(componentKey(chainDm)) && !selected.has(componentKey(chainDm)) && ownerNames.has(chainDm.configurationName)) {
+      related.unshift({ comp: chainDm, depth: 0, preselected: true });
     }
-    if (related.length === 0) return;
-    const seen = new Set<string>();
+    // Nothing that could be ticked: no question to ask.
+    if (!related.some(r => isComponentDownloadable(r.comp))) return;
     setDepPrompt({
+      subject: comp,
       subjectName: comp.configurationName,
       subjectKind: 'Format',
       body: t.depPromptBodyFno(comp.configurationName),
-      candidates: related
-        .filter(c => { const k = componentKey(c); if (seen.has(k)) return false; seen.add(k); return true; })
-        .map(c => ({
+      note: mappingAmbiguous ? t.depPromptAmbiguousMapping : undefined,
+      candidates: related.map(({ comp: c, depth, preselected }) => {
+        const reason = fnoUndownloadableReason(c);
+        return {
           key: componentKey(c),
-          kind: c.componentType as 'DataModel' | 'ModelMapping' | 'Format',
+          kind: c.componentType as DependencyKind,
           name: c.configurationName,
           meta: c.version ? `v${c.version}` : undefined,
+          depth,
+          preselected,
+          unavailable: reason ? t.depPromptUnavailable[reason] : undefined,
+          title: depth > 0 && c.parentConfigName ? t.depPromptDerivedFrom(c.parentConfigName) : undefined,
           comp: c,
-        })),
+        };
+      }),
     });
   }, [isComponentDownloadable, toggleSelected, selected, components, dataModelChain]);
+
+  /**
+   * Answer the prompt: add the ticked configurations, and mark the format as
+   * one whose related configurations the user chose — the download then
+   * guesses no mapping on top of them.
+   */
+  const answerDepPrompt = useCallback((keys: string[]) => {
+    if (!depPrompt) return;
+    const next = new Map(selected);
+    for (const c of depPrompt.candidates) {
+      if (keys.includes(c.key)) next.set(c.key, c.comp);
+    }
+    const subjectKey = componentKey(depPrompt.subject);
+    if (next.has(subjectKey)) next.set(subjectKey, { ...depPrompt.subject, relatedChosen: true });
+    setSelected(next);
+    setDepPrompt(null);
+  }, [depPrompt, selected, setSelected]);
 
   const selectAllVisible = useCallback(() => {
     const next = new Map(selected);
@@ -649,15 +685,8 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
 
           <DependencyPromptDialog
             request={depPrompt}
-            onConfirm={keys => {
-              const next = new Map(selected);
-              for (const c of depPrompt?.candidates ?? []) {
-                if (keys.includes(c.key)) next.set(c.key, c.comp);
-              }
-              setSelected(next);
-              setDepPrompt(null);
-            }}
-            onOnlySubject={() => setDepPrompt(null)}
+            onConfirm={answerDepPrompt}
+            onOnlySubject={() => answerDepPrompt([])}
           />
 
           {/* ── Footer / download bar ─────────────────────────────────────── */}

@@ -1163,6 +1163,34 @@
   color: var(--er-text-subtle);
 }
 
+/* Which mapping a format uses cannot always be told from the F&O listing;
+   the note says so above the list the user picks from. */
+.dep-prompt__note {
+  margin: -4px 0 12px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--er-accent-fill);
+  background: var(--er-surface-2);
+  font-size: var(--er-text-sm);
+  line-height: 1.45;
+  color: var(--er-text);
+}
+
+/* A derived configuration sits under the one it derives from. */
+.dep-prompt__row {
+  margin-left: calc(var(--dep-depth, 0) * 18px);
+}
+
+.dep-prompt__row--unavailable .dep-prompt__name {
+  color: var(--er-text-muted);
+  font-weight: 400;
+}
+
+.dep-prompt__unavailable {
+  font-size: var(--er-text-xs);
+  color: var(--er-text-subtle);
+  font-style: italic;
+}
+
 @media (pointer: coarse) {
   .app-shell .lin-row,
   .app-shell .dd-collapsible__trigger {

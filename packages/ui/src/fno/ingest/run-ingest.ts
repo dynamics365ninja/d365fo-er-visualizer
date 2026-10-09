@@ -17,7 +17,15 @@ import {
 } from '@er-visualizer/fno-client';
 import { t } from '../../i18n';
 import { inheritsFromOwnDataModel, normalizeGuid, scoutedDataModelGuid } from '../../utils/fno-model-guid';
-import { importMappingLink, loadedFormatIdentity, mappingSettlesWalk, type ImportMappingLink } from '../../utils/fno-import-mapping-link';
+import {
+  admitMapping,
+  importMappingLink,
+  loadedFormatIdentity,
+  mappingDefinitionIds,
+  mappingSettlesWalk,
+  type ImportMappingLink,
+  type MappingAdmission,
+} from '../../utils/fno-import-mapping-link';
 import { describeSummary, dumpFnoDebug, recordFnoDebug } from '../debug';
 import { resolveInheritedLabels } from './labels';
 import { planIngest } from './plan';
@@ -59,6 +67,28 @@ export function loadDownloadIntoWorkspace(
 }
 
 /**
+ * Names of the data models whose mappings the user settled: the models a
+ * format sits under once its related configurations were picked in the
+ * prompt (`relatedChosen`), and the model of every mapping picked by hand.
+ *
+ * The listing cannot say which of a model's mappings a format uses — for an
+ * import format's destination mapping nothing links the two at all — so the
+ * pipeline otherwise guesses, preferring the most derived one. For these
+ * models the user's pick is the answer and nothing is guessed on top of it.
+ */
+export function modelsWithChosenMappings(selected: Iterable<ErConfigSummary>): Set<string> {
+  const names = new Set<string>();
+  for (const c of selected) {
+    const decided = (c.componentType === 'Format' && c.relatedChosen) || c.componentType === 'ModelMapping';
+    if (!decided) continue;
+    for (const name of [c.ownerDataModelName, c.solutionName]) {
+      if (name) names.add(name);
+    }
+  }
+  return names;
+}
+
+/**
  * Run one ingest. Never rejects: a failure is reported through `notify` and
  * whatever arrived before it stays loaded. Nothing is fetched when the
  * selection is empty.
@@ -75,7 +105,7 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
   const loadDownload = (download: ErConfigDownload) => loadDownloadIntoWorkspace(download, request, workspace);
 
   const toLoad = Array.from(selected.values());
-  if (toLoad.length === 0) return { loaded: 0, skippedEmpty: 0, queued: 0, cancelled: ingestSignal.aborted };
+  if (toLoad.length === 0) return { loaded: 0, skippedEmpty: 0, queued: 0, cancelled: ingestSignal.aborted, warnings: [] };
   const augmented = planIngest(request);
   // What the user picked vs. what the pipeline decided to fetch for them —
   // the two differ whenever an ancestor or a mapping is auto-included.
@@ -99,6 +129,7 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
   let ok = 0;
   let skippedEmpty = 0;
   let finalToLoad: ErConfigSummary[] = [];
+  const warnings: string[] = [];
   // Everything below may throw (loadXmlFile rethrows parse failures, the
   // transport may reject). Whatever happens, the ingest overlay must be
   // released — otherwise the landing page stays locked on a stuck dialog.
@@ -117,6 +148,14 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
     // differentiate "real failure on user-selected item" (error toast)
     // from "auto-injected root model had no own XML" (silent skip).
     const explicitKeys = new Set(Array.from(selected.keys()));
+    // Models whose mappings the user picked — see modelsWithChosenMappings.
+    const chosenMappingModels = modelsWithChosenMappings(toLoad);
+    const mappingsChosenFor = (...names: Array<string | undefined>): boolean =>
+      names.some(name => Boolean(name) && chosenMappingModels.has(name as string));
+    // Every selected format had its related configurations picked by hand:
+    // no model is left whose mapping the pipeline would have to guess.
+    const selectedFormats = toLoad.filter(c => c.componentType === 'Format');
+    const everyFormatChose = selectedFormats.length > 0 && selectedFormats.every(c => c.relatedChosen);
     // (ok / skippedEmpty are declared before the try block below)
     // Follow-up queue: DataModel GUIDs extracted from `Model="…"`
     // attributes inside Format / ModelMapping XML. F&O's
@@ -292,12 +331,16 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
 
       for (const fmt of Array.from(selected.values())) {
         if (fmt.componentType !== 'Format') continue;
+        // The user picked this format's related mappings: a scout would add
+        // one they did not ask for.
+        if (fmt.relatedChosen) continue;
         // `solutionName` is the ROOT of the listing query — the key the
         // component cache is filled under. `ownerDataModelName` is the nearest
         // DataModel ANCESTOR, i.e. the model this format actually belongs to.
         const listingRootName = fmt.solutionName ?? '';
         const parentDmName = fmt.ownerDataModelName || listingRootName;
         if (!parentDmName || dmNamesInLoad.has(parentDmName)) continue;
+        if (mappingsChosenFor(parentDmName)) continue;
 
         const mmSiblings: ErConfigSummary[] = [];
         for (const [cacheKey, rootComponents] of rootComponentCache) {
@@ -306,6 +349,9 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
             if (
               c.componentType === 'ModelMapping' &&
               c.configurationGuid &&
+              // The model's own mappings — a root listing also carries those
+              // of every model derived from it.
+              (c.ownerDataModelName ?? listingRootName) === parentDmName &&
               !finalToLoad.some(existing => componentKey(existing) === componentKey(c))
             ) {
               mmSiblings.push(c);
@@ -599,6 +645,8 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
         // (and vice versa). The mapping's model must match the format's model.
         const childOwnerDm = child.ownerDataModelName ?? owningDmName;
         if (!dmNamesToScan.has(childOwnerDm)) continue;
+        // The user picked this model's mappings; the rest of them stay out.
+        if (mappingsChosenFor(childOwnerDm, owningDmName)) continue;
         {
           const families = mappingFamiliesByDmName.get(owningDmName)
             ?? { names: new Set<string>(), roots: new Set<string>() };
@@ -752,8 +800,10 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
         if (comp.componentType !== 'ModelMapping') continue;
 
         const ownerDmName = comp.ownerDataModelName ?? comp.solutionName ?? '';
-        // Only include mappings owned by DataModels we're actually downloading.
+        // Only include mappings owned by DataModels we're actually downloading,
+        // and not of a model whose mappings the user picked.
         if (!dmNamesToScan.has(ownerDmName)) continue;
+        if (mappingsChosenFor(ownerDmName)) continue;
         if (comp.configurationGuid || comp.revisionGuid) {
           // Has GUID — stash as pending branch (not mappingsToLoad) so
           // the synth pass downloads only ONE mapping per DataModel.
@@ -811,7 +861,7 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
             if (!alreadyLoadedKeys.has(componentKey(derived))) {
               const branchDmName2 = parentDm?.configurationName ?? candidateDmName;
               // Only include if the owner DM is one we're actually downloading.
-              if (!dmNamesToScan.has(branchDmName2)) continue;
+              if (!dmNamesToScan.has(branchDmName2) || mappingsChosenFor(branchDmName2)) continue;
               const bList = pendingMappingBranchesByDmName.get(branchDmName2) ?? [];
               if (!bList.some(b => b.mappingName === (derived.configurationName ?? ''))) {
                 bList.push({
@@ -831,7 +881,7 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
             // This prevents SK / base mappings from being queued when the
             // user only selected a CZ format.
             const branchDmName = parentDm?.configurationName ?? candidateDmName;
-            if (!branchDmName || !dmNamesToScan.has(branchDmName)) continue;
+            if (!branchDmName || !dmNamesToScan.has(branchDmName) || mappingsChosenFor(branchDmName)) continue;
             const existingBranches = pendingMappingBranchesByDmName.get(branchDmName) ?? [];
             const alreadyPending = existingBranches.some(b => b.mappingName === (derived.configurationName ?? ''));
             if (alreadyPending) continue;
@@ -896,6 +946,7 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
         for (const child of children) {
           if (child.componentType !== 'ModelMapping') continue;
           if (!child.configurationGuid && !child.revisionGuid) continue;
+          if (mappingsChosenFor(dmName, child.ownerDataModelName)) continue;
           if (alreadyLoadedKeys.has(componentKey(child))) continue;
           // Add as pending branch — the synth pass (already built) won't see these,
           // so push directly into mappingsToLoad for immediate download.
@@ -1450,6 +1501,8 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
     for (const dm of dmGuidIndex.values()) {
       if (dmGuidsWithResolvedBranch.has(dm.guid)) continue;
       if (!loadedDmGuids.has(dm.guid)) continue;
+      // The default mapping is a guess too; the user's pick replaces it.
+      if (mappingsChosenFor(dm.name, dm.solutionName)) continue;
       pushDefaultProbe(dm, 'owned');
     }
 
@@ -1458,10 +1511,13 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
     // matches nothing — the common case for "select a single Format", where the
     // model is only known from GUIDs inside the format XML — that narrowing left
     // the queue empty and the whole mapping phase was skipped in silence.
-    // Fall back to every DataModel GUID we know about.
-    if (synthQueue.length === 0 && dmGuidIndex.size > 0) {
+    // Fall back to every DataModel GUID we know about — unless the user picked
+    // the related mappings of every selected format, in which case there is
+    // nothing left to fall back for.
+    if (synthQueue.length === 0 && dmGuidIndex.size > 0 && !everyFormatChose) {
       for (const dm of dmGuidIndex.values()) {
         if (dmGuidsWithResolvedBranch.has(dm.guid)) continue;
+        if (mappingsChosenFor(dm.name, dm.solutionName)) continue;
         pushDefaultProbe(dm, 'fallback: no owned DataModel matched');
       }
     }
@@ -1565,6 +1621,8 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
      * mappings but exposed no id to ask for them with.
      */
     let mappingSuccessCount = 0;
+    /** Mappings that downloaded but stay out of the workspace — see `admitMapping`. */
+    let foreignMappingCount = 0;
     // ── Which mapping can be *ours* (matters for import formats) ──
     // Descriptor-name probing is a search, not a lookup: a model can carry a
     // mapping per bank plus an export-side one, and F&O answers whichever
@@ -1585,16 +1643,60 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
      * Also reports what it decided so the attempt log says why a mapping that
      * downloaded fine did not settle the question.
      */
-    const judgeMapping = (xml: string): { settles: boolean; link: ImportMappingLink | null } => {
+    const judgeMapping = (xml: string): {
+      settles: boolean;
+      link: ImportMappingLink | null;
+      admission: MappingAdmission;
+    } => {
       if (!formatIdentity.hasImportFormat) {
         usableMappingFound = true;
-        return { settles: true, link: null };
+        return { settles: true, link: null, admission: 'load' };
       }
       const link = importMappingLink(xml, formatIdentity.importGuids);
       const settles = mappingSettlesWalk(link, formatIdentity);
       if (settles) usableMappingFound = true;
-      return { settles, link };
+      const inFormat = link === 'bound'
+        && [...mappingDefinitionIds(xml)].some(id => formatIdentity.ownMappingIds.has(id));
+      return { settles, link, admission: admitMapping(link, formatIdentity, inFormat) };
     };
+    /**
+     * Bring a mapping that downloaded fine into the workspace — unless it can
+     * be no mapping of this load. A model lookup answers with whichever of the
+     * model's mappings F&O picks, and for an import model that is often the
+     * mapping of another bank format: loaded, it sat in the workspace looking
+     * like the selected format's own. Its log row says why it stayed out.
+     */
+    const admitDownloadedMapping = (
+      synth: ErConfigSummary,
+      download: ErConfigDownload,
+      admission: MappingAdmission,
+    ): void => {
+      if (admission === 'load') {
+        loadDownload(download);
+        ok += 1;
+        mappingSuccessCount += 1;
+        return;
+      }
+      const key = componentKey(synth);
+      if (admission === 'in-format') {
+        // The format brought this very mapping along; the row would announce
+        // a configuration that is nowhere to be found in the workspace.
+        mappingSuccessCount += 1;
+        progress.removeItem(key);
+        return;
+      }
+      foreignMappingCount += 1;
+      progress.updateItem({
+        key,
+        name: synth.configurationName,
+        kind: 'ModelMapping',
+        status: 'skipped',
+        message: admission === 'other-format' ? t.fnoIngestOtherFormatMapping : t.fnoIngestExportSideMapping,
+      });
+    };
+    const verdictDetail = (verdict: { link: ImportMappingLink | null; admission: MappingAdmission }): string | undefined =>
+      [verdict.link, verdict.admission === 'load' ? '' : `not loaded: ${verdict.admission}`]
+        .filter(Boolean).join(' · ') || undefined;
     if (allMappingDownloads.length > 0) {
       progress.status(t.fnoStatusDownloadingMMCount(allMappingDownloads.length), 'mm');
       // Track DM GUIDs for which a mapping was *successfully* downloaded.
@@ -1650,11 +1752,9 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
         results.forEach((result, i) => {
           const item = pending[i];
           if (result.status === 'fulfilled') {
-            loadDownload(result.value.download);
-            ok += 1;
-            mappingSuccessCount += 1;
             const verdict = judgeMapping(result.value.download.xml);
-            recordAttempt(item, 'ok', verdict.link ?? undefined);
+            recordAttempt(item, 'ok', verdictDetail(verdict));
+            admitDownloadedMapping(item.synth, result.value.download, verdict.admission);
             // Mark DM as resolved so subsequent branches for the same DM are
             // skipped — unless this mapping belongs to a different format, in
             // which case ours may still be behind one of the remaining probes.
@@ -1830,7 +1930,10 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
         // "DataModel has no GUID — skipping"). We try downloading it by name; if the
         // environment has legacy ops (getRevisionContent / getConfigurationXml), we get
         // its XML → parse its ERDataModel.ID → retry GetModelMappingByID with that GUID.
-        if (retryDownloads.length === 0) {
+        // Without a pending mapping branch a model found here has no mapping to
+        // look for, and probing it only left an empty "model" row in the log.
+        const anyPendingBranch = Array.from(pendingMappingBranchesByDmName.values()).some(b => b.length > 0);
+        if (retryDownloads.length === 0 && anyPendingBranch) {
           // Collect all pending branch descriptor candidates (used for each new DM GUID).
           const allPendingDescriptors = [...new Set(
             Array.from(pendingMappingBranchesByDmName.values())
@@ -1936,11 +2039,9 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
             results.forEach((result, i) => {
               const item = pending[i];
               if (result.status === 'fulfilled') {
-                loadDownload(result.value.dl);
-                ok += 1;
-                mappingSuccessCount += 1;
                 const verdict = judgeMapping(result.value.dl.xml);
-                recordAttempt(item, 'ok', verdict.link ?? undefined);
+                recordAttempt(item, 'ok', verdictDetail(verdict));
+                admitDownloadedMapping(item.synth, result.value.dl, verdict.admission);
                 if (verdict.settles) downloadedMappingDmGuids.add(result.value.item.dmGuid);
                 collectLateRefs(result.value.dl);
               } else {
@@ -1978,19 +2079,29 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
     // reads as if the connector forgot them, so name them and say why.
     // A load where every mapping that came back belongs to another format is a
     // failure too, even though downloads succeeded.
-    const noUsableMapping = mappingSuccessCount > 0 && !usableMappingFound;
+    const noUsableMapping = !usableMappingFound && (mappingSuccessCount > 0 || foreignMappingCount > 0);
     if (mappingSuccessCount === 0 || noUsableMapping) {
       const unreachable: ErConfigSummary[] = [];
+      // A model that arrived another way — an import format's own mapping
+      // names it — is no gap, even when its listing row carried no id.
+      const loadedModelNames = new Set(
+        workspace.configurations()
+          .filter(cfg => cfg.kind === 'DataModel')
+          .map(cfg => cfg.solutionVersion?.solution?.name)
+          .filter((name): name is string => Boolean(name)),
+      );
       for (const [dmName, branches] of pendingMappingBranchesByDmName) {
         // The model resolved: the mappings failed for some other reason and
         // their own rows already carry it.
         if (dmByName.has(dmName)) continue;
-        unreachable.push({
-          solutionName: dmName,
-          configurationName: dmName,
-          componentType: 'DataModel',
-          hasContent: false,
-        });
+        if (!loadedModelNames.has(dmName)) {
+          unreachable.push({
+            solutionName: dmName,
+            configurationName: dmName,
+            componentType: 'DataModel',
+            hasContent: false,
+          });
+        }
         for (const branch of branches) {
           if (!branch.mappingName) continue;
           unreachable.push({
@@ -2028,15 +2139,14 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
       const failedNames = pendingMappingBranchesByDmName.size > 0
         ? [...pendingMappingBranchesByDmName.keys()]
         : [...new Set(allMappingDownloads.map(m => m.synth.solutionName || m.synth.configurationName))];
+      // Told once, in the summary toast that closes the run, next to the
+      // count of what did not arrive.
       if (failedNames.length > 0) {
-        notify({
-          kind: 'warning',
-          message: unreachable.length > 0
-            ? t.fnoModelIdNotExposed(failedNames)
-            : noUsableMapping
-              ? t.fnoImportMappingNotFound(failedNames)
-              : t.fnoMappingNotAvailable(failedNames),
-        });
+        warnings.push(unreachable.length > 0
+          ? t.fnoModelIdNotExposed(failedNames)
+          : noUsableMapping
+            ? t.fnoImportMappingNotFound(failedNames)
+            : t.fnoMappingNotAvailable(failedNames));
       }
     }
 
@@ -2125,5 +2235,6 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
     queued: finalToLoad.length,
     // Cancelled: whatever arrived is in the workspace, but this is no success.
     cancelled: ingestSignal.aborted,
+    warnings,
   };
 }

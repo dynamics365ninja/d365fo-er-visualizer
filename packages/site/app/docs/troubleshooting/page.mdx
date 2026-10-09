@@ -211,19 +211,32 @@ Versions → Complete**) and it becomes selectable.
 or your account may not have access to it. Format element bindings still resolve through the
 format's own mapping information; the mapping-level trace is what you lose.
 
-### "F&amp;O exposes no id for these models and their mappings"
+### "F&amp;O returns no id for the model mappings of …"
 
-F&amp;O returned no identifier to request the data model and its mappings with, so they are listed
-as skipped and only the format is downloaded. The format's element bindings are still available.
-An import format is the exception for its own mapping: that mapping and the data model it fills
-come with the format. The mappings that write an import's data into F&amp;O tables
-(*… Mapping to destination*) have no identifier and are skipped.
+F&amp;O returned no identifier to request the mappings (and sometimes their data model) with, so
+they are listed as skipped. The format's element bindings are still available. An import format
+brings its own mapping and the data model it fills along with it; the mappings that write an
+import's data into F&amp;O tables (*… Mapping to destination*) have no identifier and are skipped.
+
+### "F&amp;O returned another format's mapping – not loaded"
+
+A model mapping that is not listed with an id can only be asked for through its data model, and
+F&amp;O then answers with whichever mapping of that model it picks. For an import model that is
+often the mapping of a different bank format. Such a mapping parses another format, so it is not
+loaded — it would only look like the selected format's own. The row in the download log says so.
+
+### The download dialog closed although something is missing
+
+It closes at the end of every download. The message that closes the download counts what did not
+arrive; **Details** reopens the dialog with every row and the reason next to it.
 
 ### The load pulled in more than I selected
 
 That is deliberate. Ancestor data models and mappings discovered inside downloaded XML are fetched
 so that bindings resolve end to end. In the download dialog they are marked **dependency**, next to
-the ones you **selected**. **Cancel download** stops a download you no longer want.
+the ones you **selected**. **Cancel download** stops a download you no longer want. Once you have
+answered **Also load related configurations?** for a format, its mappings are only the ones you
+picked — the download no longer looks for others of the same model.
 
 ## Still stuck?
 

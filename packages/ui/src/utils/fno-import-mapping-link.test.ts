@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+  admitMapping,
   importFormatGuidsInMapping,
   importMappingLink,
   loadedFormatIdentity,
+  mappingDefinitionIds,
   mappingSettlesWalk,
   mappingShape,
 } from './fno-import-mapping-link';
@@ -188,5 +190,76 @@ describe('loadedFormatIdentity', () => {
     const id = loadedFormatIdentity([{ kind: 'DataModel', content: {} }]);
     expect(id.hasImportFormat).toBe(false);
     expect(id.hasExportFormat).toBe(false);
+  });
+});
+
+describe('loadedFormatIdentity — mappings the import formats came with', () => {
+  it('collects the ids of the mapping definitions embedded in import formats', () => {
+    const { ownMappingIds } = loadedFormatIdentity([
+      {
+        kind: 'Format',
+        content: {
+          direction: 'Import',
+          formatVersion: { format: { id: `{${OUR_FORMAT}}` } },
+          embeddedModelMappingVersions: [{ mappings: [{ id: '{A4A06A3C-9FA8-423F-9FA0-47D02EB9005B}' }] }],
+        },
+      },
+      {
+        kind: 'Format',
+        content: {
+          direction: 'Export',
+          embeddedModelMappingVersions: [{ mappings: [{ id: '{EEEEEEEE-0000-4000-8000-000000000001}' }] }],
+        },
+      },
+    ]);
+    expect([...ownMappingIds]).toEqual(['a4a06a3c-9fa8-423f-9fa0-47d02eb9005b']);
+  });
+});
+
+describe('mappingDefinitionIds', () => {
+  it('reads the id of every mapping definition in a payload', () => {
+    const xml =
+      '<ErFnoBundle><ERModelMapping ID.="{A4A06A3C-9FA8-423F-9FA0-47D02EB9005B}" Name="a" />' +
+      '<ERModelMapping Name="b" ID.="{11111111-2222-4333-8444-555555555555}"></ERModelMapping></ErFnoBundle>';
+    expect([...mappingDefinitionIds(xml)]).toEqual([
+      'a4a06a3c-9fa8-423f-9fa0-47d02eb9005b',
+      '11111111-2222-4333-8444-555555555555',
+    ]);
+    expect(mappingDefinitionIds('<ErFnoBundle />').size).toBe(0);
+  });
+});
+
+describe('admitMapping', () => {
+  const importOnly = { hasImportFormat: true, hasExportFormat: false };
+  const mixed = { hasImportFormat: true, hasExportFormat: true };
+  const exportOnly = { hasImportFormat: false, hasExportFormat: true };
+
+  it('keeps a mapping that parses another format out of the workspace', () => {
+    // The reported case: a model lookup answered with some other bank format's
+    // mapping, which then sat in the workspace as if it were the right one.
+    expect(admitMapping('other-format', importOnly, false)).toBe('other-format');
+    expect(admitMapping('other-format', mixed, false)).toBe('other-format');
+  });
+
+  it('does not load the import format\'s own mapping twice', () => {
+    expect(admitMapping('bound', importOnly, true)).toBe('in-format');
+    // A format that came without its mapping (older F&O) still gets it.
+    expect(admitMapping('bound', importOnly, false)).toBe('load');
+  });
+
+  it('loads the export side only next to an export format', () => {
+    expect(admitMapping('to-model', importOnly, false)).toBe('export-side');
+    expect(admitMapping('to-model', mixed, false)).toBe('load');
+  });
+
+  it('loads a destination mapping', () => {
+    expect(admitMapping('from-model', importOnly, false)).toBe('load');
+  });
+
+  it('leaves loads without an import format alone', () => {
+    for (const link of ['bound', 'other-format', 'to-model', 'from-model'] as const) {
+      expect(admitMapping(link, exportOnly, false)).toBe('load');
+    }
+    expect(admitMapping(null, importOnly, false)).toBe('load');
   });
 });
