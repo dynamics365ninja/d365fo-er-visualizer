@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ArrowDownloadRegular, ArrowUploadRegular, DocumentPdfRegular } from '@fluentui/react-icons';
 import { useAppStore } from '../../state/store';
 import { t } from '../../i18n';
@@ -61,6 +61,9 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
   const lineage = useMemo(() => buildFormatLineage(configurations, configIndex), [configurations, configIndex]);
   const preview = useMemo(() => generateFormatPreview(previewRoot, bindingMap, previewOptions), [previewRoot, bindingMap, previewOptions]);
   const delimitedPreview = useMemo(() => parseDelimitedPreview(preview), [preview]);
+  // Stable, so the document's lines can skip a render the selection does not touch.
+  const selectElement = useCallback((elementId: string) => onSelectElement?.(elementId), [onSelectElement]);
+  const openInStructure = useCallback((elementId: string) => onNavigateToElement?.(elementId), [onNavigateToElement]);
 
   // Visual spreadsheet preview for Excel formats (including Excel wrapped in a PDF converter)
   if (info.label === 'Excel') {
@@ -101,8 +104,8 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
           configName={configurations[configIndex]?.solutionVersion.solution.name ?? 'format'}
           configIndex={configIndex}
           selectedId={selectedElementId ?? null}
-          onSelect={elementId => onSelectElement?.(elementId)}
-          onOpenStructure={elementId => onNavigateToElement?.(elementId)}
+          onSelect={selectElement}
+          onOpenStructure={openInStructure}
           tabId={tabId}
         />
       </div>

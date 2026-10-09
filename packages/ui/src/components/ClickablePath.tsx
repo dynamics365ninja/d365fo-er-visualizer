@@ -27,11 +27,13 @@ const SHOW_DELAY_MS = 220;
 export function ClickablePath({ expression, configIndex, mode = 'auto', style, interactive = true, highlight }: ClickablePathProps) {
   const segments = useMemo(() => parseExpressionSegments(expression, mode), [expression, mode]);
 
+  // Lists render their formulas non-interactive, a row each: those segments
+  // are plain text and need none of the hover machinery below.
   return (
     <span style={{ fontFamily: 'var(--er-font-mono)', fontSize: 11, ...style }}>
-      {segments.map((seg, i) => (
-        <SmartSegment key={i} segment={seg} configIndex={configIndex} interactive={interactive} highlight={highlight} />
-      ))}
+      {segments.map((seg, i) => (interactive
+        ? <SmartSegment key={i} segment={seg} configIndex={configIndex} highlight={highlight} />
+        : <span key={i} style={segmentStyle(seg, false, false)}>{highlightSegmentText(seg.text, highlight)}</span>))}
     </span>
   );
 }
@@ -59,19 +61,21 @@ const SEGMENT_COLORS: Record<PathSegment['kind'], string> = {
   separator: 'var(--syn-separator)',
 };
 
-function SmartSegment({ segment, configIndex, interactive, highlight }: {
+function segmentStyle(segment: PathSegment, canResolve: boolean, isResolved: boolean): React.CSSProperties {
+  return {
+    color: isResolved ? 'var(--syn-resolved)' : SEGMENT_COLORS[segment.kind],
+    cursor: canResolve ? 'pointer' : undefined,
+    textDecoration: isResolved ? 'underline' : undefined,
+    textDecorationStyle: isResolved ? 'dotted' : undefined,
+    textUnderlineOffset: '3px',
+  };
+}
+
+function SmartSegment({ segment, configIndex, highlight }: {
   segment: PathSegment;
   configIndex: number;
-  interactive: boolean;
   highlight?: string;
 }) {
-  const resolveDatasource = useAppStore(s => s.resolveDatasource);
-  const resolveModelPath = useAppStore(s => s.resolveModelPath);
-  const findModelPathBindings = useAppStore(s => s.findModelPathBindings);
-  const findDatasourceNode = useAppStore(s => s.findDatasourceNode);
-  const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
-  const configurations = useAppStore(s => s.configurations);
-
   const [tooltip, setTooltip] = useState<{ data: PathTooltipData; anchor: DOMRect } | null>(null);
   const [treeNodeId, setTreeNodeId] = useState<string | null>(null);
   const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -91,15 +95,21 @@ function SmartSegment({ segment, configIndex, interactive, highlight }: {
     return () => window.removeEventListener('scroll', hide, true);
   }, [tooltip]);
 
-  const canResolve = interactive && Boolean(segment.chain);
+  const canResolve = Boolean(segment.chain);
 
-  const resolve = useCallback(() => buildPathTooltip(segment, {
-    deep: path => resolveDeepExpression(path, configurations, configIndex),
-    datasource: name => resolveDatasource(name, configIndex),
-    modelPath: path => resolveModelPath(path, configIndex),
-    datasourceNode: (ds, ci) => findDatasourceNode(ds.name, ci, ds.parentPath),
-    bindingsBelow: path => findModelPathBindings(path, configIndex).length,
-  }), [segment, configurations, configIndex, resolveDatasource, resolveModelPath, findModelPathBindings, findDatasourceNode]);
+  // The store is read when the name is hovered, not subscribed to: an
+  // expression renders a segment per name, and a subscription each made a
+  // long formula expensive to mount for names nobody points at.
+  const resolve = useCallback(() => {
+    const store = useAppStore.getState();
+    return buildPathTooltip(segment, {
+      deep: path => resolveDeepExpression(path, store.configurations, configIndex),
+      datasource: name => store.resolveDatasource(name, configIndex),
+      modelPath: path => store.resolveModelPath(path, configIndex),
+      datasourceNode: (ds, ci) => store.findDatasourceNode(ds.name, ci, ds.parentPath),
+      bindingsBelow: path => store.findModelPathBindings(path, configIndex).length,
+    });
+  }, [segment, configIndex]);
 
   const handleMouseEnter = useCallback((event: React.MouseEvent<HTMLSpanElement>) => {
     if (clearTimer.current) { clearTimeout(clearTimer.current); clearTimer.current = null; }
@@ -123,8 +133,8 @@ function SmartSegment({ segment, configIndex, interactive, highlight }: {
     event.stopPropagation();
     if (!treeNodeId) return;
     setTooltip(null);
-    navigateToTreeNode(treeNodeId);
-  }, [treeNodeId, navigateToTreeNode]);
+    useAppStore.getState().navigateToTreeNode(treeNodeId);
+  }, [treeNodeId]);
 
   const isResolved = treeNodeId != null;
 
@@ -132,13 +142,7 @@ function SmartSegment({ segment, configIndex, interactive, highlight }: {
     <>
       <span
         className={isResolved ? 'clickable-path-segment' : canResolve ? 'clickable-path-can-resolve' : undefined}
-        style={{
-          color: isResolved ? 'var(--syn-resolved)' : SEGMENT_COLORS[segment.kind],
-          cursor: canResolve ? 'pointer' : undefined,
-          textDecoration: isResolved ? 'underline' : undefined,
-          textDecorationStyle: isResolved ? 'dotted' : undefined,
-          textUnderlineOffset: '3px',
-        }}
+        style={segmentStyle(segment, canResolve, isResolved)}
         onMouseEnter={canResolve ? handleMouseEnter : undefined}
         onMouseLeave={canResolve ? handleMouseLeave : undefined}
         onClick={isResolved ? handleClick : undefined}

@@ -1100,6 +1100,7 @@ export interface Translations {
   docPreviewDownloadHint: string;
   docPreviewClose: string;
   docPreviewEmpty: string;
+  docPreviewTruncated: (lines: number) => string;
   docPreviewRuler: string;
 }
 
@@ -2159,6 +2160,7 @@ const cs: Translations = {
   docPreviewDownloadHint: 'Stáhnout náhled jako soubor',
   docPreviewClose: 'Zavřít detail',
   docPreviewEmpty: 'Formát nemá žádné prvky k zobrazení.',
+  docPreviewTruncated: (lines: number) => `Náhled končí po ${lines.toLocaleString('cs-CZ')} řádcích. Opakované sekce se vypisují pro každý záznam a vnořené se násobí — pro celý dokument snižte počet záznamů.`,
   docPreviewRuler: 'Pozice znaků',
 };
 
@@ -3211,6 +3213,7 @@ const en: Translations = {
   docPreviewDownloadHint: 'Download the preview as a file',
   docPreviewClose: 'Close the detail',
   docPreviewEmpty: 'The format has no elements to show.',
+  docPreviewTruncated: (lines: number) => `The preview stops after ${lines.toLocaleString('en-US')} lines. Repeating sections are written out per record and nested ones multiply — lower the number of records to see the whole document.`,
   docPreviewRuler: 'Character positions',
 };
 

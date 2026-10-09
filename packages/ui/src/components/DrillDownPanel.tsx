@@ -1369,6 +1369,10 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dialogViewMode, setDialogViewMode] = useState<'workbench' | 'tree'>('workbench');
   const openedAtRef = useRef(0);
+  // The dialog is built the first time it opens. A trigger sits on every
+  // formula of every list row, and a closed dialog apiece was most of what
+  // such a row cost to mount.
+  const [dialogMounted, setDialogMounted] = useState(false);
   // Touch has no double-tap of its own; the dialog's "open as tab" button
   // covers that path instead.
   const coarse = useCoarsePointer();
@@ -1401,6 +1405,7 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
 
   const openDialog = () => {
     openedAtRef.current = Date.now();
+    setDialogMounted(true);
     setIsDialogOpen(true);
   };
 
@@ -1438,7 +1443,7 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
       >
         {children}
       </span>
-      <Dialog
+      {dialogMounted && <Dialog
         open={isDialogOpen}
         onOpenChange={(_, d) => {
           if (!d.open && d.type === 'backdropClick' && Date.now() - openedAtRef.current < DRILL_DOUBLE_CLICK_MS && !coarse) {
@@ -1527,7 +1532,7 @@ export function DrillDownTrigger({ expression, configIndex, elementName, classNa
             onDoubleClick={() => resetSize()}
           />
         </DialogSurface>
-      </Dialog>
+      </Dialog>}
     </>
   );
 }

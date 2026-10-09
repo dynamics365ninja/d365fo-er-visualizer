@@ -22,7 +22,7 @@ import { ERDirection, type ERConfiguration, type ERDataModelContent, type ERData
 import { resolveLabel, buildLabelPool, labelLanguageTag } from '../../utils/label-resolver';
 import { useCompactLayout } from '../../utils/responsive';
 import { useTabState } from '../../utils/tab-view-state';
-import { findTreeNodeByMatch, SlidingTabs, datasourceFocusKey, collectDatasourceTerms, EMPTY_STRING_SET } from './shared';
+import { findTreeNodeByMatch, SlidingTabs, datasourceFocusKey, collectDatasourceTerms, EMPTY_STRING_SET, RenderWhileVisible } from './shared';
 import { type GroupedDatasourceListHandle, GroupedDatasourceList } from './DatasourceTree';
 import { MappingDesigner } from './ModelMappingDesigner';
 import { FormatPreview } from './FormatPreview';
@@ -90,6 +90,16 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
   const [structureExpandVersion, setStructureExpandVersion] = useState(0);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [selectedEmbeddedMappingIdx, setSelectedEmbeddedMappingIdx] = useTabState(tabId, 'format.embeddedMapping', 0);
+
+  // The preview is built the first time it is opened and then kept, so an
+  // Excel template parsed for it, or the place in a long document, survives a
+  // trip to another view.
+  const [previewOpened, setPreviewOpened] = useState(view === 'preview');
+  if (view === 'preview' && !previewOpened) setPreviewOpened(true);
+  // The same for the format's own mapping (import formats carry one): its
+  // designer took a good tenth of a second to build on every visit.
+  const [mappingOpened, setMappingOpened] = useState(view === 'embedded-mapping');
+  if (view === 'embedded-mapping' && !mappingOpened) setMappingOpened(true);
 
   // For import formats: find all loaded standalone ModelMapping configs that reference this format
   const linkedMappings = useMemo(() => {
@@ -448,6 +458,14 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
     if (match?.id) navigateToTreeNode(match.id);
   }, [treeNodes, configIndex, navigateToTreeNode]);
 
+  // From the preview: show the element in the structure, opened up to it.
+  const openElementInStructure = useCallback((elementId: string) => {
+    setStructureExpandMode('all');
+    setStructureExpandVersion(v => v + 1);
+    setView('structure');
+    setSelectedElementId(elementId);
+  }, [setView]);
+
   const handleSelectFormatElement = useCallback((elementId: string | null) => {
     // A click or an arrow key merely selects the element so its binding details
     // expand inline and the inspector follows. The explorer does not: showing
@@ -681,28 +699,30 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
             />
           )}
 
-          {view === 'embedded-mapping' && fc.embeddedModelMappingVersions.length > 0 && (
-            <>
-              {fc.embeddedModelMappingVersions.length > 1 && (
-                <div style={{ display: 'flex', gap: 4, padding: '4px 8px', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
-                  {fc.embeddedModelMappingVersions.map((emv, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      className={`fmt-tab-btn ${selectedEmbeddedMappingIdx === idx ? 'active' : ''}`}
-                      onClick={() => setSelectedEmbeddedMappingIdx(idx)}
-                    >
-                      {emv.mapping.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <MappingDesigner
-                mapping={fc.embeddedModelMappingVersions[selectedEmbeddedMappingIdx].mapping}
-                configIndex={configIndex}
-                focusNode={null}
-              />
-            </>
+          {mappingOpened && fc.embeddedModelMappingVersions.length > 0 && (
+            <div style={{ display: view === 'embedded-mapping' ? 'contents' : 'none' }}>
+              <RenderWhileVisible visible={view === 'embedded-mapping'}>
+                {fc.embeddedModelMappingVersions.length > 1 && (
+                  <div style={{ display: 'flex', gap: 4, padding: '4px 8px', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
+                    {fc.embeddedModelMappingVersions.map((emv, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        className={`fmt-tab-btn ${selectedEmbeddedMappingIdx === idx ? 'active' : ''}`}
+                        onClick={() => setSelectedEmbeddedMappingIdx(idx)}
+                      >
+                        {emv.mapping.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <MappingDesigner
+                  mapping={fc.embeddedModelMappingVersions[selectedEmbeddedMappingIdx].mapping}
+                  configIndex={configIndex}
+                  focusNode={null}
+                />
+              </RenderWhileVisible>
+            </div>
           )}
 
           {view === 'bindings' && bindingsLayout === 'model' && (
@@ -800,14 +820,25 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
             <GroupedDatasourceList ref={dsListRef} datasources={fmtMap.datasources} filter={filter} resolveModel={resolveDatasourceModel} labelFor={modelLabelFor} configIndex={configIndex} navigateToTreeNode={navigateToTreeNode} focusKey={datasourceFocusKey(focusNode)} tabId={tabId} expressions={bindingExpressions} />
           )}
 
-          <div style={{ display: view === 'preview' ? 'contents' : 'none' }}>
-            <FormatPreview rootElement={rootElement} direction={fc.direction} bindingMap={bindingMap} configIndex={configIndex} tabId={tabId} selectedElementId={selectedElementId} onSelectElement={handleSelectFormatElement} onNavigateToElement={(elementId) => {
-              setStructureExpandMode('all');
-              setStructureExpandVersion(v => v + 1);
-              setView('structure');
-              setSelectedElementId(elementId);
-            }} />
-          </div>
+          {/* Hidden, the preview is frozen: its annotated document runs to
+              thousands of segments, and re-rendering them on every tab switch
+              and every click elsewhere made the whole designer stutter. */}
+          {previewOpened && (
+            <div style={{ display: view === 'preview' ? 'contents' : 'none' }}>
+              <RenderWhileVisible visible={view === 'preview'}>
+                <FormatPreview
+                  rootElement={rootElement}
+                  direction={fc.direction}
+                  bindingMap={bindingMap}
+                  configIndex={configIndex}
+                  tabId={tabId}
+                  selectedElementId={selectedElementId}
+                  onSelectElement={handleSelectFormatElement}
+                  onNavigateToElement={openElementInStructure}
+                />
+              </RenderWhileVisible>
+            </div>
+          )}
         </div>
       </div>
     </div>

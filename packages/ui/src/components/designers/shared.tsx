@@ -253,6 +253,21 @@ export function collectDatasourceTerms(datasources: any[], out: string[] = []): 
 export const EMPTY_STRING_SET: ReadonlySet<string> = new Set();
 
 /**
+ * Keeps a view mounted while another one is on screen, without rendering it.
+ *
+ * A view hidden with `display: none` still re-rendered with every update of
+ * its parent — a tab switch, a click on an element — though nothing of it
+ * showed. While `visible` is false this holds on to the last render; the view
+ * catches up the moment it is shown again. Its state survives either way.
+ */
+export const RenderWhileVisible = React.memo(
+  function RenderWhileVisible({ children }: { visible: boolean; children: React.ReactNode }) {
+    return <>{children}</>;
+  },
+  (_prev, next) => !next.visible,
+);
+
+/**
  * A designer row's ⋮ menu. Selecting a row in a designer leaves the explorer
  * alone; this is where the user asks it to follow.
  */

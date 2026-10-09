@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownloadRegular,
   ArrowRepeatAllRegular,
@@ -11,12 +11,16 @@ import type { ERFormatElement } from '@er-visualizer/core';
 import { t } from '../../i18n';
 import { useTabState } from '../../utils/tab-view-state';
 import { elementFill, type FormatLineage } from '../../utils/format-lineage';
-import { buildPreviewDocument, type PreviewLine, type PreviewValueMode } from '../../utils/format-preview';
+import { buildPreviewDocument, lineElementKeys, MAX_PREVIEW_LINES, type PreviewLine, type PreviewValueMode } from '../../utils/format-preview';
+import { useVirtualTree } from '../../utils/use-virtual-tree';
 import { normalizeGuid } from '../../utils/format-binding-display';
 import { downloadTextFile, safeFileName } from '../../utils/field-spec-export';
 import { ElementFillCard } from './ElementFillCard';
 
 const MODES: PreviewValueMode[] = ['sample', 'source', 'expression', 'name'];
+
+/** A document line's height (`.doc-preview__doc` line-height); every line is measured anyway. */
+const DOC_LINE_HEIGHT = 20;
 
 /** Plain text of the file lines, annotations left out. */
 function fileText(lines: readonly PreviewLine[], kind: 'xml' | 'text' | 'other'): string {
@@ -69,7 +73,7 @@ export function DocumentPreview({ lineage, root, kind, configName, configIndex, 
     optional: t.docPreviewOptional,
   }), [lineage, root, kind, mode, iterations, hideUnbound]);
 
-  const lines = showNotes ? doc.lines : doc.lines.filter(line => !line.note);
+  const lines = useMemo(() => (showNotes ? doc.lines : doc.lines.filter(line => !line.note)), [doc, showNotes]);
   // File line numbers: annotations are not lines of the file.
   const lineNumbers = useMemo(() => {
     const numbers = new Map<string, number>();
@@ -79,6 +83,29 @@ export function DocumentPreview({ lineage, root, kind, configName, configIndex, 
   }, [doc]);
   const selectedKey = selectedId ? normalizeGuid(selectedId) : null;
   const hoverKey = hoverId ? normalizeGuid(hoverId) : null;
+  // A line hears about the selection and the hover only when it shows that
+  // element: moving the mouse over a value then re-renders two lines, not a
+  // document of thousands of segments.
+  const keysByLine = useMemo(() => new Map(doc.lines.map(line => [line.key, lineElementKeys(line)])), [doc]);
+
+  // Only the lines on screen are drawn: with a few levels of nested records a
+  // document runs to thousands of lines.
+  const docRef = useRef<HTMLDivElement>(null);
+  const rowsRef = useRef<HTMLDivElement>(null);
+  const virtualRows = useMemo(() => lines.map(line => ({ id: line.key })), [lines]);
+  const { virtualizer, scrollMargin } = useVirtualTree({
+    rows: virtualRows,
+    scrollRef: docRef,
+    containerRef: rowsRef,
+    estimateSize: DOC_LINE_HEIGHT,
+    overscan: 30,
+  });
+  // As wide as the longest line, so the horizontal scroll range does not
+  // change with the lines that happen to be drawn.
+  const longestLine = useMemo(() => lines.reduce((max, line) => (line.note ? max : Math.max(
+    max,
+    (kind === 'xml' ? line.indent * 2 : 0) + line.segments.reduce((n, segment) => n + segment.text.length, 0),
+  )), 0), [lines, kind]);
   const selectedFill = useMemo(() => {
     const fill = elementFill(lineage, selectedId ?? undefined);
     return fill?.absorbedInto ? elementFill(lineage, fill.absorbedInto) ?? fill : fill;
@@ -148,61 +175,42 @@ export function DocumentPreview({ lineage, root, kind, configName, configIndex, 
       </div>
 
       <div className="doc-preview__body">
-        <div className={`doc-preview__doc doc-preview__doc--${kind}`} onMouseLeave={() => setHoverId(null)}>
+        <div ref={docRef} className={`doc-preview__doc doc-preview__doc--${kind}`} onMouseLeave={() => setHoverId(null)}>
           {lines.length === 0 && <p className="spec-view__empty">{t.docPreviewEmpty}</p>}
           {doc.fixedWidth && <Ruler width={doc.width} />}
-          {lines.map(line => {
-            const lineNumber = lineNumbers.get(line.key);
-            return (
-              <div
-                key={line.key}
-                className={`doc-preview__line${line.note ? ` doc-preview__note doc-preview__note--${line.note.kind}` : ''}`}
-              >
-                <span className="doc-preview__gutter">
-                  {line.bands.map((band, i) => (
-                    <span key={i} className={`doc-band doc-band--${band.kind}${selectedKey === normalizeGuid(band.elementId) ? ' doc-band--active' : ''}`} />
-                  ))}
-                  <span className="doc-preview__lineno">{lineNumber ?? ''}</span>
-                </span>
-                {line.note ? (
-                  <button
-                    type="button"
-                    className="doc-preview__note-text"
-                    style={{ paddingLeft: kind === 'xml' ? line.indent * 16 : 0 }}
-                    onClick={() => pick(line.note!.elementId)}
-                    onDoubleClick={() => onOpenStructure(line.note!.elementId)}
-                  >
-                    {line.note.kind === 'repeat' ? <ArrowRepeatAllRegular fontSize={12} aria-hidden />
-                      : line.note.kind === 'condition' ? <BranchForkRegular fontSize={12} aria-hidden />
-                      : <QuestionCircleRegular fontSize={12} aria-hidden />}
-                    {line.note.text}
-                  </button>
-                ) : (
-                  <span className="doc-preview__code" style={{ paddingLeft: kind === 'xml' ? `${line.indent * 2}ch` : 0 }}>
-                    {line.segments.map((segment, i) => {
-                      const id = segment.elementId;
-                      const key = id ? normalizeGuid(id) : null;
-                      const className = `doc-seg doc-seg--${segment.role}${key && key === selectedKey ? ' doc-seg--selected' : ''}${key && key === hoverKey ? ' doc-seg--hover' : ''}${segment.role === 'unbound' && !segment.text ? ' doc-seg--empty' : ''}`;
-                      if (!id) return <span key={i} className={className}>{segment.text}</span>;
-                      const fill = elementFill(lineage, id);
-                      return (
-                        <span
-                          key={i}
-                          className={className}
-                          title={fill ? [fill.path.slice(1).join(' / '), fill.binding, fill.sources.find(s => s.role === 'value' && s.kind === 'field')?.name].filter(Boolean).join('\n') : undefined}
-                          onMouseEnter={() => setHoverId(id)}
-                          onClick={() => pick(id)}
-                          onDoubleClick={() => onOpenStructure(id)}
-                        >
-                          {segment.role === 'padding' ? segment.text.replace(/ /g, '·') : segment.text}
-                        </span>
-                      );
-                    })}
-                  </span>
-                )}
-              </div>
-            );
-          })}
+          <div
+            ref={rowsRef}
+            className="doc-preview__rows"
+            style={{ height: virtualizer.getTotalSize(), minWidth: `calc(${longestLine}ch + 120px)` }}
+          >
+            {virtualizer.getVirtualItems().map(item => {
+              const line = lines[item.index];
+              if (!line) return null;
+              const keys = keysByLine.get(line.key);
+              return (
+                <div
+                  key={line.key}
+                  ref={virtualizer.measureElement}
+                  data-index={item.index}
+                  className="doc-preview__vrow"
+                  style={{ transform: `translateY(${item.start - scrollMargin}px)` }}
+                >
+                  <DocumentLine
+                    line={line}
+                    lineNumber={lineNumbers.get(line.key)}
+                    kind={kind}
+                    lineage={lineage}
+                    selectedKey={selectedKey && keys?.has(selectedKey) ? selectedKey : null}
+                    hoverKey={hoverKey && keys?.has(hoverKey) ? hoverKey : null}
+                    onPick={pick}
+                    onHover={setHoverId}
+                    onOpenStructure={onOpenStructure}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          {doc.truncated && <p className="doc-preview__truncated">{t.docPreviewTruncated(MAX_PREVIEW_LINES)}</p>}
         </div>
         {selectedFill && !detailClosed && (
           <aside className="doc-preview__detail">
@@ -220,3 +228,65 @@ export function DocumentPreview({ lineage, root, kind, configName, configIndex, 
     </div>
   );
 }
+
+/** One line of the document. Memoized: see `keysByLine`. */
+const DocumentLine = React.memo(function DocumentLine({ line, lineNumber, kind, lineage, selectedKey, hoverKey, onPick, onHover, onOpenStructure }: {
+  line: PreviewLine;
+  lineNumber: number | undefined;
+  kind: 'xml' | 'text' | 'other';
+  lineage: FormatLineage;
+  /** The selected element, when this line shows it. */
+  selectedKey: string | null;
+  /** The hovered element, when this line shows it. */
+  hoverKey: string | null;
+  onPick: (elementId: string | undefined) => void;
+  onHover: (elementId: string) => void;
+  onOpenStructure: (elementId: string) => void;
+}) {
+  return (
+    <div className={`doc-preview__line${line.note ? ` doc-preview__note doc-preview__note--${line.note.kind}` : ''}`}>
+      <span className="doc-preview__gutter">
+        {line.bands.map((band, i) => (
+          <span key={i} className={`doc-band doc-band--${band.kind}${selectedKey === normalizeGuid(band.elementId) ? ' doc-band--active' : ''}`} />
+        ))}
+        <span className="doc-preview__lineno">{lineNumber ?? ''}</span>
+      </span>
+      {line.note ? (
+        <button
+          type="button"
+          className="doc-preview__note-text"
+          style={{ paddingLeft: kind === 'xml' ? line.indent * 16 : 0 }}
+          onClick={() => onPick(line.note!.elementId)}
+          onDoubleClick={() => onOpenStructure(line.note!.elementId)}
+        >
+          {line.note.kind === 'repeat' ? <ArrowRepeatAllRegular fontSize={12} aria-hidden />
+            : line.note.kind === 'condition' ? <BranchForkRegular fontSize={12} aria-hidden />
+            : <QuestionCircleRegular fontSize={12} aria-hidden />}
+          {line.note.text}
+        </button>
+      ) : (
+        <span className="doc-preview__code" style={{ paddingLeft: kind === 'xml' ? `${line.indent * 2}ch` : 0 }}>
+          {line.segments.map((segment, i) => {
+            const id = segment.elementId;
+            const key = id ? normalizeGuid(id) : null;
+            const className = `doc-seg doc-seg--${segment.role}${key && key === selectedKey ? ' doc-seg--selected' : ''}${key && key === hoverKey ? ' doc-seg--hover' : ''}${segment.role === 'unbound' && !segment.text ? ' doc-seg--empty' : ''}`;
+            if (!id) return <span key={i} className={className}>{segment.text}</span>;
+            const fill = elementFill(lineage, id);
+            return (
+              <span
+                key={i}
+                className={className}
+                title={fill ? [fill.path.slice(1).join(' / '), fill.binding, fill.sources.find(s => s.role === 'value' && s.kind === 'field')?.name].filter(Boolean).join('\n') : undefined}
+                onMouseEnter={() => onHover(id)}
+                onClick={() => onPick(id)}
+                onDoubleClick={() => onOpenStructure(id)}
+              >
+                {segment.role === 'padding' ? segment.text.replace(/ /g, '·') : segment.text}
+              </span>
+            );
+          })}
+        </span>
+      )}
+    </div>
+  );
+});

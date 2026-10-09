@@ -19,7 +19,18 @@ export interface PreviewOptions {
   iterations: number;
   /** Leave out elements that are not bound at all. */
   hideUnbound: boolean;
+  /** Most lines written out; defaults to `MAX_PREVIEW_LINES`. */
+  maxLines?: number;
 }
+
+/**
+ * Most lines a preview writes out. Repeating sections are written once per
+ * sample record, and a section nested in another repeats for each of its
+ * records — so the document grows as records ^ nesting depth. An import
+ * format with a few levels of nested records ran to tens of thousands of
+ * lines, and building and drawing them froze the page.
+ */
+export const MAX_PREVIEW_LINES = 5000;
 
 export type SegmentRole = 'markup' | 'tag' | 'attr' | 'value' | 'constant' | 'unbound' | 'delimiter' | 'padding' | 'text';
 
@@ -42,6 +53,18 @@ export interface PreviewLine {
   bands: Array<{ elementId: string; kind: PreviewNoteKind }>;
 }
 
+/**
+ * Every element a line shows — in one of its values or as a section band it
+ * sits in — normalized. The preview hands a line the selected or hovered
+ * element only when it is among these, so the other lines skip the render.
+ */
+export function lineElementKeys(line: Pick<PreviewLine, 'segments' | 'bands'>): Set<string> {
+  const keys = new Set<string>();
+  for (const segment of line.segments) if (segment.elementId) keys.add(normalizeGuid(segment.elementId));
+  for (const band of line.bands) keys.add(normalizeGuid(band.elementId));
+  return keys;
+}
+
 export interface PreviewDocument {
   kind: 'xml' | 'text' | 'other';
   lines: PreviewLine[];
@@ -49,6 +72,8 @@ export interface PreviewDocument {
   fixedWidth: boolean;
   /** Longest line of the file, in characters. */
   width: number;
+  /** The document stopped at `MAX_PREVIEW_LINES`; what follows is left out. */
+  truncated: boolean;
 }
 
 export interface PreviewWords {
@@ -66,6 +91,9 @@ interface BuildContext {
   sample: (fill: ElementFill, iteration: number) => string;
   lines: PreviewLine[];
   seq: number;
+  maxLines: number;
+  /** Set once `maxLines` is reached: nothing more is written. */
+  truncated: boolean;
 }
 
 /**
@@ -142,12 +170,19 @@ function escapeXml(text: string, attribute = false): string {
   return attribute ? escaped.replace(/"/g, '&quot;') : escaped;
 }
 
+/** Room for one more line; marks the document truncated once there is none. */
+function hasRoom(ctx: BuildContext): boolean {
+  if (ctx.lines.length < ctx.maxLines) return true;
+  ctx.truncated = true;
+  return false;
+}
+
 function pushLine(ctx: BuildContext, indent: number, segments: PreviewSegment[], bands: PreviewLine['bands']): void {
-  ctx.lines.push({ key: `l${ctx.seq++}`, indent, segments, bands });
+  if (hasRoom(ctx)) ctx.lines.push({ key: `l${ctx.seq++}`, indent, segments, bands });
 }
 
 function pushNote(ctx: BuildContext, indent: number, note: NonNullable<PreviewLine['note']>, bands: PreviewLine['bands']): void {
-  ctx.lines.push({ key: `n${ctx.seq++}`, indent, segments: [], note, bands });
+  if (hasRoom(ctx)) ctx.lines.push({ key: `n${ctx.seq++}`, indent, segments: [], note, bands });
 }
 
 /** Notes before an element, and the bands its lines sit in. */
@@ -178,11 +213,12 @@ function isEmptyShell(ctx: BuildContext, element: ERFormatElement): boolean {
 // ─── XML ───
 
 function emitXml(ctx: BuildContext, element: ERFormatElement, indent: number, bands: PreviewLine['bands'], iteration: number): void {
+  if (ctx.truncated) return;
   const fill = fillOf(ctx, element);
   if (ctx.options.hideUnbound && isEmptyShell(ctx, element)) return;
   const repeats = fill?.repeating ? Math.max(1, ctx.options.iterations) : 1;
 
-  for (let rep = 0; rep < repeats; rep++) {
+  for (let rep = 0; rep < repeats && !ctx.truncated; rep++) {
     const iter = iteration * repeats + rep;
     switch (element.elementType) {
       case 'File': {
@@ -282,6 +318,7 @@ function withSection(bands: PreviewLine['bands'], fill: ElementFill | undefined)
 }
 
 function emitText(ctx: BuildContext, element: ERFormatElement, state: TextState, bands: PreviewLine['bands'], iteration: number): void {
+  if (ctx.truncated) return;
   const fill = fillOf(ctx, element);
   if (ctx.options.hideUnbound && isEmptyShell(ctx, element)) return;
 
@@ -294,7 +331,7 @@ function emitText(ctx: BuildContext, element: ERFormatElement, state: TextState,
   const repeats = fill?.repeating ? Math.max(1, ctx.options.iterations) : 1;
   const delimiter = fill?.constraints.delimiter;
   const lineEnd = Boolean(fill?.constraints.lineEnd) || element.elementType === 'TextLine';
-  for (let rep = 0; rep < repeats; rep++) {
+  for (let rep = 0; rep < repeats && !ctx.truncated; rep++) {
     const iter = iteration * repeats + rep;
     // Notes go between lines only; inside a line the section just colours it.
     const inner = state.current.length === 0 ? enter(ctx, fill, 0, bands, rep) : withSection(bands, fill);
@@ -319,7 +356,10 @@ export function buildPreviewDocument(
   options: PreviewOptions,
   words: PreviewWords,
 ): PreviewDocument {
-  const ctx: BuildContext = { lineage, options, words, sample: createSampler(lineage), lines: [], seq: 0 };
+  const ctx: BuildContext = {
+    lineage, options, words, sample: createSampler(lineage), lines: [], seq: 0,
+    maxLines: options.maxLines ?? MAX_PREVIEW_LINES, truncated: false,
+  };
   if (kind === 'xml') emitXml(ctx, root, 0, [], 0);
   else {
     const state: TextState = { current: [], bands: [] };
@@ -329,5 +369,5 @@ export function buildPreviewDocument(
 
   const fixedWidth = kind === 'text' && lineage.elements.some(fill => fill.constraints.padding || (fill.constraints.minLength && fill.constraints.minLength === fill.constraints.maxLength));
   const width = ctx.lines.reduce((max, line) => Math.max(max, line.segments.reduce((n, seg) => n + seg.text.length, 0)), 0);
-  return { kind, lines: ctx.lines, fixedWidth, width };
+  return { kind, lines: ctx.lines, fixedWidth, width, truncated: ctx.truncated };
 }
