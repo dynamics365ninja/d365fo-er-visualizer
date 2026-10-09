@@ -96,6 +96,10 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
   // trip to another view.
   const [previewOpened, setPreviewOpened] = useState(view === 'preview');
   if (view === 'preview' && !previewOpened) setPreviewOpened(true);
+  // The same for the format's own mapping (import formats carry one): its
+  // designer took a good tenth of a second to build on every visit.
+  const [mappingOpened, setMappingOpened] = useState(view === 'embedded-mapping');
+  if (view === 'embedded-mapping' && !mappingOpened) setMappingOpened(true);
 
   // For import formats: find all loaded standalone ModelMapping configs that reference this format
   const linkedMappings = useMemo(() => {
@@ -695,28 +699,30 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
             />
           )}
 
-          {view === 'embedded-mapping' && fc.embeddedModelMappingVersions.length > 0 && (
-            <>
-              {fc.embeddedModelMappingVersions.length > 1 && (
-                <div style={{ display: 'flex', gap: 4, padding: '4px 8px', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
-                  {fc.embeddedModelMappingVersions.map((emv, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      className={`fmt-tab-btn ${selectedEmbeddedMappingIdx === idx ? 'active' : ''}`}
-                      onClick={() => setSelectedEmbeddedMappingIdx(idx)}
-                    >
-                      {emv.mapping.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <MappingDesigner
-                mapping={fc.embeddedModelMappingVersions[selectedEmbeddedMappingIdx].mapping}
-                configIndex={configIndex}
-                focusNode={null}
-              />
-            </>
+          {mappingOpened && fc.embeddedModelMappingVersions.length > 0 && (
+            <div style={{ display: view === 'embedded-mapping' ? 'contents' : 'none' }}>
+              <RenderWhileVisible visible={view === 'embedded-mapping'}>
+                {fc.embeddedModelMappingVersions.length > 1 && (
+                  <div style={{ display: 'flex', gap: 4, padding: '4px 8px', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
+                    {fc.embeddedModelMappingVersions.map((emv, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        className={`fmt-tab-btn ${selectedEmbeddedMappingIdx === idx ? 'active' : ''}`}
+                        onClick={() => setSelectedEmbeddedMappingIdx(idx)}
+                      >
+                        {emv.mapping.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <MappingDesigner
+                  mapping={fc.embeddedModelMappingVersions[selectedEmbeddedMappingIdx].mapping}
+                  configIndex={configIndex}
+                  focusNode={null}
+                />
+              </RenderWhileVisible>
+            </div>
           )}
 
           {view === 'bindings' && bindingsLayout === 'model' && (

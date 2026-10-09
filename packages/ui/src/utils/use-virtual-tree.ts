@@ -1,6 +1,34 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useState, type RefObject } from 'react';
-import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual';
+import { defaultRangeExtractor, measureElement, observeElementRect, useVirtualizer, type Range, type Virtualizer } from '@tanstack/react-virtual';
 import { withPinnedIndexes } from './flat-tree';
+
+/**
+ * The scroll pane's size, minus the moments it has none: a view kept mounted
+ * behind `display: none` (a designer tab the user switched away from) reports
+ * a size of zero, and taking it emptied the list — showing the view again
+ * then mounted every row from scratch. The last real size keeps them.
+ */
+export function observeShownElementRect<S extends Element, T extends Element>(
+  instance: Virtualizer<S, T>,
+  cb: (rect: { width: number; height: number }) => void,
+): void | (() => void) {
+  return observeElementRect(instance, rect => {
+    if (rect.width === 0 && rect.height === 0) return;
+    cb(rect);
+  });
+}
+
+/** A row's size, or the one it had while its pane is hidden (it is not rendered then and measures zero). */
+export function measureShownElement<S extends Element, T extends Element>(
+  element: T,
+  entry: ResizeObserverEntry | undefined,
+  instance: Virtualizer<S, T>,
+): number {
+  const size = measureElement(element, entry, instance);
+  if (size > 0 || element.getClientRects().length > 0) return size;
+  const index = instance.indexFromElement(element);
+  return instance.itemSizeCache.get(instance.options.getItemKey(index)) ?? instance.options.estimateSize(index);
+}
 
 export interface VirtualTreeOptions {
   /** The rows, in display order; `id` keys each row's measured size. */
@@ -79,6 +107,8 @@ export function useVirtualTree({ rows, scrollRef, containerRef, estimateSize, pi
     paddingStart,
     scrollMargin,
     rangeExtractor,
+    observeElementRect: observeShownElementRect,
+    measureElement: measureShownElement,
   });
 
   // The scroll pane is usually an ancestor, and an ancestor's ref is attached

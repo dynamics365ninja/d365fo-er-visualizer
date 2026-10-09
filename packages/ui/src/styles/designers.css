@@ -3744,6 +3744,19 @@ button.src-chip:hover { border-color: var(--src-color); }
   background: var(--bg-primary);
 }
 .doc-preview__line { display: flex; align-items: stretch; min-height: 20px; white-space: pre; }
+/* Virtualized: only the lines on screen are in the DOM, each placed absolutely. */
+.doc-preview__rows { position: relative; }
+.doc-preview__vrow { position: absolute; top: 0; left: 0; min-width: 100%; }
+.doc-preview__truncated {
+  margin: 8px 12px 0;
+  padding: 6px 8px;
+  border-left: 2px solid var(--er-warning);
+  background: var(--er-warning-soft);
+  font-family: var(--font-sans);
+  font-size: var(--er-text-xs);
+  color: var(--er-text);
+  white-space: normal;
+}
 .doc-preview__line:hover { background: color-mix(in srgb, var(--er-hover) 60%, transparent); }
 .doc-preview__gutter {
   position: sticky;

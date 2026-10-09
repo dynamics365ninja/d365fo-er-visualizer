@@ -689,7 +689,7 @@ function VirtualBindingTree({
                 scope={scope}
                 technical={technical}
                 level={row.depth + 1}
-                collapsed={collapsed}
+                collapsed={collapsed.has(row.node.key)}
                 onToggle={onToggle}
                 configIndex={configIndex}
                 focusBindingPath={focusBindingPath}
@@ -710,15 +710,19 @@ function VirtualBindingTree({
  * One row of the model-mapping binding hierarchy. Container levels are
  * collapsible branches; bound levels also show their expression, which opens
  * the drill-down, so a node that is both keeps a single row.
+ *
+ * Memoized: the virtualizer renders the list again as it measures the rows and
+ * whenever it scrolls, and a row has not changed in any of those passes.
  */
-function BindingTreeRow({
+const BindingTreeRow = React.memo(function BindingTreeRow({
   node, scope, technical, level, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding, onRevealBinding,
 }: {
   node: BindingTreeNode;
   scope: MappingFieldScope;
   technical: boolean;
   level: number;
-  collapsed: ReadonlySet<string>;
+  /** This row's own branch is folded. */
+  collapsed: boolean;
   onToggle: (key: string) => void;
   configIndex: number;
   focusBindingPath?: string;
@@ -729,7 +733,7 @@ function BindingTreeRow({
   onRevealBinding?: (path: string) => void;
 }) {
   const hasChildren = node.children.length > 0;
-  const isCollapsed = hasChildren && collapsed.has(node.key);
+  const isCollapsed = hasChildren && collapsed;
   const binding = node.binding;
   const isFocused = !!binding && node.key === focusBindingPath;
   const navFlash = isFocused && flashBindingPath === node.key;
@@ -793,4 +797,4 @@ function BindingTreeRow({
       )}
     </div>
   );
-}
+});

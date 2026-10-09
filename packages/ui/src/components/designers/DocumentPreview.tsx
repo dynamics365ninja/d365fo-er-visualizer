@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownloadRegular,
   ArrowRepeatAllRegular,
@@ -11,12 +11,16 @@ import type { ERFormatElement } from '@er-visualizer/core';
 import { t } from '../../i18n';
 import { useTabState } from '../../utils/tab-view-state';
 import { elementFill, type FormatLineage } from '../../utils/format-lineage';
-import { buildPreviewDocument, lineElementKeys, type PreviewLine, type PreviewValueMode } from '../../utils/format-preview';
+import { buildPreviewDocument, lineElementKeys, MAX_PREVIEW_LINES, type PreviewLine, type PreviewValueMode } from '../../utils/format-preview';
+import { useVirtualTree } from '../../utils/use-virtual-tree';
 import { normalizeGuid } from '../../utils/format-binding-display';
 import { downloadTextFile, safeFileName } from '../../utils/field-spec-export';
 import { ElementFillCard } from './ElementFillCard';
 
 const MODES: PreviewValueMode[] = ['sample', 'source', 'expression', 'name'];
+
+/** A document line's height (`.doc-preview__doc` line-height); every line is measured anyway. */
+const DOC_LINE_HEIGHT = 20;
 
 /** Plain text of the file lines, annotations left out. */
 function fileText(lines: readonly PreviewLine[], kind: 'xml' | 'text' | 'other'): string {
@@ -69,7 +73,7 @@ export function DocumentPreview({ lineage, root, kind, configName, configIndex, 
     optional: t.docPreviewOptional,
   }), [lineage, root, kind, mode, iterations, hideUnbound]);
 
-  const lines = showNotes ? doc.lines : doc.lines.filter(line => !line.note);
+  const lines = useMemo(() => (showNotes ? doc.lines : doc.lines.filter(line => !line.note)), [doc, showNotes]);
   // File line numbers: annotations are not lines of the file.
   const lineNumbers = useMemo(() => {
     const numbers = new Map<string, number>();
@@ -83,6 +87,25 @@ export function DocumentPreview({ lineage, root, kind, configName, configIndex, 
   // element: moving the mouse over a value then re-renders two lines, not a
   // document of thousands of segments.
   const keysByLine = useMemo(() => new Map(doc.lines.map(line => [line.key, lineElementKeys(line)])), [doc]);
+
+  // Only the lines on screen are drawn: with a few levels of nested records a
+  // document runs to thousands of lines.
+  const docRef = useRef<HTMLDivElement>(null);
+  const rowsRef = useRef<HTMLDivElement>(null);
+  const virtualRows = useMemo(() => lines.map(line => ({ id: line.key })), [lines]);
+  const { virtualizer, scrollMargin } = useVirtualTree({
+    rows: virtualRows,
+    scrollRef: docRef,
+    containerRef: rowsRef,
+    estimateSize: DOC_LINE_HEIGHT,
+    overscan: 30,
+  });
+  // As wide as the longest line, so the horizontal scroll range does not
+  // change with the lines that happen to be drawn.
+  const longestLine = useMemo(() => lines.reduce((max, line) => (line.note ? max : Math.max(
+    max,
+    (kind === 'xml' ? line.indent * 2 : 0) + line.segments.reduce((n, segment) => n + segment.text.length, 0),
+  )), 0), [lines, kind]);
   const selectedFill = useMemo(() => {
     const fill = elementFill(lineage, selectedId ?? undefined);
     return fill?.absorbedInto ? elementFill(lineage, fill.absorbedInto) ?? fill : fill;
@@ -152,26 +175,42 @@ export function DocumentPreview({ lineage, root, kind, configName, configIndex, 
       </div>
 
       <div className="doc-preview__body">
-        <div className={`doc-preview__doc doc-preview__doc--${kind}`} onMouseLeave={() => setHoverId(null)}>
+        <div ref={docRef} className={`doc-preview__doc doc-preview__doc--${kind}`} onMouseLeave={() => setHoverId(null)}>
           {lines.length === 0 && <p className="spec-view__empty">{t.docPreviewEmpty}</p>}
           {doc.fixedWidth && <Ruler width={doc.width} />}
-          {lines.map(line => {
-            const keys = keysByLine.get(line.key);
-            return (
-              <DocumentLine
-                key={line.key}
-                line={line}
-                lineNumber={lineNumbers.get(line.key)}
-                kind={kind}
-                lineage={lineage}
-                selectedKey={selectedKey && keys?.has(selectedKey) ? selectedKey : null}
-                hoverKey={hoverKey && keys?.has(hoverKey) ? hoverKey : null}
-                onPick={pick}
-                onHover={setHoverId}
-                onOpenStructure={onOpenStructure}
-              />
-            );
-          })}
+          <div
+            ref={rowsRef}
+            className="doc-preview__rows"
+            style={{ height: virtualizer.getTotalSize(), minWidth: `calc(${longestLine}ch + 120px)` }}
+          >
+            {virtualizer.getVirtualItems().map(item => {
+              const line = lines[item.index];
+              if (!line) return null;
+              const keys = keysByLine.get(line.key);
+              return (
+                <div
+                  key={line.key}
+                  ref={virtualizer.measureElement}
+                  data-index={item.index}
+                  className="doc-preview__vrow"
+                  style={{ transform: `translateY(${item.start - scrollMargin}px)` }}
+                >
+                  <DocumentLine
+                    line={line}
+                    lineNumber={lineNumbers.get(line.key)}
+                    kind={kind}
+                    lineage={lineage}
+                    selectedKey={selectedKey && keys?.has(selectedKey) ? selectedKey : null}
+                    hoverKey={hoverKey && keys?.has(hoverKey) ? hoverKey : null}
+                    onPick={pick}
+                    onHover={setHoverId}
+                    onOpenStructure={onOpenStructure}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          {doc.truncated && <p className="doc-preview__truncated">{t.docPreviewTruncated(MAX_PREVIEW_LINES)}</p>}
         </div>
         {selectedFill && !detailClosed && (
           <aside className="doc-preview__detail">
