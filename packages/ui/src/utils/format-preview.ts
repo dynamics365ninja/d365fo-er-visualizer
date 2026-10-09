@@ -42,6 +42,18 @@ export interface PreviewLine {
   bands: Array<{ elementId: string; kind: PreviewNoteKind }>;
 }
 
+/**
+ * Every element a line shows — in one of its values or as a section band it
+ * sits in — normalized. The preview hands a line the selected or hovered
+ * element only when it is among these, so the other lines skip the render.
+ */
+export function lineElementKeys(line: Pick<PreviewLine, 'segments' | 'bands'>): Set<string> {
+  const keys = new Set<string>();
+  for (const segment of line.segments) if (segment.elementId) keys.add(normalizeGuid(segment.elementId));
+  for (const band of line.bands) keys.add(normalizeGuid(band.elementId));
+  return keys;
+}
+
 export interface PreviewDocument {
   kind: 'xml' | 'text' | 'other';
   lines: PreviewLine[];

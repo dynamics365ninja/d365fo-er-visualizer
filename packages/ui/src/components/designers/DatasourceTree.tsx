@@ -134,14 +134,20 @@ function EnumValueRow({ node, ctx }: { node: DatasourceTreeNode; ctx: Datasource
   );
 }
 
-function DatasourceTreeRow({ node, ctx, depth }: {
+/**
+ * Memoized: each group of the list is virtualized on its own, and as the rows
+ * of one group take their real height, every group below it re-measures its
+ * offset and renders again — a handful of passes when the view opens. The
+ * rows themselves have not changed in any of them.
+ */
+const DatasourceTreeRow = React.memo(function DatasourceTreeRow({ node, ctx, depth }: {
   node: DatasourceTreeNode;
   ctx: DatasourceListContext;
   depth: number;
 }) {
   if (node.enumValue) return <EnumValueRow node={node} ctx={ctx} />;
   return <DatasourceRow node={node} ctx={ctx} depth={depth} />;
-}
+});
 
 function DatasourceRow({ node, ctx, depth }: {
   node: DatasourceTreeNode;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ERFormatContent } from '@er-visualizer/core';
 import { buildFormatLineage } from './format-lineage';
-import { buildPreviewDocument, type PreviewOptions } from './format-preview';
+import { buildPreviewDocument, lineElementKeys, type PreviewOptions } from './format-preview';
 import { invoiceWorkspace } from './invoice-workspace.test-fixture';
 
 const configs = invoiceWorkspace();
@@ -71,5 +71,34 @@ describe('buildPreviewDocument — sample consistency', () => {
   it('reads the party from the context', () => {
     const seller = text(build(2, 'xml')).find(l => l.includes('<SellerName>'))!;
     expect(seller).toMatch(/Contoso|Fabrikam/);
+  });
+});
+
+describe('lineElementKeys', () => {
+  it('names the elements of a line\'s values and of the sections it sits in, normalized', () => {
+    // What lets a hover or a selection re-render only the lines that show the
+    // element, instead of a document of thousands of segments.
+    const keys = lineElementKeys({
+      segments: [
+        { text: '<Amount>', role: 'tag' },
+        { text: '100', role: 'value', elementId: '{AAAAAAAA-0000-4000-8000-000000000001}' },
+        { text: '</Amount>', role: 'tag' },
+      ],
+      bands: [{ elementId: 'bbbbbbbb-0000-4000-8000-000000000002', kind: 'repeat' }],
+    });
+    expect([...keys].sort()).toEqual([
+      'aaaaaaaa-0000-4000-8000-000000000001',
+      'bbbbbbbb-0000-4000-8000-000000000002',
+    ]);
+  });
+
+  it('finds an element on every line it appears on', () => {
+    // A value inside a repeating section is written out once per record: a
+    // hover over one of them highlights them all.
+    const counts = new Map<string, number>();
+    for (const line of build(2, 'xml', { iterations: 3 }).lines) {
+      for (const key of lineElementKeys(line)) counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    expect(Math.max(...counts.values())).toBeGreaterThanOrEqual(3);
   });
 });
