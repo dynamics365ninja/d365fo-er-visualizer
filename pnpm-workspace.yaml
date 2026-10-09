@@ -8,3 +8,5 @@ overrides:
   next>postcss: ^8.5.23
   # postcss pulls source-map-js <1.2.2 (GHSA-68fv-2mgg-jv7q, event-loop DoS).
   source-map-js: ^1.2.2
+  # Next.js pulls sharp <0.35.5 (GHSA-wq5f-xc86-pv6w, librsvg vulnerability).
+  sharp: ^0.35.5
