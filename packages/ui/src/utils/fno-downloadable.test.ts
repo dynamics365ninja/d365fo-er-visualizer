@@ -67,4 +67,14 @@ describe('fnoUndownloadableReason', () => {
   it('reports no content for any other row without a usable id', () => {
     expect(fnoUndownloadableReason(format({ configurationGuid: ZERO }))).toBe('no-content');
   });
+
+  it('accepts a data model without an id when a format under it can name the id', () => {
+    const model = format({
+      componentType: 'DataModel',
+      configurationName: 'Statement model (derived)',
+      configurationGuid: undefined,
+    });
+    expect(fnoUndownloadableReason(model)).toBe('no-content');
+    expect(fnoUndownloadableReason({ ...model, childFormatGuid: 'd9a2dc8a-e9cf-4b52-9881-e9ecfcbbf4eb' })).toBeNull();
+  });
 });

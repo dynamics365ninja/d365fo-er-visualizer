@@ -208,6 +208,16 @@ export async function runFnoIngest(request: FnoIngestRequest, deps: FnoIngestDep
           });
         }
       }
+      // An import format's own mapping names the model it fills. The listing
+      // owner is that model only for a format directly under it — a format
+      // derived from another format may fill a derived model further down.
+      const importModel = download.importMapping;
+      if (importModel?.dataModelGuid && importModel.dataModelName && !inheritsFromOwnDataModel(download.source)) {
+        dmNameHints.set(importModel.dataModelGuid.toLowerCase(), {
+          name: importModel.dataModelName,
+          solutionName: importModel.dataModelName,
+        });
+      }
       const baseNamesTheModel = inheritsFromOwnDataModel(download.source);
       for (const guid of refs) {
         const lower = guid.toLowerCase();

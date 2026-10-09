@@ -37,7 +37,7 @@ import {
   LogLevel,
   type Configuration,
 } from '@azure/msal-node';
-import { FnoHttpError, type FnoConnection, type FnoTransport, type ErConfigSummary } from '../packages/fno-client/src/types.js';
+import { FnoHttpError, type FnoConnection, type FnoTransport, type ErConfigSummary, type ErImportFormatMapping } from '../packages/fno-client/src/types.js';
 import {
   listSolutions,
   listComponents,
@@ -750,12 +750,22 @@ async function main(): Promise<void> {
 
   // Pick first downloaded Format that had own Model= GUIDs.
   const formatComp = queue.find(c => c.componentType === 'Format');
+  // For an import format the separately listed mappings are its destination
+  // mappings: F&O lists them without an id, and a model + descriptor lookup
+  // only ever answers with the formats' own mappings (or HTTP 500 when there
+  // are several). Nothing to download here — report the gap, not a failure.
+  // An import format's own format→model mapping, fetched with the format.
+  let step6ImportMapping: ErImportFormatMapping | undefined;
   if (!formatComp) {
     console.warn('  ⚠ No Format in queue — skipping pipeline test');
   } else {
     try {
       // Re-download to get XML (already downloaded above but not stored).
       const formatDl = await downloadConfigXml(transport, conn, token, formatComp);
+      step6ImportMapping = formatDl.importMapping;
+      if (step6ImportMapping) {
+        console.log(`  Import format — its own mapping came with it: "${step6ImportMapping.mappingName}" → model ${step6ImportMapping.dataModelGuid}`);
+      }
       const { guids, baseOnlyGuids, revisions } = extractReferencedDataModelGuids(formatDl.xml);
       const ownGuids = guids.filter(g => !baseOnlyGuids.has(g));
 
@@ -816,158 +826,165 @@ async function main(): Promise<void> {
           }
         }
 
-        // ── 6c. Mapping discovery: own listing + base solution listing ──────
-        const allMappings = components.filter(c =>
-          c.componentType === 'ModelMapping' && c.version !== undefined,
-        );
-        console.log();
-        console.log(`  6c. Mappings in own solution listing: ${allMappings.length}`);
-        allMappings.slice(0, 8).forEach(m =>
-          console.log(`    ${m.configurationName.padEnd(50)} v=${m.version} vn=[${m.versionNumbers?.slice(0, 4).join(',') ?? '—'}]`),
-        );
-        if (allMappings.length > 8) console.log(`    … and ${allMappings.length - 8} more`);
+        // An import format's mapping lives in the format's own configuration and
+        // came with it; the separately listed mappings are the destination ones,
+        // which F&O gives no id for. The probes below are about export formats.
+        if (step6ImportMapping) {
+          console.log('  6c–6f skipped: the import format carries its own mapping.');
+        } else {
+          // ── 6c. Mapping discovery: own listing + base solution listing ──────
+          const allMappings = components.filter(c =>
+            c.componentType === 'ModelMapping' && c.version !== undefined,
+          );
+          console.log();
+          console.log(`  6c. Mappings in own solution listing: ${allMappings.length}`);
+          allMappings.slice(0, 8).forEach(m =>
+            console.log(`    ${m.configurationName.padEnd(50)} v=${m.version} vn=[${m.versionNumbers?.slice(0, 4).join(',') ?? '—'}]`),
+          );
+          if (allMappings.length > 8) console.log(`    … and ${allMappings.length - 8} more`);
 
-        // For derived DataModels the mapping typically lives in the BASE solution.
-        // Try to discover base solution by matching the base GUID against solution list.
-        let baseSolutionMappings: ErConfigSummary[] = [];
-        let baseSolutionName: string | undefined;
-        if (dmBaseGuids.length > 0) {
-          const baseGuid = dmBaseGuids[0]!;
-          // ErSolutionSummary has no GUID field — match by name heuristic only.
-          // (In practice this branch is unreachable: F&O API strips Base= from content responses.)
-          const baseSol = solutions.find(s => s.solutionName.toLowerCase().includes('invoice model') && !s.solutionName.toLowerCase().includes('asl'));
-          if (baseSol) {
-            baseSolutionName = baseSol.solutionName;
-            console.log(`  → Base solution: "${baseSolutionName}" (GUID lookup)`);
-            const baseComponents = await listComponents(transport, conn, token, baseSolutionName);
-            baseSolutionMappings = baseComponents.filter(c =>
-              c.componentType === 'ModelMapping' && c.version !== undefined,
-            );
-            console.log(`  → Mappings in base solution listing: ${baseSolutionMappings.length}`);
-            baseSolutionMappings.slice(0, 8).forEach(m =>
-              console.log(`      ${m.configurationName.padEnd(50)} v=${m.version}`),
-            );
-          } else {
-            console.log(`  → Base solution GUID ${baseGuid} not matched in solutions list`);
-          }
-        }
-        console.log();
-
-        // Prefer own-listing mappings; fall back to base solution mappings.
-        const candidateMappings = allMappings.length > 0 ? allMappings : baseSolutionMappings;
-        const targetMapping = candidateMappings[0];
-
-        // ── 6d. Mapping probe with DERIVED DM GUID (correct UI behavior) ──
-        console.log('  6d. Mapping probe with DERIVED DM GUID (correct — what UI synth pass should use):');
-        {
-          const synthMapping: ErConfigSummary = {
-            solutionName: targetSolution.solutionName,
-            configurationName: targetMapping?.configurationName ?? `${targetSolution.solutionName} mapping`,
-            componentType: 'ModelMapping',
-            parentDataModelGuid: dmGuid,         // ← DERIVED GUID
-            descriptorNameCandidates: containerNames.length > 0 ? containerNames : undefined,
-            hasContent: true,
-          };
-          console.log(`    parentDataModelGuid = ${dmGuid} (DERIVED)`);
-          const mappingResult = await diagnoseDownload(transport, conn, token, synthMapping);
-          results.push(mappingResult);
-          printRow(mappingResult);
-          if (!mappingResult.error) {
-            console.log(`    ✓ F&O returned mapping for DERIVED GUID → binding is CORRECT`);
-            // Also detect which DataModel the mapping XML claims (Model= attr).
-            // If it says a different (base) GUID, the format↔mapping link in the workspace
-            // will appear broken because the format's DM GUID ≠ the mapping's Model= GUID.
-            try {
-              const mmDl = await downloadConfigXml(transport, conn, token, synthMapping);
-              const mmRefs = extractReferencedDataModelGuids(mmDl.xml);
-              const mmOwnGuids = mmRefs.guids.filter(g => !mmRefs.baseOnlyGuids.has(g));
-              if (mmOwnGuids.some(g => g === dmGuid)) {
-                console.log(`    ✓ Mapping XML Model= matches DERIVED GUID — perfect alignment`);
-              } else if (mmOwnGuids.length > 0) {
-                console.log(`    ⚠ Mapping XML Model= GUIDs: ${mmOwnGuids.join(', ')}`);
-                console.log(`    ⚠ Mapping's Model= GUID ≠ format's DM GUID (${dmGuid})`);
-                console.log(`    ⚠ This is the "mapping binds to base" issue — format↔mapping link broken`);
-              }
-            } catch { /* ignore re-download failure for XML inspection */ }
-            check('[Mapping/derived] download succeeded', true);
-            // GetModelMappingByID responses always have xml=(none) by design — we use listing
-            // version instead. Only fail here if a listing version is available but mismatches.
-            if (mappingResult.listingVersion !== undefined && mappingResult.xmlVersion !== undefined) {
-              check('[Mapping/derived] listing↔XML version match',
-                mappingResult.listingVersion === mappingResult.xmlVersion,
-                `listing=${mappingResult.listingVersion} xml=${mappingResult.xmlVersion}`);
+          // For derived DataModels the mapping typically lives in the BASE solution.
+          // Try to discover base solution by matching the base GUID against solution list.
+          let baseSolutionMappings: ErConfigSummary[] = [];
+          let baseSolutionName: string | undefined;
+          if (dmBaseGuids.length > 0) {
+            const baseGuid = dmBaseGuids[0]!;
+            // ErSolutionSummary has no GUID field — match by name heuristic only.
+            // (In practice this branch is unreachable: F&O API strips Base= from content responses.)
+            const baseSol = solutions.find(s => s.solutionName.toLowerCase().includes('invoice model') && !s.solutionName.toLowerCase().includes('asl'));
+            if (baseSol) {
+              baseSolutionName = baseSol.solutionName;
+              console.log(`  → Base solution: "${baseSolutionName}" (GUID lookup)`);
+              const baseComponents = await listComponents(transport, conn, token, baseSolutionName);
+              baseSolutionMappings = baseComponents.filter(c =>
+                c.componentType === 'ModelMapping' && c.version !== undefined,
+              );
+              console.log(`  → Mappings in base solution listing: ${baseSolutionMappings.length}`);
+              baseSolutionMappings.slice(0, 8).forEach(m =>
+                console.log(`      ${m.configurationName.padEnd(50)} v=${m.version}`),
+              );
             } else {
-              console.log(`    (version check skipped — GetModelMappingByID returns no XML version by design)`);
+              console.log(`  → Base solution GUID ${baseGuid} not matched in solutions list`);
             }
-          } else {
-            console.log(`    ✗ No mapping returned for DERIVED GUID → F&O inheritance NOT followed`);
-            check('[Mapping/derived] download succeeded', false, mappingResult.error ?? 'empty');
           }
-        }
+          console.log();
 
-        // ── 6f. Descriptor order regression: mapping-name-first (old/wrong) ──
-        // This probes GetModelMappingByID with a MAPPING NAME as the first descriptor,
-        // reproducing the pre-fix "allBranchNames first" order that caused v386 to be fetched.
-        // The result should differ from 6d (which uses container names first).
-        {
-          const allBranchesOnDm = rootComponents
-            .filter(c => c.componentType === 'ModelMapping')
-            .map(r => r.configurationName)
-            .filter((s): s is string => Boolean(s));
-          const firstBranchName = allBranchesOnDm[0];
-          if (firstBranchName && containerNames.length > 0 && firstBranchName !== containerNames[0]) {
-            console.log();
-            console.log('  6f. Descriptor order regression (mapping-name-first = old wrong order):');
-            const synthMappingOldOrder: ErConfigSummary = {
+          // Prefer own-listing mappings; fall back to base solution mappings.
+          const candidateMappings = allMappings.length > 0 ? allMappings : baseSolutionMappings;
+          const targetMapping = candidateMappings[0];
+
+          // ── 6d. Mapping probe with DERIVED DM GUID (correct UI behavior) ──
+          console.log('  6d. Mapping probe with DERIVED DM GUID (correct — what UI synth pass should use):');
+          {
+            const synthMapping: ErConfigSummary = {
               solutionName: targetSolution.solutionName,
-              configurationName: firstBranchName,
+              configurationName: targetMapping?.configurationName ?? `${targetSolution.solutionName} mapping`,
               componentType: 'ModelMapping',
-              parentDataModelGuid: dmGuid,
-              descriptorNameCandidates: [...new Set([
-                ...allBranchesOnDm,   // mapping names FIRST (old wrong order)
-                ...containerNames,    // container names second
-              ])],
+              parentDataModelGuid: dmGuid,         // ← DERIVED GUID
+              descriptorNameCandidates: containerNames.length > 0 ? containerNames : undefined,
               hasContent: true,
             };
-            console.log(`    Using first descriptor = "${firstBranchName}" (mapping name, NOT container name)`);
-            const oldOrderResult = await diagnoseDownload(transport, conn, token, synthMappingOldOrder);
-            printRow(oldOrderResult);
-            const returnedOldName = oldOrderResult.name ?? '(none)';
-            if (returnedOldName !== (targetMapping?.configurationName ?? '')) {
-              console.log(`    ⚠ Mapping-name-first → returns "${returnedOldName}" (NOT derived mapping!)`);
-              console.log(`    ⚠ This is the bug that the descriptor-reorder fix in FnoConnectPanel resolves.`);
+            console.log(`    parentDataModelGuid = ${dmGuid} (DERIVED)`);
+            const mappingResult = await diagnoseDownload(transport, conn, token, synthMapping);
+            results.push(mappingResult);
+            printRow(mappingResult);
+            if (!mappingResult.error) {
+              console.log(`    ✓ F&O returned mapping for DERIVED GUID → binding is CORRECT`);
+              // Also detect which DataModel the mapping XML claims (Model= attr).
+              // If it says a different (base) GUID, the format↔mapping link in the workspace
+              // will appear broken because the format's DM GUID ≠ the mapping's Model= GUID.
+              try {
+                const mmDl = await downloadConfigXml(transport, conn, token, synthMapping);
+                const mmRefs = extractReferencedDataModelGuids(mmDl.xml);
+                const mmOwnGuids = mmRefs.guids.filter(g => !mmRefs.baseOnlyGuids.has(g));
+                if (mmOwnGuids.some(g => g === dmGuid)) {
+                  console.log(`    ✓ Mapping XML Model= matches DERIVED GUID — perfect alignment`);
+                } else if (mmOwnGuids.length > 0) {
+                  console.log(`    ⚠ Mapping XML Model= GUIDs: ${mmOwnGuids.join(', ')}`);
+                  console.log(`    ⚠ Mapping's Model= GUID ≠ format's DM GUID (${dmGuid})`);
+                  console.log(`    ⚠ This is the "mapping binds to base" issue — format↔mapping link broken`);
+                }
+              } catch { /* ignore re-download failure for XML inspection */ }
+              check('[Mapping/derived] download succeeded', true);
+              // GetModelMappingByID responses always have xml=(none) by design — we use listing
+              // version instead. Only fail here if a listing version is available but mismatches.
+              if (mappingResult.listingVersion !== undefined && mappingResult.xmlVersion !== undefined) {
+                check('[Mapping/derived] listing↔XML version match',
+                  mappingResult.listingVersion === mappingResult.xmlVersion,
+                  `listing=${mappingResult.listingVersion} xml=${mappingResult.xmlVersion}`);
+              } else {
+                console.log(`    (version check skipped — GetModelMappingByID returns no XML version by design)`);
+              }
             } else {
-              console.log(`    ✓ Mapping-name-first → happens to return correct mapping (F&O resolved correctly here)`);
+              console.log(`    ✗ No mapping returned for DERIVED GUID → F&O inheritance NOT followed`);
+              check('[Mapping/derived] download succeeded', false, mappingResult.error ?? 'empty');
             }
-            check(
-              '[Mapping/6f] mapping-name-first differs from container-name-first result',
-              returnedOldName !== (targetMapping?.configurationName ?? ''),
-              `both returned "${returnedOldName}" (descriptor order may not matter for this environment)`,
-            );
           }
-        }
 
-        // ── 6e. Mapping probe with BASE DM GUID (shows wrong behavior if used) ──
-        if (dmBaseGuids.length > 0) {
-          const baseGuid = dmBaseGuids[0]!;
-          console.log();
-          console.log('  6e. Mapping probe with BASE DM GUID (demonstrates wrong behavior if UI uses this):');
-          const synthMappingBase: ErConfigSummary = {
-            solutionName: baseSolutionName ?? targetSolution.solutionName,
-            configurationName: (baseSolutionMappings[0] ?? targetMapping)?.configurationName ?? 'mapping',
-            componentType: 'ModelMapping',
-            parentDataModelGuid: baseGuid,       // ← BASE GUID (wrong for derived format)
-            descriptorNameCandidates: containerNames.length > 0 ? containerNames : undefined,
-            hasContent: true,
-          };
-          console.log(`    parentDataModelGuid = ${baseGuid} (BASE — wrong for derived format)`);
-          const baseMappingResult = await diagnoseDownload(transport, conn, token, synthMappingBase);
-          printRow(baseMappingResult);
-          if (!baseMappingResult.error) {
-            console.log(`    ⚠ F&O returned content for BASE GUID`);
-            console.log(`    ⚠ If UI uses base GUID → mapping linked to base DM, NOT to derived format's DM`);
-          } else {
-            console.log(`    ✗ No mapping returned for BASE GUID either`);
+          // ── 6f. Descriptor order regression: mapping-name-first (old/wrong) ──
+          // This probes GetModelMappingByID with a MAPPING NAME as the first descriptor,
+          // reproducing the pre-fix "allBranchNames first" order that caused v386 to be fetched.
+          // The result should differ from 6d (which uses container names first).
+          {
+            const allBranchesOnDm = rootComponents
+              .filter(c => c.componentType === 'ModelMapping')
+              .map(r => r.configurationName)
+              .filter((s): s is string => Boolean(s));
+            const firstBranchName = allBranchesOnDm[0];
+            if (firstBranchName && containerNames.length > 0 && firstBranchName !== containerNames[0]) {
+              console.log();
+              console.log('  6f. Descriptor order regression (mapping-name-first = old wrong order):');
+              const synthMappingOldOrder: ErConfigSummary = {
+                solutionName: targetSolution.solutionName,
+                configurationName: firstBranchName,
+                componentType: 'ModelMapping',
+                parentDataModelGuid: dmGuid,
+                descriptorNameCandidates: [...new Set([
+                  ...allBranchesOnDm,   // mapping names FIRST (old wrong order)
+                  ...containerNames,    // container names second
+                ])],
+                hasContent: true,
+              };
+              console.log(`    Using first descriptor = "${firstBranchName}" (mapping name, NOT container name)`);
+              const oldOrderResult = await diagnoseDownload(transport, conn, token, synthMappingOldOrder);
+              printRow(oldOrderResult);
+              const returnedOldName = oldOrderResult.name ?? '(none)';
+              if (returnedOldName !== (targetMapping?.configurationName ?? '')) {
+                console.log(`    ⚠ Mapping-name-first → returns "${returnedOldName}" (NOT derived mapping!)`);
+                console.log(`    ⚠ This is the bug that the descriptor-reorder fix in FnoConnectPanel resolves.`);
+              } else {
+                console.log(`    ✓ Mapping-name-first → happens to return correct mapping (F&O resolved correctly here)`);
+              }
+              check(
+                '[Mapping/6f] mapping-name-first differs from container-name-first result',
+                returnedOldName !== (targetMapping?.configurationName ?? ''),
+                `both returned "${returnedOldName}" (descriptor order may not matter for this environment)`,
+              );
+            }
+          }
+
+          // ── 6e. Mapping probe with BASE DM GUID (shows wrong behavior if used) ──
+          if (dmBaseGuids.length > 0) {
+            const baseGuid = dmBaseGuids[0]!;
+            console.log();
+            console.log('  6e. Mapping probe with BASE DM GUID (demonstrates wrong behavior if UI uses this):');
+            const synthMappingBase: ErConfigSummary = {
+              solutionName: baseSolutionName ?? targetSolution.solutionName,
+              configurationName: (baseSolutionMappings[0] ?? targetMapping)?.configurationName ?? 'mapping',
+              componentType: 'ModelMapping',
+              parentDataModelGuid: baseGuid,       // ← BASE GUID (wrong for derived format)
+              descriptorNameCandidates: containerNames.length > 0 ? containerNames : undefined,
+              hasContent: true,
+            };
+            console.log(`    parentDataModelGuid = ${baseGuid} (BASE — wrong for derived format)`);
+            const baseMappingResult = await diagnoseDownload(transport, conn, token, synthMappingBase);
+            printRow(baseMappingResult);
+            if (!baseMappingResult.error) {
+              console.log(`    ⚠ F&O returned content for BASE GUID`);
+              console.log(`    ⚠ If UI uses base GUID → mapping linked to base DM, NOT to derived format's DM`);
+            } else {
+              console.log(`    ✗ No mapping returned for BASE GUID either`);
+            }
           }
         }
       }
@@ -1013,7 +1030,20 @@ async function main(): Promise<void> {
     console.log(`  Import-only topology: ${isImportOnlyTopology ? 'YES (no Model= GUID in format XML — DataModel/Mapping not downloadable via API)' : 'NO (Model= GUID available)'}`);
     step6Ok.forEach(r => console.log(`    ${r.type.padEnd(13)} "${r.name}"`));
 
-    if (isImportOnlyTopology) {
+    if (step6ImportMapping) {
+      // Import format: the data model is reached through the format's own
+      // mapping, and that mapping is part of the format — no separate download.
+      check(
+        'Pipeline (import): exactly 1 DataModel downloaded via the format\'s own mapping',
+        step6Dms.length === 1,
+        `${step6Dms.length} found`,
+      );
+      check(
+        'Pipeline (import): the format carries its own model mapping',
+        Boolean(step6ImportMapping.mappingName && step6ImportMapping.dataModelGuid),
+        `"${step6ImportMapping.mappingName ?? '?'}" → ${step6ImportMapping.dataModelGuid ?? '?'}`,
+      );
+    } else if (isImportOnlyTopology) {
       // Import-only: DataModel and Mapping cannot be downloaded — 0 each is correct
       check(
         'Pipeline (import-only): DataModel not downloaded (API gap — expected)',
@@ -1292,7 +1322,11 @@ async function main(): Promise<void> {
           const preFixBase8d = allBranchNamesPreFix[0]?.toLowerCase() ?? '';
           if (defaultResult.error) {
             console.log(`      ✗ Default probe: no mapping returned`);
-            check('Step 8d [default probe]: solutionName+"mapping" descriptor returns mapping', false, 'empty');
+            if (step6ImportMapping) {
+              console.log('  [API-GAP] Step 8d: destination mappings of an import format are not addressable by model + descriptor');
+            } else {
+              check('Step 8d [default probe]: solutionName+"mapping" descriptor returns mapping', false, 'empty');
+            }
           } else {
             const correct8d = !preFixBase8d || (defaultResult.name ?? '').toLowerCase() !== preFixBase8d;
             console.log(`      ${correct8d ? '✓' : '✗'} Default probe: mapping="${defaultResult.name}" v${defaultResult.listingVersion ?? '?'}`);
@@ -1344,7 +1378,11 @@ async function main(): Promise<void> {
               correct8dFinal ? firstHitNamePostFix! : `got "${firstHitNamePostFix}" = pre-fix base — branch sort fix needed`,
             );
           } else {
-            check('Step 8d [POST-FIX branches]: at least one descriptor returned content', false, 'no hit');
+            if (step6ImportMapping) {
+              console.log('  [API-GAP] Step 8d: no descriptor reaches a destination mapping of an import format');
+            } else {
+              check('Step 8d [POST-FIX branches]: at least one descriptor returned content', false, 'no hit');
+            }
           }
         }
       } else {
@@ -2216,7 +2254,11 @@ async function main(): Promise<void> {
             );
           } else {
             console.log(`    ✗ Download failed: ${result10.error}`);
-            check('Step 10: mapping download succeeds with scout DM GUID', false, result10.error ?? 'empty');
+            if (step6ImportMapping) {
+              console.log('  [API-GAP] Step 10: destination mapping of an import format has no id and no descriptor reaches it');
+            } else {
+              check('Step 10: mapping download succeeds with scout DM GUID', false, result10.error ?? 'empty');
+            }
           }
         } else {
           console.log('  ⚠ No mapping branches found — nothing to probe');
@@ -3132,6 +3174,68 @@ async function main(): Promise<void> {
     }
   } catch (err16) {
     console.log(`  ⚠ Step 16 failed: ${err16 instanceof Error ? err16.message.slice(0, 200) : err16}`);
+  }
+  console.log();
+
+  // ─── Step 17: Import formats — own mapping, data model, id-less model rows ──
+  // An import format's format→model mapping lives in the format's own
+  // configuration: its id is among `ConfigurationLabels.SolutionComponentsGuids`
+  // of the format download, and `GetModelMappingByID` answers it with the
+  // mapping and the data model. A DataModel row the listing gives no id is
+  // reached through a format directly under it (`ParentSolutionLabels`).
+  console.log('─── Step 17: Import formats — own mapping + data model');
+  try {
+    const importRows = rootComponents.filter(c =>
+      c.componentType === 'Format' && (c.configurationGuid || c.revisionGuid) && !c.draftOnly);
+    let importFormats = 0;
+    let withMapping = 0;
+    const modelsByGuid = new Map<string, string>();
+    for (const row of importRows) {
+      const dl = await downloadConfigXml(transport, conn, token, row);
+      if (!/<ERTextFormat\b[^>]*DataImportSupport="1"/.test(dl.xml)) continue;
+      importFormats += 1;
+      const im = dl.importMapping;
+      if (!im) {
+        console.log(`  ✗ ${row.configurationName.padEnd(45)} no own mapping found`);
+        continue;
+      }
+      withMapping += 1;
+      if (im.dataModelGuid) modelsByGuid.set(im.dataModelGuid, im.dataModelName ?? '?');
+      const parsed = parseERConfiguration(dl.xml, `fno://${row.configurationName}`);
+      const embedded = parsed.content.kind === ERComponentKind.Format ? parsed.content.embeddedModelMappingVersions : [];
+      const linked = embedded.some(e => e.mapping.modelId.replace(/[{}]/g, '').toLowerCase() === im.dataModelGuid);
+      console.log(`  ✓ ${row.configurationName.padEnd(45)} "${im.mappingName}" → ${im.dataModelName} (${im.dataModelGuid})${linked ? '' : '  ⚠ not linked after parse'}`);
+      check(`Step 17: "${row.configurationName}" parses as a format with its mapping tied to the model`,
+        parsed.kind === ERComponentKind.Format && linked, `${embedded.length} embedded mapping(s)`);
+    }
+    check('Step 17: every import format brings its own mapping', importFormats > 0 && withMapping === importFormats,
+      `${withMapping}/${importFormats}`);
+
+    for (const [guid, name] of modelsByGuid) {
+      const dm = await diagnoseDownload(transport, conn, token, {
+        solutionName: name, configurationName: name, componentType: 'DataModel',
+        configurationGuid: guid, hasContent: true,
+      });
+      printRow(dm);
+      check(`Step 17: data model "${name}" downloads by the id its mapping names`, !dm.error, dm.error);
+    }
+
+    const idlessModels = rootComponents.filter(c =>
+      c.componentType === 'DataModel' && !c.configurationGuid && !c.revisionGuid);
+    for (const row of idlessModels) {
+      if (!row.childFormatGuid) {
+        console.log(`  ℹ DataModel "${row.configurationName}" has no format directly under it — stays unavailable`);
+        continue;
+      }
+      const dl = await downloadConfigXml(transport, conn, token, row);
+      const parsed = parseERConfiguration(dl.xml, `fno://${row.configurationName}`);
+      const modelName = parsed.content.kind === ERComponentKind.DataModel ? parsed.content.version.model.name : '';
+      console.log(`  ✓ DataModel row "${row.configurationName}" → ${dl.source.configurationGuid} ("${modelName}")`);
+      check(`Step 17: id-less DataModel row "${row.configurationName}" downloads through a format under it`,
+        parsed.kind === ERComponentKind.DataModel && modelName === row.configurationName, `model "${modelName}"`);
+    }
+  } catch (e) {
+    check('Step 17: import format path ran', false, e instanceof Error ? e.message.slice(0, 200) : String(e));
   }
   console.log();
 

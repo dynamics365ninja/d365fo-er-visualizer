@@ -39,6 +39,9 @@ export function fnoUndownloadableReason(comp: ErConfigSummary): FnoUndownloadabl
     return null;
   }
   if (comp.componentType === 'ModelMapping') return 'unreachable-mapping';
+  // A DataModel row without an id: a format listed directly under it reveals
+  // the model's id when it downloads — see `childFormatGuid`.
+  if (comp.componentType === 'DataModel' && comp.childFormatGuid) return null;
   return 'no-content';
 }
 
