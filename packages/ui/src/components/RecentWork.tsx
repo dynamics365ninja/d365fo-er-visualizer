@@ -15,6 +15,7 @@ import { t, useLocale } from '../i18n';
 import { describeRecent, formatRelativeTime, sessionHeadline, type RecentDisplay } from '../utils/recent-display';
 import { DependencyKindIcon, dependencyKindLabel } from './DependencyPromptDialog';
 import { FilterField } from './FilterField';
+import { useRelatedRecentLoad } from './useRelatedRecentLoad';
 
 const SESSIONS_SHOWN = 4;
 const CONFIGS_SHOWN = 8;
@@ -62,6 +63,9 @@ function RecentSessions({ sessions, recentFiles, onFilesLoaded }: {
   const clearRecentSessions = useAppStore(s => s.clearRecentSessions);
   const [showAll, setShowAll] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  // A configuration chip offers its cached data model, mapping or formats as
+  // well — the same prompt as the configurations list and workspace manager.
+  const { load: loadConfig, dialog: dependencyPrompt } = useRelatedRecentLoad(onFilesLoaded);
   const shown = showAll ? sessions : sessions.slice(0, SESSIONS_SHOWN);
   return (
     <section className="recent-section" aria-labelledby="recent-sessions-title">
@@ -78,6 +82,7 @@ function RecentSessions({ sessions, recentFiles, onFilesLoaded }: {
             loadingId={loadingId}
             setLoadingId={setLoadingId}
             onFilesLoaded={onFilesLoaded}
+            onOpenConfig={loadConfig}
           />
         ))}
       </ul>
@@ -86,21 +91,23 @@ function RecentSessions({ sessions, recentFiles, onFilesLoaded }: {
           {showAll ? t.recentShowLess : t.recentShowAll(sessions.length)}
         </button>
       )}
+      {dependencyPrompt}
     </section>
   );
 }
 
-function SessionCard({ session, recentFiles, loadingId, setLoadingId, onFilesLoaded }: {
+function SessionCard({ session, recentFiles, loadingId, setLoadingId, onFilesLoaded, onOpenConfig }: {
   session: RecentSession;
   recentFiles: RecentFile[];
   loadingId: string | null;
   setLoadingId: (id: string | null) => void;
   onFilesLoaded: () => void;
+  /** Open one configuration of the session, offering its related ones. */
+  onOpenConfig: (file: RecentFile) => void;
 }) {
   const locale = useLocale();
   const cachedPaths = useAppStore(s => s.cachedPaths);
   const loadRecentSession = useAppStore(s => s.loadRecentSession);
-  const loadCachedFile = useAppStore(s => s.loadCachedFile);
   const removeRecentSession = useAppStore(s => s.removeRecentSession);
   const pushToast = useAppStore(s => s.pushToast);
   // With nothing open, adding a session and replacing the workspace with it
@@ -184,9 +191,9 @@ function SessionCard({ session, recentFiles, loadingId, setLoadingId, onFilesLoa
                 title={cached
                   ? `${t.recentOpenConfigHint} — ${sourceLabel(display)}`
                   : t.recentNotCachedHint}
-                onClick={() => {
-                  void loadCachedFile(file.path, display.title).then(ok => { if (ok) onFilesLoaded(); });
-                }}
+                // The history entry is the fresher snapshot; the session keeps
+                // its own copy for configurations dropped from the history.
+                onClick={() => onOpenConfig(recentFiles.find(r => r.path === file.path) ?? file)}
               >
                 <span className="recent-config-chip__icon"><DependencyKindIcon kind={display.kind} /></span>
                 <span className="recent-config-chip__name">{display.title}</span>
@@ -204,11 +211,13 @@ function SessionCard({ session, recentFiles, loadingId, setLoadingId, onFilesLoa
 function RecentConfigurations({ files, onFilesLoaded }: { files: RecentFile[]; onFilesLoaded: () => void }) {
   const locale = useLocale();
   const cachedPaths = useAppStore(s => s.cachedPaths);
-  const reloadRecentFile = useAppStore(s => s.reloadRecentFile);
   const removeRecentFile = useAppStore(s => s.removeRecentFile);
   const clearRecentFiles = useAppStore(s => s.clearRecentFiles);
   const [filter, setFilter] = useState('');
   const [showAll, setShowAll] = useState(false);
+  // Opening a configuration offers its cached data model, mapping or formats
+  // as well — the same prompt the workspace manager shows.
+  const { load, dialog: dependencyPrompt } = useRelatedRecentLoad(onFilesLoaded);
 
   const described = useMemo(() => files.map(file => ({ file, display: describeRecent(file) })), [files]);
   const query = filter.trim().toLowerCase();
@@ -241,7 +250,7 @@ function RecentConfigurations({ files, onFilesLoaded }: { files: RecentFile[]; o
                   className="recent-config__open"
                   disabled={!cached}
                   title={cached ? t.recentOpenConfigHint : t.recentNotCachedHint}
-                  onClick={() => { void reloadRecentFile(file.path).then(ok => { if (ok) onFilesLoaded(); }); }}
+                  onClick={() => load(file)}
                 >
                   <span className={`recent-config__icon recent-kind--${kindClass[display.kind ?? ''] ?? 'format'}`}>
                     <DependencyKindIcon kind={display.kind} />
@@ -277,6 +286,7 @@ function RecentConfigurations({ files, onFilesLoaded }: { files: RecentFile[]; o
           {showAll ? t.recentShowLess : t.recentShowAll(matching.length)}
         </button>
       )}
+      {dependencyPrompt}
     </section>
   );
 }

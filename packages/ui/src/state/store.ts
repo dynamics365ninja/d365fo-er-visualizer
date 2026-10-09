@@ -300,8 +300,6 @@ export interface AppState {
   // Recent files
   removeRecentFile: (path: string) => void;
   clearRecentFiles: () => void;
-  /** Re-load a recent file from its cached XML content. Returns true on success. */
-  reloadRecentFile: (path: string) => Promise<boolean>;
   /** Add a single cached file to the workspace without touching what's loaded. */
   loadCachedFile: (path: string, name?: string) => Promise<boolean>;
 
@@ -1166,14 +1164,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       },
     });
   },
-  reloadRecentFile: async (path: string) => {
-    const entry = get().recentFiles.find(r => r.path === path);
-    if (!entry) return false;
-    // Same cache lookup as loadCachedFile: bundled extracts live under the
-    // bundle's path, so the entry's own path is never in the cache.
-    return get().loadCachedFile(path, entry.solutionName ?? entry.name);
-  },
-
   // ─── Recent sessions ───
   removeRecentSession: (id: string) => {
     const next = saveRecentSessions(get().recentSessions.filter(s => s.id !== id));

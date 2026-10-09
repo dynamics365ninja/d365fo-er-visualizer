@@ -23,18 +23,14 @@ import {
   OpenRegular,
   SearchRegular,
 } from '@fluentui/react-icons';
-import { findRelatedRecentFiles, useAppStore, type RecentFile } from '../state/store';
+import { useAppStore, type RecentFile } from '../state/store';
 import { t, useLocale } from '../i18n';
 import { describeRecent } from '../utils/recent-display';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
 import { useResizableDialog } from '../utils/resizable-dialog';
 import { buildExplorerModelGroups, getBestVersion, type ExplorerModelGroup } from '../utils/model-hierarchy';
-import {
-  DependencyKindIcon,
-  DependencyPromptDialog,
-  dependencyKindLabel,
-  type DependencyPromptRequest,
-} from './DependencyPromptDialog';
+import { DependencyKindIcon, dependencyKindLabel } from './DependencyPromptDialog';
+import { useRelatedRecentLoad } from './useRelatedRecentLoad';
 
 const kindAccent: Record<string, string> = {
   DataModel: 'model',
@@ -107,7 +103,6 @@ export function WorkspaceManager({
   const recentFiles = useAppStore(s => s.recentFiles);
   const cachedPaths = useAppStore(s => s.cachedPaths);
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
-  const loadCachedFile = useAppStore(s => s.loadCachedFile);
   const closeConfigurationWithUndo = useAppStore(s => s.closeConfigurationWithUndo);
   const closeAllConfigurationsWithUndo = useAppStore(s => s.closeAllConfigurationsWithUndo);
   const removeRecentFile = useAppStore(s => s.removeRecentFile);
@@ -115,7 +110,7 @@ export function WorkspaceManager({
   const pushToast = useAppStore(s => s.pushToast);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
-  const [prompt, setPrompt] = useState<(DependencyPromptRequest & { subject: RecentFile }) | null>(null);
+  const { load: addCached, loadMany, dialog: dependencyPrompt } = useRelatedRecentLoad();
 
   const loadedPaths = useMemo(() => new Set(configurations.map(c => c.filePath)), [configurations]);
   const available = useMemo(
@@ -133,37 +128,6 @@ export function WorkspaceManager({
     for (const cfg of configurations) c[cfg.content.kind as keyof typeof c] += 1;
     return c;
   }, [configurations]);
-
-  const addCached = useCallback((entry: RecentFile) => {
-    const related = findRelatedRecentFiles(entry, recentFiles, configurations, cachedPaths);
-    const candidates = [
-      ...(related.dataModel ? [related.dataModel] : []),
-      ...related.mappings,
-      ...related.formats,
-    ];
-    if (candidates.length === 0 || entry.kind === undefined) {
-      void loadCachedFile(entry.path, entry.solutionName ?? entry.name);
-      return;
-    }
-    setPrompt({
-      subject: entry,
-      subjectName: entry.solutionName ?? entry.name,
-      subjectKind: entry.kind,
-      candidates: candidates.map(c => ({
-        key: c.path,
-        kind: c.kind ?? 'Format',
-        name: c.solutionName ?? c.name,
-        meta: c.version ? `v${c.version}` : undefined,
-      })),
-    });
-  }, [recentFiles, configurations, cachedPaths, loadCachedFile]);
-
-  const loadMany = useCallback(async (entries: RecentFile[]) => {
-    // Data models first so mappings/formats link to them on arrival.
-    const order = (k: string | undefined) => (k === 'DataModel' ? 0 : k === 'ModelMapping' ? 1 : 2);
-    const sorted = [...entries].sort((a, b) => order(a.kind) - order(b.kind));
-    for (const e of sorted) await loadCachedFile(e.path, e.solutionName ?? e.name);
-  }, [loadCachedFile]);
 
   const openInTab = useCallback((configIndex: number) => {
     navigateToTreeNode(`cfg-${configIndex}`);
@@ -407,21 +371,7 @@ export function WorkspaceManager({
         </DialogSurface>
       </Dialog>
 
-      <DependencyPromptDialog
-        request={prompt}
-        onConfirm={keys => {
-          const subject = prompt!.subject;
-          const picked = recentFiles.filter(r => keys.includes(r.path));
-          setPrompt(null);
-          void loadMany([subject, ...picked]);
-        }}
-        onOnlySubject={() => {
-          const subject = prompt!.subject;
-          setPrompt(null);
-          void loadCachedFile(subject.path, subject.solutionName ?? subject.name);
-        }}
-        onCancel={() => setPrompt(null)}
-      />
+      {dependencyPrompt}
     </>
   );
 }
