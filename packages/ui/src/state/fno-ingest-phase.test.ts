@@ -27,3 +27,38 @@ describe('F&O ingest phase', () => {
     store().setFnoIngestStatus('');
   });
 });
+
+describe('F&O download log', () => {
+  const store = useAppStore.getState;
+  const row = { key: 'a', name: 'Statement format', kind: 'Format' as const, explicit: true };
+
+  it('closes when a run starts and comes back only when asked for', () => {
+    store().beginFnoIngest([row]);
+    store().endFnoIngest();
+    expect(store().fnoIngestLogOpen).toBe(false);
+    store().showFnoIngestLog();
+    expect(store().fnoIngestLogOpen).toBe(true);
+    // The next run starts with its own, live dialog.
+    store().beginFnoIngest([row]);
+    expect(store().fnoIngestLogOpen).toBe(false);
+    store().endFnoIngest();
+    store().setFnoIngestStatus('');
+  });
+
+  it('is not reopened by closing every configuration', () => {
+    // Closing the last configuration brings the landing page back. The log of
+    // the download that loaded them must not come along with it.
+    store().beginFnoIngest([row]);
+    store().endFnoIngest();
+    store().showFnoIngestLog();
+    store().removeAllConfigurations();
+    expect(store().fnoIngestLogOpen).toBe(false);
+    store().setFnoIngestStatus('');
+  });
+
+  it('has nothing to show before any download', () => {
+    useAppStore.setState({ fnoIngestProgress: { active: false, phase: 'prepare', startedAt: null, finishedAt: null, items: [] } });
+    store().showFnoIngestLog();
+    expect(store().fnoIngestLogOpen).toBe(false);
+  });
+});

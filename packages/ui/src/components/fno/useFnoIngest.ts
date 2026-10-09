@@ -1,7 +1,7 @@
 /**
  * React glue for the F&O ingest pipeline (`fno/ingest`): owns the
  * AbortController of the running "Load selected", wires the pipeline to the
- * app store and turns its result into the success toast.
+ * app store and turns its result into the summary toast.
  *
  * Progress lives in the app store, so a run keeps going — and keeps
  * reporting — after the panel that started it unmounts. Only Disconnect and
@@ -11,9 +11,10 @@
 import { useCallback, useRef, useState } from 'react';
 import type { ErConfigSummary, ErSolutionSummary, FnoConnection } from '@er-visualizer/fno-client';
 import { t } from '../../i18n';
-import { useAppStore } from '../../state/store';
+import { useAppStore, type Toast } from '../../state/store';
 import { fnoSession } from '../../fno/session';
 import { runFnoIngest, type FnoIngestDeps, type FnoIngestResult } from '../../fno/ingest';
+import { ingestGaps } from '../FnoIngestPanel';
 
 /** The pipeline's view of the app: F&O session, workspace and download log. */
 function appIngestDeps(): FnoIngestDeps {
@@ -30,10 +31,33 @@ function appIngestDeps(): FnoIngestDeps {
       begin: items => store().beginFnoIngest(items),
       status: (text, phase) => store().setFnoIngestStatus(text, phase),
       updateItem: item => store().updateFnoIngestItem(item),
+      removeItem: key => store().removeFnoIngestItem(key),
       items: () => store().fnoIngestProgress.items,
       end: () => store().endFnoIngest(),
     },
     notify: notice => { store().pushToast(notice); },
+  };
+}
+
+/**
+ * The one toast that closes a download. The dialog closes by itself; what did
+ * not arrive is counted here, and "Details" brings the log back.
+ */
+export function ingestSummaryToast(
+  result: Pick<FnoIngestResult, 'loaded' | 'warnings'>,
+  gaps: number,
+): Omit<Toast, 'id' | 'createdAt'> | null {
+  if (gaps === 0 && result.warnings.length === 0) {
+    return result.loaded > 0 ? { kind: 'success', message: t.fnoLoadedCount(result.loaded) } : null;
+  }
+  const summary = result.loaded === 0
+    ? t.fnoLoadedNothing
+    : gaps > 0 ? t.fnoLoadedWithGaps(result.loaded, gaps) : t.fnoLoadedCount(result.loaded);
+  return {
+    kind: 'warning',
+    message: [summary, ...result.warnings].join('\n\n'),
+    durationMs: 15_000,
+    action: { label: t.fnoIngestShowLog, onClick: () => useAppStore.getState().showFnoIngestLog() },
   };
 }
 
@@ -103,9 +127,10 @@ export function useFnoIngest({
       // Clear the queue when the entire batch resolved (success or
       // benign empty). Partial *real* failures stay selected for retry.
       if (result.loaded + result.skippedEmpty === result.queued) setSelected(new Map());
-      pushToast({ kind: 'success', message: t.fnoLoadedCount(result.loaded) });
       onFilesLoaded?.();
     }
+    const summary = ingestSummaryToast(result, ingestGaps(useAppStore.getState().fnoIngestProgress).length);
+    if (summary) pushToast(summary);
   }, [activeProfile, selected, allDataModelsSeen, solutions, rootComponentCache, setSelected, pushToast, onFilesLoaded]);
 
   return { ingesting, loadSelected, cancel };

@@ -214,6 +214,15 @@ export interface ErConfigSummary {
    * for a format whose parent is the model that is the `ERDataModel` id.
    */
   childFormatGuid?: string;
+  /**
+   * Set by the UI on a selected Format once the user has picked its related
+   * data models and model mappings ("Also load related configurations?").
+   * The download then brings exactly those: it still follows the references
+   * inside the downloaded XML, but no longer guesses a mapping from the
+   * listing — a guess is how a sibling mapping arrived in place of the one
+   * the user wanted.
+   */
+  relatedChosen?: boolean;
 }
 
 /** The format→model mapping an import format carries on itself. */

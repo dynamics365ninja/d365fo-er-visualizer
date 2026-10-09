@@ -173,39 +173,29 @@ export function FnoIngestPanel({ variant = 'overlay', onClose }: {
 }
 
 /**
- * The overlay, mounted once for the whole app.
- *
- * It has to outlive the landing page: the first configuration that arrives
- * switches the app over to the workspace, which used to unmount the dialog
- * mid-run. Rows added at the end of a batch — a model or a mapping the listing
- * found but nothing could address — therefore reached the store and were never
- * drawn, leaving the toast as the only trace. So the log also stays up after the
- * batch ends whenever something did not arrive, until the user closes it.
+ * Rows of a finished download that did not bring a configuration into the
+ * workspace: failed, without own XML, or skipped (no id from F&O, belongs to
+ * another format…). The summary toast counts them and offers the log.
  */
-export function shouldKeepIngestLogOpen(
-  progress: Pick<FnoIngestProgress, 'items' | 'startedAt' | 'finishedAt'>,
-  closedAt: number,
-): boolean {
-  if (progress.finishedAt === null) return false;
-  const somethingMissing = progress.items.some(
-    i => i.status === 'failed' || i.status === 'empty' || i.status === 'skipped',
-  );
-  if (!somethingMissing) return false;
-  // A newer batch beats an earlier dismissal, so the next Load shows its log.
-  return (progress.startedAt ?? 0) > closedAt;
+export function ingestGaps(progress: Pick<FnoIngestProgress, 'items'>): FnoIngestItem[] {
+  return progress.items.filter(i => i.status === 'failed' || i.status === 'empty' || i.status === 'skipped');
 }
 
+/**
+ * The overlay, mounted next to the landing page and next to the workspace.
+ *
+ * While a download runs it is always up. Once the run ends it closes by
+ * itself — gaps included; the summary toast says what did not arrive and its
+ * "Details" bring the log back (`fnoIngestLogOpen`). Keeping that flag in the
+ * store rather than in this component matters: the app mounts one overlay per
+ * screen, and a dismissal kept here was forgotten whenever the other screen
+ * mounted its own, so closing every configuration brought an old log back.
+ */
 export function FnoIngestOverlay() {
   const status = useAppStore(s => s.fnoIngestStatus);
-  const progress = useAppStore(s => s.fnoIngestProgress);
-  const [closedAt, setClosedAt] = useState(0);
+  const logOpen = useAppStore(s => s.fnoIngestLogOpen);
+  const hideLog = useAppStore(s => s.hideFnoIngestLog);
 
-  const keepOpenAfterFinish = shouldKeepIngestLogOpen(progress, closedAt);
-  if (!status && !keepOpenAfterFinish) return null;
-  return (
-    <FnoIngestPanel
-      variant="overlay"
-      onClose={status ? undefined : () => setClosedAt(Date.now())}
-    />
-  );
+  if (!status && !logOpen) return null;
+  return <FnoIngestPanel variant="overlay" onClose={status ? undefined : hideLog} />;
 }

@@ -95,6 +95,42 @@ export function mappingSettlesWalk(
   return true;
 }
 
+/**
+ * What becomes of a mapping that downloaded fine:
+ *  - `load` — it joins the workspace;
+ *  - `in-format` — it is the import format's own mapping, which already came
+ *    with the format; loading it again only adds a duplicate;
+ *  - `other-format` — it parses a format that is not in the load;
+ *  - `export-side` — it fills the model from D365FO data, and no export format
+ *    is in the load to use it.
+ *
+ * Only a load with an import format is judged: an export format's mappings are
+ * found by the descriptor the format itself names.
+ */
+export type MappingAdmission = 'load' | 'in-format' | 'other-format' | 'export-side';
+
+export function admitMapping(
+  link: ImportMappingLink | null,
+  load: { hasImportFormat: boolean; hasExportFormat: boolean },
+  alreadyInFormat: boolean,
+): MappingAdmission {
+  if (!load.hasImportFormat || link === null) return 'load';
+  if (link === 'bound') return alreadyInFormat ? 'in-format' : 'load';
+  if (link === 'other-format') return 'other-format';
+  if (link === 'to-model') return load.hasExportFormat ? 'load' : 'export-side';
+  return 'load';
+}
+
+/** The `ID.` of every `ERModelMapping` definition in a payload. */
+export function mappingDefinitionIds(xml: string): Set<string> {
+  const out = new Set<string>();
+  for (const [tag] of xml.matchAll(/<ERModelMapping\b[^>]*>/gi)) {
+    const id = normalize(tag.match(/\sID\.\s*=\s*"([^"]*)"/)?.[1]);
+    if (id && id !== ZERO_GUID_LOWER) out.add(id);
+  }
+  return out;
+}
+
 interface LoadedConfigLike {
   kind: string;
   solutionVersion?: { solution?: { id?: string } };
@@ -103,7 +139,8 @@ interface LoadedConfigLike {
 
 /**
  * What the workspace holds after the format downloads: the ids an import format
- * can be referenced by, and whether an export format is in the load at all.
+ * can be referenced by, the ids of the mappings the import formats brought
+ * along on themselves, and whether an export format is in the load at all.
  *
  * `ERImportFormatDatasource.FormatGUID` is the inner `ERTextFormat` id — *not*
  * the ERSolution id the listing hands out — so both go in the set, and so does
@@ -111,14 +148,16 @@ interface LoadedConfigLike {
  */
 export function loadedFormatIdentity(configurations: readonly LoadedConfigLike[]): {
   importGuids: Set<string>;
+  ownMappingIds: Set<string>;
   hasImportFormat: boolean;
   hasExportFormat: boolean;
 } {
   const importGuids = new Set<string>();
+  const ownMappingIds = new Set<string>();
   let hasExportFormat = false;
-  const add = (guid: string | undefined): void => {
+  const add = (target: Set<string>, guid: string | undefined): void => {
     const lower = normalize(guid);
-    if (lower && lower !== ZERO_GUID_LOWER) importGuids.add(lower);
+    if (lower && lower !== ZERO_GUID_LOWER) target.add(lower);
   };
   for (const cfg of configurations) {
     if (cfg.kind !== 'Format') continue;
@@ -126,15 +165,19 @@ export function loadedFormatIdentity(configurations: readonly LoadedConfigLike[]
       direction?: string;
       formatVersion?: { id?: string; format?: { id?: string } };
       formatMappingVersion?: { id?: string };
+      embeddedModelMappingVersions?: Array<{ mappings?: Array<{ id?: string }> }>;
     } | undefined;
     if (content?.direction !== 'Import') {
       hasExportFormat = true;
       continue;
     }
-    add(cfg.solutionVersion?.solution?.id);
-    add(content.formatVersion?.id);
-    add(content.formatVersion?.format?.id);
-    add(content.formatMappingVersion?.id);
+    add(importGuids, cfg.solutionVersion?.solution?.id);
+    add(importGuids, content.formatVersion?.id);
+    add(importGuids, content.formatVersion?.format?.id);
+    add(importGuids, content.formatMappingVersion?.id);
+    for (const version of content.embeddedModelMappingVersions ?? []) {
+      for (const mapping of version.mappings ?? []) add(ownMappingIds, mapping.id);
+    }
   }
-  return { importGuids, hasImportFormat: importGuids.size > 0, hasExportFormat };
+  return { importGuids, ownMappingIds, hasImportFormat: importGuids.size > 0, hasExportFormat };
 }

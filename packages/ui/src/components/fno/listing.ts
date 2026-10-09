@@ -146,6 +146,96 @@ export function scopeComponentsToModel(
   }) as ErConfigSummary[];
 }
 
+/** A configuration offered next to a format picked in the F&O browser. */
+export interface RelatedListingCandidate {
+  comp: ErConfigSummary;
+  /** Steps below the first offered configuration of its kind (base 0, derived 1, …). */
+  depth: number;
+  /** Ticked when the prompt opens. */
+  preselected: boolean;
+}
+
+/**
+ * What to offer with a format picked in the F&O browser: every data model on
+ * the way from the listing root down to the model the format sits under, and
+ * every model mapping of those models — base ones and every derivation — in
+ * the order of the configuration tree.
+ *
+ * `tree` should be the full listing of the root model: the list on screen is
+ * scoped to one level of it, which is how only the most derived mapping used
+ * to be offered. Which mapping the format actually uses is something the
+ * listing does not say (an import format's destination mapping is not linked
+ * to it at all), so everything is offered and only what is unambiguous is
+ * ticked: the format's own model, and a mapping when it is the only one that
+ * can be downloaded. `mappingAmbiguous` says the user has to choose.
+ */
+export function relatedConfigurationsForFormat(
+  format: ErConfigSummary,
+  tree: readonly ErConfigSummary[],
+  isDownloadable: (c: ErConfigSummary) => boolean,
+): { candidates: RelatedListingCandidate[]; mappingAmbiguous: boolean } {
+  const models = new Map<string, ErConfigSummary>();
+  for (const c of tree) {
+    if (c.componentType === 'DataModel' && c.configurationName && !models.has(c.configurationName)) {
+      models.set(c.configurationName, c);
+    }
+  }
+  // Root first. A model row names its parent model as its owner; the root
+  // names itself (the listing root).
+  const chain: ErConfigSummary[] = [];
+  const seen = new Set<string>();
+  for (let name = format.ownerDataModelName; name && !seen.has(name);) {
+    seen.add(name);
+    const model = models.get(name);
+    if (!model) break;
+    chain.unshift(model);
+    name = model.ownerDataModelName;
+  }
+  const modelNames = new Set(chain.map(m => m.configurationName));
+  if (modelNames.size === 0) {
+    for (const name of [format.ownerDataModelName, format.solutionName]) if (name) modelNames.add(name);
+  }
+
+  const mappings = tree.filter(c =>
+    c.componentType === 'ModelMapping' && modelNames.has(c.ownerDataModelName ?? c.solutionName));
+  // Base before derived, whatever order the list came in.
+  const byName = new Map(mappings.map(m => [m.configurationName, m]));
+  const childrenOf = new Map<string, ErConfigSummary[]>();
+  const roots: ErConfigSummary[] = [];
+  for (const m of mappings) {
+    const parent = m.parentConfigName && m.parentConfigName !== m.configurationName && byName.has(m.parentConfigName)
+      ? m.parentConfigName
+      : null;
+    if (parent) childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), m]);
+    else roots.push(m);
+  }
+  const orderedMappings: Array<{ comp: ErConfigSummary; depth: number }> = [];
+  const placed = new Set<ErConfigSummary>();
+  const walk = (m: ErConfigSummary, depth: number): void => {
+    if (placed.has(m)) return;
+    placed.add(m);
+    orderedMappings.push({ comp: m, depth });
+    for (const child of childrenOf.get(m.configurationName) ?? []) walk(child, depth + 1);
+  };
+  for (const root of roots) walk(root, 0);
+
+  const downloadableMappings = orderedMappings.filter(m => isDownloadable(m.comp));
+  const nearestModel = chain[chain.length - 1];
+  const candidates: RelatedListingCandidate[] = [
+    ...chain.map((comp, depth) => ({
+      comp,
+      depth,
+      preselected: comp === nearestModel && isDownloadable(comp),
+    })),
+    ...orderedMappings.map(({ comp, depth }) => ({
+      comp,
+      depth,
+      preselected: downloadableMappings.length === 1 && isDownloadable(comp),
+    })),
+  ];
+  return { candidates, mappingAmbiguous: downloadableMappings.length > 1 };
+}
+
 /**
  * Merge every DataModel summary from `list` into `prev`, keyed by
  * `componentKey`. Non-mutating — returns a new Map when anything was

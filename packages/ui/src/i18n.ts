@@ -176,6 +176,9 @@ export interface Translations {
   depPromptConfirm: string;
   depPromptOnlyThis: string;
   depPromptCancel: string;
+  depPromptAmbiguousMapping: string;
+  depPromptDerivedFrom: (name: string) => string;
+  depPromptUnavailable: { 'draft-only': string; 'unreachable-mapping': string; 'no-content': string };
   fnoIngestTitle: string;
   fnoIngestDone: string;
   fnoIngestSummary: (done: number, total: number) => string;
@@ -190,6 +193,9 @@ export interface Translations {
   fnoIngestStatusSkipped: string;
   fnoIngestStatusFailed: string;
   fnoIngestNoId: string;
+  fnoIngestOtherFormatMapping: string;
+  fnoIngestExportSideMapping: string;
+  fnoIngestShowLog: string;
   fnoIngestHint: string;
   fnoIngestClose: string;
   fnoIngestOpenWorkspace: string;
@@ -465,6 +471,8 @@ export interface Translations {
   fnoLoadingFailed: (msg: string) => string;
   fnoDownloadFailed: (name: string, msg: string) => string;
   fnoLoadedCount: (n: number) => string;
+  fnoLoadedWithGaps: (loaded: number, missing: number) => string;
+  fnoLoadedNothing: string;
   fnoIngestAborted: (message: string) => string;
   excelCellGoToStructure: string;
   statusDerivedFromModel: string;
@@ -1206,6 +1214,9 @@ const cs: Translations = {
   depPromptConfirm: 'Načíst vybrané',
   depPromptOnlyThis: 'Jen tuto konfiguraci',
   depPromptCancel: 'Zrušit',
+  depPromptAmbiguousMapping: 'Nelze jednoznačně určit, které z mapování formát používá. Vyberte, které chcete načíst.',
+  depPromptDerivedFrom: (name: string) => `Odvozeno z „${name}“`,
+  depPromptUnavailable: { 'draft-only': 'jen rozpracovaná verze', 'unreachable-mapping': 'F&O nevrací ID', 'no-content': 'nic ke stažení' },
   fnoIngestTitle: 'Stahování konfigurací z F&O',
   fnoIngestDone: 'Stahování dokončeno',
   fnoIngestSummary: (done: number, total: number) => `${done} z ${total} hotovo`,
@@ -1220,6 +1231,9 @@ const cs: Translations = {
   fnoIngestStatusSkipped: 'Přeskočeno',
   fnoIngestStatusFailed: 'Selhalo',
   fnoIngestNoId: 'F&O nevrací ID',
+  fnoIngestOtherFormatMapping: 'F&O vrátilo mapování jiného formátu – nenačteno',
+  fnoIngestExportSideMapping: 'F&O vrátilo exportní mapování – nenačteno',
+  fnoIngestShowLog: 'Podrobnosti',
   fnoIngestHint: 'Datové modely a mapování se doplňují automaticky podle vazeb ve staženém XML.',
   fnoIngestClose: 'Zavřít',
   fnoIngestOpenWorkspace: 'Otevřít pracovní plochu',
@@ -1491,14 +1505,16 @@ const cs: Translations = {
   fnoLoadingFailed: (msg: string) => `Načítání selhalo: ${msg}`,
   fnoDownloadFailed: (name: string, msg: string) => `Stažení „${name}" selhalo: ${msg}`,
   fnoLoadedCount: (n: number) => `${csPlural(n, 'Načtena', 'Načteny', 'Načteno')} ${n} ${csPlural(n, 'konfigurace', 'konfigurace', 'konfigurací')} z F&O.`,
+  fnoLoadedWithGaps: (loaded: number, missing: number) => `${csPlural(loaded, 'Načtena', 'Načteny', 'Načteno')} ${loaded} ${csPlural(loaded, 'konfigurace', 'konfigurace', 'konfigurací')} z F&O, ${missing} ${csPlural(missing, 'konfiguraci', 'konfigurace', 'konfigurací')} se stáhnout nepodařilo.`,
+  fnoLoadedNothing: 'Z F&O se nepodařilo nic načíst.',
   fnoIngestAborted: (message: string) => `Stahování z F&O bylo přerušeno: ${message}`,
   excelCellGoToStructure: 'Kliknutím přejít do struktury',
   statusDerivedFromModel: 'model: ',
   statusDerivedFromModelTitle: (kind, parentName) => `Aktivní konfigurace je ${kind === 'Format' ? 'formát' : 'mapování'} odvozený z modelu „${parentName}“`,
   statusGuidCount: (n) => `GUIDů: ${n}`,
   fnoMappingNotAvailable: (names: string[]) => `ModelMapping nelze stáhnout pro: ${names.join(', ')}. Vazby formátových elementů jsou i přesto dostupné přes FormatMapping.`,
-  fnoModelIdNotExposed: (names: string[]) => `F&O nevrací pro tyto modely a jejich mapování žádné ID: ${names.join(', ')}. Není tedy podle čeho je stáhnout — v seznamu jsou proto označené jako přeskočené. U importních formátů to nejde obejít: model je uvedený až v jejich samostatném mapování, samotný formát na model neodkazuje. Stáhl se tedy jen formát; vazby jeho elementů jsou dostupné přes FormatMapping.`,
-  fnoImportMappingNotFound: (names: string[]) => `Mapování patřící vybranému importnímu formátu se nenašlo (model: ${names.join(', ')}). F&O vrátilo jen mapování jiných formátů, případně exportní mapování téhož modelu — ta jsou načtená, ale k tomuto formátu nepatří (žádné neuvádí náš formát v ERImportFormatDatasource a žádné nemá prázdnou definici modelu).`,
+  fnoModelIdNotExposed: (names: string[]) => `F&O nevrací pro mapování modelu ${names.join(', ')} žádné ID, takže je nelze stáhnout — v podrobnostech jsou označená jako přeskočená. U importních formátů jde o mapování do cíle; mapování formátu na model se stáhlo spolu s formátem.`,
+  fnoImportMappingNotFound: (names: string[]) => `Mapování patřící vybranému importnímu formátu se nenašlo (model: ${names.join(', ')}). F&O vrátilo jen mapování jiných formátů, případně exportní mapování téhož modelu — ta se nenačetla, protože k tomuto formátu nepatří.`,
   fnoMappingNoDataModel: 'ModelMapping se nestahoval — ve staženém formátu nebyl nalezen žádný GUID datového modelu, takže není podle čeho mapování dohledat. Vyberte navíc příslušný datový model (nebo jeho mapování) ve stromu.',
 
   // Property inspector labels
@@ -2253,6 +2269,9 @@ const en: Translations = {
   depPromptConfirm: 'Load selected',
   depPromptOnlyThis: 'Only this configuration',
   depPromptCancel: 'Cancel',
+  depPromptAmbiguousMapping: 'Which of these mappings the format uses cannot be told for sure. Pick the ones to load.',
+  depPromptDerivedFrom: (name: string) => `Derived from "${name}"`,
+  depPromptUnavailable: { 'draft-only': 'draft only', 'unreachable-mapping': 'no id from F&O', 'no-content': 'nothing to download' },
   fnoIngestTitle: 'Downloading configurations from F&O',
   fnoIngestDone: 'Download finished',
   fnoIngestSummary: (done: number, total: number) => `${done} of ${total} done`,
@@ -2267,6 +2286,9 @@ const en: Translations = {
   fnoIngestStatusSkipped: 'Skipped',
   fnoIngestStatusFailed: 'Failed',
   fnoIngestNoId: 'No id from F&O',
+  fnoIngestOtherFormatMapping: 'F&O returned another format\'s mapping – not loaded',
+  fnoIngestExportSideMapping: 'F&O returned the export-side mapping – not loaded',
+  fnoIngestShowLog: 'Details',
   fnoIngestHint: 'Data models and mappings are resolved automatically from references in the downloaded XML.',
   fnoIngestClose: 'Close',
   fnoIngestOpenWorkspace: 'Open workspace',
@@ -2535,14 +2557,16 @@ const en: Translations = {
   fnoLoadingFailed: (msg: string) => `Loading failed: ${msg}`,
   fnoDownloadFailed: (name: string, msg: string) => `Download of "${name}" failed: ${msg}`,
   fnoLoadedCount: (n: number) => `Loaded ${n} configuration${n === 1 ? '' : 's'} from F&O.`,
+  fnoLoadedWithGaps: (loaded: number, missing: number) => `Loaded ${loaded} configuration${loaded === 1 ? '' : 's'} from F&O; ${missing} could not be downloaded.`,
+  fnoLoadedNothing: 'Nothing could be loaded from F&O.',
   fnoIngestAborted: (message: string) => `F&O download was aborted: ${message}`,
   excelCellGoToStructure: 'Click to jump to the structure',
   statusDerivedFromModel: 'model: ',
   statusDerivedFromModelTitle: (kind, parentName) => `Active config is a ${kind === 'Format' ? 'format' : 'mapping'} derived from model "${parentName}"`,
   statusGuidCount: (n) => `GUIDs: ${n}`,
   fnoMappingNotAvailable: (names: string[]) => `ModelMapping could not be downloaded for: ${names.join(', ')}. Format element bindings are still available via FormatMapping.`,
-  fnoModelIdNotExposed: (names: string[]) => `F&O exposes no id for these models and their mappings: ${names.join(', ')}. There is nothing to request them with, so they are listed as skipped. For an import format there is no way around it: the model is named only in its separate mapping — the format itself does not reference the model. Only the format was downloaded; its element bindings are still available via FormatMapping.`,
-  fnoImportMappingNotFound: (names: string[]) => `The mapping that belongs to the selected import format was not found (model: ${names.join(', ')}). F&O returned other formats' mappings, or the export-side mapping of the same model — they are loaded, but none belongs to this format (none names it in ERImportFormatDatasource, and none has the empty model definition of a destination mapping).`,
+  fnoModelIdNotExposed: (names: string[]) => `F&O returns no id for the model mappings of ${names.join(', ')}, so they cannot be downloaded — the details list them as skipped. For an import format these are the destination mappings; the format's own mapping to the model came with the format.`,
+  fnoImportMappingNotFound: (names: string[]) => `The mapping that belongs to the selected import format was not found (model: ${names.join(', ')}). F&O returned only other formats' mappings, or the export-side mapping of the same model — they were not loaded, as none belongs to this format.`,
   fnoMappingNoDataModel: 'No ModelMapping was attempted — the downloaded format carries no data model GUID, so there is nothing to resolve a mapping against. Select the data model (or its mapping) in the tree as well.',
 
   // Property inspector labels

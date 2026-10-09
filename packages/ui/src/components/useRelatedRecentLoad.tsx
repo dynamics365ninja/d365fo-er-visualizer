@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { t } from '../i18n';
 import { findRelatedRecentFiles, useAppStore, type RecentFile } from '../state/store';
 import { DependencyPromptDialog, type DependencyPromptRequest } from './DependencyPromptDialog';
 
@@ -33,25 +34,31 @@ export function useRelatedRecentLoad(onLoaded?: () => void) {
 
   const load = useCallback((entry: RecentFile) => {
     const related = findRelatedRecentFiles(entry, recentFiles, configurations, cachedPaths);
-    const candidates = [
-      ...(related.dataModel ? [related.dataModel] : []),
-      ...related.mappings,
-      ...related.formats,
-    ];
+    const candidates = [...related.dataModels, ...related.mappings, ...related.formats];
     if (candidates.length === 0 || entry.kind === undefined) {
       void loadMany([entry]);
       return;
     }
+    const nameOf = (file: RecentFile) => file.solutionName ?? file.name;
     setPrompt({
       subject: entry,
-      subjectName: entry.solutionName ?? entry.name,
+      subjectName: nameOf(entry),
       subjectKind: entry.kind,
-      candidates: candidates.map(c => ({
-        key: c.path,
-        kind: c.kind ?? 'Format',
-        name: c.solutionName ?? c.name,
-        meta: c.version ? `v${c.version}` : undefined,
-      })),
+      note: related.mappingAmbiguous ? t.depPromptAmbiguousMapping : undefined,
+      candidates: candidates.map(({ file, depth, preselected }) => {
+        const base = depth > 0
+          ? recentFiles.find(r => r.solutionId && r.solutionId === file.baseSolutionId)
+          : undefined;
+        return {
+          key: file.path,
+          kind: file.kind ?? 'Format',
+          name: nameOf(file),
+          meta: file.version ? `v${file.version}` : undefined,
+          depth,
+          preselected,
+          title: base ? t.depPromptDerivedFrom(nameOf(base)) : undefined,
+        };
+      }),
     });
   }, [recentFiles, configurations, cachedPaths, loadMany]);
 

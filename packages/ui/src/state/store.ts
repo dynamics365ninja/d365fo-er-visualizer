@@ -68,7 +68,7 @@ import type { WhereUsedTarget } from '../utils/impact-index';
 
 // The store's helpers live in the modules imported above; everything that used
 // to be exported from here still is, so importers keep using './store'.
-export type { RecentFile, RecentSession, RelatedRecentFiles } from './persistence';
+export type { RecentFile, RecentSession, RelatedRecentFile, RelatedRecentFiles } from './persistence';
 export {
   bundleContentPath,
   configurationModelId,
@@ -223,6 +223,15 @@ export interface AppState {
   fnoIngestStatus: string;
   /** Structured per-configuration progress of the running / last F&O download. */
   fnoIngestProgress: FnoIngestProgress;
+  /**
+   * The log of the last finished download is on screen. A run closes its
+   * dialog by itself; the log comes back only when asked for (the "Details"
+   * of the summary toast), so nothing left over from an earlier run can pop
+   * up again on its own.
+   */
+  fnoIngestLogOpen: boolean;
+  showFnoIngestLog: () => void;
+  hideFnoIngestLog: () => void;
   /** One-shot request to show the landing page on a given source tab. */
   landingRequest: { tab: 'local' | 'remote'; version: number } | null;
   requestLanding: (tab: 'local' | 'remote') => void;
@@ -241,6 +250,7 @@ export interface AppState {
   closeAllConfigurationsWithUndo: () => void;
   beginFnoIngest: (items: Array<Pick<FnoIngestItem, 'key' | 'name' | 'kind' | 'explicit'>>) => void;
   updateFnoIngestItem: (item: Pick<FnoIngestItem, 'key' | 'name' | 'kind'> & Partial<FnoIngestItem>) => void;
+  removeFnoIngestItem: (key: string) => void;
   endFnoIngest: () => void;
   selectNode: (nodeId: string | null, options?: { revealInExplorer?: boolean }) => void;
   openTab: (id: string, label: string, configIndex: number) => void;
@@ -388,6 +398,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   showTechnicalDetails: readStoredTechnicalDetails(),
   fnoIngestStatus: '',
   fnoIngestProgress: { active: false, phase: 'prepare', startedAt: null, finishedAt: null, items: [] },
+  fnoIngestLogOpen: false,
+  showFnoIngestLog: () => {
+    if (get().fnoIngestProgress.items.length > 0) set({ fnoIngestLogOpen: true });
+  },
+  hideFnoIngestLog: () => {
+    if (get().fnoIngestLogOpen) set({ fnoIngestLogOpen: false });
+  },
   landingRequest: null,
   requestLanding: (tab) => set(state => ({ landingRequest: { tab, version: (state.landingRequest?.version ?? 0) + 1 } })),
   themeMode: initialThemeMode,
@@ -631,6 +648,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   beginFnoIngest: (items) => {
     set({
+      fnoIngestLogOpen: false,
       fnoIngestProgress: {
         active: true,
         phase: 'prepare',
@@ -665,6 +683,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
     }
     set({ fnoIngestProgress: { ...progress, items: nextItems } });
+  },
+
+  removeFnoIngestItem: (key) => {
+    const progress = get().fnoIngestProgress;
+    if (!progress.active || !progress.items.some(i => i.key === key)) return;
+    set({ fnoIngestProgress: { ...progress, items: progress.items.filter(i => i.key !== key) } });
   },
 
   endFnoIngest: () => {
@@ -714,6 +738,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       whereUsedScope: 'all',
       activeWhereUsedRefKey: null,
       recentSessions: nextRecentSessions,
+      // The log of a download whose configurations were just closed has
+      // nothing left to explain.
+      fnoIngestLogOpen: false,
     });
     useFnoSession.getState().clearSelection();
     // Labels harvested for this workspace must not leak into the next one,
