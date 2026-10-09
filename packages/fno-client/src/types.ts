@@ -206,6 +206,25 @@ export interface ErConfigSummary {
    * carries just the definition it resolved to.
    */
   siblingDescriptorNames?: string[];
+  /**
+   * For a DataModel row the listing gives no id: the id of a Format listed
+   * directly under it. Downloading that format reveals the model's id — F&O
+   * hands out the parent solution's component ids with every format
+   * (`ConfigurationLabels.ParentSolutionLabels.SolutionComponentsGuids`), and
+   * for a format whose parent is the model that is the `ERDataModel` id.
+   */
+  childFormatGuid?: string;
+}
+
+/** The format→model mapping an import format carries on itself. */
+export interface ErImportFormatMapping {
+  /** `ERModelMapping` id, from the format's own `SolutionComponentsGuids`. */
+  mappingGuid: string;
+  mappingName?: string;
+  /** `ERDataModel` id of the model the mapping fills. */
+  dataModelGuid?: string;
+  /** Name of that data model configuration, as the mapping states it. */
+  dataModelName?: string;
 }
 
 /** Result of downloading a configuration XML. */
@@ -246,6 +265,13 @@ export interface ErConfigDownload {
    * DataModels — they are base/parent configs, not data dependencies.
    */
   referencedBaseOnlyGuids?: Set<string>;
+  /**
+   * An import format's own format→model mapping, when F&O returned it. Its
+   * definition is spliced into `xml` (with `Model=` filled in, which the bare
+   * service payload leaves out), so it shows as the format's embedded mapping
+   * and names the data model for the follow-up download.
+   */
+  importMapping?: ErImportFormatMapping;
 }
 
 /** A successfully acquired token, valid for an envUrl. */

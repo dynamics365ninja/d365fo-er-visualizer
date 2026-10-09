@@ -131,9 +131,12 @@ them freely.
 - **Model mappings are not always downloadable.** When `GetModelMappingByID` returns nothing for a
   data model, the panel says so — format element bindings still resolve through the format's own
   mapping information, but the mapping-level trace stops there.
-- **Import-only formats have no data model to fetch.** For formats that only read files — bank
-  statements, for example — the F&amp;O API exposes no data model, so only the format
-  configuration itself can be downloaded.
+- **An import format brings its own mapping and its data model.** A format that reads files —
+  bank statements, for example — keeps its mapping to the data model inside its own
+  configuration. Downloading the format fetches that mapping too (the format designer shows it
+  under **Mapping**) and the data model it fills. The separately listed mappings that write the
+  model on into F&amp;O tables (*… Mapping to destination*) cannot be downloaded: F&amp;O gives
+  no identifier for them, so they stay greyed out.
 - **An empty solution list is not a sign-in failure.** It means the environment has no ER
   configurations imported yet — see [Troubleshooting](/docs/troubleshooting).
 - **Nothing is written back.** Every call the tool makes is a read.

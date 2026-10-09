@@ -1599,3 +1599,32 @@ describe('F&O bundle solution identity', () => {
     expect(cfg.solutionVersion.solution.baseSolutionId).toBe('{22222222-2222-2222-2222-222222222222}');
   });
 });
+
+describe('F&O import format bundle with its own mapping', () => {
+  // What the F&O connector builds for an import format: the format halves from
+  // GetEffectiveFormatMappingByID plus the format->model mapping fetched by its
+  // component id, with Model= / DataContainerDescriptor= stamped on.
+  const xml =
+    '<ErFnoBundle Name="Statement format" Version="24" SolutionId="59aa8316-9563-400e-aaad-99ddd3e03f4c">' +
+    '<ERTextFormat ID.="{DBE9510B-02ED-4930-9F7B-0E8AF5726C78}" DataImportSupport="1" Name="Statement format"><Root /></ERTextFormat>' +
+    '<ERFormatMapping ID.="{59AA8316-9563-400E-AAAD-99DDD3E03F4C}" Format="{DBE9510B-02ED-4930-9F7B-0E8AF5726C78}" Name="Statement format" />' +
+    '<ERModelMapping Model="{94A18CF9-13A5-40D7-8185-AF474661D4D0}" DataContainerDescriptor="Document" ID.="{A4A06A3C-9FA8-423F-9FA0-47D02EB9005B}" ModelName="Statement model" Name="Statement format mapping">' +
+    '<Datasource><ERModelDefinition><Contents.><ERModelItemDefinition><ValueDefinition><ERModelItemValueDefinition Name="format"><ValueSource>' +
+    '<ERImportFormatDatasource FormatGUID="{DBE9510B-02ED-4930-9F7B-0E8AF5726C78}" />' +
+    '</ValueSource></ERModelItemValueDefinition></ValueDefinition></ERModelItemDefinition></Contents.></ERModelDefinition></Datasource>' +
+    '</ERModelMapping></ErFnoBundle>';
+
+  it('stays a format named after itself, with the mapping embedded and tied to the model', () => {
+    const cfg = parseERConfiguration(xml, 'fno://statement-format');
+    expect(cfg.kind).toBe('Format');
+    if (cfg.content.kind !== 'Format') throw new Error('Expected format content');
+    expect(cfg.solutionVersion.solution.name).toBe('Statement format');
+    expect(cfg.content.direction).toBe('Import');
+    expect(cfg.content.embeddedModelMappingVersions).toHaveLength(1);
+    const mapping = cfg.content.embeddedModelMappingVersions[0].mapping;
+    expect(mapping.name).toBe('Statement format mapping');
+    expect(mapping.modelId).toBe('{94A18CF9-13A5-40D7-8185-AF474661D4D0}');
+    expect(mapping.dataContainerDescriptor).toBe('Document');
+    expect(mapping.datasources[0]).toMatchObject({ type: 'ImportFormat' });
+  });
+});

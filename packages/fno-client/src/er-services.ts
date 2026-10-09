@@ -6,6 +6,7 @@ import type {
   ErConfigSummary,
   ErConfigDownload,
   ErComponentType,
+  ErImportFormatMapping,
 } from './types';
 import { FnoHttpError, FnoSourceUnsupportedError, FnoEmptyContentError } from './types';
 import { buildFnoPath } from './path-key';
@@ -722,7 +723,25 @@ export async function listComponents(
 
   // The X++ implementation is fully recursive so the initial response already
   // contains the complete sub-tree — no additional BFS probing needed.
-  return flattenComponentsWithParent(rootRows, solutionName);
+  return withChildFormatGuids(flattenComponentsWithParent(rootRows, solutionName));
+}
+
+/**
+ * Give every DataModel row that came without an id the id of a format listed
+ * directly under it (see `ErConfigSummary.childFormatGuid`). A format with a
+ * completed version is preferred: F&O answers a draft-only one empty.
+ */
+export function withChildFormatGuids(rows: ErConfigSummary[]): ErConfigSummary[] {
+  return rows.map(row => {
+    if (row.componentType !== 'DataModel' || row.configurationGuid || row.revisionGuid) return row;
+    const children = rows.filter(c =>
+      c.componentType === 'Format' &&
+      c.parentConfigName === row.configurationName &&
+      Boolean(c.configurationGuid || c.revisionGuid));
+    const child = children.find(c => !c.draftOnly) ?? children[0];
+    const guid = child?.configurationGuid ?? child?.revisionGuid;
+    return guid ? { ...row, childFormatGuid: guid } : row;
+  });
 }
 
 /**
@@ -911,6 +930,32 @@ export async function downloadConfigXml(
   component: ErConfigSummary,
   signal?: AbortSignal,
 ): Promise<ErConfigDownload> {
+  // A DataModel row without an id of its own: a format listed directly under
+  // it names the model's id among its parent component ids.
+  if (
+    component.componentType === 'DataModel' &&
+    !component.revisionGuid && !component.configurationGuid && component.childFormatGuid
+  ) {
+    const candidates = await dataModelGuidsViaChildFormat(transport, conn, token, component.childFormatGuid, signal);
+    let lastEmpty: FnoEmptyContentError | null = null;
+    for (const guid of candidates) {
+      try {
+        return await downloadConfigXml(
+          transport, conn, token,
+          { ...component, configurationGuid: guid, childFormatGuid: undefined },
+          signal,
+        );
+      } catch (err) {
+        if (!(err instanceof FnoEmptyContentError)) throw err;
+        lastEmpty = err;
+      }
+    }
+    throw lastEmpty ?? new FnoEmptyContentError(
+      `"${component.configurationName}" (DataModel) has no id in the listing, and the format listed ` +
+        `under it (${component.childFormatGuid}) did not name its parent's components either.`,
+    );
+  }
+
   if (!component.revisionGuid && !component.configurationGuid) {
     // ModelMapping: can still download via descriptor path if parent DataModel GUID is known.
     const canDownloadMapping =
@@ -954,7 +999,14 @@ export async function downloadConfigXml(
     // Non-fatal — fall back to blind attempts.
   }
 
-  const tried: { operation: string; body: Record<string, unknown>; status?: number; body2?: string }[] = [];
+  const tried: {
+    operation: string;
+    body: Record<string, unknown>;
+    status?: number;
+    body2?: string;
+    /** F&O found several mappings for the model and descriptor and would not pick one. */
+    ambiguous?: boolean;
+  }[] = [];
   let raw: unknown = null;
   let operation = '';
   let success = false;
@@ -1002,6 +1054,25 @@ export async function downloadConfigXml(
         // 400/404 → wrong op name or wrong parameter name; try next.
         // Other statuses (401/403/5xx) propagate so auth / server errors
         // aren't swallowed.
+        // A descriptor lookup on a model that several import formats fill
+        // answers HTTP 500 "More than one model mapping exists … Set one of
+        // the configurations as default": each import format carries its own
+        // mapping of that descriptor. That is no answer for this lookup, not
+        // a broken service — the formats' own mappings come with the formats.
+        if (
+          err.status === 500 &&
+          att.operation === 'GetModelMappingByID' &&
+          att.body._mappingGuid === ZERO_GUID
+        ) {
+          tried.push({
+            operation: att.operation,
+            body: att.body,
+            status: err.status,
+            body2: err.body ? truncate(err.body, 200) : undefined,
+            ambiguous: true,
+          });
+          continue;
+        }
         if (err.status === 400 || err.status === 404) {
           lastErr = err;
           tried.push({
@@ -1029,7 +1100,10 @@ export async function downloadConfigXml(
     // simply has no own XML (typical for derived DataModels). Surface
     // as a distinct error so UI code can skip silently instead of
     // showing a red toast.
-    const allEmpty = tried.length > 0 && tried.every(t => t.status === 200);
+    const allEmpty = tried.length > 0 && tried.every(t => t.status === 200 || t.ambiguous);
+    const ambiguousNote = tried.some(t => t.ambiguous)
+      ? ' F&O found more than one model mapping for this model (one per import format) and would not pick one.'
+      : '';
     if (allEmpty) {
       // A draft-only configuration is the common, explainable case: the
       // storage service serves the effective (completed) version, so there is
@@ -1046,7 +1120,7 @@ export async function downloadConfigXml(
       throw new FnoEmptyContentError(
         `"${component.configurationName}" (${component.componentType}) has no own XML content — ` +
           `F&O returned HTTP 200 with an empty body for all ${tried.length} probe(s). ` +
-          `This is expected for pure-inheritance derived configurations; the base model carries the definition. ` +
+          `This is expected for pure-inheritance derived configurations; the base model carries the definition.${ambiguousNote} ` +
           // The ids matter when it is *not* expected: they say whether the
           // listing row ever gave us the id this configuration is stored under.
           `Probed: ${probedIds || '(none)'}.`,
@@ -1067,7 +1141,7 @@ export async function downloadConfigXml(
       throw new FnoEmptyContentError(
         `"${component.configurationName}" (${component.componentType}) has no GUID and all ` +
           `name-based legacy ops failed (${tried.length} attempt(s)). ` +
-          `This is expected when the F&O listing API does not expose GUIDs for this component type.`,
+          `This is expected when the F&O listing API does not expose GUIDs for this component type.${ambiguousNote}`,
       );
     }
     throw new FnoSourceUnsupportedError(
@@ -1093,9 +1167,18 @@ export async function downloadConfigXml(
           transport, conn, token, component, successBody ?? {}, primaryXml, signal,
         )
       : [];
-  const xml = extraDefinitions.length > 0
+  // An import format's own format→model mapping is not part of the format
+  // payload; fetch it and keep it with the format, where F&O stores it.
+  const importMapping =
+    component.componentType === 'Format' &&
+    operation === 'GetEffectiveFormatMappingByID' &&
+    isImportFormatPayload(primaryXml)
+      ? await fetchImportFormatMapping(transport, conn, token, raw, primaryXml, signal)
+      : null;
+  const merged = extraDefinitions.length > 0
     ? mergeMappingDefinitions(primaryXml, extraDefinitions)
     : primaryXml;
+  const xml = importMapping ? appendToBundle(merged, importMapping.xml) : merged;
 
   // For `GetModelMappingByID` the XML payload wraps the inner content in
   // `<ERModelMappingVersion Number="N">` where N is the *descriptor-level*
@@ -1150,7 +1233,184 @@ export async function downloadConfigXml(
     /** GUIDs that came exclusively from Base= (inheritance parents). Skip as follow-up
      *  downloads when the derived DataModel's own Model= GUID is already known. */
     referencedBaseOnlyGuids: referencedBaseOnlyGuids.size > 0 ? referencedBaseOnlyGuids : undefined,
+    importMapping: importMapping?.info,
   };
+}
+
+// ─── Import formats: the mapping a format carries on itself ───
+
+const GUID_IN_TEXT_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/** Bare lowercased GUID out of `guid`, `{guid}` or `{guid},N`; `''` when there is none. */
+function bareGuid(value: string | undefined): string {
+  return (value ?? '').match(GUID_IN_TEXT_RE)?.[0].toLowerCase() ?? '';
+}
+
+/** The first `<element …>` opening tag in `xml`, or `''`. */
+function openingTag(xml: string, element: string): string {
+  return xml.match(new RegExp(`<${element}\\b[^>]*>`))?.[0] ?? '';
+}
+
+function tagAttr(tag: string, attr: string): string | undefined {
+  const escaped = attr.replace(/\./g, '\\.');
+  return tag.match(new RegExp(`\\s${escaped}\\s*=\\s*"([^"]*)"`))?.[1];
+}
+
+/** True when the payload's format grammar reads a file instead of writing one. */
+export function isImportFormatPayload(xml: string): boolean {
+  return tagAttr(openingTag(xml, 'ERTextFormat'), 'DataImportSupport') === '1';
+}
+
+/**
+ * The component ids F&O lists next to a downloaded format, from the
+ * `ConfigurationLabels` part of the `GetEffectiveFormatMappingByID` response.
+ *
+ * `own` are the components of the format's configuration: for an import format
+ * that is its format→model mapping, the format grammar and the format mapping.
+ * `parent` are those of the configuration it sits under — for a format directly
+ * under its data model, the `ERDataModel` id. Neither is in the listing: these
+ * ids are the one way to reach an import format's mapping and model.
+ */
+export function extractSolutionComponentGuids(raw: unknown): { own: string[]; parent: string[] } {
+  const findLabels = (value: unknown, depth: number): Record<string, unknown> | undefined => {
+    if (!value || typeof value !== 'object' || depth > 4) return undefined;
+    const labels = (value as Record<string, unknown>)['ConfigurationLabels'];
+    if (labels && typeof labels === 'object' && !Array.isArray(labels)) return labels as Record<string, unknown>;
+    for (const child of Object.values(value as Record<string, unknown>)) {
+      const hit = findLabels(child, depth + 1);
+      if (hit) return hit;
+    }
+    return undefined;
+  };
+  const guids = (value: unknown): string[] => (Array.isArray(value) ? value : [])
+    .map(g => bareGuid(typeof g === 'string' ? g : undefined))
+    .filter(g => g.length > 0 && g !== ZERO_GUID);
+  const labels = findLabels(raw, 0);
+  const parent = labels?.['ParentSolutionLabels'];
+  return {
+    own: guids(labels?.['SolutionComponentsGuids']),
+    parent: guids(parent && typeof parent === 'object' ? (parent as Record<string, unknown>)['SolutionComponentsGuids'] : undefined),
+  };
+}
+
+/**
+ * Fetch the format→model mapping an import format carries on itself.
+ *
+ * `GetEffectiveFormatMappingByID` returns the format grammar only, and the
+ * listing has no row for this mapping — it lives inside the format's own
+ * configuration. Its id is among the format's `SolutionComponentsGuids`, and
+ * `GetModelMappingByID` answers that id with the mapping *and* the data model
+ * it fills. A candidate only counts when its `ERImportFormatDatasource` names
+ * this very format.
+ *
+ * The bare payload states neither `Model=` nor `DataContainerDescriptor=`; both
+ * are written onto the returned definition, so the format links to its data
+ * model like an exported import format does.
+ */
+async function fetchImportFormatMapping(
+  transport: FnoTransport,
+  conn: FnoConnection,
+  token: string,
+  raw: unknown,
+  formatXml: string,
+  signal?: AbortSignal,
+): Promise<{ xml: string; info: ErImportFormatMapping } | null> {
+  const formatId = bareGuid(tagAttr(openingTag(formatXml, 'ERTextFormat'), 'ID.'));
+  if (!formatId) return null;
+  const formatMappingId = bareGuid(tagAttr(openingTag(formatXml, 'ERFormatMapping'), 'ID.'));
+  const candidates = extractSolutionComponentGuids(raw).own
+    .filter(g => g !== formatId && g !== formatMappingId);
+  for (const guid of candidates) {
+    let response: unknown;
+    try {
+      response = await callErService<unknown>(
+        transport, conn, token,
+        ER_SERVICES.configurationStorage, 'GetModelMappingByID',
+        { _mappingGuid: guid, _dataModelGuid: ZERO_GUID, _dataContainerDescriptorName: '' },
+        signal,
+      );
+    } catch (err) {
+      // Best effort: the format itself downloaded fine, so a probe that fails
+      // only means this id is not the mapping. Sign-in problems and a
+      // cancellation still have to reach the caller.
+      if (isAbort(err, signal)) throw err;
+      if (err instanceof FnoHttpError && (err.status === 401 || err.status === 403)) throw err;
+      continue;
+    }
+    const fields = unwrapServiceValue(response, 'GetModelMappingByID');
+    const field = (key: string): string => {
+      const value = fields && typeof fields === 'object' ? (fields as Record<string, unknown>)[key] : undefined;
+      return typeof value === 'string' ? normalizeXmlString(value) : '';
+    };
+    const mappingXml = field('ModelMapping').replace(/^\s*<\?xml[^?]*\?>\s*/i, '');
+    const mappingTag = openingTag(mappingXml, 'ERModelMapping');
+    if (!mappingTag) continue;
+    const namesThisFormat = [...mappingXml.matchAll(/<ERImportFormatDatasource\b[^>]*>/g)]
+      .some(([tag]) => bareGuid(tagAttr(tag, 'FormatGUID')) === formatId);
+    if (!namesThisFormat) continue;
+
+    const modelTag = openingTag(field('Model'), 'ERDataModel');
+    const dataModelGuid = bareGuid(tagAttr(modelTag, 'ID.')) || undefined;
+    // A plain name, not XML: `field` would read "Document" as base64.
+    const rawDescriptor = fields && typeof fields === 'object'
+      ? (fields as Record<string, unknown>)['DataContainerDescriptor'] : undefined;
+    const descriptor = typeof rawDescriptor === 'string' ? rawDescriptor.trim() : '';
+    const stamp = [
+      dataModelGuid && tagAttr(mappingTag, 'Model') === undefined
+        ? ` Model="{${dataModelGuid.toUpperCase()}}"` : '',
+      descriptor && tagAttr(mappingTag, 'DataContainerDescriptor') === undefined
+        ? ` DataContainerDescriptor="${escapeXmlAttr(descriptor)}"` : '',
+    ].join('');
+    const stampedTag = `<ERModelMapping${stamp}${mappingTag.slice('<ERModelMapping'.length)}`;
+    return {
+      xml: mappingXml.replace(mappingTag, () => stampedTag),
+      info: {
+        mappingGuid: guid,
+        mappingName: tagAttr(mappingTag, 'Name'),
+        dataModelGuid,
+        // The mapping's `ModelName` is the model configuration's name; the
+        // model's own element name can be a shorter internal one.
+        dataModelName: tagAttr(mappingTag, 'ModelName') ?? tagAttr(modelTag, 'Name'),
+      },
+    };
+  }
+  return null;
+}
+
+/** Add `fragment` to a service payload, bundling the two when needed. */
+function appendToBundle(xml: string, fragment: string): string {
+  const trimmed = xml.replace(/^﻿/, '').replace(/^\s*<\?xml[^?]*\?>\s*/i, '');
+  const close = trimmed.lastIndexOf('</ErFnoBundle>');
+  if (/^<\s*ErFnoBundle[\s>]/i.test(trimmed) && close >= 0) {
+    return `${trimmed.slice(0, close)}${fragment}${trimmed.slice(close)}`;
+  }
+  return `<ErFnoBundle>${trimmed}${fragment}</ErFnoBundle>`;
+}
+
+/**
+ * The data model ids behind a DataModel row the listing gives no id, read from
+ * the parent component ids of a format listed directly under it.
+ */
+async function dataModelGuidsViaChildFormat(
+  transport: FnoTransport,
+  conn: FnoConnection,
+  token: string,
+  formatGuid: string,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  try {
+    const raw = await callErService<unknown>(
+      transport, conn, token,
+      ER_SERVICES.configurationStorage, 'GetEffectiveFormatMappingByID',
+      { _formatMappingGuid: formatGuid },
+      signal,
+    );
+    return extractSolutionComponentGuids(raw).parent;
+  } catch (err) {
+    if (isAbort(err, signal)) throw err;
+    if (err instanceof FnoHttpError && (err.status === 400 || err.status === 404)) return [];
+    throw err;
+  }
 }
 
 /**

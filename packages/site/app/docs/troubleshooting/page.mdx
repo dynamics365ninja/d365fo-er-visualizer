@@ -214,8 +214,10 @@ format's own mapping information; the mapping-level trace is what you lose.
 ### "F&amp;O exposes no id for these models and their mappings"
 
 F&amp;O returned no identifier to request the data model and its mappings with, so they are listed
-as skipped and only the format is downloaded. This is typical of import formats, which do not
-reference the model themselves. The format's element bindings are still available.
+as skipped and only the format is downloaded. The format's element bindings are still available.
+An import format is the exception for its own mapping: that mapping and the data model it fills
+come with the format. The mappings that write an import's data into F&amp;O tables
+(*… Mapping to destination*) have no identifier and are skipped.
 
 ### The load pulled in more than I selected
 

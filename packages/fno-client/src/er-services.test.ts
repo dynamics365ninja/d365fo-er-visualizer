@@ -19,6 +19,8 @@ import {
   isSyntheticComponentName,
   relabelDownload,
   pickDisplayVersion,
+  extractSolutionComponentGuids,
+  withChildFormatGuids,
 } from './er-services';
 import { DEFAULT_SEED_MODELS } from './seed-models';
 import { FnoHttpError, FnoSourceUnsupportedError, FnoEmptyContentError } from './types';
@@ -1598,5 +1600,169 @@ describe('listComponents error handling', () => {
       post: () => { throw new FnoHttpError('not found', 404, 'u'); },
     });
     await expect(listComponents(transport, conn, 'tok', 'Invoice')).resolves.toEqual([]);
+  });
+});
+
+describe('import formats: the mapping a format carries on itself', () => {
+  const ZERO = '00000000-0000-0000-0000-000000000000';
+  const FORMAT_ID = 'dbe9510b-02ed-4930-9f7b-0e8af5726c78';
+  const FORMAT_MAPPING_ID = '59aa8316-9563-400e-aaad-99ddd3e03f4c';
+  const MAPPING_ID = 'a4a06a3c-9fa8-423f-9fa0-47d02eb9005b';
+  const MODEL_ID = '94a18cf9-13a5-40d7-8185-af474661d4d0';
+
+  /** `GetEffectiveFormatMappingByID` as F&O answers it for an import format. */
+  const formatResponse = (dataImportSupport = '1') => ({
+    Format: `<ERTextFormat ID.="{${FORMAT_ID.toUpperCase()}}" DataImportSupport="${dataImportSupport}" Name="Statement format"><Root /></ERTextFormat>`,
+    FormatMapping: `<ERFormatMapping ID.="{${FORMAT_MAPPING_ID.toUpperCase()}}" Format="{${FORMAT_ID.toUpperCase()}}" Name="Statement format" />`,
+    ConfigurationLabels: {
+      SolutionComponentsGuids: [MAPPING_ID, FORMAT_ID, FORMAT_MAPPING_ID],
+      ParentSolutionLabels: { SolutionComponentsGuids: [MODEL_ID] },
+    },
+  });
+  /** `GetModelMappingByID` for the format's own mapping: mapping + model, no `Model=`. */
+  const mappingResponse = (formatGuid = FORMAT_ID) => ({
+    Model: `<ERDataModel ID.="{${MODEL_ID.toUpperCase()}}" Name="Statement model"><Contents. /></ERDataModel>`,
+    ModelMapping:
+      `<ERModelMapping ID.="{${MAPPING_ID.toUpperCase()}}" ModelName="Statement model" Name="Statement format mapping">` +
+      '<Datasource><ERModelDefinition><Contents.><ERModelItemDefinition><ValueDefinition><ERModelItemValueDefinition Name="format"><ValueSource>' +
+      `<ERImportFormatDatasource FormatGUID="{${formatGuid}}" />` +
+      '</ValueSource></ERModelItemValueDefinition></ValueDefinition></ERModelItemDefinition></Contents.></ERModelDefinition></Datasource></ERModelMapping>',
+    DataContainerDescriptor: 'Document',
+  });
+  const format: ErConfigSummary = {
+    solutionName: 'Statement model',
+    configurationName: 'Statement format',
+    componentType: 'Format',
+    configurationGuid: FORMAT_MAPPING_ID,
+    hasContent: true,
+  };
+  const destinationMapping: ErConfigSummary = {
+    solutionName: 'Statement model',
+    configurationName: 'Mapping to destination',
+    componentType: 'ModelMapping',
+    hasContent: true,
+    parentDataModelGuid: MODEL_ID,
+    descriptorNameCandidates: ['Document'],
+    descriptorNamesExclusive: true,
+  };
+
+  it('reads the component ids F&O lists with a format', () => {
+    expect(extractSolutionComponentGuids(formatResponse())).toEqual({
+      own: [MAPPING_ID, FORMAT_ID, FORMAT_MAPPING_ID],
+      parent: [MODEL_ID],
+    });
+    expect(extractSolutionComponentGuids({ Format: '<x/>' })).toEqual({ own: [], parent: [] });
+  });
+
+  it('fetches the mapping by its component id and keeps it with the format, naming the model', async () => {
+    const { transport, posts } = makeTransport({
+      post: (url, body) => {
+        if (url.endsWith('/GetEffectiveFormatMappingByID')) return formatResponse();
+        const b = body as Record<string, unknown>;
+        return b._mappingGuid === MAPPING_ID ? mappingResponse() : { Model: '', ModelMapping: '' };
+      },
+    });
+    const result = await downloadConfigXml(transport, conn, 'tok', format);
+
+    // Only the id that is neither the grammar nor the format mapping is probed.
+    const mappingProbes = posts.filter(p => p.url.endsWith('/GetModelMappingByID'));
+    expect(mappingProbes.map(p => (p.body as Record<string, unknown>)._mappingGuid)).toEqual([MAPPING_ID]);
+    expect((mappingProbes[0].body as Record<string, unknown>)._dataModelGuid).toBe(ZERO);
+
+    expect(result.xml).toContain('<ERTextFormat');
+    expect(result.xml).toContain(
+      `<ERModelMapping Model="{${MODEL_ID.toUpperCase()}}" DataContainerDescriptor="Document" ID.=`,
+    );
+    expect(result.importMapping).toEqual({
+      mappingGuid: MAPPING_ID,
+      mappingName: 'Statement format mapping',
+      dataModelGuid: MODEL_ID,
+      dataModelName: 'Statement model',
+    });
+    // The stamped `Model=` is what queues the data model download.
+    expect(result.referencedDataModelGuids).toContain(MODEL_ID);
+  });
+
+  it('ignores a mapping that parses some other format', async () => {
+    const { transport } = makeTransport({
+      post: url => (url.endsWith('/GetEffectiveFormatMappingByID')
+        ? formatResponse()
+        : mappingResponse('11111111-2222-3333-4444-555555555555')),
+    });
+    const result = await downloadConfigXml(transport, conn, 'tok', format);
+    expect(result.importMapping).toBeUndefined();
+    expect(result.xml).not.toContain('<ERModelMapping');
+  });
+
+  it('leaves an export format alone', async () => {
+    const { transport, posts } = makeTransport({ post: () => formatResponse('0') });
+    const result = await downloadConfigXml(transport, conn, 'tok', format);
+    expect(result.importMapping).toBeUndefined();
+    expect(posts.some(p => p.url.endsWith('/GetModelMappingByID'))).toBe(false);
+  });
+
+  it('still returns the format when the mapping probe fails', async () => {
+    const { transport } = makeTransport({
+      post: url => {
+        if (url.endsWith('/GetEffectiveFormatMappingByID')) return formatResponse();
+        throw new FnoHttpError('boom', 500, url);
+      },
+    });
+    const result = await downloadConfigXml(transport, conn, 'tok', format);
+    expect(result.xml).toContain('<ERTextFormat');
+    expect(result.importMapping).toBeUndefined();
+  });
+
+  it('downloads an id-less DataModel row through a format listed under it', async () => {
+    const { transport, posts } = makeTransport({
+      post: (url, body) => {
+        if (url.endsWith('/GetEffectiveFormatMappingByID')) return formatResponse();
+        const b = body as Record<string, unknown>;
+        return b._dataModelGuid === MODEL_ID && b._revisionNumber === 4
+          ? { GetDataModelByIDAndRevisionResult: `<ERDataModel ID.="{${MODEL_ID}}" Name="Statement model" />` }
+          : '';
+      },
+    });
+    const result = await downloadConfigXml(transport, conn, 'tok', {
+      solutionName: 'Statement model',
+      configurationName: 'Statement model',
+      componentType: 'DataModel',
+      hasContent: true,
+      versionNumbers: [5, 4],
+      childFormatGuid: FORMAT_MAPPING_ID,
+    });
+    expect(result.xml).toContain('Name="Statement model"');
+    expect(result.source.configurationGuid).toBe(MODEL_ID);
+    expect((posts[0].body as Record<string, unknown>)._formatMappingGuid).toBe(FORMAT_MAPPING_ID);
+  });
+
+  it('treats "more than one model mapping" on a descriptor lookup as no answer', async () => {
+    const { transport } = makeTransport({
+      post: url => {
+        // Discovery is unavailable here, so the legacy name-based ops are
+        // tried as well; they do not exist on a current F&O build.
+        if (!url.endsWith('/GetModelMappingByID')) throw new FnoHttpError('HTTP 404', 404, url);
+        throw new FnoHttpError('HTTP 500', 500, url,
+          '{"Message":"More than one model mapping exists for the Statement model (Document) data model"}');
+      },
+    });
+    const attempt = downloadConfigXml(transport, conn, 'tok', destinationMapping);
+    await expect(attempt).rejects.toBeInstanceOf(FnoEmptyContentError);
+    await expect(attempt).rejects.toThrow(/more than one model mapping/i);
+  });
+});
+
+describe('withChildFormatGuids', () => {
+  it('gives an id-less DataModel row the id of a completed format directly under it', () => {
+    const rows: ErConfigSummary[] = [
+      { solutionName: 'R', configurationName: 'Derived model', componentType: 'DataModel', hasContent: false },
+      { solutionName: 'R', configurationName: 'Draft', componentType: 'Format', hasContent: true, configurationGuid: 'g-draft', parentConfigName: 'Derived model', draftOnly: true },
+      { solutionName: 'R', configurationName: 'Done', componentType: 'Format', hasContent: true, configurationGuid: 'g-done', parentConfigName: 'Derived model' },
+      { solutionName: 'R', configurationName: 'Elsewhere', componentType: 'Format', hasContent: true, configurationGuid: 'g-x', parentConfigName: 'Other' },
+      { solutionName: 'R', configurationName: 'Lonely model', componentType: 'DataModel', hasContent: false },
+    ];
+    const out = withChildFormatGuids(rows);
+    expect(out[0].childFormatGuid).toBe('g-done');
+    expect(out[4].childFormatGuid).toBeUndefined();
   });
 });
