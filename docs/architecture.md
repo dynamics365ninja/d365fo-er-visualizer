@@ -108,6 +108,7 @@ analysis views share, so they always agree:
 | `utils/format-preview.ts` · `utils/sample-values.ts` | The preview document (XML / text lines with segments linked to elements, notes, bands) and the sample values (type, enum, mask, context aware, consistent per model field) |
 | `utils/field-spec-export.ts` | The specification as CSV |
 | `utils/version-diff.ts` | `diffConfigurations`: what changed between two versions of one configuration — format elements (properties, bindings, moves to another parent, reorders via a longest increasing run), data sources, mapping bindings / validations / definitions, model records and fields, format enums, transformations, label texts — matched by GUID, then by path; the CSV of the change list |
+| `utils/expression-format.ts` | `formatFormula`: a formula on indented lines, one argument per line once it is long — broken only after `(` / `,` and before `)`, so each line tokenizes (and renders through `ClickablePath`) on its own; `diffFormulaLines` lines two formulas up by their longest common run |
 
 Views on top: `designers/FieldSpecView` (Specification tab), `designers/ElementFillCard` (inspector,
 preview), `designers/DocumentPreview`, `designers/VersionCompareView` (comparison tab),

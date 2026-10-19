@@ -152,11 +152,16 @@ by area, is everything that was **added**, **removed** or **changed**:
 | **All** | Label texts that changed |
 
 Items are matched by their GUID where ER gives them one, so a renamed element is reported as
-renamed (*was …*), not as removed and added. In a changed expression the part that differs is
-highlighted on both sides. Filter by kind of change or by text, and **Export CSV** writes the list
-out — one row per changed property — for a change log or a review. The open icon on an item shows
-it in the designer of the loaded version, in the other tab group, so the comparison stays on
-screen.
+renamed (*was …*), not as removed and added. Formulas — bindings, calculated fields, conditions,
+validation messages — are coloured as in the designer and, when they are long, laid out with one
+argument per indented line. The two versions are compared line against line: a changed line shows
+the part that differs on both sides, a line only one version has is marked as added or removed, and
+long runs of unchanged lines fold away (click to show them). Names in the formula of the version in
+the workspace resolve on hover and open in the designer, as everywhere else; the other version's are
+only coloured, since they would resolve against the wrong version. Filter by kind of change or by
+text, and **Export CSV** writes the list out — one row per changed property — for a change log or a
+review. The open icon on an item shows it in the designer of the loaded version, in the other tab
+group, so the comparison stays on screen.
 
 ## What happens to your files
 

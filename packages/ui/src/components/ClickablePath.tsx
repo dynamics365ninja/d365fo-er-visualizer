@@ -14,6 +14,16 @@ interface ClickablePathProps {
   interactive?: boolean;
   /** Active filter query — occurrences are marked inside the rendered text. */
   highlight?: string;
+  /** A character range of `expression` wrapped in a span of `className` — the changed part in a comparison. */
+  mark?: TextMark;
+  /** Where a click on a resolved name goes; the tree node it resolves to by default. */
+  onNavigate?: (treeNodeId: string) => void;
+}
+
+export interface TextMark {
+  from: number;
+  to: number;
+  className: string;
 }
 
 /** Sweeping the pointer across a formula should not flash a card per name. */
@@ -24,17 +34,49 @@ const SHOW_DELAY_MS = 220;
  * Datasource names and model paths are resolved on hover.
  * If a reference resolves, it becomes clickable with a tooltip.
  */
-export function ClickablePath({ expression, configIndex, mode = 'auto', style, interactive = true, highlight }: ClickablePathProps) {
+export function ClickablePath({ expression, configIndex, mode = 'auto', style, interactive = true, highlight, mark, onNavigate }: ClickablePathProps) {
   const segments = useMemo(() => parseExpressionSegments(expression, mode), [expression, mode]);
+  // Where each segment starts in `expression`, for a mark given in its offsets.
+  const offsets = useMemo(() => {
+    if (!mark) return null;
+    let cursor = 0;
+    return segments.map(seg => {
+      const at = expression.indexOf(seg.text, cursor);
+      const start = at >= 0 ? at : cursor;
+      cursor = start + seg.text.length;
+      return start;
+    });
+  }, [segments, expression, mark]);
 
   // Lists render their formulas non-interactive, a row each: those segments
   // are plain text and need none of the hover machinery below.
   return (
     <span style={{ fontFamily: 'var(--er-font-mono)', fontSize: 11, ...style }}>
-      {segments.map((seg, i) => (interactive
-        ? <SmartSegment key={i} segment={seg} configIndex={configIndex} highlight={highlight} />
-        : <span key={i} style={segmentStyle(seg, false, false)}>{highlightSegmentText(seg.text, highlight)}</span>))}
+      {segments.map((seg, i) => {
+        const segMark = mark && offsets ? markWithin(mark, offsets[i], seg.text.length) : undefined;
+        return interactive
+          ? <SmartSegment key={i} segment={seg} configIndex={configIndex} highlight={highlight} mark={segMark} onNavigate={onNavigate} />
+          : <span key={i} style={segmentStyle(seg, false, false)}>{markedSegmentText(seg.text, highlight, segMark)}</span>;
+      })}
     </span>
+  );
+}
+
+/** The part of `mark` that falls into a segment, in the segment's own offsets. */
+function markWithin(mark: TextMark, start: number, length: number): TextMark | undefined {
+  const from = Math.max(mark.from, start);
+  const to = Math.min(mark.to, start + length);
+  return from < to ? { from: from - start, to: to - start, className: mark.className } : undefined;
+}
+
+function markedSegmentText(text: string, query: string | undefined, mark: TextMark | undefined): React.ReactNode {
+  if (!mark) return highlightSegmentText(text, query);
+  return (
+    <>
+      {highlightSegmentText(text.slice(0, mark.from), query)}
+      <span className={mark.className}>{highlightSegmentText(text.slice(mark.from, mark.to), query)}</span>
+      {highlightSegmentText(text.slice(mark.to), query)}
+    </>
   );
 }
 
@@ -71,10 +113,12 @@ function segmentStyle(segment: PathSegment, canResolve: boolean, isResolved: boo
   };
 }
 
-function SmartSegment({ segment, configIndex, highlight }: {
+function SmartSegment({ segment, configIndex, highlight, mark, onNavigate }: {
   segment: PathSegment;
   configIndex: number;
   highlight?: string;
+  mark?: TextMark;
+  onNavigate?: (treeNodeId: string) => void;
 }) {
   const [tooltip, setTooltip] = useState<{ data: PathTooltipData; anchor: DOMRect } | null>(null);
   const [treeNodeId, setTreeNodeId] = useState<string | null>(null);
@@ -133,8 +177,9 @@ function SmartSegment({ segment, configIndex, highlight }: {
     event.stopPropagation();
     if (!treeNodeId) return;
     setTooltip(null);
-    useAppStore.getState().navigateToTreeNode(treeNodeId);
-  }, [treeNodeId]);
+    if (onNavigate) onNavigate(treeNodeId);
+    else useAppStore.getState().navigateToTreeNode(treeNodeId);
+  }, [treeNodeId, onNavigate]);
 
   const isResolved = treeNodeId != null;
 
@@ -147,7 +192,7 @@ function SmartSegment({ segment, configIndex, highlight }: {
         onMouseLeave={canResolve ? handleMouseLeave : undefined}
         onClick={isResolved ? handleClick : undefined}
       >
-        {highlightSegmentText(segment.text, highlight)}
+        {markedSegmentText(segment.text, highlight, mark)}
       </span>
       {tooltip && <PathTooltipCard data={tooltip.data} anchor={tooltip.anchor} />}
     </>

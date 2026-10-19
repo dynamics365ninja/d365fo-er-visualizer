@@ -16,6 +16,8 @@ import { buildLabelPool, labelDisplayText, labelLanguageTag, looksLikeLabelRef }
 import { downloadTextFile, safeFileName } from '../../utils/field-spec-export';
 import { getBestVersion } from '../../utils/model-hierarchy';
 import type { SearchDoc } from '../../utils/search-index';
+import { diffFormulaLines, formatFormula, type FormulaLine, type FormulaRow } from '../../utils/expression-format';
+import { ClickablePath } from '../ClickablePath';
 import {
   buildVersionDiffCsv,
   diffConfigurations,
@@ -35,11 +37,17 @@ const SECTION_PAGE = 150;
 
 const BOOLEAN_KEYS = new Set(['crossCompany', 'isRoot', 'isEnum', 'typeHost', 'stopProcessing']);
 const LABEL_KEYS = new Set(['label', 'description']);
-/** Values that are ER expressions or paths, shown in the code face. */
-function isCodeKey(key: string): boolean {
+/** ER formulas: laid out on lines, coloured, compared line by line. */
+function isFormulaKey(key: string): boolean {
   return key === 'binding' || key.startsWith('binding:') || key === 'expression' || key === 'condition'
-    || key === 'message' || key === 'listToGroup' || key === 'groupedFields' || key === 'aggregations';
+    || key === 'message' || key === 'listToGroup';
 }
+/** Values shown in the code face. */
+function isCodeKey(key: string): boolean {
+  return isFormulaKey(key) || key === 'groupedFields' || key === 'aggregations';
+}
+/** Unchanged lines of a formula kept around a change; longer runs fold. */
+const FORMULA_CONTEXT = 3;
 
 export function propertyLabel(key: string): string {
   if (key.startsWith('@')) return key.slice(1);
@@ -340,12 +348,160 @@ const EntryRow = React.memo(function EntryRow({ entry, section, configIndex, loa
           </button>
         )}
       </div>
-      {entry.properties.map(property => (
+      {entry.properties.map(property => (isFormulaKey(property.key) ? (
+        <div key={property.key} className="vcmp-grid vcmp-prop vcmp-prop--formula">
+          <span className="vcmp-prop__key" title={property.key}>{propertyLabel(property.key)}</span>
+          <FormulaCompare
+            before={property.before}
+            after={property.after}
+            configIndex={configIndex}
+            loadedSide={loadedSide}
+            needle={needle}
+            onNavigate={nodeId => navigateBeside(nodeId, tabId)}
+          />
+        </div>
+      ) : (
         <PropertyRow key={property.key} property={property} change={entry.change} display={display} />
-      ))}
+      )))}
     </div>
   );
 });
+
+type FormulaItem =
+  | { kind: 'row'; row: FormulaRow }
+  | { kind: 'fold'; rows: FormulaRow[] };
+
+/**
+ * Unchanged runs longer than the context around a change fold into one row:
+ * a 60-line formula with one changed argument shows that argument, not a
+ * wall of identical lines.
+ */
+function foldUnchanged(rows: readonly FormulaRow[]): FormulaItem[] {
+  const items: FormulaItem[] = [];
+  let i = 0;
+  while (i < rows.length) {
+    if (rows[i].kind !== 'same') {
+      items.push({ kind: 'row', row: rows[i++] });
+      continue;
+    }
+    let end = i;
+    while (end < rows.length && rows[end].kind === 'same') end++;
+    const run = rows.slice(i, end);
+    const keepHead = i === 0 ? 0 : FORMULA_CONTEXT;
+    const keepTail = end === rows.length ? 0 : FORMULA_CONTEXT;
+    // Folding fewer lines than this saves nothing worth a click.
+    if (run.length - keepHead - keepTail >= 3) {
+      run.slice(0, keepHead).forEach(row => items.push({ kind: 'row', row }));
+      items.push({ kind: 'fold', rows: run.slice(keepHead, run.length - keepTail) });
+      run.slice(run.length - keepTail).forEach(row => items.push({ kind: 'row', row }));
+    } else {
+      run.forEach(row => items.push({ kind: 'row', row }));
+    }
+    i = end;
+  }
+  return items;
+}
+
+/**
+ * Two formulas line against line, coloured as in the designer. The names of
+ * the version loaded in the workspace resolve on hover and open in the
+ * designer next to the comparison; the other version's are only coloured —
+ * they would resolve against the wrong version.
+ */
+function FormulaCompare({ before, after, configIndex, loadedSide, needle, onNavigate }: {
+  before: string | undefined;
+  after: string | undefined;
+  configIndex: number;
+  loadedSide: 'older' | 'newer';
+  needle: string;
+  onNavigate: (treeNodeId: string) => void;
+}) {
+  const [unfolded, setUnfolded] = useState<Set<number>>(() => new Set());
+  const items = useMemo(() => {
+    const rows = diffFormulaLines(
+      before != null ? formatFormula(before) : [],
+      after != null ? formatFormula(after) : [],
+    );
+    return foldUnchanged(rows);
+  }, [before, after]);
+
+  return (
+    <div className="vcmp-formula">
+      {items.flatMap((item, index) => {
+        if (item.kind === 'fold' && !unfolded.has(index)) {
+          return [(
+            <button
+              key={`fold-${index}`}
+              type="button"
+              className="vcmp-formula__fold"
+              onClick={() => setUnfolded(current => new Set(current).add(index))}
+            >
+              {t.compareUnchangedLines(item.rows.length)}
+            </button>
+          )];
+        }
+        const rows = item.kind === 'fold' ? item.rows : [item.row];
+        return rows.map((row, k) => (
+          <React.Fragment key={`${index}-${k}`}>
+            <FormulaCell
+              line={row.before}
+              rowKind={row.kind}
+              side="before"
+              empty={before == null && index === 0 && k === 0}
+              mark={row.change && row.change.before ? { from: row.change.prefix.length, to: row.change.prefix.length + row.change.before.length, className: 'vcmp-mark-del' } : undefined}
+              configIndex={configIndex}
+              interactive={loadedSide === 'older'}
+              needle={needle}
+              onNavigate={onNavigate}
+            />
+            <FormulaCell
+              line={row.after}
+              rowKind={row.kind}
+              side="after"
+              empty={after == null && index === 0 && k === 0}
+              mark={row.change && row.change.after ? { from: row.change.prefix.length, to: row.change.prefix.length + row.change.after.length, className: 'vcmp-mark-ins' } : undefined}
+              configIndex={configIndex}
+              interactive={loadedSide === 'newer'}
+              needle={needle}
+              onNavigate={onNavigate}
+            />
+          </React.Fragment>
+        ));
+      })}
+    </div>
+  );
+}
+
+function FormulaCell({ line, rowKind, side, empty, mark, configIndex, interactive, needle, onNavigate }: {
+  line: FormulaLine | undefined;
+  rowKind: FormulaRow['kind'];
+  side: 'before' | 'after';
+  /** The whole value is missing on this side — the first cell says so. */
+  empty: boolean;
+  mark?: { from: number; to: number; className: string };
+  configIndex: number;
+  interactive: boolean;
+  needle: string;
+  onNavigate: (treeNodeId: string) => void;
+}) {
+  if (!line) {
+    return <span className={`vcmp-fl vcmp-fl--gap${empty ? ' vcmp-fl--none' : ''}`}>{empty ? '—' : null}</span>;
+  }
+  const tone = rowKind === 'same' ? '' : side === 'before' ? ' vcmp-fl--before' : ' vcmp-fl--after';
+  return (
+    <span className={`vcmp-fl${tone}`} style={{ paddingLeft: `calc(6px + ${line.indent * 2}ch)` }}>
+      <ClickablePath
+        expression={line.text}
+        configIndex={configIndex}
+        mode="binding-expr"
+        interactive={interactive}
+        highlight={needle || undefined}
+        mark={mark}
+        onNavigate={onNavigate}
+      />
+    </span>
+  );
+}
 
 function PropertyRow({ property, change, display }: {
   property: PropertyChange;

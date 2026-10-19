@@ -4035,6 +4035,46 @@ button.src-chip:hover { border-color: var(--src-color); }
 .vcmp-prop__value del { background: color-mix(in srgb, var(--vcmp-removed) 24%, transparent); }
 .vcmp-prop__value ins { background: color-mix(in srgb, var(--vcmp-added) 24%, transparent); }
 
+/* A formula: one line per row, the older line facing the newer one. Cells of
+   one row share its height, so a wrapped line keeps both sides aligned. */
+.vcmp-formula {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 10px;
+  min-width: 0;
+}
+.vcmp-fl {
+  min-width: 0;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 17px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.vcmp-fl--before { background: color-mix(in srgb, var(--vcmp-removed-soft) 55%, transparent); }
+.vcmp-fl--after { background: color-mix(in srgb, var(--vcmp-added-soft) 55%, transparent); }
+.vcmp-fl--none { font-family: inherit; color: var(--er-text-subtle); }
+.vcmp-mark-del, .vcmp-mark-ins { border-radius: 2px; }
+.vcmp-mark-del { background: color-mix(in srgb, var(--vcmp-removed) 26%, transparent); }
+.vcmp-mark-ins { background: color-mix(in srgb, var(--vcmp-added) 26%, transparent); }
+.vcmp-formula__fold {
+  grid-column: 1 / -1;
+  margin: 1px 0;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--er-radius-md);
+  background: var(--bg-tertiary);
+  color: var(--er-text-muted);
+  font: inherit;
+  font-size: var(--er-text-2xs);
+  line-height: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+.vcmp-formula__fold:hover { color: var(--er-accent); background: var(--er-hover); }
+
 .vcmp-more {
   align-self: flex-start;
   margin: 6px 12px 8px 34px;
@@ -4055,6 +4095,7 @@ button.src-chip:hover { border-color: var(--src-color); }
   .vcmp-grid--head > :first-child { display: none; }
   .vcmp-grid--head { padding-left: 32px; }
   .vcmp-prop__key { grid-column: 1 / -1; }
+  .vcmp-formula { grid-column: 1 / -1; column-gap: 6px; }
 }
 @container vcmp (max-width: 460px) {
   .vcmp-sides { grid-template-columns: minmax(0, 1fr); }
