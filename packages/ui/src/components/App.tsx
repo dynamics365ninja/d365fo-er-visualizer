@@ -65,6 +65,7 @@ import { ToastHost } from './ToastHost';
 import { FnoIngestOverlay } from './FnoIngestPanel';
 import { ActivityBar } from './ActivityBar';
 import { TouchTitleTooltip } from './TouchTitleTooltip';
+import { VersionComparePicker } from './VersionComparePicker';
 import { useCompactLayout, useStackedLayout } from '../utils/responsive';
 import { matchWorkspaceShortcut } from '../utils/workspace-shortcuts';
 import { isSearchInputFocused, requestSearchFocus } from '../utils/search-focus';
@@ -691,6 +692,7 @@ export function App() {
       </div>
       <ToastHost />
       <FnoIngestOverlay />
+      <VersionComparePicker />
       <TouchTitleTooltip />
     </div>
   );

@@ -29,6 +29,7 @@ import {
   SearchRegular,
   ArrowUploadRegular,
   ArrowDownloadRegular,
+  BranchCompareRegular,
 } from '@fluentui/react-icons';
 import { whereUsedQueryFor, whereUsedTargetFor } from '../utils/where-used-query';
 import { t, useLocale } from '../i18n';
@@ -1245,6 +1246,7 @@ const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded,
   const canCloseConfiguration = depth === 0 && node.configIndex != null && node.type === 'file';
   const whereUsedQuery = whereUsedQueryFor(node);
   const triggerWhereUsed = useAppStore(s => s.triggerWhereUsed);
+  const openVersionComparePicker = useAppStore(s => s.openVersionComparePicker);
   // Double-tap is unreliable on touch (it competes with the platform's own
   // zoom gesture), so on a coarse pointer every node that responds to a
   // double-click gets an explicit menu entry instead.
@@ -1320,6 +1322,14 @@ const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded,
               {whereUsedQuery && (
                 <MenuItem icon={<SearchRegular />} onClick={() => triggerWhereUsed(whereUsedQuery, whereUsedTargetFor(node))}>
                   {t.whereUsedAction}
+                </MenuItem>
+              )}
+              {canCloseConfiguration && (
+                <MenuItem
+                  icon={<BranchCompareRegular />}
+                  onClick={() => openVersionComparePicker(node.configIndex ?? null)}
+                >
+                  {t.compareWithVersionAction}
                 </MenuItem>
               )}
               {canCloseConfiguration && (

@@ -23,9 +23,10 @@ is detected from the content, not from the file name — renaming a file changes
 mapping export that also carries its data model yields both configurations; the model shows up in
 the recent lists as *Part of* the file it came from.
 
-The workspace holds one version of each configuration. Loading a newer version replaces the one
-that is open; loading an older one than is already open is refused with a message saying which
-version is loaded.
+The workspace holds one version of each configuration — formats, mappings and models find each
+other by GUID, so two versions side by side would resolve against each other. Loading a newer
+version replaces the one that is open; loading an older one opens it in a comparison with the open
+version instead (see [Comparing versions](#comparing-versions)).
 
 ## How to load
 
@@ -120,6 +121,47 @@ related configurations?** prompt as in the workspace manager lets you pick them 
 history a filter appears, and **Show all** expands the list. An entry whose content is no longer
 stored in the browser is marked *not stored in the browser* and has to be opened again from disk
 or downloaded again.
+
+## Comparing versions
+
+To see what changed between two versions of a configuration, open one of them and bring the other
+next to it:
+
+- **Load the other version's file** — from disk, a recent configuration or the workspace manager.
+  An older version than the one open is not added to the workspace; it opens in a comparison tab.
+  A newer one replaces the open version as usual, and the comparison with the version it replaced
+  opens right away.
+- **Compare with another version…** — in the configuration's ⋮ menu in the Explorer, or the
+  compare button of its row in the workspace manager. It lists the other versions of that
+  configuration you loaded before (from the browser cache) and offers **Load XML from disk…** for
+  any export of it.
+
+Finance &amp; Operations' ER services hand out only the effective (completed) version of a
+configuration, so an older version comes from an export: **Configurations → Versions → Exchange →
+Export as XML file** in the Electronic reporting workspace.
+
+The comparison tab — titled `Name · v68 ↔ v70` — puts the older version on the left and the newer
+on the right, with a badge saying which of them is the one in the workspace. Below them, grouped
+by area, is everything that was **added**, **removed** or **changed**:
+
+| Configuration | What is compared |
+|---|---|
+| **Format** | Format elements with every property and their bindings (including conditions such as `Enabled`), elements moved to another parent or to another position among their siblings, format data sources, enumerations, transformations, the Excel template |
+| **Model mapping** | Bindings, data sources and validations of each mapping definition, and definitions added or retargeted to another model version |
+| **Data model** | Records and their fields — type, referenced record, label, description |
+| **All** | Label texts that changed |
+
+Items are matched by their GUID where ER gives them one, so a renamed element is reported as
+renamed (*was …*), not as removed and added. Formulas — bindings, calculated fields, conditions,
+validation messages — are coloured as in the designer and, when they are long, laid out with one
+argument per indented line. The two versions are compared line against line: a changed line shows
+the part that differs on both sides, a line only one version has is marked as added or removed, and
+long runs of unchanged lines fold away (click to show them). Names in the formula of the version in
+the workspace resolve on hover and open in the designer, as everywhere else; the other version's are
+only coloured, since they would resolve against the wrong version. Filter by kind of change or by
+text, and **Export CSV** writes the list out — one row per changed property — for a change log or a
+review. The open icon on an item shows it in the designer of the loaded version, in the other tab
+group, so the comparison stays on screen.
 
 ## What happens to your files
 

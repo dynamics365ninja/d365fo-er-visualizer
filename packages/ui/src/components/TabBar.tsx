@@ -8,7 +8,7 @@ import {
   makeStyles,
   mergeClasses,
 } from '@fluentui/react-components';
-import { DismissRegular, DismissSquareMultipleRegular, CompassNorthwestRegular, SplitVerticalRegular } from '@fluentui/react-icons';
+import { BranchCompareRegular, DismissRegular, DismissSquareMultipleRegular, CompassNorthwestRegular, SplitVerticalRegular } from '@fluentui/react-icons';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore, isSplitView, tabsInPane, type DesignerPane } from '../state/store';
 import { t, useLocale } from '../i18n';
@@ -183,6 +183,7 @@ export function TabStrip({ pane }: { pane: DesignerPane }) {
         {tabs.map((tab, index) => {
           const shown = tab.id === shownTabId;
           const isDrillDown = tab.kind === 'drillDown';
+          const isCompare = tab.kind === 'compare';
           const hint = dropHint?.tabId === tab.id ? dropHint : null;
           return (
             <div
@@ -237,6 +238,11 @@ export function TabStrip({ pane }: { pane: DesignerPane }) {
               {isDrillDown && (
                 <span className={styles.icon} aria-hidden>
                   <CompassNorthwestRegular fontSize={13} />
+                </span>
+              )}
+              {isCompare && (
+                <span className={styles.icon} aria-hidden>
+                  <BranchCompareRegular fontSize={13} />
                 </span>
               )}
               <span className={styles.label}>{tab.label}</span>
