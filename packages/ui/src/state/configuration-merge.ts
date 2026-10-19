@@ -39,18 +39,49 @@ function versionSegments(version: string | undefined | null): number[] {
   return (String(version).match(/\d+/g) ?? []).map(part => parseInt(part, 10));
 }
 
+/** What merging one parsed configuration into the loaded set did. */
+export type MergeOutcome =
+  | {
+      status: 'merged';
+      configs: ERConfiguration[];
+      /**
+       * Another version of the same configuration that the candidate took the
+       * place of — the two can be compared.
+       */
+      replaced?: ERConfiguration;
+    }
+  /** A newer version of the same configuration is loaded; `existingIndex` is where. */
+  | { status: 'older'; existingIndex: number }
+  /** A data model extracted from a bundle that is loaded from its own file already. */
+  | { status: 'duplicate' };
+
+/** Same configuration (solution GUID + kind) in a different version. */
+function isOtherVersion(a: ERConfiguration, b: ERConfiguration): boolean {
+  const id = normalizeSolutionId(a.solutionVersion.solution.id);
+  return Boolean(id)
+    && a.content.kind === b.content.kind
+    && id === normalizeSolutionId(b.solutionVersion.solution.id)
+    && compareConfigVersions(a.solutionVersion.publicVersionNumber, b.solutionVersion.publicVersionNumber) !== 0;
+}
+
 /**
  * Insert `config` into `configs`, replacing an entry with the same path or the
- * same solution GUID + kind. Returns `null` when an already-loaded entry is a
- * newer version and the candidate should be dropped.
+ * same solution GUID + kind. The workspace holds one version of each
+ * configuration — formats, mappings and models find each other by GUID — so
+ * a candidate older than the loaded entry stays out (`older`).
  */
 export function mergeConfiguration(
   configs: ERConfiguration[],
   config: ERConfiguration,
-): ERConfiguration[] | null {
+): MergeOutcome {
   const existingIdx = configs.findIndex(c => c.filePath === config.filePath);
   if (existingIdx >= 0) {
-    return configs.map((c, i) => (i === existingIdx ? config : c));
+    const existing = configs[existingIdx];
+    return {
+      status: 'merged',
+      configs: configs.map((c, i) => (i === existingIdx ? config : c)),
+      replaced: isOtherVersion(existing, config) ? existing : undefined,
+    };
   }
 
   // A data model extracted from a mapping bundle and the same model loaded
@@ -64,8 +95,8 @@ export function mergeConfiguration(
         )
       : -1;
     if (twinIdx >= 0) {
-      if (config.filePath.includes('#datamodel:')) return null;
-      return configs.map((c, i) => (i === twinIdx ? config : c));
+      if (config.filePath.includes('#datamodel:')) return { status: 'duplicate' };
+      return { status: 'merged', configs: configs.map((c, i) => (i === twinIdx ? config : c)) };
     }
   }
 
@@ -76,13 +107,18 @@ export function mergeConfiguration(
         && normalizeSolutionId(c.solutionVersion.solution.id) === solutionId,
       )
     : -1;
-  if (byGuidIdx < 0) return [...configs, config];
+  if (byGuidIdx < 0) return { status: 'merged', configs: [...configs, config] };
 
+  const existing = configs[byGuidIdx];
   const versionOrder = compareConfigVersions(
     config.solutionVersion.publicVersionNumber,
-    configs[byGuidIdx].solutionVersion.publicVersionNumber,
+    existing.solutionVersion.publicVersionNumber,
   );
-  if (versionOrder < 0) return null;
+  if (versionOrder < 0) return { status: 'older', existingIndex: byGuidIdx };
   // Replace in-place so configIndex references in openTabs stay valid.
-  return configs.map((c, i) => (i === byGuidIdx ? config : c));
+  return {
+    status: 'merged',
+    configs: configs.map((c, i) => (i === byGuidIdx ? config : c)),
+    replaced: versionOrder > 0 ? existing : undefined,
+  };
 }

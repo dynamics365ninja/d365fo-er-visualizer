@@ -11,8 +11,9 @@ export interface NavigationSnapshot {
 }
 
 /**
- * A tab is either bound to a tree node (default) or a free-form drill-down session
- * carrying an expression + configIndex to analyse.
+ * A tab is bound to a tree node (default), is a free-form drill-down session
+ * carrying an expression + configIndex to analyse, or compares a loaded
+ * configuration with another version of it (`otherKey` in `comparisonVersions`).
  */
 export type OpenTab =
   | { kind?: 'node'; id: string; label: string; configIndex: number }
@@ -23,7 +24,8 @@ export type OpenTab =
       configIndex: number;
       expression: string;
       elementName?: string;
-    };
+    }
+  | { kind: 'compare'; id: string; label: string; configIndex: number; otherKey: string };
 
 /** Which tabs are open, which one is active and which node is selected. */
 export interface TabSelectionState {
@@ -51,14 +53,15 @@ export type NavigationPatch = Partial<TabSelectionState & {
 
 /**
  * Shift a tab or tree-node id past the removal of configuration
- * `removedIndex`. Both id shapes carry the config index: tree nodes and node
- * tabs are `cfg-N…`, drill-down tabs are `drilldown:N:…`. Returns `null` for
+ * `removedIndex`. Every id shape carries the config index: tree nodes and node
+ * tabs are `cfg-N…`, drill-down tabs `drilldown:N:…`, comparisons
+ * `compare:N:…`. Returns `null` for
  * an id that belonged to the removed configuration; ids of any other shape are
  * returned unchanged.
  */
 export function remapIdAfterConfigRemoval(id: string | null, removedIndex: number): string | null {
   if (!id) return null;
-  const match = id.match(/^(cfg-|drilldown:)(\d+)(.*)$/s);
+  const match = id.match(/^(cfg-|drilldown:|compare:)(\d+)(.*)$/s);
   if (!match) return id;
 
   const [, prefix, indexText, suffix] = match;

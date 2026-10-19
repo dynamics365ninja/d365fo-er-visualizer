@@ -1102,6 +1102,48 @@ export interface Translations {
   docPreviewEmpty: string;
   docPreviewTruncated: (lines: number) => string;
   docPreviewRuler: string;
+
+  // ─── Version comparison (designers/VersionCompareView.tsx, VersionComparePicker.tsx) ───
+  compareTabLabel: (name: string, older: string, newer: string) => string;
+  toastOlderVersionCompared: (fileName: string, version: string | number, loadedVersion?: string | number) => string;
+  toastNewerVersionCompared: (fileName: string, version: string | number, previousVersion: string | number) => string;
+  compareNoSuchConfiguration: (fileName: string, name: string) => string;
+  compareWithVersionAction: string;
+  compareOlder: string;
+  compareNewer: string;
+  compareInWorkspace: string;
+  compareInWorkspaceHint: string;
+  compareOnlyHere: string;
+  compareOnlyHereHint: string;
+  compareDifferentConfigurations: string;
+  compareChangeLabels: Record<'added' | 'removed' | 'changed', string>;
+  compareFilterAll: string;
+  compareFilterAria: string;
+  compareFilterPlaceholder: string;
+  compareNoChanges: string;
+  compareNoMatches: string;
+  compareSectionLabels: Record<'structure' | 'datasources' | 'bindings' | 'validations' | 'definitions' | 'records' | 'fields' | 'formatEnums' | 'transformations' | 'labels', string>;
+  compareEmbeddedMapping: string;
+  compareOrphanBindings: string;
+  compareProps: Record<string, string>;
+  compareBindingOf: (property: string) => string;
+  compareStatusLabels: Record<string, string>;
+  compareYes: string;
+  compareRenamedFrom: (path: string) => string;
+  compareShowInDesigner: string;
+  compareExportCsvHint: string;
+  compareCsvHeaders: string[];
+  compareShowMore: (n: number) => string;
+  compareExpandAll: string;
+  compareCollapseAll: string;
+  comparePickerTitle: (name: string) => string;
+  comparePickerIntro: string;
+  comparePickerCached: string;
+  comparePickerNone: string;
+  comparePickerFromFile: string;
+  comparePickerFnoNote: string;
+  comparePickerLoaded: (version: string) => string;
+  comparePickerOpenedAt: (when: string) => string;
 }
 
 // ─── Translation dictionaries ─────────────────────────────────────────────
@@ -2162,6 +2204,105 @@ const cs: Translations = {
   docPreviewEmpty: 'Formát nemá žádné prvky k zobrazení.',
   docPreviewTruncated: (lines: number) => `Náhled končí po ${lines.toLocaleString('cs-CZ')} řádcích. Opakované sekce se vypisují pro každý záznam a vnořené se násobí — pro celý dokument snižte počet záznamů.`,
   docPreviewRuler: 'Pozice znaků',
+
+  // ─── Version comparison ───
+  compareTabLabel: (name: string, older: string, newer: string) => `${name} · v${older} ↔ v${newer}`,
+  toastOlderVersionCompared: (fileName: string, version: string | number, loadedVersion?: string | number) =>
+    `${fileName} (verze ${version}) je starší než otevřená verze${loadedVersion ? ` ${loadedVersion}` : ''} – otevřeno porovnání obou verzí.`,
+  toastNewerVersionCompared: (fileName: string, version: string | number, previousVersion: string | number) =>
+    `${fileName} (verze ${version}) nahradil otevřenou verzi ${previousVersion} – otevřeno porovnání obou verzí.`,
+  compareNoSuchConfiguration: (fileName: string, name: string) => `${fileName} neobsahuje konfiguraci stejného typu jako „${name}“ – není s čím porovnat.`,
+  compareWithVersionAction: 'Porovnat s jinou verzí…',
+  compareOlder: 'Starší verze',
+  compareNewer: 'Novější verze',
+  compareInWorkspace: 've workspace',
+  compareInWorkspaceHint: 'Tato verze je načtená ve workspace – změny na ní otevřete v návrháři.',
+  compareOnlyHere: 'jen pro porovnání',
+  compareOnlyHereHint: 'Tato verze není součástí workspace: formát, mapování a model se párují podle GUID, takže workspace drží jednu verzi od každé konfigurace.',
+  compareDifferentConfigurations: 'Porovnáváte dvě různé konfigurace – prvky se párují podle GUID, kde ho ER má, jinak podle cesty.',
+  compareChangeLabels: { added: 'Přidáno', removed: 'Odebráno', changed: 'Změněno' },
+  compareFilterAll: 'Vše',
+  compareFilterAria: 'Druh změny',
+  compareFilterPlaceholder: 'Filtrovat podle cesty nebo hodnoty',
+  compareNoChanges: 'Verze se neliší v ničem, co nástroj porovnává (struktura, vazby, zdroje dat, model, validace, popisky).',
+  compareNoMatches: 'Filtru neodpovídá žádná změna.',
+  compareSectionLabels: {
+    structure: 'Struktura formátu',
+    datasources: 'Zdroje dat',
+    bindings: 'Vazby',
+    validations: 'Validace',
+    definitions: 'Definice mapování',
+    records: 'Záznamy modelu',
+    fields: 'Pole modelu',
+    formatEnums: 'Výčty formátu',
+    transformations: 'Transformace',
+    labels: 'Texty popisků',
+  },
+  compareEmbeddedMapping: 'mapování formátu na model',
+  compareOrphanBindings: 'bez prvku ve struktuře',
+  compareProps: {
+    name: 'Název',
+    type: 'Typ',
+    binding: 'Vazba',
+    expression: 'Výraz',
+    label: 'Popisek',
+    description: 'Popis',
+    table: 'Tabulka',
+    crossCompany: 'Napříč společnostmi',
+    selectedFields: 'Vybraná pole',
+    enum: 'Výčet',
+    enumSource: 'Zdroj výčtu',
+    class: 'Třída',
+    edt: 'Typ EDT',
+    listToGroup: 'Seskupovaný seznam',
+    groupedFields: 'Seskupit podle',
+    aggregations: 'Agregace',
+    descriptor: 'Kořen modelu',
+    modelRevision: 'Revize modelu',
+    importFormat: 'Importní formát',
+    condition: 'Podmínka',
+    message: 'Zpráva',
+    action: 'Akce',
+    severity: 'Závažnost',
+    stopProcessing: 'Zastavit zpracování',
+    model: 'Datový model',
+    modelVersion: 'Verze modelu',
+    pathsToCache: 'Ukládané cesty',
+    isRoot: 'Kořen',
+    isEnum: 'Výčet modelu',
+    typeDescriptor: 'Odkazovaný záznam',
+    typeHost: 'Hostitel typu',
+    values: 'Hodnoty',
+    parameterType: 'Typ parametru',
+    file: 'Soubor',
+    content: 'Obsah šablony',
+    text: 'Text',
+    parent: 'Nadřazený prvek',
+    position: 'Pořadí',
+    version: 'Verze',
+    date: 'Datum verze',
+    versionDescription: 'Popis verze',
+    status: 'Stav',
+    base: 'Odvozeno od',
+  },
+  compareBindingOf: (property: string) => `Vazba (${property})`,
+  compareStatusLabels: { Draft: 'Koncept', Completed: 'Dokončeno', Shared: 'Sdíleno', Discontinued: 'Ukončeno' },
+  compareYes: 'ano',
+  compareRenamedFrom: (path: string) => `dříve ${path}`,
+  compareShowInDesigner: 'Zobrazit v návrháři',
+  compareExportCsvHint: 'Stáhnout seznam změn jako CSV (otevře se v Excelu)',
+  compareCsvHeaders: ['Oblast', 'Změna', 'Cesta', 'Dřívější cesta', 'Typ', 'Vlastnost', 'Starší verze', 'Novější verze'],
+  compareShowMore: (n: number) => `Zobrazit ${csPlural(n, 'další', 'další', 'dalších')} ${n}`,
+  compareExpandAll: 'Rozbalit vše',
+  compareCollapseAll: 'Sbalit vše',
+  comparePickerTitle: (name: string) => `Porovnat „${name}“ s jinou verzí`,
+  comparePickerIntro: 'Vyberte verzi z dříve načtených konfigurací, nebo načtěte export XML z disku. Druhá verze se do workspace nepřidá – otevře se jen v porovnání.',
+  comparePickerCached: 'Dříve načtené verze',
+  comparePickerNone: 'V mezipaměti není žádná jiná verze této konfigurace.',
+  comparePickerFromFile: 'Načíst XML z disku…',
+  comparePickerFnoNote: 'F&O přes své služby vydává jen platnou (dokončenou) verzi. Starší verzi vyexportujte v F&O (Konfigurace → Verze → Exchange → Export as XML file) a načtěte ji odsud.',
+  comparePickerLoaded: (version: string) => `Ve workspace je verze ${version}.`,
+  comparePickerOpenedAt: (when: string) => `načteno ${when}`,
 };
 
 const en: Translations = {
@@ -3215,6 +3356,105 @@ const en: Translations = {
   docPreviewEmpty: 'The format has no elements to show.',
   docPreviewTruncated: (lines: number) => `The preview stops after ${lines.toLocaleString('en-US')} lines. Repeating sections are written out per record and nested ones multiply — lower the number of records to see the whole document.`,
   docPreviewRuler: 'Character positions',
+
+  // ─── Version comparison ───
+  compareTabLabel: (name: string, older: string, newer: string) => `${name} · v${older} ↔ v${newer}`,
+  toastOlderVersionCompared: (fileName: string, version: string | number, loadedVersion?: string | number) =>
+    `${fileName} (version ${version}) is older than the open version${loadedVersion ? ` ${loadedVersion}` : ''} — opened a comparison of the two.`,
+  toastNewerVersionCompared: (fileName: string, version: string | number, previousVersion: string | number) =>
+    `${fileName} (version ${version}) replaced the open version ${previousVersion} — opened a comparison of the two.`,
+  compareNoSuchConfiguration: (fileName: string, name: string) => `${fileName} holds no configuration of the same kind as "${name}" — nothing to compare with.`,
+  compareWithVersionAction: 'Compare with another version…',
+  compareOlder: 'Older version',
+  compareNewer: 'Newer version',
+  compareInWorkspace: 'in the workspace',
+  compareInWorkspaceHint: 'This version is loaded in the workspace — open its changes in the designer.',
+  compareOnlyHere: 'for comparison only',
+  compareOnlyHereHint: 'This version is not part of the workspace: formats, mappings and models find each other by GUID, so the workspace holds one version of each configuration.',
+  compareDifferentConfigurations: 'These are two different configurations — items are matched by GUID where ER has one, otherwise by path.',
+  compareChangeLabels: { added: 'Added', removed: 'Removed', changed: 'Changed' },
+  compareFilterAll: 'All',
+  compareFilterAria: 'Kind of change',
+  compareFilterPlaceholder: 'Filter by path or value',
+  compareNoChanges: 'The versions do not differ in anything the tool compares (structure, bindings, data sources, model, validations, labels).',
+  compareNoMatches: 'No change matches the filter.',
+  compareSectionLabels: {
+    structure: 'Format structure',
+    datasources: 'Data sources',
+    bindings: 'Bindings',
+    validations: 'Validations',
+    definitions: 'Mapping definitions',
+    records: 'Model records',
+    fields: 'Model fields',
+    formatEnums: 'Format enumerations',
+    transformations: 'Transformations',
+    labels: 'Label texts',
+  },
+  compareEmbeddedMapping: 'format to model mapping',
+  compareOrphanBindings: 'without an element in the structure',
+  compareProps: {
+    name: 'Name',
+    type: 'Type',
+    binding: 'Binding',
+    expression: 'Expression',
+    label: 'Label',
+    description: 'Description',
+    table: 'Table',
+    crossCompany: 'Cross-company',
+    selectedFields: 'Selected fields',
+    enum: 'Enumeration',
+    enumSource: 'Enumeration source',
+    class: 'Class',
+    edt: 'EDT',
+    listToGroup: 'List to group',
+    groupedFields: 'Group by',
+    aggregations: 'Aggregations',
+    descriptor: 'Model root',
+    modelRevision: 'Model revision',
+    importFormat: 'Import format',
+    condition: 'Condition',
+    message: 'Message',
+    action: 'Action',
+    severity: 'Severity',
+    stopProcessing: 'Stop processing',
+    model: 'Data model',
+    modelVersion: 'Model version',
+    pathsToCache: 'Cached paths',
+    isRoot: 'Root',
+    isEnum: 'Model enumeration',
+    typeDescriptor: 'Referenced record',
+    typeHost: 'Type host',
+    values: 'Values',
+    parameterType: 'Parameter type',
+    file: 'File',
+    content: 'Template content',
+    text: 'Text',
+    parent: 'Parent element',
+    position: 'Position',
+    version: 'Version',
+    date: 'Version date',
+    versionDescription: 'Version description',
+    status: 'Status',
+    base: 'Derived from',
+  },
+  compareBindingOf: (property: string) => `Binding (${property})`,
+  compareStatusLabels: { Draft: 'Draft', Completed: 'Completed', Shared: 'Shared', Discontinued: 'Discontinued' },
+  compareYes: 'yes',
+  compareRenamedFrom: (path: string) => `was ${path}`,
+  compareShowInDesigner: 'Show in the designer',
+  compareExportCsvHint: 'Download the change list as CSV (opens in Excel)',
+  compareCsvHeaders: ['Section', 'Change', 'Path', 'Previous path', 'Type', 'Property', 'Older version', 'Newer version'],
+  compareShowMore: (n: number) => `Show ${n} more`,
+  compareExpandAll: 'Expand all',
+  compareCollapseAll: 'Collapse all',
+  comparePickerTitle: (name: string) => `Compare "${name}" with another version`,
+  comparePickerIntro: 'Pick a version among the configurations loaded before, or load an XML export from disk. The other version is not added to the workspace — it only opens in the comparison.',
+  comparePickerCached: 'Versions loaded before',
+  comparePickerNone: 'No other version of this configuration is in the cache.',
+  comparePickerFromFile: 'Load XML from disk…',
+  comparePickerFnoNote: 'F&O serves only the effective (completed) version over its services. Export an older version in F&O (Configurations → Versions → Exchange → Export as XML file) and load it from here.',
+  comparePickerLoaded: (version: string) => `The workspace holds version ${version}.`,
+  comparePickerOpenedAt: (when: string) => `loaded ${when}`,
 };
 
 export let t: Translations = locale === 'cs' ? cs : en;

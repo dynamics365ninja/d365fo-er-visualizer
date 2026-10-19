@@ -65,6 +65,8 @@ import {
 } from './expression-resolution';
 import { findTextOccurrences, findWhereUsed, type WhereUsedEntry } from './where-used';
 import type { WhereUsedTarget } from '../utils/impact-index';
+import { orderVersions } from '../utils/version-diff';
+import { getBestVersion } from '../utils/model-hierarchy';
 
 // The store's helpers live in the modules imported above; everything that used
 // to be exported from here still is, so importers keep using './store'.
@@ -236,12 +238,36 @@ export interface AppState {
   landingRequest: { tab: 'local' | 'remote'; version: number } | null;
   requestLanding: (tab: 'local' | 'remote') => void;
 
+  /**
+   * Other versions of loaded configurations, held only to be compared with
+   * them — keyed by `comparisonKey`. They stay out of `configurations`: the
+   * workspace holds one version of each configuration, since formats,
+   * mappings and models find each other by GUID.
+   */
+  comparisonVersions: Record<string, ERConfiguration>;
+  /** The configuration the "Compare with another version" picker is open for. */
+  versionComparePickerIndex: number | null;
+  openVersionComparePicker: (configIndex: number | null) => void;
+  /** Open a tab comparing configuration `configIndex` with another version of it. */
+  openVersionCompare: (configIndex: number, other: ERConfiguration) => void;
+  /**
+   * Compare configuration `configIndex` with its version in an ER export.
+   * Returns `false` (with a toast) when the export holds no configuration of
+   * that kind. The file joins the recent configurations.
+   */
+  compareWithXml: (configIndex: number, xml: string, filePath: string, options?: { source?: 'file' | 'fno' }) => boolean;
+  /** The same with a version from the cache of recent configurations. */
+  compareWithCachedVersion: (configIndex: number, path: string) => Promise<boolean>;
+
   // Actions
   /**
-   * Parse and merge an ER export. Returns `false` when nothing was loaded
-   * because a newer version of the same configuration is already open.
+   * Parse and merge an ER export. With `olderVersion: 'skip'` (the default)
+   * an export older than the loaded version of the same configuration is not
+   * loaded and `false` comes back. With `'compare'` — a file the user picked —
+   * that older version is kept for comparison and a comparison tab opens, as
+   * it does when the export replaces an older loaded version.
    */
-  loadXmlFile: (xml: string, filePath: string, options?: { source?: 'file' | 'fno' }) => boolean;
+  loadXmlFile: (xml: string, filePath: string, options?: LoadXmlOptions) => boolean;
   removeConfiguration: (index: number) => void;
   /** Close a configuration and offer an undo toast that re-opens it from the cache. */
   closeConfigurationWithUndo: (index: number) => void;
@@ -296,6 +322,12 @@ export interface AppState {
   setWhereUsedScope: (scope: 'all' | 'mapping' | 'format') => void;
   setActiveWhereUsedRefKey: (key: string | null) => void;
   navigateToTreeNode: (nodeId: string) => void;
+  /**
+   * Navigate to a tree node with its designer in the other group than tab
+   * `besideTabId`, which stays on screen — a comparison next to the designer
+   * of the version it compares.
+   */
+  navigateToTreeNodeBeside: (nodeId: string, besideTabId: string) => void;
   navigateBack: () => void;
   navigateForward: () => void;
 
@@ -310,7 +342,10 @@ export interface AppState {
   // Recent files
   removeRecentFile: (path: string) => void;
   clearRecentFiles: () => void;
-  /** Add a single cached file to the workspace without touching what's loaded. */
+  /**
+   * Add a single cached file to the workspace without touching what's loaded.
+   * Another version of a loaded configuration opens a comparison with it.
+   */
   loadCachedFile: (path: string, name?: string) => Promise<boolean>;
 
   // Recent sessions
@@ -360,6 +395,118 @@ export interface AppState {
   consumeWhereUsedTrigger: (version: number) => void;
 }
 
+export interface LoadXmlOptions {
+  source?: 'file' | 'fno';
+  olderVersion?: 'compare' | 'skip';
+}
+
+/** Key of a comparison version: its path, and its version — the same file can come back edited. */
+export function comparisonKey(cfg: ERConfiguration): string {
+  return `${cfg.filePath}|v${getBestVersion(cfg) ?? ''}`;
+}
+
+/** `Name · v68 ↔ v70`, older version first. */
+export function comparisonTabLabel(config: ERConfiguration, other: ERConfiguration): string {
+  const [older, newer] = orderVersions(other, config);
+  const name = config.solutionVersion.solution.name || config.filePath.split(/[\\/]/).pop() || config.filePath;
+  return t.compareTabLabel(name, getBestVersion(older) ?? '?', getBestVersion(newer) ?? '?');
+}
+
+/** The comparison versions some open comparison tab still shows. */
+function comparisonVersionsInUse(
+  openTabs: readonly OpenTab[],
+  versions: Record<string, ERConfiguration>,
+): Record<string, ERConfiguration> {
+  const used = new Set(openTabs.flatMap(tab => (tab.kind === 'compare' ? [tab.otherKey] : [])));
+  const keys = Object.keys(versions);
+  if (keys.every(key => used.has(key))) return versions;
+  return Object.fromEntries(keys.filter(key => used.has(key)).map(key => [key, versions[key]]));
+}
+
+/**
+ * The recent-file entries of one export — one per parsed configuration so
+ * bundled extracts (`…#datamodel:{guid}`) can be re-opened from the workspace
+ * manager after they are closed — in front of the older entries.
+ */
+function withRecentEntries(
+  recentFiles: RecentFile[],
+  parsed: ERConfiguration[],
+  filePath: string,
+  source: 'file' | 'fno',
+): { recentFiles: RecentFile[]; entries: RecentFile[] } {
+  const now = Date.now();
+  const entries: RecentFile[] = parsed.map((cfg, i) => ({
+    ...describeRecentFile(cfg, source),
+    path: cfg.filePath,
+    openedAt: now - i,
+    bundlePath: cfg.filePath === filePath ? undefined : filePath,
+  }));
+  const newPaths = new Set(entries.map(e => e.path));
+  return {
+    recentFiles: [...entries, ...recentFiles.filter(r => !newPaths.has(r.path))].slice(0, MAX_RECENT_FILES),
+    entries,
+  };
+}
+
+/**
+ * Keep the XML of a loaded export in the content cache (best effort). Only a
+ * write that landed makes the file reopenable — a quota or private-mode
+ * failure must not offer a "Reopen" that then finds nothing.
+ */
+function cacheExportContent(
+  get: () => AppState,
+  set: (patch: Partial<AppState>) => void,
+  filePath: string,
+  xml: string,
+  entries: readonly RecentFile[],
+): void {
+  void saveFileContent(filePath, xml).then(saved => {
+    if (saved === false) return;
+    const current = get();
+    // The entry may have been removed from the recent list meanwhile.
+    if (!current.recentFiles.some(r => r.path === filePath)) return;
+    const nextCachedPaths = new Set(current.cachedPaths);
+    nextCachedPaths.add(filePath);
+    // Extracts are reachable through the outer file's cache entry.
+    for (const entry of entries) {
+      if (entry.bundlePath) nextCachedPaths.add(entry.path);
+    }
+    set({ cachedPaths: nextCachedPaths });
+  });
+}
+
+/**
+ * Compare configuration `configIndex` with its version among the parsed
+ * configurations of an export — the same solution, else the first of the
+ * same kind. Pass `file` for an export read from disk: it joins the recent
+ * configurations (and the cache), so it is offered the next time.
+ */
+function compareWithExport(
+  get: () => AppState,
+  set: (patch: Partial<AppState>) => void,
+  configIndex: number,
+  parsed: ERConfiguration[],
+  file?: { filePath: string; xml: string; source: 'file' | 'fno' },
+): boolean {
+  const config = get().configurations[configIndex];
+  if (!config) return false;
+  const solutionId = normalizeSolutionId(config.solutionVersion.solution.id);
+  const sameKind = parsed.filter(c => c.content.kind === config.content.kind);
+  const other = sameKind.find(c => normalizeSolutionId(c.solutionVersion.solution.id) === solutionId) ?? sameKind[0];
+  if (!other) {
+    const name = file?.filePath.split(/[\\/]/).pop() ?? parsed[0]?.solutionVersion.solution.name ?? '';
+    get().pushToast({ kind: 'warning', message: t.compareNoSuchConfiguration(name, config.solutionVersion.solution.name) });
+    return false;
+  }
+  if (file) {
+    const { recentFiles, entries } = withRecentEntries(get().recentFiles, parsed, file.filePath, file.source);
+    set({ recentFiles: saveRecentFiles(recentFiles) });
+    cacheExportContent(get, set, file.filePath, file.xml, entries);
+  }
+  get().openVersionCompare(configIndex, other);
+  return true;
+}
+
 function buildDerivedState(configurations: ERConfiguration[]): { registry: GUIDRegistry; treeNodes: TreeNode[]; warnings: ConfigWarning[] } {
   const registry = new GUIDRegistry();
   for (const config of configurations) {
@@ -405,6 +552,72 @@ export const useAppStore = create<AppState>((set, get) => ({
   hideFnoIngestLog: () => {
     if (get().fnoIngestLogOpen) set({ fnoIngestLogOpen: false });
   },
+  comparisonVersions: {},
+  versionComparePickerIndex: null,
+  openVersionComparePicker: (configIndex) => set({ versionComparePickerIndex: configIndex }),
+
+  openVersionCompare: (configIndex, other) => {
+    const state = get();
+    const config = state.configurations[configIndex];
+    if (!config || config.content.kind !== other.content.kind) return;
+    const otherKey = comparisonKey(other);
+    const id = `compare:${configIndex}:${otherKey}`;
+    const label = comparisonTabLabel(config, other);
+    const exists = state.openTabs.some(tab => tab.id === id);
+    const openTabs: OpenTab[] = exists
+      ? state.openTabs.map(tab => (tab.id === id ? { ...tab, label } : tab))
+      : [...state.openTabs, { kind: 'compare', id, label, configIndex, otherKey }];
+    const navigationHistory = pushNavigationHistory(state, id, state.selectedNodeId);
+    set({
+      comparisonVersions: { ...state.comparisonVersions, [otherKey]: other },
+      openTabs,
+      ...showTabInFocusedPane(state, id),
+      navigationHistory,
+      navigationForward: [],
+      canNavigateBack: navigationHistory.length > 0,
+      canNavigateForward: false,
+    });
+  },
+
+  compareWithXml: (configIndex, xml, filePath, options) => {
+    const config = get().configurations[configIndex];
+    if (!config) return false;
+    const fileName = filePath.split(/[\\/]/).pop() ?? filePath;
+    let parsed: ERConfiguration[];
+    try {
+      parsed = parseERConfigurations(xml, filePath);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      get().pushToast({ kind: 'error', message: t.toastLoadFailedWithMessage(fileName, message) });
+      return false;
+    }
+    const source = options?.source ?? (filePath.startsWith('fno://') ? 'fno' : 'file');
+    return compareWithExport(get, set, configIndex, parsed, { filePath, xml, source });
+  },
+
+  compareWithCachedVersion: async (configIndex, path) => {
+    const entry = get().recentFiles.find(r => r.path === path);
+    const label = entry?.solutionName ?? path.split(/[\\/]/).pop() ?? path;
+    const contentPath = entry?.bundlePath ?? bundleContentPath(path);
+    const content = await readFileContent(contentPath);
+    const config = get().configurations[configIndex];
+    if (!config) return false;
+    if (!content) {
+      set({ cachedPaths: withoutContentKeys(get().cachedPaths, [contentPath]) });
+      get().pushToast({ kind: 'warning', message: t.toastFileNotCached(label) });
+      return false;
+    }
+    let parsed: ERConfiguration[];
+    try {
+      parsed = parseERConfigurations(content, contentPath);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      get().pushToast({ kind: 'error', message: t.toastLoadFailedWithMessage(label, message) });
+      return false;
+    }
+    return compareWithExport(get, set, configIndex, parsed);
+  },
+
   landingRequest: null,
   requestLanding: (tab) => set(state => ({ landingRequest: { tab, version: (state.landingRequest?.version ?? 0) + 1 } })),
   themeMode: initialThemeMode,
@@ -421,7 +634,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   warnings: [],
   whereUsedTrigger: null,
 
-  loadXmlFile: (xml: string, filePath: string, options?: { source?: 'file' | 'fno' }) => {
+  loadXmlFile: (xml: string, filePath: string, options?: LoadXmlOptions) => {
     try {
       // A single export can bundle a data model together with its model
       // mapping; the parser hands both back so the model no longer
@@ -429,22 +642,43 @@ export const useAppStore = create<AppState>((set, get) => ({
       const parsed = parseERConfigurations(xml, filePath);
       const config = parsed.find(c => c.filePath === filePath) ?? parsed[parsed.length - 1];
       const state = get();
+      const compareVersions = options?.olderVersion === 'compare';
+      const fileName = filePath.split(/[\\/]/).pop() ?? filePath;
+      const source = options?.source ?? (filePath.startsWith('fno://') ? 'fno' : 'file');
 
       let newConfigs = state.configurations;
       let primaryAdded = false;
+      // Where the newer loaded version of the primary configuration sits, when the export is older.
+      let newerLoadedIndex: number | null = null;
+      // The older loaded version the primary configuration took the place of.
+      let replacedVersion: ERConfiguration | undefined;
       for (const candidate of parsed) {
-        const merged = mergeConfiguration(newConfigs, candidate);
-        if (merged) newConfigs = merged;
-        if (candidate === config && merged) primaryAdded = true;
+        const outcome = mergeConfiguration(newConfigs, candidate);
+        if (outcome.status === 'merged') {
+          newConfigs = outcome.configs;
+          if (candidate === config) {
+            primaryAdded = true;
+            replacedVersion = outcome.replaced;
+          }
+        } else if (outcome.status === 'older' && candidate === config) {
+          newerLoadedIndex = outcome.existingIndex;
+        }
       }
       // Every candidate was superseded by an already-loaded newer version.
       if (newConfigs === state.configurations && !primaryAdded) {
-        const fileName = filePath.split(/[\\/]/).pop() ?? filePath;
         const loadedVersion = state.configurations.find(c =>
           c.content.kind === config.content.kind
           && normalizeSolutionId(c.solutionVersion.solution.id) === normalizeSolutionId(config.solutionVersion.solution.id),
         )?.solutionVersion.publicVersionNumber;
         const version = config.solutionVersion.publicVersionNumber;
+        if (compareVersions && newerLoadedIndex != null) {
+          // The user brought an older version of an open configuration — to
+          // see what changed since. It stays out of the workspace and opens
+          // in a comparison with the loaded one instead.
+          if (!compareWithExport(get, set, newerLoadedIndex, parsed, { filePath, xml, source })) return false;
+          get().pushToast({ kind: 'info', message: t.toastOlderVersionCompared(fileName, version, loadedVersion) });
+          return true;
+        }
         get().pushToast({
           kind: 'info',
           message: t.toastNewerVersionOpen(fileName, version, loadedVersion),
@@ -454,22 +688,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       const { registry, treeNodes, warnings } = buildDerivedState(newConfigs);
 
-      // Add recent entries — one per parsed configuration so bundled
-      // extracts (`…#datamodel:{guid}`) can be re-opened from the workspace
-      // manager after they are closed.
-      const source = options?.source ?? (filePath.startsWith('fno://') ? 'fno' : 'file');
-      const now = Date.now();
-      const newEntries: RecentFile[] = parsed.map((cfg, i) => ({
-        ...describeRecentFile(cfg, source),
-        path: cfg.filePath,
-        openedAt: now - i,
-        bundlePath: cfg.filePath === filePath ? undefined : filePath,
-      }));
-      const newPaths = new Set(newEntries.map(e => e.path));
-      const candidateRecent: RecentFile[] = [
-        ...newEntries,
-        ...state.recentFiles.filter(r => !newPaths.has(r.path)),
-      ].slice(0, MAX_RECENT_FILES);
+      const { recentFiles: candidateRecent, entries: newEntries } = withRecentEntries(state.recentFiles, parsed, filePath, source);
       const nextRecent = saveRecentFiles(candidateRecent);
 
       // Build/upsert a recent session that reflects the full set of currently
@@ -484,22 +703,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         ),
       );
 
-      // Persist full XML to IndexedDB (best effort). Only a write that landed
-      // makes the file reopenable — a quota or private-mode failure must not
-      // offer a "Reopen" that then finds nothing.
-      void saveFileContent(filePath, xml).then(saved => {
-        if (saved === false) return;
-        const current = get();
-        // The entry may have been removed from the recent list meanwhile.
-        if (!current.recentFiles.some(r => r.path === filePath)) return;
-        const nextCachedPaths = new Set(current.cachedPaths);
-        nextCachedPaths.add(filePath);
-        // Extracts are reachable through the outer file's cache entry.
-        for (const entry of newEntries) {
-          if (entry.bundlePath) nextCachedPaths.add(entry.path);
-        }
-        set({ cachedPaths: nextCachedPaths });
-      });
+      // Persist full XML to IndexedDB (best effort).
+      cacheExportContent(get, set, filePath, xml, newEntries);
 
       // The tree was rebuilt, so a selection held from before points at stale
       // objects (or a node that no longer exists) — re-resolve it by id.
@@ -519,6 +724,27 @@ export const useAppStore = create<AppState>((set, get) => ({
         recentSessions: nextSessions,
         ...openDesignerTabsForFormats(selection, parsed, newConfigs, treeNodes),
       });
+      if (compareVersions) {
+        // A bundle whose other parts loaded while its primary configuration
+        // is older than the loaded one — or a newer version that took the
+        // place of an older loaded one: either way, two versions to compare.
+        if (newerLoadedIndex != null) {
+          compareWithExport(get, set, newerLoadedIndex, [config]);
+        } else if (replacedVersion) {
+          const index = get().configurations.indexOf(config);
+          if (index >= 0) {
+            get().openVersionCompare(index, replacedVersion);
+            get().pushToast({
+              kind: 'info',
+              message: t.toastNewerVersionCompared(
+                fileName,
+                config.solutionVersion.publicVersionNumber,
+                replacedVersion.solutionVersion.publicVersionNumber,
+              ),
+            });
+          }
+        }
+      }
       return true;
     } catch (e) {
       console.error('Failed to parse ER configuration:', e);
@@ -585,6 +811,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       treeNodes,
       warnings,
       openTabs,
+      comparisonVersions: comparisonVersionsInUse(openTabs, state.comparisonVersions),
+      versionComparePickerIndex: null,
       activeTabId: nextActiveTabId,
       splitTabId,
       sideTabIds,
@@ -721,6 +949,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       treeNodes,
       warnings,
       openTabs: [],
+      comparisonVersions: {},
+      versionComparePickerIndex: null,
       activeTabId: null,
       splitTabId: null,
       sideTabIds: [],
@@ -799,6 +1029,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const navigationForward = pruneNavigationStack(state.navigationForward, id);
     set({
       openTabs: newTabs,
+      comparisonVersions: comparisonVersionsInUse(newTabs, state.comparisonVersions),
       activeTabId: newActive,
       splitTabId: nextSplit,
       sideTabIds: state.sideTabIds.filter(tabId => tabId !== id),
@@ -812,6 +1043,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   closeAllTabs: () => {
     set({
       openTabs: [],
+      comparisonVersions: {},
       activeTabId: null,
       splitTabId: null,
       sideTabIds: [],
@@ -916,6 +1148,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       warnings,
       selectedNode,
       openTabs,
+      comparisonVersions: comparisonVersionsInUse(openTabs, state.comparisonVersions),
       activeTabId,
       canNavigateBack: state.navigationHistory.length > 0,
     });
@@ -1080,6 +1313,25 @@ export const useAppStore = create<AppState>((set, get) => ({
       navigationForward: [],
       canNavigateBack: navigationHistory.length > 0,
       canNavigateForward: false,
+    });
+  },
+
+  navigateToTreeNodeBeside: (nodeId: string, besideTabId: string) => {
+    get().navigateToTreeNode(nodeId);
+    const state = get();
+    const node = findNodeById(state.treeNodes, nodeId);
+    const designerTabId = node?.configIndex != null ? state.treeNodes[node.configIndex]?.id : undefined;
+    if (!designerTabId || designerTabId === besideTabId) return;
+    if (!state.openTabs.some(tab => tab.id === besideTabId) || !state.openTabs.some(tab => tab.id === designerTabId)) return;
+    const besidePane = paneOfTab(state, besideTabId);
+    const target: DesignerPane = besidePane === 'main' ? 'side' : 'main';
+    const placed = { ...state, ...placeTabInPane(state, designerTabId, target) };
+    // The tab it opens beside stays on screen in its own group.
+    set({
+      activeTabId: besidePane === 'main' ? besideTabId : designerTabId,
+      splitTabId: besidePane === 'side' ? besideTabId : designerTabId,
+      sideTabIds: placed.sideTabIds,
+      focusedPane: target,
     });
   },
 
@@ -1253,6 +1505,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         treeNodes: [],
         warnings: [],
         openTabs: [],
+        comparisonVersions: {},
+        versionComparePickerIndex: null,
         activeTabId: null,
         splitTabId: null,
         sideTabIds: [],
@@ -1313,7 +1567,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       return false;
     }
     try {
-      return get().loadXmlFile(content, contentPath, { source: entry?.source });
+      return get().loadXmlFile(content, contentPath, { source: entry?.source, olderVersion: 'compare' });
     } catch {
       return false;
     }

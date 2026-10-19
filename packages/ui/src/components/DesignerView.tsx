@@ -83,6 +83,7 @@ import { pruneTabViewState } from '../utils/tab-view-state';
 import { ModelDesigner } from './designers/DataModelDesigner';
 import { MappingDesigner } from './designers/ModelMappingDesigner';
 import { FormatDesigner } from './designers/FormatDesigner';
+import { VersionCompareView } from './designers/VersionCompareView';
 import { FormatElementIcon, getFormatTypeColor } from './designers/format-type';
 
 export type { GroupedDatasourceListHandle } from './designers/DatasourceTree';
@@ -350,6 +351,10 @@ const TabContent = React.memo(function TabContent({ tab, config, configs, tabNod
         />
       </div>
     );
+  }
+
+  if (tab.kind === 'compare') {
+    return <VersionCompareView tabId={tab.id} configIndex={tab.configIndex} otherKey={tab.otherKey} />;
   }
 
   if (tabNode && tabNode.type !== 'file') {

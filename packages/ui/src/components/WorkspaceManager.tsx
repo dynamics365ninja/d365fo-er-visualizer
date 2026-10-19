@@ -12,6 +12,7 @@ import {
 import {
   AddRegular,
   ArrowCounterclockwiseRegular,
+  BranchCompareRegular,
   DataBarVerticalFilled,
   DocumentFilled,
   LinkFilled,
@@ -108,6 +109,7 @@ export function WorkspaceManager({
   const removeRecentFile = useAppStore(s => s.removeRecentFile);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const pushToast = useAppStore(s => s.pushToast);
+  const openVersionComparePicker = useAppStore(s => s.openVersionComparePicker);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const { load: addCached, loadMany, dialog: dependencyPrompt } = useRelatedRecentLoad();
@@ -157,6 +159,18 @@ export function WorkspaceManager({
         <span className="ws-row-actions">
           <Tooltip content={t.explorerOpenInTab} relationship="label">
             <Button appearance="subtle" size="small" icon={<OpenRegular />} onClick={() => openInTab(idx)} />
+          </Tooltip>
+          <Tooltip content={t.compareWithVersionAction} relationship="label">
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<BranchCompareRegular />}
+              onClick={() => {
+                // One dialog at a time: the picker takes the manager's place.
+                onOpenChange(false);
+                openVersionComparePicker(idx);
+              }}
+            />
           </Tooltip>
           <Tooltip content={t.closeConfiguration} relationship="label">
             <Button appearance="subtle" size="small" icon={<DismissRegular />} onClick={() => closeConfigurationWithUndo(idx)} />
