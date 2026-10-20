@@ -7,7 +7,7 @@ import type {
 } from '../types/mapping.js';
 import { asArray, getAttr, getContentsArray } from './xml-document.js';
 import type { XmlNode } from './xml-document.js';
-import { selectReferencedVersionNodes, selectVersionNode } from './envelope.js';
+import { selectAllVersionNodes, selectReferencedVersionNodes, selectVersionNode } from './envelope.js';
 import { parseDatasources } from './datasources.js';
 import { parseExpression } from './expressions.js';
 
@@ -19,23 +19,38 @@ export function parseModelMappingVersion(root: XmlNode): ERModelMappingVersion {
 
   const primaryNode = selectVersionNode(root, 'ERModelMappingVersion')!;
   const primary = parseModelMappingVersionNode(primaryNode);
-  if (nodes.length === 1) return primary;
+  // F&O lists only one component in the solution's `Contents.` even when the
+  // configuration holds several mapping components (one per descriptor).
+  const unreferenced = selectAllVersionNodes(root, 'ERModelMappingVersion').filter(node => !nodes.includes(node));
+  if (nodes.length === 1 && unreferenced.length === 0) return primary;
 
   // A solution may store each DataContainerDescriptor definition as its own
   // ERModelMappingVersion component (sibling version nodes). Merge the
   // definitions of every referenced component so consumers can pick the one
   // matching a format's descriptor instead of seeing only the first node.
   const seen = new Set<string>();
+  const descriptors = new Set<string>();
   const mappings: ERModelMapping[] = [];
+  const add = (mapping: ERModelMapping) => {
+    const key = mapping.id || `${mapping.name}::${mapping.dataContainerDescriptor}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    descriptors.add((mapping.dataContainerDescriptor ?? '').toLowerCase());
+    mappings.push(mapping);
+  };
   for (const node of nodes) {
     const version = node === primaryNode ? primary : parseModelMappingVersionNode(node);
+    for (const mapping of version.mappings ?? [version.mapping]) add(mapping);
+  }
+  // An unreferenced sibling counts only for a descriptor no referenced
+  // component covers; otherwise it is a stale version of the same mapping.
+  for (const node of unreferenced) {
+    const version = parseModelMappingVersionNode(node);
     for (const mapping of version.mappings ?? [version.mapping]) {
-      const key = mapping.id || `${mapping.name}::${mapping.dataContainerDescriptor}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      mappings.push(mapping);
+      if (!descriptors.has((mapping.dataContainerDescriptor ?? '').toLowerCase())) add(mapping);
     }
   }
+  if (mappings.length === 1) return primary;
   return { ...primary, mappings };
 }
 

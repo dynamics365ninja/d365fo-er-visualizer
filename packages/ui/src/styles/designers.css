@@ -4075,6 +4075,13 @@ button.src-chip:hover { border-color: var(--src-color); }
 }
 .vcmp-formula__fold:hover { color: var(--er-accent); background: var(--er-hover); }
 
+/* A list value, item against item. */
+.vcmp-list__item { position: relative; padding-left: 16px; }
+.vcmp-list__mark { position: absolute; left: 4px; font-weight: 600; }
+.vcmp-list__name { font-weight: 600; }
+.vcmp-list__counts { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+.vcmp-prop__key:has(.vcmp-list__counts) { white-space: normal; }
+
 .vcmp-more {
   align-self: flex-start;
   margin: 6px 12px 8px 34px;
