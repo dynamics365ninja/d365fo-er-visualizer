@@ -79,7 +79,17 @@ export interface ERDatasource {
   userParamInfo?: ERUserParamDatasource;
   calculatedField?: ERCalculatedFieldDatasource;
   groupByInfo?: ERGroupByDatasource;
+  joinInfo?: ERJoinDatasource;
   modelInfo?: ERModelDatasource;
+}
+
+/** A join of lists: a record of the join reads each joined list's record by its name. */
+export interface ERJoinDatasource {
+  lists: Array<{
+    name: string;
+    /** Datasource path of the list joined, `$Trans/$Lines`. */
+    path: string;
+  }>;
 }
 
 /**

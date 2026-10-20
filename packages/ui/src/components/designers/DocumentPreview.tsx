@@ -10,7 +10,7 @@ import {
 import type { ERFormatElement } from '@er-visualizer/core';
 import { t } from '../../i18n';
 import { useTabState } from '../../utils/tab-view-state';
-import { elementFill, type FormatLineage } from '../../utils/format-lineage';
+import { elementFill, principalValueSource, type FormatLineage } from '../../utils/format-lineage';
 import { buildPreviewDocument, lineElementKeys, MAX_PREVIEW_LINES, type PreviewLine, type PreviewValueMode } from '../../utils/format-preview';
 import { useVirtualTree } from '../../utils/use-virtual-tree';
 import { normalizeGuid } from '../../utils/format-binding-display';
@@ -276,7 +276,7 @@ const DocumentLine = React.memo(function DocumentLine({ line, lineNumber, kind, 
               <span
                 key={i}
                 className={className}
-                title={fill ? [fill.path.slice(1).join(' / '), fill.binding, fill.sources.find(s => s.role === 'value' && s.kind === 'field')?.name].filter(Boolean).join('\n') : undefined}
+                title={fill ? [fill.path.slice(1).join(' / '), fill.binding, principalValueSource(fill)?.name].filter(Boolean).join('\n') : undefined}
                 onMouseEnter={() => onHover(id)}
                 onClick={() => onPick(id)}
                 onDoubleClick={() => onOpenStructure(id)}

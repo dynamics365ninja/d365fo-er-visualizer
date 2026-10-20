@@ -555,6 +555,55 @@ export function specificationRows(lineage: FormatLineage): ElementFill[] {
   return lineage.elements.filter(entry => !entry.absorbedInto);
 }
 
+/** Letters and digits of a name, lower-cased: `'$TaxBase'` → `taxbase`. */
+const nameKey = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/** Length of the longest run `a` and `b` share. */
+function sharedRun(a: string, b: string): number {
+  let best = 0;
+  const row = new Array<number>(b.length + 1).fill(0);
+  for (let i = 1; i <= a.length; i++) {
+    let diagonal = 0;
+    for (let j = 1; j <= b.length; j++) {
+      const above = row[j];
+      row[j] = a[i - 1] === b[j - 1] ? diagonal + 1 : 0;
+      if (row[j] > best) best = row[j];
+      diagonal = above;
+    }
+  }
+  return best;
+}
+
+/** Fields every table has; they key a record, they are not its value. */
+const SYSTEM_FIELD = /\.(dataareaid|recid|recversion|partition|tableid|modifieddatetime|createddatetime)$/i;
+
+/**
+ * The table field that best stands for the value: of the value fields it
+ * reads, the one named most like the model field it fills (else the field
+ * the binding names, else the element) — a value read through filters,
+ * signs and lookups touches many fields, only one of them is the value.
+ */
+export function principalValueSource(entry: Pick<ElementFill, 'sources' | 'modelLinks' | 'binding' | 'displayName'>): SourceRef | undefined {
+  const all = entry.sources.filter(src => src.role === 'value' && src.kind === 'field');
+  const fields = all.some(src => !SYSTEM_FIELD.test(src.name)) ? all.filter(src => !SYSTEM_FIELD.test(src.name)) : all;
+  if (fields.length <= 1) return fields[0];
+  const link = entry.modelLinks.find(l => l.role === 'value');
+  const bound = entry.binding && isBarePath(entry.binding) ? extractReferences(entry.binding)[0]?.segments : undefined;
+  const targets = [link?.segments[link.segments.length - 1], bound?.[bound.length - 1], entry.displayName]
+    .map(name => nameKey(name ?? ''))
+    .filter(Boolean);
+  const scored = fields.map(src => {
+    const field = nameKey(src.name.slice(src.name.indexOf('.') + 1));
+    return { src, scores: targets.map(target => sharedRun(field, target) / Math.max(field.length, target.length)) };
+  });
+  // The most telling name decides; the next ones only break its ties.
+  const better = (a: number[], b: number[]) => {
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] > b[i];
+    return false;
+  };
+  return scored.reduce((best, next) => (better(next.scores, best.scores) ? next : best)).src;
+}
+
 /** The most telling value sources: table fields, else tables, else enums / classes / parameters. */
 export function primaryValueSources(entry: Pick<ElementFill, 'sources'>): SourceRef[] {
   const value = entry.sources.filter(src => src.role === 'value');

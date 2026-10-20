@@ -38,6 +38,28 @@ describe('sampleValue', () => {
     expect(sampleValue({ ...base, dataType: 'Real', names: ['LineAmount'], constraints: { format: '0.00' } })).toMatch(/^\d+\.\d{2}$/);
   });
 
+  it('takes the shape of the formula that computes the value', () => {
+    const formula = (f: string, seed = 'x') => sampleValue({ ...base, names: ['Code'], formula: f, seed });
+    expect(['B', 'O', 'N']).toContain(formula('CASE(Parameters.Type, Types.Regular, "B", Types.Corrective, "O", Types.Supplementary, "N", "")'));
+    expect(['A', 'N']).toContain(formula('IF(model.IsBadDebt, "A", "N")'));
+    expect(formula('DATEFORMAT(model.ToDate, "yyyy")')).toBe('2026');
+    expect(formula('IF(model.Monthly, DATEFORMAT(model.ToDate, "MM"), "")')).toMatch(/^\d{2}$/);
+    expect(formula('SUMIF("Base", "Lines", "Values") + SUMIF("Base", "Other", "Values")')).toMatch(/^\d+\.\d{2}$/);
+    // A formula that only passes data on leaves it to the names.
+    expect(formula('model.Header.Code')).toMatch(/^(A01|STD|VAT21)$/);
+  });
+
+  it('makes up text of its own rather than repeating the field name', () => {
+    const values = ['a', 'b', 'c', 'd'].map(seed => sampleValue({ ...base, names: ['Remark'], seed }));
+    expect(values.some(value => /remark/i.test(value))).toBe(false);
+    expect(new Set(values).size).toBeGreaterThan(1);
+    expect(sampleValue({ ...base, names: ['Remark'], constraints: { maxLength: 4 } })).toMatch(/^[A-Z]{4}$/);
+  });
+
+  it('writes amounts with two decimals', () => {
+    expect(sampleValue({ ...base, dataType: 'Real', names: ['TaxBaseAmountCur'], modelType: 5 })).toMatch(/^\d+\.\d{2}$/);
+  });
+
   it('varies with the record number', () => {
     const a = sampleValue({ ...base, dataType: 'Real', names: ['LineNum'], iteration: 0 });
     const b = sampleValue({ ...base, dataType: 'Real', names: ['LineNum'], iteration: 1 });

@@ -354,6 +354,14 @@ function parseDatasourceItem(node: XmlNode): ERDatasource {
     ds.type = 'Container';
   } else if (valueSource['ERJoinDataSourceHandler']) {
     ds.type = 'Join';
+  } else if (valueSource['ERListJoinDatasource']) {
+    const j = valueSource['ERListJoinDatasource'];
+    ds.type = 'Join';
+    ds.joinInfo = {
+      lists: getContentsArray(j?.['Items']?.['ERJoinedLists'], 'ERJoinedList')
+        .map((list: XmlNode) => ({ name: getAttr(list, 'Name') ?? '', path: getAttr(list, 'Path') ?? '' }))
+        .filter(list => list.name && list.path),
+    };
   } else if (valueSource['ERFilteredDataSourceHandler']) {
     // Filtered list — treat as container with a filter expression
     const f = valueSource['ERFilteredDataSourceHandler'];

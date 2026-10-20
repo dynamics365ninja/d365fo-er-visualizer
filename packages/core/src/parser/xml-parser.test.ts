@@ -1143,6 +1143,53 @@ describe('parseERConfiguration', () => {
     ]);
   });
 
+  it('parses the lists an ERListJoinDatasource joins', () => {
+    const xml = buildSolutionEnvelope(`
+      <ERModelMappingVersion ID.="{MAP},1" DateTime="2026-04-16T12:00:00" Description="Fixture" Number="1">
+        <Mapping>
+          <ERModelMapping ID.="{MAP}" Name="Mapping" DataContainerDescriptor="Root" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1">
+            <Datasource>
+              <ERModelDefinition>
+                <Contents.>
+                  <ERModelItemDefinition>
+                    <ValueDefinition>
+                      <ERModelItemValueDefinition Name="$TaxTransDetailsJoin">
+                        <ValueSource>
+                          <ERListJoinDatasource ExecutionTarget="1">
+                            <Items>
+                              <ERJoinedLists>
+                                <Contents.>
+                                  <ERJoinedList Name="$TaxTransDetails" Path="$TaxTransDetailsFilter" />
+                                  <ERJoinedList Name="$RegNumView" Path="$TaxTransDetailsFilter/$RegNumView" Type="1" />
+                                </Contents.>
+                              </ERJoinedLists>
+                            </Items>
+                          </ERListJoinDatasource>
+                        </ValueSource>
+                      </ERModelItemValueDefinition>
+                    </ValueDefinition>
+                  </ERModelItemDefinition>
+                </Contents.>
+              </ERModelDefinition>
+            </Datasource>
+          </ERModelMapping>
+        </Mapping>
+      </ERModelMappingVersion>
+    `, { contentRefId: '{MAP}' });
+
+    const config = parseERConfiguration(xml, 'list-join.xml');
+    if (config.content.kind !== 'ModelMapping') {
+      throw new Error('Expected model mapping content');
+    }
+
+    const datasource = config.content.version.mapping.datasources[0];
+    expect(datasource?.type).toBe('Join');
+    expect(datasource?.joinInfo?.lists).toEqual([
+      { name: '$TaxTransDetails', path: '$TaxTransDetailsFilter' },
+      { name: '$RegNumView', path: '$TaxTransDetailsFilter/$RegNumView' },
+    ]);
+  });
+
   it('maps all inline group by SelectionField values to aggregation labels', () => {
     const xml = buildSolutionEnvelope(`
       <ERModelMappingVersion ID.="{MAP},1" DateTime="2026-04-16T12:00:00" Description="Fixture" Number="1">

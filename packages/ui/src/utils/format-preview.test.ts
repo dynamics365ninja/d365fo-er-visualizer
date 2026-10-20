@@ -74,6 +74,47 @@ describe('buildPreviewDocument — sample consistency', () => {
   });
 });
 
+describe('buildPreviewDocument — a list read by its path', () => {
+  // `<Line ItemId="…" Amount="…"/>` repeating over `$Lines`: the attributes
+  // read the list by its path rather than by `@`, as group-by lists are read.
+  const leaf = (id: string): ERFormatElement => ({ id: `{${id}-v}`, name: 'String', elementType: 'String', attributes: {}, children: [] });
+  const attribute = (id: string, name: string): ERFormatElement => ({ id: `{${id}}`, name, elementType: 'XMLAttribute', attributes: {}, children: [leaf(id)] });
+  const root: ERFormatElement = { id: '{file}', name: 'Lines', elementType: 'File', attributes: {}, children: [
+    { id: '{line}', name: 'Line', elementType: 'XMLElement', attributes: {}, children: [attribute('item', 'ItemId'), attribute('note', 'Remark')] },
+  ] };
+  const invoice = configs[2].content as ERFormatContent;
+  const format = {
+    ...configs[2],
+    content: {
+      ...invoice,
+      formatVersion: { ...invoice.formatVersion, format: { ...invoice.formatVersion.format, rootElement: root } },
+      formatMappingVersion: { ...invoice.formatMappingVersion, formatMapping: {
+        ...invoice.formatMappingVersion.formatMapping,
+        bindings: [
+          { componentId: '{line}', expressionAsString: 'model.InvoiceBase.Lines' },
+          { componentId: '{item-v}', expressionAsString: 'model.InvoiceBase.Lines.ItemId' },
+          { componentId: '{note-v}', expressionAsString: 'model.InvoiceBase.Lines.Remark' },
+        ],
+      } },
+    },
+  };
+  const lineage = buildFormatLineage([...configs.slice(0, 2), format, ...configs.slice(3)], 2)!;
+  const lines = text(buildPreviewDocument(lineage, root, 'xml', { mode: 'sample', iterations: 3, hideUnbound: false }, words));
+
+  it('writes the element bound to the records without a value of its own', () => {
+    expect(lines.filter(l => l.includes('<Line '))).toHaveLength(3);
+    expect(lines.every(l => !l.includes('</Line>'))).toBe(true);
+  });
+
+  it('gives each record values of its own', () => {
+    const items = lines.map(l => /ItemId="([^"]*)"/.exec(l)?.[1]).filter(Boolean);
+    const remarks = lines.map(l => /Remark="([^"]*)"/.exec(l)?.[1]).filter(Boolean);
+    expect(new Set(items).size).toBeGreaterThan(1);
+    expect(new Set(remarks).size).toBeGreaterThan(1);
+    expect(remarks.some(remark => /remark/i.test(remark!))).toBe(false);
+  });
+});
+
 describe('lineElementKeys', () => {
   it('names the elements of a line\'s values and of the sections it sits in, normalized', () => {
     // What lets a hover or a selection re-render only the lines that show the
