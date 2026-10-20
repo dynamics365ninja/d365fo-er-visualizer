@@ -21,8 +21,11 @@ import { ClickablePath } from '../ClickablePath';
 import {
   buildVersionDiffCsv,
   diffConfigurations,
+  diffListItems,
   inlineChange,
+  LIST_KEYS,
   type ChangeKind,
+  type ListRow,
   type DiffEntry,
   type DiffSection,
   type PropertyChange,
@@ -44,7 +47,7 @@ function isFormulaKey(key: string): boolean {
 }
 /** Values shown in the code face. */
 function isCodeKey(key: string): boolean {
-  return isFormulaKey(key) || key === 'groupedFields' || key === 'aggregations';
+  return isFormulaKey(key) || LIST_KEYS.has(key);
 }
 /** Unchanged lines of a formula kept around a change; longer runs fold. */
 const FORMULA_CONTEXT = 3;
@@ -360,6 +363,8 @@ const EntryRow = React.memo(function EntryRow({ entry, section, configIndex, loa
             onNavigate={nodeId => navigateBeside(nodeId, tabId)}
           />
         </div>
+      ) : LIST_KEYS.has(property.key) ? (
+        <ListCompare key={property.key} property={property} needle={needle} />
       ) : (
         <PropertyRow key={property.key} property={property} change={entry.change} display={display} />
       )))}
@@ -367,17 +372,17 @@ const EntryRow = React.memo(function EntryRow({ entry, section, configIndex, loa
   );
 });
 
-type FormulaItem =
-  | { kind: 'row'; row: FormulaRow }
-  | { kind: 'fold'; rows: FormulaRow[] };
+type FoldItem<R> =
+  | { kind: 'row'; row: R }
+  | { kind: 'fold'; rows: R[] };
 
 /**
  * Unchanged runs longer than the context around a change fold into one row:
  * a 60-line formula with one changed argument shows that argument, not a
  * wall of identical lines.
  */
-function foldUnchanged(rows: readonly FormulaRow[]): FormulaItem[] {
-  const items: FormulaItem[] = [];
+function foldUnchanged<R extends { kind: string }>(rows: readonly R[], context = FORMULA_CONTEXT): Array<FoldItem<R>> {
+  const items: Array<FoldItem<R>> = [];
   let i = 0;
   while (i < rows.length) {
     if (rows[i].kind !== 'same') {
@@ -387,8 +392,8 @@ function foldUnchanged(rows: readonly FormulaRow[]): FormulaItem[] {
     let end = i;
     while (end < rows.length && rows[end].kind === 'same') end++;
     const run = rows.slice(i, end);
-    const keepHead = i === 0 ? 0 : FORMULA_CONTEXT;
-    const keepTail = end === rows.length ? 0 : FORMULA_CONTEXT;
+    const keepHead = i === 0 ? 0 : context;
+    const keepTail = end === rows.length ? 0 : context;
     // Folding fewer lines than this saves nothing worth a click.
     if (run.length - keepHead - keepTail >= 3) {
       run.slice(0, keepHead).forEach(row => items.push({ kind: 'row', row }));
@@ -501,6 +506,112 @@ function FormulaCell({ line, rowKind, side, empty, mark, configIndex, interactiv
       />
     </span>
   );
+}
+
+/** Unchanged list items kept around a change; longer runs fold. */
+const LIST_CONTEXT = 1;
+const LIST_MARK: Record<ListRow['kind'], string> = { same: '', changed: '~', added: '+', removed: '−' };
+
+/**
+ * A list value (group-by aggregations and fields, selected table fields,
+ * enum values, cached paths) item against item: each on its own line, an
+ * item that kept its name facing its newer self with the differing part
+ * marked, unchanged runs folded.
+ */
+function ListCompare({ property, needle }: { property: PropertyChange; needle: string }) {
+  const [unfolded, setUnfolded] = useState<Set<number>>(() => new Set());
+  const { items, counts } = useMemo(() => {
+    const rows = diffListItems(property.before, property.after);
+    const tally = { changed: 0, added: 0, removed: 0 };
+    for (const row of rows) if (row.kind !== 'same') tally[row.kind] += 1;
+    return { items: foldUnchanged(rows, LIST_CONTEXT), counts: tally };
+  }, [property.before, property.after]);
+
+  return (
+    <div className="vcmp-grid vcmp-prop vcmp-prop--formula">
+      <span className="vcmp-prop__key" title={property.key}>
+        {propertyLabel(property.key)}
+        <span className="vcmp-list__counts">
+          {(['changed', 'added', 'removed'] as const).map(change => counts[change] > 0 && (
+            <span key={change} className={`vcmp-count vcmp-count--${change}`} title={t.compareChangeLabels[change]}>
+              {CHANGE_MARK[change]}{counts[change]}
+            </span>
+          ))}
+        </span>
+      </span>
+      <div className="vcmp-formula vcmp-list">
+        {items.flatMap((item, index) => {
+          if (item.kind === 'fold' && !unfolded.has(index)) {
+            return [(
+              <button
+                key={`fold-${index}`}
+                type="button"
+                className="vcmp-formula__fold"
+                onClick={() => setUnfolded(current => new Set(current).add(index))}
+              >
+                {t.compareUnchangedItems(item.rows.length)}
+              </button>
+            )];
+          }
+          const rows = item.kind === 'fold' ? item.rows : [item.row];
+          return rows.map((row, k) => {
+            const split = row.kind === 'changed' && row.before != null && row.after != null ? inlineChange(row.before, row.after) : null;
+            const first = index === 0 && k === 0;
+            return (
+              <React.Fragment key={`${index}-${k}`}>
+                <ListCell row={row} side="before" split={split} needle={needle} empty={first && property.before == null} />
+                <ListCell row={row} side="after" split={split} needle={needle} empty={first && property.after == null} />
+              </React.Fragment>
+            );
+          });
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ListCell({ row, side, split, needle, empty }: {
+  row: ListRow;
+  side: 'before' | 'after';
+  split: ReturnType<typeof inlineChange> | null;
+  needle: string;
+  /** The whole list is missing on this side — the first cell says so. */
+  empty: boolean;
+}) {
+  const text = side === 'before' ? row.before : row.after;
+  if (text == null) return <span className={`vcmp-fl vcmp-fl--gap${empty ? ' vcmp-fl--none' : ''}`}>{empty ? '—' : null}</span>;
+  const tone = row.kind === 'same' ? '' : side === 'before' ? ' vcmp-fl--before' : ' vcmp-fl--after';
+  const mark = split
+    ? { from: split.prefix.length, to: split.prefix.length + (side === 'before' ? split.before : split.after).length }
+    : undefined;
+  const nameEnd = text.indexOf(' = ');
+  return (
+    <span className={`vcmp-fl vcmp-list__item${tone}`}>
+      {row.kind !== 'same' && <span className={`vcmp-list__mark vcmp-mark--${row.kind}`} aria-hidden>{LIST_MARK[row.kind]}</span>}
+      {segmentText(text, nameEnd > 0 ? nameEnd : -1, mark, side === 'before' ? 'vcmp-mark-del' : 'vcmp-mark-ins', needle)}
+    </span>
+  );
+}
+
+/** The item's name in bold, the differing part marked. */
+function segmentText(text: string, nameEnd: number, mark: { from: number; to: number } | undefined, markClass: string, needle: string): React.ReactNode[] {
+  const cuts = new Set([0, text.length]);
+  if (nameEnd > 0) cuts.add(nameEnd);
+  if (mark && mark.to > mark.from) { cuts.add(mark.from); cuts.add(mark.to); }
+  const points = [...cuts].sort((a, b) => a - b);
+  const out: React.ReactNode[] = [];
+  for (let p = 0; p < points.length - 1; p++) {
+    const from = points[p];
+    const to = points[p + 1];
+    const piece = <HighlightMatch text={text.slice(from, to)} query={needle} />;
+    const marked = mark && from >= mark.from && to <= mark.to;
+    const named = nameEnd > 0 && to <= nameEnd;
+    let node: React.ReactNode = piece;
+    if (named) node = <strong className="vcmp-list__name">{node}</strong>;
+    if (marked) node = <span className={markClass}>{node}</span>;
+    out.push(<React.Fragment key={from}>{node}</React.Fragment>);
+  }
+  return out;
 }
 
 function PropertyRow({ property, change, display }: {

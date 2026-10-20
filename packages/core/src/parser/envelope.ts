@@ -484,3 +484,8 @@ export function selectReferencedVersionNodes(root: XmlNode, elementName: string)
 
   return referencedNodes.length > 0 ? referencedNodes : nodes;
 }
+
+/** Every version node of one kind in the envelope, referenced by the solution or not. */
+export function selectAllVersionNodes(root: XmlNode, elementName: string): XmlNode[] {
+  return asArray(getContents(root)?.[elementName]);
+}

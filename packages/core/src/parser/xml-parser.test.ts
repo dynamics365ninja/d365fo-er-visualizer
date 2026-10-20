@@ -677,6 +677,28 @@ describe('parseERConfiguration', () => {
     expect(config.content.version.mappings[2]?.bindings[0]?.path).toBe('SalesInvoice/Value');
   });
 
+  it('merges an unreferenced sibling mapping component with its own descriptor', () => {
+    const versionNode = (id: string, name: string, descriptor: string) => `
+      <ERModelMappingVersion ID.="{${id}},1" DateTime="2026-04-14T12:00:00" Description="${name}" Number="1">
+        <Mapping>
+          <ERModelMapping ID.="{${id}}" Name="${name}" DataContainerDescriptor="${descriptor}" Model="{MODEL}" ModelName="Model" ModelVersion="{MODEL},1" />
+        </Mapping>
+      </ERModelMappingVersion>`;
+    const xml = buildSolutionEnvelope(
+      versionNode('MAP-A', 'VAT', 'TaxDeclaration')
+      + versionNode('MAP-STALE', 'VAT old', 'TaxDeclaration')
+      + versionNode('MAP-B', 'Control statement', 'TaxDeclarationKH'),
+      { contentRefIds: ['{MAP-A}'] },
+    );
+
+    const config = parseERConfiguration(xml, 'unreferenced-sibling.xml');
+    if (config.content.kind !== 'ModelMapping') throw new Error('Expected model mapping content');
+
+    expect(config.content.version.id).toBe('{MAP-A}');
+    expect(config.content.version.mappings.map(m => m.dataContainerDescriptor))
+      .toEqual(['TaxDeclaration', 'TaxDeclarationKH']);
+  });
+
   it('treats bundles with model mapping plus format refs as format configurations', () => {
     const xml = buildSolutionEnvelope(`
       <ERModelMappingVersion ID.="{FORMAT-MAP-DS},1" DateTime="2026-04-14T12:00:00" Description="Fixture" Number="1">

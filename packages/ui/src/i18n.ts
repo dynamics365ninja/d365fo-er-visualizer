@@ -1135,6 +1135,7 @@ export interface Translations {
   compareCsvHeaders: string[];
   compareShowMore: (n: number) => string;
   compareUnchangedLines: (n: number) => string;
+  compareUnchangedItems: (n: number) => string;
   compareExpandAll: string;
   compareCollapseAll: string;
   comparePickerTitle: (name: string) => string;
@@ -2295,6 +2296,7 @@ const cs: Translations = {
   compareCsvHeaders: ['Oblast', 'Změna', 'Cesta', 'Dřívější cesta', 'Typ', 'Vlastnost', 'Starší verze', 'Novější verze'],
   compareShowMore: (n: number) => `Zobrazit ${csPlural(n, 'další', 'další', 'dalších')} ${n}`,
   compareUnchangedLines: (n: number) => `⋯ ${n} ${csPlural(n, 'řádek', 'řádky', 'řádků')} beze změny – zobrazit`,
+  compareUnchangedItems: (n: number) => `⋯ ${n} ${csPlural(n, 'položka', 'položky', 'položek')} beze změny – zobrazit`,
   compareExpandAll: 'Rozbalit vše',
   compareCollapseAll: 'Sbalit vše',
   comparePickerTitle: (name: string) => `Porovnat „${name}“ s jinou verzí`,
@@ -3448,6 +3450,7 @@ const en: Translations = {
   compareCsvHeaders: ['Section', 'Change', 'Path', 'Previous path', 'Type', 'Property', 'Older version', 'Newer version'],
   compareShowMore: (n: number) => `Show ${n} more`,
   compareUnchangedLines: (n: number) => `⋯ ${n} unchanged line${n === 1 ? '' : 's'} — show`,
+  compareUnchangedItems: (n: number) => `⋯ ${n} unchanged item${n === 1 ? '' : 's'} — show`,
   compareExpandAll: 'Expand all',
   compareCollapseAll: 'Collapse all',
   comparePickerTitle: (name: string) => `Compare "${name}" with another version`,

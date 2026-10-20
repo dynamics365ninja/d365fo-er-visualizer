@@ -3,6 +3,7 @@ import { parseERConfiguration, type ERConfiguration, type ERDataModelContent, ty
 import {
   buildVersionDiffCsv,
   diffConfigurations,
+  diffListItems,
   inlineChange,
   longestIncreasingRun,
   orderVersions,
@@ -263,5 +264,23 @@ describe('helpers', () => {
     const lines = csv.slice(1).trim().split('\r\n');
     expect(lines[0]).toBe('Section;Change;Path;Previous;Type;Property;Before;After');
     expect(lines.slice(1)).toEqual(['fields;added;InvoiceCustomer/Extra;;String;type;;String']);
+  });
+});
+
+describe('diffListItems', () => {
+  it('pairs items by name and marks the ones whose rest changed', () => {
+    const before = ['Amount = SUM($T/Amount)', 'VatDate = MAX($T/VatDate)', 'Old = MIN($T/Old)'].join('\n');
+    const after = ['Amount = SUM($T/Amount)', 'VatDate = MAX($T/Asl_VatDate)', 'New = MIN($T/New)'].join('\n');
+    expect(diffListItems(before, after)).toEqual([
+      { kind: 'same', before: 'Amount = SUM($T/Amount)', after: 'Amount = SUM($T/Amount)' },
+      { kind: 'changed', before: 'VatDate = MAX($T/VatDate)', after: 'VatDate = MAX($T/Asl_VatDate)' },
+      { kind: 'removed', before: 'Old = MIN($T/Old)' },
+      { kind: 'added', after: 'New = MIN($T/New)' },
+    ]);
+  });
+
+  it('treats a plain item as its own name and a missing side as an empty list', () => {
+    expect(diffListItems(undefined, 'A\nB')).toEqual([{ kind: 'added', after: 'A' }, { kind: 'added', after: 'B' }]);
+    expect(diffListItems('A\nB', 'A\nC').map(row => row.kind)).toEqual(['same', 'removed', 'added']);
   });
 });

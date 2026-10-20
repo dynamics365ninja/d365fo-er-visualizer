@@ -329,9 +329,65 @@ function yesNo(value: boolean | undefined): string | undefined {
   return value ? '1' : undefined;
 }
 
+/** Properties whose value is a list — one item per line — compared item by item. */
+export const LIST_KEYS: ReadonlySet<string> = new Set(['selectedFields', 'groupedFields', 'aggregations', 'pathsToCache', 'values']);
+
 function list(values: Array<string | undefined>): string | undefined {
   const items = values.filter((v): v is string => Boolean(v && v.trim()));
-  return items.length > 0 ? items.join(', ') : undefined;
+  return items.length > 0 ? items.join('\n') : undefined;
+}
+
+export function listItems(value: string | undefined): string[] {
+  return value ? value.split('\n').filter(item => item.trim() !== '') : [];
+}
+
+/** What identifies a list item across versions: the name before ` = `, or the whole item. */
+export function listItemKey(item: string): string {
+  const at = item.indexOf(' = ');
+  return (at > 0 ? item.slice(0, at) : item).trim().toLowerCase();
+}
+
+export interface ListRow {
+  kind: 'same' | 'changed' | 'added' | 'removed';
+  before?: string;
+  after?: string;
+}
+
+/**
+ * Two lists item against item: the longest run of items that kept their
+ * name and order pairs up (same, or changed when the rest differs); the
+ * others were removed or added, listed where they stood.
+ */
+export function diffListItems(before: string | undefined, after: string | undefined): ListRow[] {
+  const older = listItems(before);
+  const newer = listItems(after);
+  const olderKeys = older.map(listItemKey);
+  const newerKeys = newer.map(listItemKey);
+  const n = older.length;
+  const m = newer.length;
+  const width = m + 1;
+  const lcs = new Int32Array((n + 1) * width);
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      lcs[i * width + j] = olderKeys[i] === newerKeys[j]
+        ? lcs[(i + 1) * width + j + 1] + 1
+        : Math.max(lcs[(i + 1) * width + j], lcs[i * width + j + 1]);
+    }
+  }
+  const rows: ListRow[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && olderKeys[i] === newerKeys[j]) {
+      rows.push({ kind: older[i] === newer[j] ? 'same' : 'changed', before: older[i], after: newer[j] });
+      i++; j++;
+    } else if (j >= m || (i < n && lcs[(i + 1) * width + j] >= lcs[i * width + j + 1])) {
+      rows.push({ kind: 'removed', before: older[i++] });
+    } else {
+      rows.push({ kind: 'added', after: newer[j++] });
+    }
+  }
+  return rows;
 }
 
 const FIELD_TYPE_NAMES: Record<number, string> = Object.fromEntries(
