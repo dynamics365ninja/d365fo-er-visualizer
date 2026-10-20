@@ -7,7 +7,8 @@
  */
 import type { ERDataContainerDescriptor, ERFormatElement } from '@er-visualizer/core';
 import { containerLookup } from './datasource-tree';
-import type { ElementFill, FormatLineage } from './format-lineage';
+import { extractReferences, isBarePath } from './er-references';
+import { MODEL_TYPE_LIST, MODEL_TYPE_RECORD, principalValueSource, type ElementFill, type FormatLineage, type ModelLink } from './format-lineage';
 import { normalizeGuid } from './format-binding-display';
 import { layoutFixed, sampleValue } from './sample-values';
 
@@ -107,7 +108,7 @@ export function createSampler(lineage: FormatLineage): (fill: ElementFill, itera
   const model = lineage.context.dataModel?.model;
   const lookup = model ? containerLookup(model) : null;
   const enumValuesOf = (fill: ElementFill): string[] | undefined => {
-    const link = fill.modelLinks.find(l => l.role === 'value');
+    const link = valueLink(fill);
     const td = link?.field?.type === 9 ? link.field.typeDescriptor : undefined;
     if (!td || !lookup) return undefined;
     if (!enumCache.has(td)) {
@@ -118,19 +119,37 @@ export function createSampler(lineage: FormatLineage): (fill: ElementFill, itera
   };
   return (fill, iteration) => {
     if (fill.fill === 'constant' && fill.constant != null) return fill.constant.replace(/^@"(.*)"$/, '$1');
-    const link = fill.modelLinks.find(l => l.role === 'value');
-    const perRecord = Boolean(fill.binding?.includes('@'));
+    const link = valueLink(fill);
+    const bound = fill.binding && isBarePath(fill.binding) ? extractReferences(fill.binding)[0]?.segments : undefined;
+    // `@` reads the current record, and so does the path of the list the element iterates.
+    const perRecord = Boolean(fill.binding?.includes('@') || (fill.contextPath && fill.binding?.includes(`${fill.contextPath}.`)));
     return sampleValue({
-      names: [link?.field?.name ?? '', link?.segments[link.segments.length - 1] ?? '', fill.displayName],
+      names: [link?.field?.name ?? '', bound?.[bound.length - 1] ?? '', link?.segments[link.segments.length - 1] ?? '', fill.displayName],
+      formula: formulaOf(fill),
       context: [...(link?.segments.slice(0, -1) ?? []), ...fill.path.slice(-3, -1)],
       dataType: fill.dataType,
       modelType: link?.field?.type,
       enumValues: enumValuesOf(fill),
       constraints: fill.constraints,
-      seed: link?.path ?? fill.binding ?? fill.id,
+      // A model field reads the same wherever the format reads it directly;
+      // fields the format computes from it are values of their own.
+      seed: (fill.fill === 'model' ? link?.path : undefined) ?? fill.binding ?? link?.path ?? fill.id,
       iteration: perRecord ? iteration : 0,
     });
   };
+}
+
+/** The model field the value is — not a record or list it is read through. */
+function valueLink(fill: ElementFill): ModelLink | undefined {
+  return fill.modelLinks.find(l => l.role === 'value' && l.field?.type !== MODEL_TYPE_RECORD && l.field?.type !== MODEL_TYPE_LIST);
+}
+
+/** The formula that computes the value: the binding itself, or the calculated field of the format it names. */
+function formulaOf(fill: ElementFill): string | undefined {
+  if (!fill.binding) return undefined;
+  if (!isBarePath(fill.binding)) return fill.binding;
+  const path = extractReferences(fill.binding)[0]?.segments.join('/').toLowerCase();
+  return fill.formatSources.find(src => src.kind === 'datasource' && src.formula && src.name.toLowerCase() === path)?.formula;
 }
 
 function fillOf(ctx: BuildContext, element: ERFormatElement): ElementFill | undefined {
@@ -153,7 +172,7 @@ function valueSegment(ctx: BuildContext, fill: ElementFill | undefined, iteratio
     case 'name':
       return { text: `{${fill.displayName}}`, role: 'value', elementId };
     case 'source': {
-      const field = fill.sources.find(src => src.role === 'value' && src.kind === 'field');
+      const field = principalValueSource(fill);
       const model = fill.modelLinks.find(link => link.role === 'value');
       const label = field?.name ?? (model ? `model.${model.path.replace(/\//g, '.')}` : fill.binding);
       return { text: `{${label}}`, role: 'value', elementId };
@@ -251,7 +270,8 @@ function emitXml(ctx: BuildContext, element: ERFormatElement, indent: number, ba
             { text: '"', role: 'markup' },
           );
         }
-        const hasValue = Boolean(fill?.carrierId) || (content.length === 0 && Boolean(fill?.binding));
+        // An element bound to the records its attributes read carries no value of its own.
+        const hasValue = Boolean(fill?.carrierId) || (content.length === 0 && Boolean(fill?.binding) && !fill?.childContext);
         if (content.length === 0) {
           if (hasValue || fill?.isField) {
             const value = valueSegment(ctx, fill, iter);

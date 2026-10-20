@@ -9,8 +9,8 @@
  * read from). Impact analysis wants both, a field specification leads with the
  * value sources.
  */
-import type { ERDatasource } from '@er-visualizer/core';
-import { dsPathToExpression } from './ds-path';
+import type { ERDatasource, ERGroupByDatasource } from '@er-visualizer/core';
+import { dsPathToExpression, quotePathSegment } from './ds-path';
 import { extractReferences, LIST_FUNCTIONS, LIST_PRESERVING_FUNCTIONS, parseFunctionCall } from './er-references';
 
 export type SourceKind = 'table' | 'field' | 'enum' | 'class' | 'parameter' | 'datasource' | 'importFormat';
@@ -52,19 +52,32 @@ export interface TraceScope {
 const MAX_DEPTH = 12;
 const ROLE_RANK: Record<SourceRole, number> = { value: 3, condition: 2, context: 1 };
 
+const sourceKey = (ref: SourceRef) => `${ref.kind}|${ref.name.toLowerCase()}|${ref.configIndex}|${ref.definition ?? ''}`;
+
+/** Mapping sources are merged into the lineage of every element that reads them; their keys are worked out once. */
+const mergedKeys = new WeakMap<SourceRef, string>();
+
+function mergedKey(ref: SourceRef): string {
+  let key = mergedKeys.get(ref);
+  if (key === undefined) {
+    key = sourceKey(ref);
+    mergedKeys.set(ref, key);
+  }
+  return key;
+}
+
 /** Collects sources once per kind + name; a stronger role replaces a weaker one. */
 export class SourceCollector {
   private byKey = new Map<string, SourceRef>();
 
-  add(ref: SourceRef): void {
-    const key = `${ref.kind}|${ref.name.toLowerCase()}|${ref.configIndex}|${ref.definition ?? ''}`;
+  add(ref: SourceRef, role: SourceRole = ref.role, key = sourceKey(ref)): void {
     const existing = this.byKey.get(key);
-    if (!existing) { this.byKey.set(key, ref); return; }
-    if (ROLE_RANK[ref.role] > ROLE_RANK[existing.role]) this.byKey.set(key, { ...existing, role: ref.role });
+    if (!existing) { this.byKey.set(key, role === ref.role ? ref : { ...ref, role }); return; }
+    if (ROLE_RANK[role] > ROLE_RANK[existing.role]) this.byKey.set(key, { ...existing, role });
   }
 
   addAll(refs: readonly SourceRef[], role?: SourceRole): void {
-    for (const ref of refs) this.add(role && ROLE_RANK[role] < ROLE_RANK[ref.role] ? { ...ref, role } : ref);
+    for (const ref of refs) this.add(ref, role && ROLE_RANK[role] < ROLE_RANK[ref.role] ? role : ref.role, mergedKey(ref));
   }
 
   get sources(): SourceRef[] {
@@ -77,6 +90,10 @@ export class SourceCollector {
 interface PoolIndex {
   parent: Map<ERDatasource, ERDatasource | null>;
   roots: readonly ERDatasource[];
+  /** Roots by bare name, in pool order. */
+  rootsByName: Map<string, ERDatasource[]>;
+  /** Every declared datasource by bare name, the shallowest first. */
+  byName: Map<string, ERDatasource[]>;
 }
 
 const poolIndexCache = new WeakMap<readonly ERDatasource[], PoolIndex>();
@@ -90,7 +107,20 @@ function indexPool(pool: readonly ERDatasource[]): PoolIndex {
     for (const child of ds.children ?? []) visit(child, ds);
   };
   for (const ds of pool) visit(ds, null);
-  const index = { parent, roots: pool };
+  const add = (map: Map<string, ERDatasource[]>, ds: ERDatasource) => {
+    const key = bare(ds.name);
+    const list = map.get(key);
+    if (list) list.push(ds); else map.set(key, [ds]);
+  };
+  const rootsByName = new Map<string, ERDatasource[]>();
+  for (const ds of pool) add(rootsByName, ds);
+  const byName = new Map<string, ERDatasource[]>();
+  const queue = [...pool];
+  for (let i = 0; i < queue.length; i++) {
+    if (!queue[i].implicit) add(byName, queue[i]);
+    queue.push(...(queue[i].children ?? []));
+  }
+  const index = { parent, roots: pool, rootsByName, byName };
   poolIndexCache.set(pool, index);
   return index;
 }
@@ -102,25 +132,38 @@ function nameMatches(dsName: string, segment: string): boolean {
   return bare(dsName) === bare(segment) && (/^[$#]/.test(segment) || !/^[$#]/.test(dsName));
 }
 
+const childIndexCache = new WeakMap<ERDatasource, Map<string, ERDatasource[]>>();
+
+/** Children by bare name, in declaration order — containers hold hundreds of them. */
+function childIndex(ds: ERDatasource): Map<string, ERDatasource[]> {
+  let index = childIndexCache.get(ds);
+  if (!index) {
+    index = new Map();
+    for (const child of ds.children ?? []) {
+      const key = bare(child.name);
+      const list = index.get(key);
+      if (list) list.push(child); else index.set(key, [child]);
+    }
+    childIndexCache.set(ds, index);
+  }
+  return index;
+}
+
 function findChild(ds: ERDatasource, segment: string): ERDatasource | undefined {
-  const children = ds.children ?? [];
+  const children = childIndex(ds).get(bare(segment)) ?? [];
   return children.find(c => c.name.toLowerCase() === segment.toLowerCase())
     ?? children.find(c => nameMatches(c.name, segment));
 }
 
 function findRoot(pool: readonly ERDatasource[], segment: string): ERDatasource | undefined {
-  const direct = pool.find(ds => ds.name.toLowerCase() === segment.toLowerCase())
-    ?? pool.find(ds => nameMatches(ds.name, segment));
+  const { rootsByName, byName } = indexPool(pool);
+  const roots = rootsByName.get(bare(segment)) ?? [];
+  const direct = roots.find(ds => ds.name.toLowerCase() === segment.toLowerCase())
+    ?? roots.find(ds => nameMatches(ds.name, segment));
   if (direct) return direct;
   // A name the definition only declares below a container is still reachable
   // by name in older exports; take the first real datasource of that name.
-  const stack = [...pool];
-  while (stack.length) {
-    const ds = stack.shift()!;
-    if (!ds.implicit && nameMatches(ds.name, segment)) return ds;
-    stack.push(...(ds.children ?? []));
-  }
-  return undefined;
+  return byName.get(bare(segment))?.find(ds => nameMatches(ds.name, segment));
 }
 
 /** Path of a datasource as the definition spells it, `Parent/$Child`. */
@@ -176,6 +219,21 @@ export type RecordOrigin =
 /** Leading method calls a table datasource answers with one of its own records. */
 const RECORD_METHODS = /^(find|findrecid|findbyrecid|exist)\(\)$/i;
 
+/** Positions of the results an `IF` or `CASE` picks from (a `CASE`'s default included). */
+function resultIndexes(call: { name: string; args: string[] }): number[] {
+  switch (call.name) {
+    case 'IF': return [1, 2];
+    case 'CASE': return call.args.map((_, i) => i).filter(i => i > 0 && (i % 2 === 0 || i === call.args.length - 1));
+    default: return [];
+  }
+}
+
+/** Arguments whose records a call hands on: every list a `LISTJOIN` joins, the results of an `IF` / `CASE`. */
+function recordArguments(call: { name: string; args: string[] }): string[] {
+  if (call.name === 'LISTJOIN') return call.args;
+  return resultIndexes(call).map(i => call.args[i]).filter(Boolean);
+}
+
 /**
  * The record a field read on `expr` comes from: `ORDERBY(WHERE(T, …), …)` reads
  * records of `T`, `'$Lines'` reads whatever its formula reads, `@` reads the
@@ -185,9 +243,12 @@ export function recordOrigin(expr: string, scope: TraceScope, depth = 0): Record
   if (depth > MAX_DEPTH) return null;
   const call = parseFunctionCall(expr);
   if (call) {
-    return LIST_PRESERVING_FUNCTIONS.has(call.name) && call.args[0]
-      ? recordOrigin(call.args[0], scope, depth + 1)
-      : null;
+    if (LIST_PRESERVING_FUNCTIONS.has(call.name) && call.args[0]) return recordOrigin(call.args[0], scope, depth + 1);
+    for (const arg of recordArguments(call)) {
+      const origin = recordOrigin(arg, scope, depth + 1);
+      if (origin) return origin;
+    }
+    return null;
   }
   const trimmed = expr.trim();
   const refs = extractReferences(trimmed);
@@ -271,6 +332,13 @@ function traceInto(expr: string, scope: TraceScope, role: SourceRole, state: Tra
     call.args.forEach((arg, i) => traceInto(arg, scope, i === 0 ? role : weaker(role, 'context'), state));
     return;
   }
+  // The test of an IF / CASE only picks the result; when a result reads data
+  // of its own, that data is the value.
+  const results = call ? resultIndexes(call) : [];
+  if (call && results.some(i => extractReferences(call.args[i] ?? '').length > 0)) {
+    call.args.forEach((arg, i) => traceInto(arg, scope, results.includes(i) ? role : weaker(role, 'context'), state));
+    return;
+  }
   for (const ref of extractReferences(expr)) traceReference(ref.segments, ref.current, scope, role, state);
 }
 
@@ -295,7 +363,7 @@ function traceReference(segments: string[], current: boolean, scope: TraceScope,
     const origin = recordOrigin(record.expression, record.scope);
     if (!origin) return;
     if (origin.kind === 'model') {
-      scope.onModelPath?.(cutCalculated([...origin.segments, ...rest]), role);
+      readModelField([...origin.segments, ...rest], recordScope, role, state);
       return;
     }
     if (origin.kind === 'table') {
@@ -313,6 +381,21 @@ function traceReference(segments: string[], current: boolean, scope: TraceScope,
     return;
   }
   traceDatasource(walked.ds, walked.trailing, scope, role, state);
+}
+
+/**
+ * A field read on a data model record. A calculated field the format hangs
+ * under the model (`model/Lines/$Total`) is traced through its formula; a
+ * field of the model itself is reported.
+ */
+function readModelField(segments: string[], scope: TraceScope, role: SourceRole, state: TraceState): void {
+  const root = segments.some(segment => /^[$#]/.test(segment)) ? scope.pool.find(ds => ds.type === 'DataModel') : undefined;
+  const walked = root ? walkFrom(root, segments) : null;
+  if (walked && walked.ds !== root) {
+    nested(state, () => traceDatasource(walked.ds, walked.trailing, scope, role, state));
+    return;
+  }
+  scope.onModelPath?.(cutCalculated(segments), role);
 }
 
 /** `scope`, reporting the model paths it meets to `sink`'s callback. */
@@ -379,26 +462,76 @@ function traceDatasource(ds: ERDatasource, trailing: string[], scope: TraceScope
     return;
   }
 
-  const childScope: TraceScope = { ...scope, current: currentForChild(ds, scope) };
-  const visitKey = `${datasourcePath(ds).toLowerCase()}|${role}`;
-  if (formula && !state.visited.has(visitKey)) {
-    state.visited.add(visitKey);
-    nested(state, () => traceInto(formula, childScope, role, state));
-  }
-  if (ds.groupByInfo?.listToGroup && !state.visited.has(visitKey + '|group')) {
-    state.visited.add(visitKey + '|group');
-    nested(state, () => traceInto(dsPathToExpression(ds.groupByInfo!.listToGroup), scope, role, state));
+  const path = datasourcePath(ds).toLowerCase();
+  const once = (key: string, fn: () => void) => {
+    if (state.visited.has(key)) return;
+    state.visited.add(key);
+    nested(state, fn);
+  };
+
+  if (ds.joinInfo) {
+    // A joined record reads its fields off the record of the list it names.
+    const joined = ds.joinInfo.lists.find(list => trailing.length > 0 && bare(list.name) === bare(trailing[0]));
+    for (const list of joined ? [joined] : ds.joinInfo.lists) {
+      const expression = dsPathToExpression(joined ? [list.path, ...trailing.slice(1)].join('/') : list.path);
+      once(`${path}|${role}|${expression.toLowerCase()}`, () => traceInto(expression, scope, role, state));
+    }
+    return;
   }
 
-  if (trailing.length > 0 && formula) {
-    const origin = recordOrigin(formula, childScope);
-    if (origin?.kind === 'table') addField(origin.table, trailing, scope, role, state);
-    else if (origin?.kind === 'model') scope.onModelPath?.(cutCalculated([...origin.segments, ...trailing]), role);
-    else if (origin?.kind === 'datasource' && origin.ds !== ds) {
-      const walked = walkFrom(origin.ds, trailing);
-      if (walked && walked.ds !== origin.ds) nested(state, () => traceDatasource(walked.ds, walked.trailing, withSink(origin.scope, scope), role, state));
-    }
+  const member = ds.groupByInfo ? groupMember(ds.groupByInfo, trailing) : null;
+  if (member) {
+    // `grouped.X` / `aggregated.Y` is read off the records being grouped;
+    // the grouped list only provides them.
+    const listRole = weaker(role, 'context');
+    once(`${path}|${listRole}|group`, () => traceInto(dsPathToExpression(ds.groupByInfo!.listToGroup), scope, listRole, state));
+    nested(state, () => traceInto(dsPathToExpression(member), scope, role, state));
+    return;
   }
+
+  const childScope: TraceScope = { ...scope, current: currentForChild(ds, scope) };
+  // A field read on the record a formula yields: the formula only picks the
+  // record, the field is read on the lists the record comes from.
+  const reads = trailing.length > 0 && formula ? fieldReads(formula, trailing, childScope) : [];
+  const formulaRole = reads.length > 0 ? weaker(role, 'context') : role;
+  if (formula) once(`${path}|${formulaRole}`, () => traceInto(formula, childScope, formulaRole, state));
+  if (ds.groupByInfo?.listToGroup) {
+    once(`${path}|${formulaRole}|group`, () => traceInto(dsPathToExpression(ds.groupByInfo!.listToGroup), scope, formulaRole, state));
+  }
+  for (const read of reads) once(`${path}|${role}|${read.toLowerCase()}`, () => traceInto(read, childScope, role, state));
+}
+
+/**
+ * `trailing` read on the record `expr` yields, as reads on the lists that
+ * record comes from: `WHERE(T, …)` → `T.Field`, `LISTJOIN(A, B)` → `A.Field`
+ * and `B.Field`. A list may declare the field itself (`$A/Values/$TaxBase`),
+ * so the read goes to each list, not past it to the table or model below.
+ */
+function fieldReads(expr: string, trailing: readonly string[], scope: TraceScope, depth = 0): string[] {
+  if (depth > MAX_DEPTH) return [];
+  const call = parseFunctionCall(expr);
+  if (call) {
+    const lists = LIST_PRESERVING_FUNCTIONS.has(call.name) ? call.args.slice(0, 1) : recordArguments(call);
+    return lists.flatMap(list => fieldReads(list, trailing, scope, depth + 1));
+  }
+  const trimmed = expr.trim();
+  const refs = extractReferences(trimmed);
+  if (refs.length !== 1 || refs[0].start !== 0 || refs[0].end !== trimmed.length) return [];
+  const resolves = refs[0].current ? Boolean(scope.current) : walkDatasources(scope.pool, refs[0].segments) !== null || refs[0].segments[0]?.toLowerCase() === 'model';
+  return resolves ? [`${trimmed}.${trailing.map(quotePathSegment).join('.')}`] : [];
+}
+
+const GROUP_SECTIONS: Record<string, 'groupedFields' | 'aggregations'> = {
+  grouped: 'groupedFields', groupby: 'groupedFields', groupbyfields: 'groupedFields', groupedfields: 'groupedFields', groupfields: 'groupedFields',
+  aggregated: 'aggregations', aggregation: 'aggregations', aggregations: 'aggregations',
+};
+
+/** Datasource path of the field a group-by's `grouped.X` / `aggregated.Y` reads, with what follows it. */
+function groupMember(info: ERGroupByDatasource, trailing: readonly string[]): string | null {
+  const section = trailing.length >= 2 ? GROUP_SECTIONS[bare(trailing[0])] : undefined;
+  if (!section) return null;
+  const member = info[section].find(entry => entry.path && bare(entry.name) === bare(trailing[1]));
+  return member ? [member.path, ...trailing.slice(2)].join('/') : null;
 }
 
 /** Value sources first, then the most concrete kinds. */
