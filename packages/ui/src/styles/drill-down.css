@@ -7,11 +7,6 @@
   color: var(--syn-literal);
 }
 
-.fmt-bind-row-expr > .dd-trigger-expr {
-  display: block;
-  width: 100%;
-}
-
 .dd-panel {
   margin-top: 8px;
   border: 1px solid var(--border-color);
@@ -206,15 +201,6 @@
   font-weight: 800;
   letter-spacing: 0.2px;
   color: var(--er-text);
-}
-
-.lin-summary__count {
-  font-size: var(--er-text-xs);
-  font-weight: 700;
-  color: var(--er-text-muted);
-  background: color-mix(in srgb, var(--er-accent) 14%, transparent);
-  padding: 1px 8px;
-  border-radius: 9px;
 }
 
 .lin-summary__hint {
@@ -1270,15 +1256,6 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-
-.lin-group__count {
-  padding: 0 5px;
-  background: var(--er-surface-3);
-  color: var(--er-text-muted);
-  font-size: var(--er-text-2xs);
-  font-variant-numeric: tabular-nums;
-  border-radius: 9px;
 }
 
 /* Drill-down dialog: pin it as a tab, or open it next to the active tab. */

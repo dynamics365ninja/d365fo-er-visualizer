@@ -13,19 +13,6 @@
   outline-offset: 2px;
 }
 
-.explorer-panel-header .fui-Button {
-  min-width: 24px;
-  height: 24px;
-  padding: 0;
-  color: var(--er-text-muted);
-  border-radius: var(--er-radius-lg);
-}
-
-.explorer-panel-header .fui-Button:hover {
-  color: var(--er-text);
-  background: var(--er-surface-2);
-}
-
 .ws-section-head .fui-Button {
   font-size: var(--px-text-sm);
   font-weight: 500;
@@ -61,10 +48,6 @@
   background-color: var(--er-surface-raised);
   border: 1px solid var(--er-border-strong);
   box-shadow: var(--er-shadow-3);
-}
-
-.app-shell .explorer-panel-header .fui-Button:hover {
-  background: var(--er-hover);
 }
 
 /* The one focus ring, VS Code's: 1px in the focus blue. */

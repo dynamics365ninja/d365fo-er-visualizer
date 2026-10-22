@@ -4,7 +4,9 @@ import { parseERConfigurations, GUIDRegistry } from '@er-visualizer/core';
 import { t } from '../i18n';
 import { useFnoSession } from './fno-session';
 import { clearHarvestedLabels } from '../utils/label-resolver';
-import { onFnoDownloadEvent } from '../fno/session';
+import { fnoSession, onFnoDownloadEvent } from '../fno/session';
+import { useFnoProfiles } from './fno-profiles';
+import { baseDownloadSpec, baseReference, cachedBaseVersions, isBaseOf, isDerivedFromVersion, isExactBase, knownBaseKind, loadedBase } from './base-configuration';
 import { FnoEmptyContentError } from '@er-visualizer/fno-client';
 import {
   saveFileContent,
@@ -49,6 +51,7 @@ import {
   remapNavigationStackAfterRemoval,
   stepNavigation,
   type NavigationSnapshot,
+  type CompareMode,
   type OpenTab,
 } from './navigation';
 import {
@@ -84,7 +87,7 @@ export type { TreeNode } from './tree-builder';
 export type { ConfigWarning } from './config-warnings';
 export { expressionRootToken } from './config-warnings';
 export { compareConfigVersions } from './configuration-merge';
-export type { OpenTab } from './navigation';
+export type { CompareMode, OpenTab } from './navigation';
 export { openDesignerTabsForFormats, remapIdAfterConfigRemoval } from './navigation';
 export {
   activeMappingDefinitionLabel,
@@ -247,17 +250,30 @@ export interface AppState {
   comparisonVersions: Record<string, ERConfiguration>;
   /** The configuration the "Compare with another version" picker is open for. */
   versionComparePickerIndex: number | null;
-  openVersionComparePicker: (configIndex: number | null) => void;
-  /** Open a tab comparing configuration `configIndex` with another version of it. */
-  openVersionCompare: (configIndex: number, other: ERConfiguration) => void;
+  /** Whether that picker looks for another version or for the base the configuration was derived from. */
+  versionComparePickerMode: CompareMode;
+  openVersionComparePicker: (configIndex: number | null, mode?: CompareMode) => void;
   /**
-   * Compare configuration `configIndex` with its version in an ER export.
-   * Returns `false` (with a toast) when the export holds no configuration of
-   * that kind. The file joins the recent configurations.
+   * Open a tab comparing configuration `configIndex` with another version of
+   * it — or, with `mode: 'base'`, with the configuration it was derived from.
    */
-  compareWithXml: (configIndex: number, xml: string, filePath: string, options?: { source?: 'file' | 'fno' }) => boolean;
+  openVersionCompare: (configIndex: number, other: ERConfiguration, options?: { mode?: CompareMode }) => void;
+  /**
+   * Compare configuration `configIndex` with its version in an ER export (its
+   * base, in `base` mode). Returns `false` (with a toast) when the export
+   * holds no configuration of that kind. The file joins the recent configurations.
+   */
+  compareWithXml: (configIndex: number, xml: string, filePath: string, options?: { source?: 'file' | 'fno'; mode?: CompareMode }) => boolean;
   /** The same with a version from the cache of recent configurations. */
-  compareWithCachedVersion: (configIndex: number, path: string) => Promise<boolean>;
+  compareWithCachedVersion: (configIndex: number, path: string, mode?: CompareMode) => Promise<boolean>;
+  /**
+   * Compare a derived configuration with its base: the loaded base, else the
+   * cached copy of the version it was derived from; otherwise the picker
+   * opens on the base, to fetch it from F&O or load it from a file.
+   */
+  compareWithBase: (configIndex: number) => Promise<boolean>;
+  /** Download the base of configuration `configIndex` from the connected F&O environment and compare with it. */
+  compareWithBaseFromFno: (configIndex: number) => Promise<boolean>;
 
   // Actions
   /**
@@ -405,10 +421,11 @@ export function comparisonKey(cfg: ERConfiguration): string {
   return `${cfg.filePath}|v${getBestVersion(cfg) ?? ''}`;
 }
 
-/** `Name · v68 ↔ v70`, older version first. */
-export function comparisonTabLabel(config: ERConfiguration, other: ERConfiguration): string {
-  const [older, newer] = orderVersions(other, config);
+/** `Name · v68 ↔ v70`, older version first; `Name ↔ base Base name` for a base comparison. */
+export function comparisonTabLabel(config: ERConfiguration, other: ERConfiguration, mode: CompareMode = 'version'): string {
   const name = config.solutionVersion.solution.name || config.filePath.split(/[\\/]/).pop() || config.filePath;
+  if (mode === 'base') return t.compareBaseTabLabel(name, other.solutionVersion.solution.name || other.filePath, getBestVersion(other) ?? '?');
+  const [older, newer] = orderVersions(other, config);
   return t.compareTabLabel(name, getBestVersion(older) ?? '?', getBestVersion(newer) ?? '?');
 }
 
@@ -487,24 +504,38 @@ function compareWithExport(
   configIndex: number,
   parsed: ERConfiguration[],
   file?: { filePath: string; xml: string; source: 'file' | 'fno' },
+  mode: CompareMode = 'version',
 ): boolean {
   const config = get().configurations[configIndex];
   if (!config) return false;
-  const solutionId = normalizeSolutionId(config.solutionVersion.solution.id);
+  // The same solution — or, for a base comparison, the solution it was derived from.
+  const wanted = mode === 'base' ? baseReference(config)?.id : normalizeSolutionId(config.solutionVersion.solution.id);
   const sameKind = parsed.filter(c => c.content.kind === config.content.kind);
-  const other = sameKind.find(c => normalizeSolutionId(c.solutionVersion.solution.id) === solutionId) ?? sameKind[0];
+  const match = sameKind.find(c => normalizeSolutionId(c.solutionVersion.solution.id) === wanted);
+  const other = match ?? sameKind[0];
+  const fileName = file?.filePath.split(/[\\/]/).pop() ?? parsed[0]?.solutionVersion.solution.name ?? '';
   if (!other) {
-    const name = file?.filePath.split(/[\\/]/).pop() ?? parsed[0]?.solutionVersion.solution.name ?? '';
-    get().pushToast({ kind: 'warning', message: t.compareNoSuchConfiguration(name, config.solutionVersion.solution.name) });
+    get().pushToast({ kind: 'warning', message: t.compareNoSuchConfiguration(fileName, config.solutionVersion.solution.name) });
     return false;
+  }
+  if (mode === 'base' && !match) {
+    // The user picked it; say it is not the base on record, and compare anyway.
+    get().pushToast({ kind: 'info', message: t.compareBaseNotInFile(fileName, baseReference(config)?.name ?? '') });
   }
   if (file) {
     const { recentFiles, entries } = withRecentEntries(get().recentFiles, parsed, file.filePath, file.source);
     set({ recentFiles: saveRecentFiles(recentFiles) });
     cacheExportContent(get, set, file.filePath, file.xml, entries);
   }
-  get().openVersionCompare(configIndex, other);
+  get().openVersionCompare(configIndex, other, { mode });
   return true;
+}
+
+/** The active F&O connection, when the user is signed in. */
+function connectedFnoProfile() {
+  const session = useFnoSession.getState();
+  if (session.connState.kind !== 'connected' || !session.activeProfileId) return undefined;
+  return useFnoProfiles.getState().profiles.find(profile => profile.id === session.activeProfileId);
 }
 
 function buildDerivedState(configurations: ERConfiguration[]): { registry: GUIDRegistry; treeNodes: TreeNode[]; warnings: ConfigWarning[] } {
@@ -554,19 +585,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   comparisonVersions: {},
   versionComparePickerIndex: null,
-  openVersionComparePicker: (configIndex) => set({ versionComparePickerIndex: configIndex }),
+  versionComparePickerMode: 'version',
+  openVersionComparePicker: (configIndex, mode = 'version') => set({ versionComparePickerIndex: configIndex, versionComparePickerMode: mode }),
 
-  openVersionCompare: (configIndex, other) => {
+  openVersionCompare: (configIndex, other, options) => {
     const state = get();
     const config = state.configurations[configIndex];
     if (!config || config.content.kind !== other.content.kind) return;
+    const mode = options?.mode ?? 'version';
     const otherKey = comparisonKey(other);
-    const id = `compare:${configIndex}:${otherKey}`;
-    const label = comparisonTabLabel(config, other);
+    const id = `compare:${configIndex}:${mode === 'base' ? 'base:' : ''}${otherKey}`;
+    const label = comparisonTabLabel(config, other, mode);
     const exists = state.openTabs.some(tab => tab.id === id);
     const openTabs: OpenTab[] = exists
       ? state.openTabs.map(tab => (tab.id === id ? { ...tab, label } : tab))
-      : [...state.openTabs, { kind: 'compare', id, label, configIndex, otherKey }];
+      : [...state.openTabs, { kind: 'compare', id, label, configIndex, otherKey, ...(mode === 'base' ? { mode } : {}) }];
     const navigationHistory = pushNavigationHistory(state, id, state.selectedNodeId);
     set({
       comparisonVersions: { ...state.comparisonVersions, [otherKey]: other },
@@ -592,10 +625,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       return false;
     }
     const source = options?.source ?? (filePath.startsWith('fno://') ? 'fno' : 'file');
-    return compareWithExport(get, set, configIndex, parsed, { filePath, xml, source });
+    return compareWithExport(get, set, configIndex, parsed, { filePath, xml, source }, options?.mode);
   },
 
-  compareWithCachedVersion: async (configIndex, path) => {
+  compareWithCachedVersion: async (configIndex, path, mode) => {
     const entry = get().recentFiles.find(r => r.path === path);
     const label = entry?.solutionName ?? path.split(/[\\/]/).pop() ?? path;
     const contentPath = entry?.bundlePath ?? bundleContentPath(path);
@@ -615,7 +648,74 @@ export const useAppStore = create<AppState>((set, get) => ({
       get().pushToast({ kind: 'error', message: t.toastLoadFailedWithMessage(label, message) });
       return false;
     }
-    return compareWithExport(get, set, configIndex, parsed);
+    return compareWithExport(get, set, configIndex, parsed, undefined, mode);
+  },
+
+  compareWithBase: async (configIndex) => {
+    const state = get();
+    const config = state.configurations[configIndex];
+    const base = baseReference(config);
+    if (!config || !base) {
+      if (config) get().pushToast({ kind: 'info', message: t.compareBaseNone(config.solutionVersion.solution.name) });
+      return false;
+    }
+    const known = knownBaseKind(state.configurations, state.recentFiles, config);
+    if (known.kind === 'other') {
+      // A root format or mapping derives from its data model: nothing alike to compare.
+      get().pushToast({ kind: 'info', message: t.compareBaseOtherKind(known.name, t.explorerGroupLabels[known.configKind]) });
+      return false;
+    }
+    // The very version it was derived from — loaded, else cached — then any loaded version of the base.
+    const loaded = loadedBase(state.configurations, config);
+    const sameKind = loaded && loaded.config.content.kind === config.content.kind ? loaded.config : undefined;
+    if (sameKind && isExactBase(sameKind, config)) {
+      get().openVersionCompare(configIndex, sameKind, { mode: 'base' });
+      return true;
+    }
+    const exact = cachedBaseVersions(state.recentFiles, state.cachedPaths, config)
+      .find(file => isDerivedFromVersion(file.version, base));
+    if (exact && await get().compareWithCachedVersion(configIndex, exact.path, 'base')) return true;
+    if (sameKind) {
+      get().openVersionCompare(configIndex, sameKind, { mode: 'base' });
+      return true;
+    }
+    get().openVersionComparePicker(configIndex, 'base');
+    return false;
+  },
+
+  compareWithBaseFromFno: async (configIndex) => {
+    const config = get().configurations[configIndex];
+    const spec = baseDownloadSpec(config);
+    const profile = connectedFnoProfile();
+    if (!config || !spec) return false;
+    if (!profile) {
+      get().pushToast({ kind: 'warning', message: t.compareBaseFnoNotConnected });
+      return false;
+    }
+    const name = spec.configurationName;
+    const toastId = get().pushToast({ kind: 'info', message: t.compareBaseDownloading(name), durationMs: 60_000 });
+    try {
+      const download = await fnoSession.downloadConfiguration(profile, spec, undefined, { silent: true });
+      get().dismissToast(toastId);
+      const parsed = parseERConfigurations(download.xml, download.syntheticPath);
+      const other = parsed.find(c => c.content.kind === config.content.kind && isBaseOf(c, config));
+      if (!other) {
+        const found = parsed.find(c => isBaseOf(c, config)) ?? parsed[0];
+        get().pushToast({
+          kind: 'warning',
+          message: found && found.content.kind !== config.content.kind
+            ? t.compareBaseOtherKind(found.solutionVersion.solution.name, t.explorerGroupLabels[found.content.kind as 'DataModel' | 'ModelMapping' | 'Format'])
+            : t.compareBaseFnoFailed(name, t.compareBaseFnoNotFound),
+        });
+        return false;
+      }
+      return get().compareWithXml(configIndex, download.xml, download.syntheticPath, { source: 'fno', mode: 'base' });
+    } catch (e) {
+      get().dismissToast(toastId);
+      const message = e instanceof Error ? e.message : String(e);
+      get().pushToast({ kind: 'error', message: t.compareBaseFnoFailed(name, message) });
+      return false;
+    }
   },
 
   landingRequest: null,

@@ -51,26 +51,6 @@
   width: 40%;
 }
 
-.fno-ingest-progress-track {
-  height: 4px;
-  border-radius: var(--er-radius-sm);
-  background: color-mix(in srgb, var(--er-accent) 12%, var(--er-surface-2));
-  overflow: hidden;
-  position: relative;
-}
-
-.fno-ingest-progress-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 60%;
-  border-radius: var(--er-radius-sm);
-  background: linear-gradient(90deg, var(--er-accent), var(--er-model));
-  animation: fno-ingest-indeterminate 1.6s ease-in-out infinite;
-  transform-origin: left center;
-}
-
 .fno-ingest-step.active .fno-ingest-step-dot {
   background: var(--er-accent);
   animation: fno-ingest-dot-pulse 1.4s ease-in-out infinite;
@@ -87,54 +67,6 @@
 
 .fno-ingest-step.done {
   color: var(--colorNeutralForeground3, #888);
-}
-
-.fno-ingest-banner-label {
-  margin-bottom: 1px;
-}
-
-.fno-ingest-banner-status {
-  font-size: var(--er-text-sm);
-  font-weight: 600;
-}
-
-/* Ingest banner (inside a non-empty explorer) */
-.fno-ingest-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--er-border);
-  background: var(--er-accent-soft);
-  color: var(--er-text);
-  font-size: var(--px-text-sm);
-}
-
-.fno-ingest-banner-icon {
-  flex-shrink: 0;
-  color: var(--er-accent);
-}
-
-.fno-ingest-banner-text {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.fno-ingest-banner-label {
-  font-size: var(--px-caption);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--er-accent);
-}
-
-.fno-ingest-banner-status {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--er-text-muted);
 }
 
 .fno-ingest-backdrop {

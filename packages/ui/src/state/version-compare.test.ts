@@ -2,8 +2,28 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { parseERConfiguration } from '@er-visualizer/core';
 import { remapIdAfterConfigRemoval, useAppStore, type OpenTab } from './store';
 import { mergeConfiguration } from './configuration-merge';
-import { XML_FORMAT_XML } from '../utils/invoice-workspace.test-fixture';
+import { MODEL_XML, XML_FORMAT_ID, XML_FORMAT_XML } from '../utils/invoice-workspace.test-fixture';
 import { otherCachedVersions } from '../components/VersionComparePicker';
+import { diffConfigurations } from '../utils/version-diff';
+import { cachedBaseVersions, knownBaseKind } from './base-configuration';
+import { t } from '../i18n';
+
+const DERIVED_ID = '{C9000000-0000-4000-8000-000000000009}';
+const MODEL_SOLUTION_ID = '{A1000000-0000-4000-8000-000000000001}';
+
+/**
+ * A format derived from the fixture format (its base, version 1): its own
+ * solution, the base's elements under the same GUIDs, one of them renamed.
+ */
+function derivedFormat(baseId = XML_FORMAT_ID, version = '7'): string {
+  return XML_FORMAT_XML
+    .replace(
+      `<ERSolution ID.="${XML_FORMAT_ID}" Name="Sales invoice XML">`,
+      `<ERSolution ID.="${DERIVED_ID}" Base="${baseId},1" BaseName.o.="Sales invoice XML" Name="Sales invoice XML (CZ)">`,
+    )
+    .replace('PublicVersionNumber="1"', `PublicVersionNumber="${version}"`)
+    .replace('Name="SellerName"', 'Name="Prodavajici"');
+}
 
 /** The fixture format in another public version (the same solution GUID). */
 function formatVersion(version: string): string {
@@ -113,5 +133,54 @@ describe('otherCachedVersions', () => {
     const cached = new Set(['v1.xml', 'v10.xml', 'v2.xml', 'other.xml', 'mapping.xml']);
     const offered = otherCachedVersions(files.map(f => ({ ...f })), cached, { filePath: 'v2.xml', kind: 'Format', solutionId: '{ABC}' });
     expect(offered.map(f => f.path)).toEqual(['v10.xml', 'v1.xml']);
+  });
+});
+
+describe('comparing with the base configuration', () => {
+  it('opens a base comparison with the loaded base, the base on the left', async () => {
+    useAppStore.getState().loadXmlFile(formatVersion('9'), 'base.xml');
+    useAppStore.getState().loadXmlFile(derivedFormat(), 'derived.xml');
+    expect(await useAppStore.getState().compareWithBase(1)).toBe(true);
+
+    const [tab] = compareTabs();
+    expect(tab).toMatchObject({ configIndex: 1, mode: 'base', label: t.compareBaseTabLabel('Sales invoice XML (CZ)', 'Sales invoice XML', '9') });
+    const state = useAppStore.getState();
+    const base = state.comparisonVersions[tab.otherKey];
+    expect(base.filePath).toBe('base.xml');
+    // Version order would put the derived v7 first; a base comparison keeps the base on the left.
+    const diff = diffConfigurations(base, state.configurations[1], { keepOrder: true });
+    expect(diff.older.filePath).toBe('base.xml');
+    expect(diffConfigurations(base, state.configurations[1]).older.filePath).toBe('derived.xml');
+    const renamed = diff.sections.flatMap(section => section.entries).find(entry => entry.path.endsWith('Prodavajici'));
+    expect(renamed).toMatchObject({ change: 'changed', previousPath: expect.stringMatching(/SellerName$/) });
+  });
+
+  it('takes the base out of an export that holds it', () => {
+    useAppStore.getState().loadXmlFile(derivedFormat(), 'derived.xml');
+    expect(useAppStore.getState().compareWithXml(0, formatVersion('1'), 'base.xml', { mode: 'base' })).toBe(true);
+    const [tab] = compareTabs();
+    expect(tab.mode).toBe('base');
+    expect(useAppStore.getState().configurations.map(c => c.filePath)).toEqual(['derived.xml']);
+    // The base is remembered with its solution, so the picker offers it the next time.
+    const state = useAppStore.getState();
+    expect(cachedBaseVersions(state.recentFiles, new Set(['base.xml']), state.configurations[0]).map(f => f.path)).toEqual(['base.xml']);
+  });
+
+  it('opens the picker on the base when no copy of it is at hand', async () => {
+    useAppStore.getState().loadXmlFile(derivedFormat(), 'derived.xml');
+    expect(await useAppStore.getState().compareWithBase(0)).toBe(false);
+    expect(useAppStore.getState()).toMatchObject({ versionComparePickerIndex: 0, versionComparePickerMode: 'base' });
+    expect(compareTabs()).toEqual([]);
+  });
+
+  it('says so when the base is the data model the format hangs under', async () => {
+    useAppStore.getState().loadXmlFile(MODEL_XML, 'model.xml');
+    useAppStore.getState().loadXmlFile(derivedFormat(MODEL_SOLUTION_ID), 'format.xml');
+    const state = useAppStore.getState();
+    const format = state.configurations.findIndex(c => c.filePath === 'format.xml');
+    expect(knownBaseKind(state.configurations, state.recentFiles, state.configurations[format])).toMatchObject({ kind: 'other', configKind: 'DataModel' });
+    expect(await useAppStore.getState().compareWithBase(format)).toBe(false);
+    expect(compareTabs()).toEqual([]);
+    expect(useAppStore.getState().toasts.at(-1)?.kind).toBe('info');
   });
 });

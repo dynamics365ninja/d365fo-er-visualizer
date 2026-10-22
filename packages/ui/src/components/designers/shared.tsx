@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AppsListDetailRegular, InfoRegular, MoreVerticalRegular } from '@fluentui/react-icons';
 import { Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Tooltip } from '@fluentui/react-components';
 import { useAppStore, resolveDeepExpression, toModelRootedPath } from '../../state/store';
@@ -7,6 +7,7 @@ import { ClickablePath } from '../ClickablePath';
 import { t } from '../../i18n';
 import { formatEnumDisplayName } from '../../utils/enum-display';
 import { getConsultantFormatTypeLabel } from '../../utils/consultant-labels';
+import { formatFormula } from '../../utils/expression-format';
 
 export function findTreeNodeByMatch(node: any, predicate: (candidate: any) => boolean): any | null {
   if (predicate(node)) return node;
@@ -112,6 +113,25 @@ export function ExpressionDetailLink({ expression, configIndex, className, inter
   return (
     <span className={className} onClick={interactive ? navigateExpressionTarget : undefined} title={interactive ? t.openInExplorerAction : undefined}>
       <ClickablePath expression={expression} configIndex={configIndex} mode="binding-expr" interactive={false} highlight={highlight} />
+    </span>
+  );
+}
+
+/**
+ * A formula laid out as the comparison lays it out: on one line while it is
+ * short, otherwise one argument per line, indented by how deep it sits — broken
+ * only after `(` and `,`, never inside a quoted name. A line still too long for
+ * the column wraps under its own indent.
+ */
+export function FormulaLines({ expression, configIndex }: { expression: string; configIndex: number }) {
+  const lines = useMemo(() => formatFormula(expression), [expression]);
+  return (
+    <span className="formula-lines">
+      {lines.map((line, i) => (
+        <span key={i} className="formula-lines__line" style={{ ['--formula-indent' as string]: line.indent }}>
+          <ClickablePath expression={line.text} configIndex={configIndex} mode="binding-expr" interactive={false} breakBetweenNames />
+        </span>
+      ))}
     </span>
   );
 }

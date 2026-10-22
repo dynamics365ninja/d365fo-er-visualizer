@@ -235,7 +235,6 @@ function ResultGroup({ config, configIndex, definition, items, query, expandSign
         <span className="search-result-group-name" title={name}>{name}</span>
         {kind && <span className={`badge badge-${kind.toLowerCase()} badge-tiny`}>{t.searchKindLabels[kind as 'Format' | 'ModelMapping' | 'DataModel'] ?? kind}</span>}
         {definition && <span className="search-result-group-model" title={t.searchGroupDefinitionHint(definition)}>{t.searchGroupDefinition(definition)}</span>}
-        <span className="search-result-group-count">{items.length}</span>
       </button>
       {expanded && (
         <div className="search-result-group-body">
@@ -244,7 +243,6 @@ function ResultGroup({ config, configIndex, definition, items, query, expandSign
               <div className="search-cat__header">
                 <span className="search-cat__marker" aria-hidden="true" />
                 <span className="search-cat__title">{t.searchCategoryLabels[category]}</span>
-                <span className="search-cat__count">{rows.length}</span>
               </div>
               <div className="search-cat__rows">
                 {rows.map(match => <ResultRow key={match.doc.id} match={match} query={query} />)}

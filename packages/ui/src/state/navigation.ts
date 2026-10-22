@@ -25,7 +25,18 @@ export type OpenTab =
       expression: string;
       elementName?: string;
     }
-  | { kind: 'compare'; id: string; label: string; configIndex: number; otherKey: string };
+  | {
+      kind: 'compare';
+      id: string;
+      label: string;
+      configIndex: number;
+      otherKey: string;
+      /** `base`: the other side is the configuration this one was derived from, not another version of it. */
+      mode?: CompareMode;
+    };
+
+/** What a comparison tab sets against the loaded configuration. */
+export type CompareMode = 'version' | 'base';
 
 /** Which tabs are open, which one is active and which node is selected. */
 export interface TabSelectionState {

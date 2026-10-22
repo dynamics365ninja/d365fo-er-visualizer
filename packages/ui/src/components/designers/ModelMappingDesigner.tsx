@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LinkFilled, CheckmarkCircleRegular, CheckmarkRegular, ChevronDownRegular } from '@fluentui/react-icons';
+import { BracesRegular, LinkFilled, CheckmarkCircleRegular, CheckmarkRegular, ChevronDownRegular, TagRegular } from '@fluentui/react-icons';
 import { Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from '@fluentui/react-components';
 import type { ERDataModelContent } from '@er-visualizer/core';
 import { useAppStore, getMappingDefinitions, mappingDefinitionLabel } from '../../state/store';
@@ -14,7 +14,10 @@ import { FilterField } from '../FilterField';
 import { t, useLocale } from '../../i18n';
 import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../../utils/filter-suggestions';
 import { useTabState } from '../../utils/tab-view-state';
-import { findTreeNodeByMatch, DesignerHint, SlidingTabs, datasourceFocusKey, collectDatasourceTerms, EMPTY_STRING_SET, RevealInExplorerMenu, fieldTypeLabel } from './shared';
+import { findTreeNodeByMatch, DesignerHint, SlidingTabs, datasourceFocusKey, collectDatasourceTerms, EMPTY_STRING_SET, RevealInExplorerMenu, fieldTypeLabel, FormulaLines } from './shared';
+import { BindingExpression, BindingGroupHead, BindingItem, BindingLine } from './FormatBindingsView';
+import { getBindingIntentHint, getBindingIntentItemLabel } from '../../utils/format-binding-sections';
+import { isBarePath } from '../../utils/er-references';
 import { type GroupedDatasourceListHandle, GroupedDatasourceList } from './DatasourceTree';
 import { flattenVisibleTree } from '../../utils/flat-tree';
 import { buildFieldTree, pruneFieldTree, type BindingTreeNode, type MappingFieldScope } from '../../utils/mapping-field-tree';
@@ -488,7 +491,6 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
             ? <div style={{ color: 'var(--er-text-muted)', fontSize: 12, padding: 12 }}>{t.noResults}</div>
             : <VirtualBindingTree
                 roots={bindingTree}
-                scope={effectiveScope}
                 technical={showTechnicalDetails}
                 scrollRef={scrollPaneRef}
                 collapsed={effectiveCollapsedGroups}
@@ -555,12 +557,6 @@ function ValidationRow({ validation, configIndex, focused, focusRef, onSelect, o
       <div className="mm-tree-head">
         <span className="mm-validation-icon" aria-hidden><CheckmarkCircleRegular fontSize={14} /></span>
         <span className="mm-binding-name" title={validation.path}>{validation.path}</span>
-        {rules.length > 1 && (
-          <span
-            className="mm-group-count"
-            title={t.mmRuleCount(rules.length)}
-          >{rules.length}</span>
-        )}
         {onReveal && <RevealInExplorerMenu onReveal={() => onReveal(validation.path)} />}
       </div>
       {rules.map((rule: any, ri: number) => (
@@ -616,14 +612,13 @@ const BINDING_ROW_ESTIMATE = 58;
 /**
  * The model-mapping binding hierarchy, flattened and virtualized: a mapping
  * with thousands of bindings used to mount every row (each with its formula)
- * on "Expand all". The indentation rails the nested markup used to draw come
- * from each row now (see `.mm-flat-row` in the styles).
+ * on "Expand all". Each row indents itself by its depth, in the same group and
+ * item rows as the format's Bindings tab.
  */
 function VirtualBindingTree({
-  roots, scope, technical, scrollRef, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding, onRevealBinding,
+  roots, technical, scrollRef, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding, onRevealBinding,
 }: {
   roots: BindingTreeNode[];
-  scope: MappingFieldScope;
   technical: boolean;
   scrollRef: React.RefObject<HTMLDivElement | null>;
   collapsed: ReadonlySet<string>;
@@ -666,7 +661,7 @@ function VirtualBindingTree({
   }, [focusBindingPath, focusIndex, virtualizer]);
 
   return (
-    <div className="mm-tree" role="tree">
+    <div className="fb-tree" role="tree">
       <div ref={containerRef} style={{ position: 'relative', height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map(item => {
           const row = rows[item.index];
@@ -676,19 +671,16 @@ function VirtualBindingTree({
               key={item.key}
               data-index={item.index}
               ref={virtualizer.measureElement}
-              className="mm-flat-row"
               data-depth={row.depth}
               style={{
                 position: 'absolute', top: 0, left: 0, width: '100%',
                 transform: `translateY(${item.start - scrollMargin}px)`,
-                ['--mm-depth' as string]: row.depth,
               }}
             >
               <BindingTreeRow
                 node={row.node}
-                scope={scope}
                 technical={technical}
-                level={row.depth + 1}
+                depth={row.depth}
                 collapsed={collapsed.has(row.node.key)}
                 onToggle={onToggle}
                 configIndex={configIndex}
@@ -715,12 +707,11 @@ function VirtualBindingTree({
  * whenever it scrolls, and a row has not changed in any of those passes.
  */
 const BindingTreeRow = React.memo(function BindingTreeRow({
-  node, scope, technical, level, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding, onRevealBinding,
+  node, technical, depth, collapsed, onToggle, configIndex, focusBindingPath, flashBindingPath, focusRef, onSelectBinding, onRevealBinding,
 }: {
   node: BindingTreeNode;
-  scope: MappingFieldScope;
   technical: boolean;
-  level: number;
+  depth: number;
   /** This row's own branch is folded. */
   collapsed: boolean;
   onToggle: (key: string) => void;
@@ -733,68 +724,70 @@ const BindingTreeRow = React.memo(function BindingTreeRow({
   onRevealBinding?: (path: string) => void;
 }) {
   const hasChildren = node.children.length > 0;
-  const isCollapsed = hasChildren && collapsed;
+  const open = hasChildren && !collapsed;
   const binding = node.binding;
   const isFocused = !!binding && node.key === focusBindingPath;
-  const navFlash = isFocused && flashBindingPath === node.key;
   // A field of the model that nothing binds — listed by "all" and "unmapped".
   const unmapped = node.inModel && !binding && !hasChildren;
+  const label = node.label && node.label !== node.name ? node.label : undefined;
+  const icon = hasChildren
+    ? <span className="fb-icon fb-icon--record"><BracesRegular fontSize={16} /></span>
+    : <span className="fb-icon fb-icon--field"><TagRegular fontSize={16} /></span>;
 
-  const classes = [
-    'mm-tree-row',
-    binding ? 'mm-binding-row' : unmapped ? 'mm-unmapped-row' : 'mm-tree-branch',
-    hasChildren ? 'mm-tree-expandable' : '',
-    isFocused ? 'search-match' : '',
-    navFlash ? 'nav-flash' : '',
-  ].filter(Boolean).join(' ');
-
-  return (
-    <div
-      className={classes}
-      role="treeitem"
-      aria-level={level}
-      aria-expanded={hasChildren ? !isCollapsed : undefined}
-      ref={isFocused ? focusRef : null}
-      onClick={() => {
-        if (binding) onSelectBinding(node.key);
-        else if (hasChildren) onToggle(node.key);
-      }}
-    >
-      <div className="mm-tree-head">
-        {hasChildren ? (
-          <button
-            type="button"
-            className={`mm-tree-toggle ${isCollapsed ? '' : 'open'}`}
-            aria-label={node.name}
-            onClick={e => { e.stopPropagation(); onToggle(node.key); }}
-          >
-            <span className={`tree-chevron ${isCollapsed ? '' : 'open'}`} />
-          </button>
-        ) : (
-          <span className="mm-tree-toggle mm-tree-toggle--leaf" aria-hidden />
-        )}
-        <span className={binding || unmapped ? 'mm-binding-name' : 'mm-tree-branch-name'}>{node.name}</span>
-        {node.label && node.label !== node.name && (
-          <span className="mm-tree-label" title={node.label}>{node.label}</span>
-        )}
-        {unmapped && technical && node.fieldType !== undefined && (
-          <span className="mm-field-type">{fieldTypeLabel(node.fieldType)}</span>
-        )}
-        {unmapped && <span className="mm-unmapped-tag">{t.mmUnmappedField}</span>}
-        {hasChildren && (scope === 'unmapped'
-          ? <span className="mm-group-count mm-group-count--unmapped" title={t.mmBranchUnmappedCount(node.unmappedCount)}>{node.unmappedCount}</span>
-          : <span className="mm-group-count" title={t.mmBranchBindingCount(node.count)}>{node.count}</span>)}
-        {binding && onRevealBinding && <RevealInExplorerMenu onReveal={() => onRevealBinding(node.key)} />}
+  // A record that only groups bound fields.
+  if (!binding && !unmapped) {
+    return (
+      <div role="treeitem" aria-level={depth + 1} aria-expanded={hasChildren ? open : undefined}>
+        <BindingGroupHead
+          depth={depth}
+          open={open}
+          onToggle={() => onToggle(node.key)}
+          icon={icon}
+          title={node.name}
+          description={label}
+          hint={node.key}
+        />
       </div>
-      {binding && (
-        <div className="mm-binding-expr">
-          <span className="mm-binding-arrow" aria-hidden>←</span>
-          {/* The formula opens its drill-down, as in the format and datasource views. */}
-          <DrillDownTrigger expression={binding.expressionAsString} configIndex={configIndex} elementName={node.name}>
-            <ClickablePath expression={binding.expressionAsString} configIndex={configIndex} mode="binding-expr" interactive={false} />
-          </DrillDownTrigger>
-        </div>
-      )}
+    );
+  }
+
+  // A bound field — or one nothing binds: what fills it, read the same way as the format's bindings.
+  const intent = binding && isBarePath(binding.expressionAsString) ? 'direct' : 'calculated';
+  return (
+    <div role="treeitem" aria-level={depth + 1} aria-expanded={hasChildren ? open : undefined}>
+      <BindingItem
+        depth={depth}
+        itemRef={isFocused ? focusRef : undefined}
+        focused={isFocused}
+        flash={isFocused && flashBindingPath === node.key}
+        warning={unmapped}
+        icon={icon}
+        name={node.name}
+        hint={node.key}
+        description={label}
+        toggle={hasChildren ? { open, onToggle: () => onToggle(node.key) } : undefined}
+        onSelect={binding ? () => onSelectBinding(node.key) : undefined}
+        aside={unmapped && technical && node.fieldType !== undefined && <span className="fb-aside">{fieldTypeLabel(node.fieldType)}</span>}
+        actions={binding && onRevealBinding && <RevealInExplorerMenu onReveal={() => onRevealBinding(node.key)} />}
+        lines={binding ? (
+          <BindingLine
+            tone={`fmt-bind-intent--${intent}`}
+            label={getBindingIntentItemLabel(intent)}
+            hint={getBindingIntentHint(intent)}
+          >
+            <BindingExpression>
+              {/* The formula opens its drill-down, as in the format and datasource views. */}
+              <DrillDownTrigger expression={binding.expressionAsString} configIndex={configIndex} elementName={node.name}>
+                <FormulaLines expression={binding.expressionAsString} configIndex={configIndex} />
+              </DrillDownTrigger>
+            </BindingExpression>
+          </BindingLine>
+        ) : (
+          <BindingLine tone="fb-tone--mapping" label={t.fbLineMapping}>
+            <span className="fb-note fb-note--warning">{t.fbNoMappingBinding}</span>
+          </BindingLine>
+        )}
+      />
     </div>
   );
 });

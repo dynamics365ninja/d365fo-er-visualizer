@@ -18,6 +18,12 @@ interface ClickablePathProps {
   mark?: TextMark;
   /** Where a click on a resolved name goes; the tree node it resolves to by default. */
   onNavigate?: (treeNodeId: string) => void;
+  /**
+   * A line too long for its column breaks only between names — after a `.`,
+   * `,`, `(` or an operator — never inside a quoted name such as
+   * `'Tax declaration header'`. Non-interactive rendering only.
+   */
+  breakBetweenNames?: boolean;
 }
 
 export interface TextMark {
@@ -34,7 +40,10 @@ const SHOW_DELAY_MS = 220;
  * Datasource names and model paths are resolved on hover.
  * If a reference resolves, it becomes clickable with a tooltip.
  */
-export function ClickablePath({ expression, configIndex, mode = 'auto', style, interactive = true, highlight, mark, onNavigate }: ClickablePathProps) {
+/** A segment after which a long formula may break: a separator, a comma, an operator, white space. */
+const BREAK_AFTER = /(?:[.,(=<>+\-*/&]|\s)$/;
+
+export function ClickablePath({ expression, configIndex, mode = 'auto', style, interactive = true, highlight, mark, onNavigate, breakBetweenNames }: ClickablePathProps) {
   const segments = useMemo(() => parseExpressionSegments(expression, mode), [expression, mode]);
   // Where each segment starts in `expression`, for a mark given in its offsets.
   const offsets = useMemo(() => {
@@ -54,9 +63,18 @@ export function ClickablePath({ expression, configIndex, mode = 'auto', style, i
     <span style={{ fontFamily: 'var(--er-font-mono)', fontSize: 11, ...style }}>
       {segments.map((seg, i) => {
         const segMark = mark && offsets ? markWithin(mark, offsets[i], seg.text.length) : undefined;
-        return interactive
-          ? <SmartSegment key={i} segment={seg} configIndex={configIndex} highlight={highlight} mark={segMark} onNavigate={onNavigate} />
-          : <span key={i} style={segmentStyle(seg, false, false)}>{markedSegmentText(seg.text, highlight, segMark)}</span>;
+        if (interactive) {
+          return <SmartSegment key={i} segment={seg} configIndex={configIndex} highlight={highlight} mark={segMark} onNavigate={onNavigate} />;
+        }
+        if (!breakBetweenNames) {
+          return <span key={i} style={segmentStyle(seg, false, false)}>{markedSegmentText(seg.text, highlight, segMark)}</span>;
+        }
+        return (
+          <React.Fragment key={i}>
+            <span style={{ ...segmentStyle(seg, false, false), whiteSpace: 'nowrap' }}>{markedSegmentText(seg.text, highlight, segMark)}</span>
+            {BREAK_AFTER.test(seg.text) && <wbr />}
+          </React.Fragment>
+        );
       })}
     </span>
   );

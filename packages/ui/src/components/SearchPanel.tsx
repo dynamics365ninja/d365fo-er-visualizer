@@ -765,7 +765,6 @@ function FileReferenceGroup({
           <Highlight text={configName} query={query} />
         </span>
         <MappingDefinitionChip definition={definition} />
-        <span className="search-result-group-count">{visibleRefs.length}</span>
       </button>
       {expanded && (
         <div className="search-result-group-body">
@@ -774,7 +773,6 @@ function FileReferenceGroup({
               <div className="search-cat__header">
                 <span className="search-cat__marker" aria-hidden="true" />
                 <span className="search-cat__title">{referenceCategoryLabel(category)}</span>
-                <span className="search-cat__count">{refs.length}</span>
               </div>
               <div className="search-cat__rows">
                 {refs.map((ref, i) => (
