@@ -66,6 +66,7 @@ from `store.ts` so importers keep using one path:
 | `where-used.ts` | Text occurrences of a where-used query that the impact analysis cannot tie to a source (and the older name-based walk, kept for its tests) |
 | `configuration-merge.ts` · `mapping-definitions.ts` · `config-warnings.ts` | Replacing a loaded configuration by path or solution GUID — the workspace holds one version of each configuration; an older candidate is reported (`older`) and a replaced one handed back, so the store can open a comparison instead — which mapping definition a format binds to, non-fatal warnings |
 | `fno-profiles.ts` · `fno-session.ts` | F&O connection profiles and browsing state |
+| `base-configuration.ts` | The base a derived configuration was made from (`Base` of its solution): whether a loaded, cached or parsed configuration is that base — and the very version it was derived from — what is known of its kind (a root format's base is its data model), the F&O request that downloads it |
 
 | Key state | Description |
 |---|---|
@@ -74,7 +75,8 @@ from `store.ts` so importers keep using one path:
 | `treeNodes` | Explorer tree hierarchy |
 | `selectedNode` | Currently selected tree node |
 | `openTabs` / `activeTabId` | Designer tabs (node, drill-down or version comparison); `activeTabId` is the tab shown in the left (main) group |
-| `comparisonVersions` | Other versions of loaded configurations, held only for an open comparison tab (`compare:N:…`) and dropped with the last tab that shows them — never part of `configurations`, where formats, mappings and models resolve each other by GUID |
+| `comparisonVersions` | Other versions of loaded configurations — or the base a derived one was made from — held only for an open comparison tab (`compare:N:…`, `mode: 'base'` for a base comparison) and dropped with the last tab that shows them — never part of `configurations`, where formats, mappings and models resolve each other by GUID |
+| `versionComparePickerIndex` / `versionComparePickerMode` | The configuration the comparison picker is open for, and whether it looks for another version or for the base |
 | `splitTabId` / `sideTabIds` / `focusedPane` | The right (side) tab group: its shown tab, its tabs, and which group has focus |
 | `searchQuery` | Search box text; the panel searches the typed index (`utils/search-index.ts`) itself |
 | `whereUsedQuery` / `whereUsedTarget` / `whereUsedScope` | The where-used query, the exact item it was started from (model field of one record, datasource of one definition), and the all / mapping / format scope; `whereUsedResults` holds the text occurrences |
@@ -86,7 +88,7 @@ from `store.ts` so importers keep using one path:
 | `warnings` | Non-fatal parse findings surfaced per configuration |
 | `fnoIngestStatus` / `fnoIngestProgress` / `cancelFnoIngest` | Free-text phase label, the structured per-configuration download log, and the cancel handle of the running download |
 
-**Key actions:** `loadXmlFile` (`olderVersion: 'compare'` for files the user picks) · `openVersionCompare` / `compareWithXml` / `compareWithCachedVersion` · `selectNode` · `openTab` / `openDrillDownTab` · `openTabToSide` / `moveTabToPane` / `reorderTab` / `closePane` · `resolveDatasource` · `resolveBinding` · `resolveModelPath` · `triggerWhereUsed` / `executeWhereUsed` · `loadCachedFile` / `loadRecentSession` · `closeConfigurationWithUndo` / `closeAllConfigurationsWithUndo` · `addInheritedLabels` / `refreshLabelPool` · `beginFnoIngest` / `updateFnoIngestItem` / `endFnoIngest`
+**Key actions:** `loadXmlFile` (`olderVersion: 'compare'` for files the user picks) · `openVersionCompare` / `compareWithXml` / `compareWithCachedVersion` (each with `mode: 'base'`) · `compareWithBase` / `compareWithBaseFromFno` · `selectNode` · `openTab` / `openDrillDownTab` · `openTabToSide` / `moveTabToPane` / `reorderTab` / `closePane` · `resolveDatasource` · `resolveBinding` · `resolveModelPath` · `triggerWhereUsed` / `executeWhereUsed` · `loadCachedFile` / `loadRecentSession` · `closeConfigurationWithUndo` / `closeAllConfigurationsWithUndo` · `addInheritedLabels` / `refreshLabelPool` · `beginFnoIngest` / `updateFnoIngestItem` / `endFnoIngest`
 
 **Layout of `src/`:**
 - `components/` — the shell (`App`, `ActivityBar`, `Toolbar`, `LandingPage` + `RecentWork`, `ConfigExplorer`, `DesignerView` + `TabBar`, `PropertyInspector`, `SearchPanel`, `DrillDownPanel`, `WorkspaceManager`); `components/designers/` — one designer per component kind plus the shared pieces (`DataModelDesigner` / `DataModelList`, `ModelMappingDesigner`, `FormatDesigner` / `FormatElementTree` / `FormatBindingsView`, `DatasourceTree`, `FormatPreview` / `ExcelPreview`); `components/fno/` — the F&O browser (profiles, solution navigator, configuration browser, `useFnoIngest`).
@@ -107,11 +109,15 @@ analysis views share, so they always agree:
 | `utils/search-index.ts` | Typed full-text documents for every named thing, accent-insensitive, ranked by match location |
 | `utils/format-preview.ts` · `utils/sample-values.ts` | The preview document (XML / text lines with segments linked to elements, notes, bands) and the sample values (type, enum, mask, context aware, consistent per model field) |
 | `utils/field-spec-export.ts` | The specification as CSV |
-| `utils/version-diff.ts` | `diffConfigurations`: what changed between two versions of one configuration — format elements (properties, bindings, moves to another parent, reorders via a longest increasing run), data sources, mapping bindings / validations / definitions, model records and fields, format enums, transformations, label texts — matched by GUID, then by path; the CSV of the change list |
+| `utils/version-diff.ts` | `diffConfigurations`: what changed between two versions of one configuration — format elements (properties, bindings, moves to another parent, reorders via a longest increasing run), data sources, mapping bindings / validations / definitions, model records and fields, format enums, transformations, label texts — matched by GUID, then by path; `keepOrder` keeps a base on the left of its derived configuration; the CSV of the change list |
+| `utils/template-diff.ts` | `compareWorkbooks`: what changed inside the Excel template — sheets (renamed ones paired by content), cell texts, formulas and styles, merged cells, named ranges, pictures and text boxes, column widths and row heights. Rows are lined up first (by their texts, and by the named ranges ER writes through them), so an inserted row is one added row and ranges that only moved with it are no change; per side the cell and row marks the preview colours |
+| `utils/sequence-diff.ts` | `alignSequences`: two sequences item against item — the longest common run pairs up, the items left between pair by similarity (`textSimilarity`) or stay added / removed; `foldUnchanged` folds long unchanged runs. Used for template rows, preview document lines, formulas and lists |
 | `utils/expression-format.ts` | `formatFormula`: a formula on indented lines, one argument per line once it is long — broken only after `(` / `,` and before `)`, so each line tokenizes (and renders through `ClickablePath`) on its own; `diffFormulaLines` lines two formulas up by their longest common run |
 
 Views on top: `designers/FieldSpecView` (Specification tab), `designers/ElementFillCard` (inspector,
-preview), `designers/DocumentPreview`, `designers/VersionCompareView` (comparison tab),
+preview), `designers/DocumentPreview`, `designers/VersionCompareView` (comparison tab: change list, or
+`designers/ComparePreview` — both Excel templates side by side with every changed cell marked, or the two
+sample XML / text documents line against line),
 `WhereUsedView`, `SearchResultsView`. All of them are pure
 functions of `configurations` and cached per configuration set (`WeakMap`), so nothing is stored in
 the Zustand store.
@@ -135,7 +141,8 @@ dictionary. The preferred language follows the app's language switch, not the br
 **Excel templates** — `utils/xlsx-parser.ts` unpacks the `.xlsx` template embedded in a format
 (JSZip) and reads sheets, merged cells, column widths and named ranges, so the format designer's
 Preview (`designers/ExcelPreview.tsx`) can render the workbook. When the export carries no template the same view accepts one
-dropped in by the user.
+dropped in by the user. A comparison unzips both versions' templates (`designers/useTemplateComparison.ts`, parsed once per
+payload) and compares their content (`utils/template-diff.ts`).
 
 **Theming** — the rules live in `@er-visualizer/design-tokens/theme` (re-exported by `src/theme.ts`)
 next to the CSS that encodes the same precedence, and the marketing site imports the very same

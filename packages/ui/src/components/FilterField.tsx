@@ -238,11 +238,6 @@ export function FilterField({
                 <span className="filter-suggest__label">
                   {before}<mark>{match}</mark>{after}
                 </span>
-                {suggestion.count > 1 && (
-                  <span className="filter-suggest__count" title={t.filterMatchCount(suggestion.count)}>
-                    {suggestion.count}
-                  </span>
-                )}
               </div>
             );
           })}

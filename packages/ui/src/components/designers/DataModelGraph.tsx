@@ -160,7 +160,6 @@ const ModelContainerNode = React.memo(function ModelContainerNode({ data, select
         <span className="dm-node__name">{name}</span>
         {kind === 'root' && <span className="dm-node__badge dm-node__badge--root">{t.modelRootBadge}</span>}
         {kind === 'enum' && <span className="dm-node__badge dm-node__badge--enum">{t.modelEnumBadge}</span>}
-        <span className="dm-node__count">{t.statsFields(fieldCount)}</span>
       </div>
       <div className="dm-node__fields">
         {fields.map((f, i) => (

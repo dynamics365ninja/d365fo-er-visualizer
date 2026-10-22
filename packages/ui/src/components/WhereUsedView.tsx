@@ -271,7 +271,6 @@ function UsageSection<T>({ icon, title, kind, rows, render }: {
       <div className="impact-section__head">
         {icon}
         <span className="impact-section__title" title={title}>{kind === 'mapping' ? `${t.impactFillsTitle} · ` : ''}{title}</span>
-        <span className="impact-section__count">{rows.length}</span>
       </div>
       <div className="impact-section__rows">
         {shown.map((row, i) => <React.Fragment key={i}>{render(row)}</React.Fragment>)}

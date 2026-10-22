@@ -13,9 +13,6 @@ import {
   AddRegular,
   ArrowCounterclockwiseRegular,
   BranchCompareRegular,
-  DataBarVerticalFilled,
-  DocumentFilled,
-  LinkFilled,
   CloudArrowDownRegular,
   DeleteRegular,
   DismissRegular,
@@ -125,12 +122,6 @@ export function WorkspaceManager({
 
   const hierarchy = useMemo(() => buildExplorerModelGroups(configurations), [configurations]);
 
-  const counts = useMemo(() => {
-    const c = { DataModel: 0, ModelMapping: 0, Format: 0 };
-    for (const cfg of configurations) c[cfg.content.kind as keyof typeof c] += 1;
-    return c;
-  }, [configurations]);
-
   const openInTab = useCallback((configIndex: number) => {
     navigateToTreeNode(`cfg-${configIndex}`);
     onOpenChange(false);
@@ -237,22 +228,7 @@ export function WorkspaceManager({
                 />
               }
             >
-              <span className="ws-title">
-                {t.workspaceManager}
-                {/* Three bare numbers said nothing about what they counted;
-                    the icons are the same ones the explorer marks kinds with. */}
-                <span className="ws-title-counts">
-                  <span className="ws-count ws-count--model" title={dependencyKindLabel('DataModel')}>
-                    <DataBarVerticalFilled fontSize={11} />{counts.DataModel}
-                  </span>
-                  <span className="ws-count ws-count--mapping" title={dependencyKindLabel('ModelMapping')}>
-                    <LinkFilled fontSize={11} />{counts.ModelMapping}
-                  </span>
-                  <span className="ws-count ws-count--format" title={dependencyKindLabel('Format')}>
-                    <DocumentFilled fontSize={11} />{counts.Format}
-                  </span>
-                </span>
-              </span>
+              <span className="ws-title">{t.workspaceManager}</span>
             </DialogTitle>
             <DialogContent className="ws-content" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <div className="ws-toolbar">
@@ -292,7 +268,6 @@ export function WorkspaceManager({
 
               <div className="ws-section-head">
                 <span>{t.workspaceLoaded}</span>
-                <span className="ws-count">{configurations.length}</span>
                 <span className="ws-section-spacer" />
                 <Button
                   appearance="subtle"
@@ -314,7 +289,6 @@ export function WorkspaceManager({
 
               <div className="ws-section-head ws-section-head--spaced">
                 <span>{t.workspaceAvailable}</span>
-                <span className="ws-count">{available.length}</span>
                 <span className="ws-section-spacer" />
                 {available.length > 0 && (
                   <Button

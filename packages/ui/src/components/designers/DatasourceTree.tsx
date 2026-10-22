@@ -171,7 +171,6 @@ function DatasourceRow({ node, ctx, depth }: {
   const parentPath = ctx.layout === 'kind' && depth === 0 && node.path.length > 1
     ? node.path.slice(0, -1).join(' / ')
     : null;
-  const enumValues = node.enumValues;
 
   const groupByFields = ds?.groupByInfo?.groupedFields ?? [];
   const aggregatedFields = ds?.groupByInfo?.aggregations ?? [];
@@ -299,21 +298,6 @@ function DatasourceRow({ node, ctx, depth }: {
                 ? <span className="ds-row-formula">= {targetLabel}</span>
                 : <>→ <strong>{targetLabel}</strong></>)}
           </span>
-          {enumValues && (
-            <span
-              className={`ds-enum-count${enumValues.complete ? '' : ' ds-enum-count--partial'}`}
-              title={enumValues.complete ? t.dsEnumValuesHint : t.dsEnumValuesPartialHint}
-            >
-              {enumValues.complete
-                ? t.dsEnumValueCount(enumValues.values.length)
-                : enumValues.values.length > 0 ? t.dsEnumValuesUsedCount(enumValues.values.length) : t.dsEnumValuesInFno}
-            </span>
-          )}
-          {ctx.layout !== 'kind' && node.declaredCount > 0 && (
-            <span className="ds-row-count" title={t.dsNestedCount(node.declaredCount)}>
-              {node.declaredCount}
-            </span>
-          )}
           {formula && (
             <button
               type="button"
@@ -359,7 +343,6 @@ function DatasourceRow({ node, ctx, depth }: {
                   }}
                 >
                   <span className="fmt-ds-label">{t.dsGroupBy}</span>
-                  <span className="ds-row-groupby-count">{groupByFields.length}</span>
                   <span className={`tree-chevron ${showGroupedFields ? 'open' : ''}`} />
                 </button>
                 {showGroupedFields && (
@@ -392,7 +375,6 @@ function DatasourceRow({ node, ctx, depth }: {
                   }}
                 >
                   <span className="fmt-ds-label">{t.dsAggregated}</span>
-                  <span className="ds-row-groupby-count">{aggregatedFields.length}</span>
                   <span className={`tree-chevron ${showAggregatedFields ? 'open' : ''}`} />
                 </button>
                 {showAggregatedFields && (
@@ -894,7 +876,6 @@ export const GroupedDatasourceList = React.forwardRef<GroupedDatasourceListHandl
                   <span className={`tree-chevron ${!isCollapsed ? 'open' : ''}`} />
                   <span className="ds-group-dot" aria-hidden="true" />
                   <span className="ds-group-label">{getDatasourceGroupLabel(type, showTechnicalDetails)}</span>
-                  <span className="ds-group-count">{items.length}</span>
                 </div>
                 {!isCollapsed && <DatasourceGroupRows items={items} ctx={ctx} scrollRef={scrollRef} />}
               </div>

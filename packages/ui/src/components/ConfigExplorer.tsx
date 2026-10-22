@@ -7,29 +7,44 @@ import {
   MenuList,
   MenuItem,
   MenuDivider,
+  type PositioningVirtualElement,
 } from '@fluentui/react-components';
 import {
-  MoreVerticalRegular,
-  ArrowSortRegular,
-  OpenRegular,
-  DeleteRegular,
-  ChevronDownRegular,
-  ChevronRightRegular,
-  DataBarVerticalFilled,
-  LinkFilled,
-  DocumentFilled,
-  TextExpandRegular,
-  TextCollapseRegular,
-  TextBulletListTreeRegular,
-  ListRegular,
-  DismissSquareMultipleRegular,
-  FolderRegular,
-  AppsListDetailRegular,
   AddRegular,
-  SearchRegular,
-  ArrowUploadRegular,
+  AppsListDetailRegular,
   ArrowDownloadRegular,
+  ArrowDownRegular,
+  ArrowSyncRegular,
+  ArrowUpRegular,
+  ArrowUploadRegular,
+  BracesRegular,
   BranchCompareRegular,
+  BranchForkRegular,
+  CheckmarkCircleRegular,
+  CheckmarkRegular,
+  ChevronRightRegular,
+  CircleSmallFilled,
+  DataBarVerticalFilled,
+  DatabaseRegular,
+  DeleteRegular,
+  DismissRegular,
+  DismissSquareMultipleRegular,
+  DocumentFilled,
+  DocumentRegular,
+  FolderOpenRegular,
+  FolderRegular,
+  LinkFilled,
+  LinkRegular,
+  ListRegular,
+  MoreHorizontalRegular,
+  ArrowResetRegular,
+  NumberSymbolSquareRegular,
+  OpenRegular,
+  SearchRegular,
+  TagRegular,
+  TextBulletListTreeRegular,
+  TextCollapseRegular,
+  TextExpandRegular,
 } from '@fluentui/react-icons';
 import { whereUsedQueryFor, whereUsedTargetFor } from '../utils/where-used-query';
 import { t, useLocale } from '../i18n';
@@ -38,6 +53,7 @@ import { flattenVisibleTree, indexFlatRows, type FlatTreeRow } from '../utils/fl
 import { useTreeOpenState } from '../utils/use-tree-open-state';
 import { useVirtualTree } from '../utils/use-virtual-tree';
 import { useAppStore, focusedTabId, lastActiveFormatIndex, type TreeNode } from '../state/store';
+import { baseReference, knownBaseKind } from '../state/base-configuration';
 import { ERDirection } from '@er-visualizer/core';
 import type { ERConfiguration } from '@er-visualizer/core';
 import { buildExplorerModelGroups, getDisplayVersion, type ExplorerModelGroup } from '../utils/model-hierarchy';
@@ -50,13 +66,25 @@ import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../uti
 import { FilterField } from './FilterField';
 import { WorkspaceManager } from './WorkspaceManager';
 import { FnoIngestPanel } from './FnoIngestPanel';
+import { FormatElementIcon, getFormatTypeColor } from './designers/format-type';
 import {
-  ArrowSyncRegular,
-  CheckmarkCircleRegular,
-} from '@fluentui/react-icons';
+  DEFAULT_SECTION_ORDER,
+  arrangeSections,
+  dropSection,
+  loadSectionLayout,
+  moveSection,
+  saveSectionLayout,
+} from '../utils/explorer-sections';
 
 type ConfigKind = 'DataModel' | 'ModelMapping' | 'Format';
 type SortMode = 'loadOrder' | 'nameAsc' | 'nameDesc';
+
+const KINDS: readonly ConfigKind[] = ['DataModel', 'ModelMapping', 'Format'];
+const KIND_ACCENT: Record<ConfigKind, 'model' | 'mapping' | 'format'> = { DataModel: 'model', ModelMapping: 'mapping', Format: 'format' };
+
+/** Indentation per tree level and the row's own left padding — VS Code's tree metrics. */
+const INDENT = 8;
+const ROW_PAD = 8;
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -64,46 +92,7 @@ function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   return t.formatDirectionUnknown;
 }
 
-function getExplorerNodeAccentClass(node: TreeNode): string {
-  const kind = node.type === 'file' ? node.data?.kind : undefined;
-
-  if (kind === 'DataModel' || node.type === 'model') return 'tree-node-accent-model';
-  if (kind === 'ModelMapping' || node.type === 'mapping') return 'tree-node-accent-mapping';
-  if (kind === 'Format' || node.type === 'format') return 'tree-node-accent-format';
-
-  return '';
-}
-
-function getExplorerKindLabel(node: TreeNode): string | null {
-  const kind = getConfigurationKind(node);
-  const labels = t.explorerKindPills;
-
-  if (kind === 'Format' && node.data?.content?.kind === 'Format') {
-    return `${labels.Format} • ${getFormatDirectionLabel(node.data.content.direction)}`;
-  }
-
-  if (kind === 'DataModel' || node.type === 'model') return labels.DataModel;
-  // The mapping-definition row is named after the definition itself, so the
-  // pill is what says it is a mapping. Configuration rows still get theirs.
-  if (kind === 'ModelMapping') return labels.ModelMapping;
-  if (kind === 'Format' || node.type === 'format') return labels.Format;
-
-  return null;
-}
-
-/**
- * Pill text for rows that already sit under a kind group header — repeating
- * "Model" under "Data models" is noise. Formats still carry their direction,
- * which the group header does not say.
- */
-function getExplorerKindPillInGroup(node: TreeNode): string | null {
-  if (getConfigurationKind(node) === 'Format' && node.data?.content?.kind === 'Format') {
-    return getFormatDirectionLabel(node.data.content.direction);
-  }
-  return null;
-}
-
-function getConfigurationKind(node: TreeNode): 'DataModel' | 'ModelMapping' | 'Format' | undefined {
+function getConfigurationKind(node: TreeNode): ConfigKind | undefined {
   const kind = node.data?.kind ?? node.data?.content?.kind;
   if (kind === 'DataModel' || kind === 'ModelMapping' || kind === 'Format') {
     return kind;
@@ -111,66 +100,99 @@ function getConfigurationKind(node: TreeNode): 'DataModel' | 'ModelMapping' | 'F
   return undefined;
 }
 
-function getExplorerGroupLabel(kind: 'DataModel' | 'ModelMapping' | 'Format'): string {
+function getExplorerGroupLabel(kind: ConfigKind): string {
   return t.explorerGroupLabels[kind];
 }
 
+function KindIcon({ kind, fontSize = 16 }: { kind: ConfigKind; fontSize?: number }) {
+  if (kind === 'DataModel') return <DataBarVerticalFilled fontSize={fontSize} />;
+  if (kind === 'ModelMapping') return <LinkFilled fontSize={fontSize} />;
+  return <DocumentFilled fontSize={fontSize} />;
+}
+
 /**
- * The filter chips get one grid column each, which is not enough for
- * "Datové modely" / "Mapování modelu" — those were cut mid-word. The full
- * label stays on the chip's tooltip.
+ * The row's icon, as a file icon theme would draw it: the configuration kind
+ * in its colour, a folder for a section (open while expanded), the format
+ * element's type, and a plain glyph for the rest.
  */
-function getExplorerChipLabel(kind: 'DataModel' | 'ModelMapping' | 'Format'): string {
-  return t.explorerChipLabels[kind];
-}
-
-function getExplorerGroupAccent(kind: 'DataModel' | 'ModelMapping' | 'Format'): string {
-  return kind === 'DataModel'
-    ? 'explorer-kind-group-model'
-    : kind === 'ModelMapping'
-      ? 'explorer-kind-group-mapping'
-      : 'explorer-kind-group-format';
-}
-
-function getExplorerNodeIcon(node: TreeNode): React.ReactNode {
+function ExplorerNodeIcon({ node, expanded }: { node: TreeNode; expanded: boolean }) {
   const kind = getConfigurationKind(node);
-
-  if (kind === 'DataModel') {
-    return <DataBarVerticalFilled fontSize={14} />;
+  if (node.type === 'file' && kind) {
+    return <span className={`vx-icon vx-icon--${KIND_ACCENT[kind]}`}><KindIcon kind={kind} /></span>;
   }
-
-  if (kind === 'ModelMapping') {
-    return <LinkFilled fontSize={14} />;
+  switch (node.type) {
+    case 'section':
+      return <span className="vx-icon vx-icon--folder">{expanded ? <FolderOpenRegular fontSize={16} /> : <FolderRegular fontSize={16} />}</span>;
+    case 'formatElement': {
+      const type = String(node.data?.elementType ?? '');
+      return <span className="vx-icon" style={{ color: getFormatTypeColor(type) }}><FormatElementIcon type={type} fontSize={16} /></span>;
+    }
+    case 'datasource':
+      return <span className="vx-icon vx-icon--datasource"><DatabaseRegular fontSize={16} /></span>;
+    case 'mapping':
+      return <span className="vx-icon vx-icon--mapping"><LinkFilled fontSize={16} /></span>;
+    case 'binding':
+    case 'formatBinding':
+      return <span className="vx-icon vx-icon--binding"><LinkRegular fontSize={16} /></span>;
+    case 'validation':
+      return <span className="vx-icon vx-icon--validation"><CheckmarkCircleRegular fontSize={16} /></span>;
+    case 'transformation':
+      return <span className="vx-icon vx-icon--transformation"><ArrowSyncRegular fontSize={16} /></span>;
+    case 'container':
+      return <span className="vx-icon vx-icon--record"><BracesRegular fontSize={16} /></span>;
+    case 'field':
+      return <span className="vx-icon vx-icon--field"><TagRegular fontSize={16} /></span>;
+    case 'enum':
+      return <span className="vx-icon vx-icon--enum"><NumberSymbolSquareRegular fontSize={16} /></span>;
+    case 'enumValue':
+      return <span className="vx-icon vx-icon--enum"><CircleSmallFilled fontSize={16} /></span>;
+    case 'model':
+      return <span className="vx-icon vx-icon--model"><DataBarVerticalFilled fontSize={16} /></span>;
+    default:
+      return <span className="vx-icon"><DocumentRegular fontSize={16} /></span>;
   }
+}
 
-  if (kind === 'Format') {
-    return <DocumentFilled fontSize={14} />;
-  }
+/** `Výčty (6)` → the name and the count the tree builder appended to it. */
+function splitCount(name: string): { name: string; count?: string } {
+  const match = /^(.*\S)\s+\((\d+)\)$/.exec(name);
+  return match ? { name: match[1], count: match[2] } : { name };
+}
 
-  if (node.type === 'mapping' || node.type === 'binding' || node.type === 'formatBinding') {
-    return <LinkFilled fontSize={14} />;
-  }
+/** How the explorer's sections move: unhurried, easing in and out, so the eye follows them. */
+const SECTION_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
+const SECTION_MOVE_MS = 420;
+const SECTION_UNROLL_MS = 380;
+const SECTION_CLOSE_MS = 220;
 
-  if (node.type === 'validation') {
-    return <CheckmarkCircleRegular fontSize={14} />;
-  }
+/** What a dragged section header carries — not files, so the explorer's file drop ignores it. */
+const SECTION_DRAG_TYPE = 'application/x-er-explorer-section';
 
-  if (node.type === 'transformation') {
-    return <ArrowSyncRegular fontSize={14} />;
-  }
+/** An invisible point to open a menu at — where the right click was. */
+function pointAt(x: number, y: number): PositioningVirtualElement {
+  return { getBoundingClientRect: () => ({ x, y, top: y, left: x, bottom: y, right: x, width: 0, height: 0 }) as DOMRect };
+}
 
-  if (
-    node.type === 'datasource'
-    || node.type === 'field'
-    || node.type === 'container'
-    || node.type === 'enum'
-    || node.type === 'enumValue'
-    || node.type === 'model'
-  ) {
-    return <DataBarVerticalFilled fontSize={14} />;
-  }
-
-  return <DocumentFilled fontSize={14} />;
+/** A small icon button of a title bar, pane header or row — VS Code's action bar. */
+function VxAction({ icon, label, onClick, pressed, className }: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  pressed?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={`vx-action${pressed ? ' vx-action--pressed' : ''}${className ? ` ${className}` : ''}`}
+      title={label}
+      aria-label={label}
+      aria-pressed={pressed}
+      onClick={onClick}
+    >
+      {icon}
+    </button>
+  );
 }
 
 /**
@@ -413,12 +435,24 @@ export function ConfigExplorer() {
   const [isDragging, setIsDragging] = useState(false);
   const [kindFilter, setKindFilter] = useState<Set<ConfigKind>>(new Set(['DataModel', 'ModelMapping', 'Format']));
   const [sortMode, setSortMode] = useState<SortMode>('loadOrder');
-  // Everything that is loaded should be visible at first level on open — the
-  // explorer starts with every kind group expanded.
+  // The kind sections in the order the user set, and which of them are
+  // collapsed — both remembered, as VS Code remembers its views. Every
+  // section starts open.
+  const [initialSections] = useState(loadSectionLayout);
+  const [sectionOrder, setSectionOrder] = useState<ConfigKind[]>(initialSections.order);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<ConfigKind>>(
-    () => new Set<ConfigKind>(),
+    () => new Set<ConfigKind>(initialSections.collapsed),
   );
+  React.useEffect(() => {
+    saveSectionLayout({ order: sectionOrder, collapsed: [...collapsedGroups] });
+  }, [sectionOrder, collapsedGroups]);
+  // A section header being dragged to a new place, and where it would land.
+  const [sectionDrag, setSectionDrag] = useState<{ kind: ConfigKind; over?: { kind: ConfigKind; place: 'before' | 'after' } } | null>(null);
+  const [sectionMenu, setSectionMenu] = useState<{ kind: ConfigKind; target: HTMLElement | PositioningVirtualElement } | null>(null);
   const [hierarchyView, setHierarchyView] = useState(false);
+  // The context menu of one row, opened at its "…" button or at the pointer.
+  const [menu, setMenu] = useState<{ node: TreeNode; target: HTMLElement | PositioningVirtualElement } | null>(null);
+  const openMenu = useCallback((node: TreeNode, target: HTMLElement | PositioningVirtualElement) => setMenu({ node, target }), []);
 
   // The mapping definition / model root the *active* format binds to. Computed
   // here (not while the tree is built) so switching designer tabs re-points the
@@ -433,30 +467,85 @@ export function ConfigExplorer() {
     );
   }, [storeTreeNodes, configurations, openTabs, activeTabId, lastFormatIndex]);
 
+  // The kind toggles narrow the tree to the kinds pressed — none pressed shows
+  // every kind, as the option toggles of a VS Code filter box do.
   const toggleKind = useCallback((kind: ConfigKind) => {
     setKindFilter(prev => {
+      const all = new Set<ConfigKind>(KINDS);
+      if (prev.size === KINDS.length) return new Set<ConfigKind>([kind]);
       const next = new Set(prev);
-      if (next.has(kind)) {
-        if (next.size === 1) {
-          // Clicking the only active one -> reset to all visible
-          return new Set(['DataModel', 'ModelMapping', 'Format']);
-        }
-        next.delete(kind);
-      } else {
-        next.add(kind);
-      }
-      return next;
+      if (next.has(kind)) next.delete(kind); else next.add(kind);
+      return next.size === 0 || next.size === KINDS.length ? all : next;
     });
   }, []);
 
-  const toggleGroup = useCallback((kind: ConfigKind) => {
-    setCollapsedGroups(prev => {
-      const next = new Set(prev);
-      if (next.has(kind)) next.delete(kind);
-      else next.add(kind);
-      return next;
+  /*
+   * Sections move when they fold, open or change place — the collapsed ones
+   * dock at the bottom. So the eye can follow, every such change is animated
+   * the FLIP way: where each section header was is noted just before the
+   * change, and right after the new layout each section is shifted back there
+   * and let glide into its new place; a section that opens unrolls its rows.
+   */
+  const pendingSectionMove = React.useRef<Map<string, { top: number; open: boolean }> | null>(null);
+  const noteSectionPositions = useCallback(() => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const before = new Map<string, { top: number; open: boolean }>();
+    document.querySelectorAll<HTMLElement>('.vx [data-section]').forEach(header => {
+      before.set(header.dataset.section!, { top: header.getBoundingClientRect().top, open: header.getAttribute('aria-expanded') === 'true' });
     });
+    pendingSectionMove.current = before;
   }, []);
+  React.useLayoutEffect(() => {
+    const before = pendingSectionMove.current;
+    if (!before) return;
+    pendingSectionMove.current = null;
+    document.querySelectorAll<HTMLElement>('.vx [data-section]').forEach(header => {
+      const section = header.closest<HTMLElement>('.vx-pane');
+      const was = before.get(header.dataset.section!);
+      if (!section || !was) return;
+      const shift = was.top - header.getBoundingClientRect().top;
+      if (Math.abs(shift) > 1) {
+        section.animate([{ transform: `translateY(${shift}px)` }, { transform: 'translateY(0)' }], { duration: SECTION_MOVE_MS, easing: SECTION_EASING });
+      }
+      const block = section.querySelector<HTMLElement>('.vx-block');
+      if (block && !was.open && header.getAttribute('aria-expanded') === 'true') {
+        block.animate(
+          [{ clipPath: 'inset(0 0 100% 0)', opacity: 0 }, { clipPath: 'inset(0 0 0 0)', opacity: 1 }],
+          { duration: SECTION_UNROLL_MS, easing: SECTION_EASING },
+        );
+      }
+    });
+  });
+
+  // A section being folded closes its rows first, then moves to the dock.
+  const closingSections = React.useRef(new Set<ConfigKind>());
+  const toggleGroup = useCallback((kind: ConfigKind) => {
+    const flip = () => {
+      noteSectionPositions();
+      setCollapsedGroups(prev => {
+        const next = new Set(prev);
+        if (next.has(kind)) next.delete(kind);
+        else next.add(kind);
+        return next;
+      });
+    };
+    const block = document.querySelector(`.vx [data-section="${kind}"]`)?.closest('.vx-pane')?.querySelector<HTMLElement>('.vx-block');
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (!block || reduced) { flip(); return; }
+    if (closingSections.current.has(kind)) return;
+    closingSections.current.add(kind);
+    const closing = block.animate(
+      [{ clipPath: 'inset(0 0 0 0)', opacity: 1 }, { clipPath: 'inset(0 0 100% 0)', opacity: 0 }],
+      { duration: SECTION_CLOSE_MS, easing: SECTION_EASING, fill: 'forwards' },
+    );
+    closing.finished.catch(() => undefined).finally(() => {
+      closingSections.current.delete(kind);
+      flip();
+      // The rows unmount with the fold; should they stay (a filter keeps every
+      // section open), they must not stay clipped away.
+      requestAnimationFrame(() => requestAnimationFrame(() => closing.cancel()));
+    });
+  }, [noteSectionPositions]);
 
   // dragenter/dragleave fire for every child the cursor crosses (including the
   // overlay we render while dragging), so track depth instead of comparing targets.
@@ -616,10 +705,10 @@ export function ConfigExplorer() {
       groups.get(kind)!.push(node);
     }
 
-    return (['DataModel', 'ModelMapping', 'Format'] as const)
+    return sectionOrder
       .filter(kind => kindFilter.has(kind))
       .map(kind => ({ kind, nodes: sortNodes(groups.get(kind) ?? []) }));
-  }, [filteredTreeNodes, kindFilter, sortNodes]);
+  }, [filteredTreeNodes, kindFilter, sortNodes, sectionOrder]);
   // Fast lookup: which top-level node IDs pass the search filter.
   const filteredNodeIds = useMemo(
     () => new Set(filteredTreeNodes.map(n => n.id)),
@@ -662,6 +751,26 @@ export function ConfigExplorer() {
   React.useEffect(() => {
     if (selectedPathIds.size > 0) setOpen(selectedPathIds, true);
   }, [selectedPathIds, setOpen]);
+
+  // Open sections on top in their order; the collapsed ones (and kinds with
+  // nothing loaded) dock at the bottom of the explorer. A filter shows every
+  // section open, in place.
+  const sections = useMemo(() => {
+    const byKind = new Map(groupedTreeNodes.map(group => [group.kind, group]));
+    const { open, docked } = arrangeSections(
+      groupedTreeNodes.map(group => group.kind),
+      kind => !isFiltering && (collapsedGroups.has(kind) || (byKind.get(kind)?.nodes.length ?? 0) === 0),
+    );
+    return { open: open.map(kind => byKind.get(kind)!), docked: docked.map(kind => byKind.get(kind)!), openKinds: open, dockedKinds: docked };
+  }, [groupedTreeNodes, isFiltering, collapsedGroups]);
+
+  /** Move a section one place among the ones it is shown with, keeping focus on its header. */
+  const moveSectionBy = useCallback((kind: ConfigKind, delta: -1 | 1) => {
+    const neighbours = sections.openKinds.includes(kind) ? sections.openKinds : sections.dockedKinds;
+    noteSectionPositions();
+    setSectionOrder(order => moveSection(order, kind, delta, neighbours) as ConfigKind[]);
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(`.vx [data-section="${kind}"]`)?.focus({ preventScroll: true }));
+  }, [sections, noteSectionPositions]);
 
   const blocks = useMemo<ExplorerBlock[]>(() => {
     if (hierarchyView) {
@@ -761,268 +870,361 @@ export function ConfigExplorer() {
     onRowKeyDown: handleRowKeyDown,
     onDoubleClick: handleExplorerDoubleClick,
     onCloseConfiguration: closeConfigurationNode,
-  }), [blockRows, selectedNodeId, selectedPathIds, fallbackTabStopId, focusedRowId, showTechnicalDetails, selectNode, setOpen, handleRowKeyDown, handleExplorerDoubleClick, closeConfigurationNode]);
+    onOpenMenu: openMenu,
+  }), [blockRows, selectedNodeId, selectedPathIds, fallbackTabStopId, focusedRowId, showTechnicalDetails, selectNode, setOpen, handleRowKeyDown, handleExplorerDoubleClick, closeConfigurationNode, openMenu]);
+
+  const fileInput = (
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept=".xml"
+      multiple
+      style={{ display: 'none' }}
+      onChange={e => {
+        void loadBrowserFiles(e.target.files, loadXmlFile).then(({ errors }) => {
+          for (const err of errors) pushToast({ kind: 'error', message: err });
+        });
+        e.target.value = '';
+      }}
+    />
+  );
+  const dropHandlers = {
+    onDragEnter: handleDragEnter,
+    onDragOver: handleDragOver,
+    onDragLeave: handleDragLeave,
+    onDrop: handleDrop,
+  };
+  const expandAll = () => { setExpandMode('all'); setExpandVersion(v => v + 1); };
+  const collapseAll = () => { setExpandMode('none'); setExpandVersion(v => v + 1); };
 
   if (treeNodes.length === 0) {
     return (
-      <div
-        className={`explorer-empty-state explorer-dropzone ${isDragging ? 'explorer-dropzone-dragging' : ''}`}
-        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
-        onDragEnter={handleDragEnter}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
+      <div className={`vx${isDragging ? ' vx--dragging' : ''}`} {...dropHandlers}>
+        <div className="vx-titlebar">
+          <span className="vx-titlebar__title">{t.explorer}</span>
+          <div className="vx-titlebar__actions" role="toolbar" aria-label={t.explorerMoreActions}>
+            <VxAction icon={<AppsListDetailRegular fontSize={16} />} label={t.workspaceManager} onClick={() => setWorkspaceOpen(true)} />
+          </div>
+        </div>
         {fnoIngestStatus ? (
-          <FnoIngestPanel variant="card" />
+          <div className="vx-welcome"><FnoIngestPanel variant="card" /></div>
         ) : (
-          <>
-            <p style={{ marginBottom: 8 }}>{t.noConfigurationsLoaded}</p>
-            <p style={{ fontSize: 11 }}>{t.loadXmlHint}</p>
-            <div className="explorer-empty-actions">
-              <Button appearance="primary" size="small" icon={<AddRegular />} onClick={openAddFiles}>{t.workspaceAddFiles}</Button>
-              <Button appearance="secondary" size="small" icon={<AppsListDetailRegular />} onClick={() => setWorkspaceOpen(true)}>{t.workspaceManager}</Button>
-            </div>
-            <WorkspaceManager open={workspaceOpen} onOpenChange={setWorkspaceOpen} onRequestFno={() => requestLanding('remote')} />
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xml"
-              multiple
-              style={{ display: 'none' }}
-              onChange={e => {
-                void loadBrowserFiles(e.target.files, loadXmlFile).then(({ errors }) => {
-                  for (const err of errors) pushToast({ kind: 'error', message: err });
-                });
-                e.target.value = '';
-              }}
-            />
-          </>
+          <div className="vx-welcome">
+            <p>{t.noConfigurationsLoaded}</p>
+            <Button appearance="primary" className="vx-welcome__button" icon={<AddRegular />} onClick={openAddFiles}>{t.workspaceAddFiles}</Button>
+            <Button appearance="secondary" className="vx-welcome__button" icon={<AppsListDetailRegular />} onClick={() => setWorkspaceOpen(true)}>{t.workspaceManager}</Button>
+            <p className="vx-welcome__hint">{t.loadXmlHint}</p>
+          </div>
         )}
-        {isDragging && <div className="explorer-dropzone-overlay">{t.landingDropRelease}</div>}
+        <WorkspaceManager open={workspaceOpen} onOpenChange={setWorkspaceOpen} onRequestFno={() => requestLanding('remote')} />
+        {fileInput}
+        {isDragging && <div className="vx-drop">{t.landingDropRelease}</div>}
       </div>
     );
   }
 
+  const nothingShown = filteredTreeNodes.length === 0 || totalVisible === 0;
+
+  /**
+   * A kind section: its header — click to fold, drag to reorder, right click
+   * or "…" for the section menu, Alt+↑ / Alt+↓ to move it — and, when open,
+   * its rows.
+   */
+  const renderSection = (group: { kind: ConfigKind; nodes: TreeNode[] }, collapsed: boolean) => {
+    const blockKey = `kind:${group.kind}`;
+    const over = sectionDrag?.over?.kind === group.kind && sectionDrag.kind !== group.kind ? sectionDrag.over.place : undefined;
+    const hasOpenRows = !collapsed && (blockRows.get(blockKey) ?? []).some(row => row.expanded);
+    return (
+      <section
+        key={group.kind}
+        className={[
+          'vx-pane',
+          `vx-pane--${KIND_ACCENT[group.kind]}`,
+          collapsed ? 'vx-pane--collapsed' : '',
+          sectionDrag?.kind === group.kind ? 'vx-pane--dragging' : '',
+        ].filter(Boolean).join(' ')}
+      >
+        <div
+          className={`vx-pane__header${over ? ` vx-pane__header--drop-${over}` : ''}`}
+          role="button"
+          tabIndex={0}
+          aria-expanded={!collapsed}
+          data-section={group.kind}
+          title={t.explorerSectionDragHint}
+          draggable
+          onClick={() => toggleGroup(group.kind)}
+          onKeyDown={event => {
+            if (event.target !== event.currentTarget) return;
+            if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+              event.preventDefault();
+              moveSectionBy(group.kind, event.key === 'ArrowUp' ? -1 : 1);
+            } else if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              toggleGroup(group.kind);
+            } else if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+              event.preventDefault();
+              setSectionMenu({ kind: group.kind, target: event.currentTarget });
+            }
+          }}
+          onContextMenu={event => {
+            event.preventDefault();
+            setSectionMenu({ kind: group.kind, target: pointAt(event.clientX, event.clientY) });
+          }}
+          onDragStart={event => {
+            event.dataTransfer.setData(SECTION_DRAG_TYPE, group.kind);
+            event.dataTransfer.effectAllowed = 'move';
+            setSectionDrag({ kind: group.kind });
+          }}
+          onDragOver={event => {
+            if (!sectionDrag || !event.dataTransfer.types.includes(SECTION_DRAG_TYPE)) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            const box = event.currentTarget.getBoundingClientRect();
+            const place = event.clientY < box.top + box.height / 2 ? 'before' : 'after';
+            if (sectionDrag.over?.kind !== group.kind || sectionDrag.over.place !== place) {
+              setSectionDrag({ kind: sectionDrag.kind, over: { kind: group.kind, place } });
+            }
+          }}
+          onDragLeave={event => {
+            if (sectionDrag?.over?.kind === group.kind && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setSectionDrag({ kind: sectionDrag.kind });
+            }
+          }}
+          onDrop={event => {
+            if (!sectionDrag || !event.dataTransfer.types.includes(SECTION_DRAG_TYPE)) return;
+            event.preventDefault();
+            const place = sectionDrag.over?.kind === group.kind ? sectionDrag.over.place : 'before';
+            const moved = sectionDrag.kind;
+            noteSectionPositions();
+            setSectionOrder(order => dropSection(order, moved, group.kind, place) as ConfigKind[]);
+            // Dropped among the open sections it opens, among the docked ones it folds.
+            if (sections.dockedKinds.includes(moved) !== collapsed) {
+              setCollapsedGroups(prev => {
+                const next = new Set(prev);
+                if (collapsed) next.add(moved); else next.delete(moved);
+                return next;
+              });
+            }
+            setSectionDrag(null);
+          }}
+          onDragEnd={() => setSectionDrag(null)}
+        >
+          <span className={`vx-twistie${collapsed ? '' : ' open'}`} aria-hidden><ChevronRightRegular fontSize={16} /></span>
+          <span className="vx-pane__title">{getExplorerGroupLabel(group.kind)}</span>
+          <span className="vx-pane__actions">
+            {hasOpenRows && (
+              <VxAction
+                icon={<TextCollapseRegular fontSize={14} />}
+                label={t.explorerCollapseGroup}
+                onClick={event => {
+                  event.stopPropagation();
+                  setOpen((blockRows.get(blockKey) ?? []).filter(row => row.expanded).map(row => row.id), false);
+                }}
+              />
+            )}
+            <VxAction
+              icon={<MoreHorizontalRegular fontSize={14} />}
+              label={t.explorerSectionActions}
+              onClick={event => {
+                event.stopPropagation();
+                setSectionMenu({ kind: group.kind, target: event.currentTarget });
+              }}
+            />
+          </span>
+        </div>
+        {!collapsed && <ExplorerTreeBlock blockKey={blockKey} />}
+      </section>
+    );
+  };
+
   return (
     <ActiveScopeContext.Provider value={activeScopeNodeIds}>
     <ExplorerTreeContext.Provider value={treeContext}>
-    <div
-      className={`explorer-tree-shell explorer-dropzone ${isDragging ? 'explorer-dropzone-dragging' : ''}`}
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      {isDragging && <div className="explorer-dropzone-overlay">{t.landingDropRelease}</div>}
+    <div className={`vx${isDragging ? ' vx--dragging' : ''}`} {...dropHandlers}>
+      <div className="vx-titlebar">
+        <span className="vx-titlebar__title">{t.explorer}</span>
+        <div className="vx-titlebar__actions" role="toolbar" aria-label={t.explorerMoreActions}>
+          <VxAction icon={<AddRegular fontSize={16} />} label={t.workspaceAddFiles} onClick={openAddFiles} />
+          <VxAction
+            icon={hierarchyView ? <ListRegular fontSize={16} /> : <TextBulletListTreeRegular fontSize={16} />}
+            label={hierarchyView ? t.explorerViewFlat : t.explorerViewHierarchy}
+            onClick={() => setHierarchyView(v => !v)}
+          />
+          <VxAction icon={<TextCollapseRegular fontSize={16} />} label={t.cmdCollapseAll} onClick={collapseAll} />
+          <VxAction icon={<AppsListDetailRegular fontSize={16} />} label={t.workspaceManager} onClick={() => setWorkspaceOpen(true)} />
+          <Menu>
+            <MenuTrigger disableButtonEnhancement>
+              <button type="button" className="vx-action" title={t.explorerMoreActions} aria-label={t.explorerMoreActions}>
+                <MoreHorizontalRegular fontSize={16} />
+              </button>
+            </MenuTrigger>
+            <MenuPopover>
+              <MenuList>
+                <MenuItem icon={<TextExpandRegular />} onClick={expandAll}>{t.cmdExpandAll}</MenuItem>
+                <MenuItem icon={<TextCollapseRegular />} onClick={collapseAll}>{t.cmdCollapseAll}</MenuItem>
+                <MenuDivider />
+                {(['loadOrder', 'nameAsc', 'nameDesc'] as const).map(mode => (
+                  <MenuItem
+                    key={mode}
+                    icon={sortMode === mode ? <CheckmarkRegular /> : <span className="vx-menu-blank" />}
+                    onClick={() => setSortMode(mode)}
+                  >
+                    {mode === 'loadOrder' ? t.explorerSortLoadOrder : mode === 'nameAsc' ? t.explorerSortNameAsc : t.explorerSortNameDesc}
+                  </MenuItem>
+                ))}
+                <MenuDivider />
+                <MenuItem icon={<DismissSquareMultipleRegular />} onClick={closeAllConfigurationsWithUndo}>
+                  {t.closeAllConfigurations}
+                </MenuItem>
+              </MenuList>
+            </MenuPopover>
+          </Menu>
+        </div>
+      </div>
 
       {fnoIngestStatus && (
-        <div className="fno-ingest-banner">
-          <ArrowSyncRegular
-            className="fno-ingest-banner-icon"
-            fontSize={14}
-            style={{ animation: 'spin 1.2s linear infinite' }}
-          />
-          <div className="fno-ingest-banner-text">
-            <div className="fno-ingest-banner-label">{t.explorerLoading}</div>
-            <div className="fno-ingest-banner-status">{fnoIngestStatus}</div>
-          </div>
-          <div className="fno-ingest-progress-track" style={{ width: 48, flexShrink: 0 }}>
-            <div className="fno-ingest-progress-bar" />
+        <div className="vx-progress" role="status">
+          <div className="vx-progress__track"><div className="vx-progress__bar" /></div>
+          <div className="vx-progress__text" title={fnoIngestStatus}>
+            <ArrowSyncRegular fontSize={12} className="vx-spin" aria-hidden />
+            <span>{t.explorerLoading}</span>
+            <span className="vx-progress__status">{fnoIngestStatus}</span>
           </div>
         </div>
       )}
 
-      <div className="explorer-panel-header">
-        <span className="explorer-panel-title">
-          <FolderRegular fontSize={15} />
-          {t.explorer}
-        </span>
-        <span className="explorer-panel-spacer" />
-        <Button
-          appearance="subtle"
-          size="small"
-          className="explorer-workspace-button"
-          icon={<AppsListDetailRegular />}
-          aria-label={t.workspaceManager}
-          title={t.workspaceManager}
-          onClick={() => setWorkspaceOpen(true)}
-        >
-          {t.workspaceManager}
-        </Button>
-        <Menu>
-          <MenuTrigger disableButtonEnhancement>
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<MoreVerticalRegular />}
-              aria-label={t.explorerMoreActions}
-              title={t.explorerMoreActions}
-            />
-          </MenuTrigger>
-          <MenuPopover>
-            <MenuList>
-              <MenuItem
-                icon={hierarchyView ? <ListRegular /> : <TextBulletListTreeRegular />}
-                onClick={() => setHierarchyView(v => !v)}
-              >
-                {hierarchyView ? t.explorerViewFlat : t.explorerViewHierarchy}
-              </MenuItem>
-              <MenuItem icon={<TextExpandRegular />} onClick={() => { setExpandMode('all'); setExpandVersion(v => v + 1); }}>
-                {t.cmdExpandAll}
-              </MenuItem>
-              <MenuItem icon={<TextCollapseRegular />} onClick={() => { setExpandMode('none'); setExpandVersion(v => v + 1); }}>
-                {t.cmdCollapseAll}
-              </MenuItem>
-              <MenuDivider />
-              <MenuItem icon={<ArrowSortRegular />} onClick={() => setSortMode('loadOrder')} disabled={sortMode === 'loadOrder'}>
-                {t.explorerSortLoadOrder}
-              </MenuItem>
-              <MenuItem icon={<ArrowSortRegular />} onClick={() => setSortMode('nameAsc')} disabled={sortMode === 'nameAsc'}>
-                {t.explorerSortNameAsc}
-              </MenuItem>
-              <MenuItem icon={<ArrowSortRegular />} onClick={() => setSortMode('nameDesc')} disabled={sortMode === 'nameDesc'}>
-                {t.explorerSortNameDesc}
-              </MenuItem>
-              <MenuDivider />
-              <MenuItem icon={<DismissSquareMultipleRegular />} onClick={closeAllConfigurationsWithUndo}>
-                {t.closeAllConfigurations}
-              </MenuItem>
-            </MenuList>
-          </MenuPopover>
-        </Menu>
-      </div>
-
       <WorkspaceManager open={workspaceOpen} onOpenChange={setWorkspaceOpen} onRequestFno={() => requestLanding('remote')} />
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".xml"
-        multiple
-        style={{ display: 'none' }}
-        onChange={e => {
-          void loadBrowserFiles(e.target.files, loadXmlFile).then(({ errors }) => {
-            for (const err of errors) pushToast({ kind: 'error', message: err });
-          });
-          e.target.value = '';
-        }}
-      />
+      {fileInput}
 
-      <div className="explorer-toolbar config-explorer-toolbar">
-        <div className="panel-filter-row explorer-toolbar-filter">
+      <div className="vx-filter">
+        <div className="vx-filter__box">
           <FilterField
             value={filterQuery}
             onChange={setFilterQuery}
             placeholder={t.explorerFilterPlaceholder}
             suggestions={filterSuggestions}
             historyScope="explorer"
-            className="explorer-filter-field"
+            className="vx-filter__field"
           />
-        </div>
-
-        <div className="explorer-chip-row" role="toolbar" aria-label={t.explorerFilterByKind}>
-          <ExplorerKindChip
-            kind="DataModel"
-            active={kindFilter.has('DataModel')}
-            disabled={kindCounts.DataModel === 0}
-            onToggle={() => toggleKind('DataModel')}
-            icon={<DataBarVerticalFilled />}
-          />
-          <ExplorerKindChip
-            kind="ModelMapping"
-            active={kindFilter.has('ModelMapping')}
-            disabled={kindCounts.ModelMapping === 0}
-            onToggle={() => toggleKind('ModelMapping')}
-            icon={<LinkFilled />}
-          />
-          <ExplorerKindChip
-            kind="Format"
-            active={kindFilter.has('Format')}
-            disabled={kindCounts.Format === 0}
-            onToggle={() => toggleKind('Format')}
-            icon={<DocumentFilled />}
-          />
-        </div>
-
-        {isFiltering && (
-          <div className="explorer-result-info">
-            {t.explorerResultsCount(totalVisible, totalAll)}
+          <div className="vx-filter__toggles" role="group" aria-label={t.explorerFilterByKind}>
+            {KINDS.map(kind => (
+              <button
+                key={kind}
+                type="button"
+                className={`vx-toggle vx-toggle--${KIND_ACCENT[kind]}${kindFilter.has(kind) && kindFilter.size < KINDS.length ? ' active' : ''}`}
+                aria-pressed={kindFilter.has(kind) && kindFilter.size < KINDS.length}
+                disabled={kindCounts[kind] === 0}
+                title={t.explorerShowOnlyKind(getExplorerGroupLabel(kind))}
+                aria-label={getExplorerGroupLabel(kind)}
+                onClick={() => toggleKind(kind)}
+              >
+                <KindIcon kind={kind} fontSize={14} />
+              </button>
+            ))}
           </div>
+        </div>
+        {isFiltering && <div className="vx-filter__info">{t.explorerResultsCount(totalVisible, totalAll)}</div>}
+      </div>
+
+      <div
+        ref={treeRef}
+        {...treeFocusProps}
+        className={`vx-tree${hierarchyView ? ' vx-tree--hierarchy' : ''}${!hierarchyView && !nothingShown && sections.open.length === 0 ? ' vx-tree--empty' : ''}`}
+        role="tree"
+        aria-label={t.configurations}
+      >
+        {nothingShown ? (
+          <p className="vx-empty">{t.noResults}</p>
+        ) : hierarchyView && hierarchy ? (
+          <section className="vx-pane">
+            <div className="vx-pane__header vx-pane__header--static">
+              <span className="vx-pane__title">{t.explorerViewHierarchyTitle}</span>
+            </div>
+            {hierarchy.roots.map(group => (
+              <ModelGroupSection
+                key={group.configIdx}
+                group={group}
+                configurations={configurations}
+                treeNodes={treeNodes}
+                filteredNodeIds={filteredNodeIds}
+                kindFilter={kindFilter}
+              />
+            ))}
+            {hierarchy.orphans.some(idx => isConfigVisible(idx, configurations, treeNodes, filteredNodeIds, kindFilter)) && (
+              <div className="vx-hgroup">
+                <div className="vx-subheader">{t.explorerUnlinked}</div>
+                {hierarchy.orphans.map(idx => {
+                  const node = treeNodes[idx];
+                  if (!node || !isConfigVisible(idx, configurations, treeNodes, filteredNodeIds, kindFilter)) return null;
+                  return <ExplorerTreeBlock key={node.id} blockKey={node.id} />;
+                })}
+              </div>
+            )}
+          </section>
+        ) : (
+          sections.open.map(group => renderSection(group, false))
         )}
       </div>
-      {filteredTreeNodes.length === 0 || totalVisible === 0 ? (
-        <div className="explorer-empty-state">
-          <p>{t.noResults}</p>
-        </div>
-      ) : hierarchyView && hierarchy ? (
-        <div ref={treeRef} {...treeFocusProps} className="explorer-sections explorer-hierarchy-view" role="tree" aria-label={t.configurations}>
-          {(() => {
-            const { roots, orphans } = hierarchy;
-            const sharedProps = {
-              configurations,
-              treeNodes,
-              filteredNodeIds,
-              kindFilter,
-            };
-            const hasAnyRootVisible = roots.some(r =>
-              groupHasVisibleContent(r, configurations, treeNodes, filteredNodeIds, kindFilter));
-            const hasOrphans = orphans.some(idx => isConfigVisible(idx, configurations, treeNodes, filteredNodeIds, kindFilter));
-            if (!hasAnyRootVisible && !hasOrphans) {
-              return <div className="explorer-empty-state"><p>{t.noResults}</p></div>;
-            }
-            return (
-              <>
-                {roots.map(group => (
-                  <ModelGroupSection key={group.configIdx} group={group} depth={0} {...sharedProps} />
-                ))}
-                {hasOrphans && (
-                  <div className="explorer-orphan-section">
-                    <div className="explorer-orphan-header">{t.explorerUnlinked}</div>
-                    {orphans.map(idx => {
-                      const node = treeNodes[idx];
-                      if (!node || !isConfigVisible(idx, configurations, treeNodes, filteredNodeIds, kindFilter)) return null;
-                      return <ExplorerTreeBlock key={node.id} blockKey={node.id} />;
-                    })}
-                  </div>
-                )}
-              </>
-            );
-          })()}
-        </div>
-      ) : (
-        <div ref={treeRef} {...treeFocusProps} className="explorer-sections" role="tree" aria-label={t.configurations}>
-          {groupedTreeNodes.map(group => {
-            // An empty kind has nothing to show, so it stays visually folded.
-            const isCollapsed = !isFiltering && (collapsedGroups.has(group.kind) || group.nodes.length === 0);
-            return (
-              <div key={group.kind} className={`explorer-kind-group ${getExplorerGroupAccent(group.kind)} ${isCollapsed ? 'collapsed' : ''}`}>
-                <button
-                  type="button"
-                  className="explorer-kind-group-header explorer-kind-group-header-btn"
-                  onClick={() => toggleGroup(group.kind)}
-                  aria-expanded={!isCollapsed}
-                >
-                  <span className="explorer-kind-group-header-left">
-                    <span className="explorer-kind-group-chevron" aria-hidden="true">
-                      {isCollapsed ? <ChevronRightRegular /> : <ChevronDownRegular />}
-                    </span>
-                    {getExplorerGroupLabel(group.kind)}
-                  </span>
-                </button>
-                {!isCollapsed && (
-                  <div className="explorer-kind-group-body">
-                    {group.nodes.length === 0 ? (
-                      <div className="explorer-kind-group-empty">{t.noResults}</div>
-                    ) : (
-                      <ExplorerTreeBlock blockKey={`kind:${group.kind}`} inKindGroup />
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+      {!hierarchyView && !nothingShown && sections.docked.length > 0 && (
+        <div className="vx-docked">
+          {sections.docked.map(group => renderSection(group, true))}
         </div>
       )}
+      <Menu
+        open={Boolean(sectionMenu)}
+        onOpenChange={(_, data) => {
+          if (data.open) return;
+          const kind = sectionMenu?.kind;
+          setSectionMenu(null);
+          if (kind) requestAnimationFrame(() => document.querySelector<HTMLElement>(`.vx [data-section="${kind}"]`)?.focus({ preventScroll: true }));
+        }}
+        positioning={sectionMenu ? { target: sectionMenu.target, position: 'below', align: 'start', offset: 2 } : undefined}
+      >
+        <MenuPopover>
+          {sectionMenu && (() => {
+            const kind = sectionMenu.kind;
+            const neighbours = sections.openKinds.includes(kind) ? sections.openKinds : sections.dockedKinds;
+            const at = neighbours.indexOf(kind);
+            const collapsed = collapsedGroups.has(kind);
+            const blockKey = `kind:${kind}`;
+            const rows = blockRows.get(blockKey) ?? [];
+            return (
+              <MenuList>
+                <MenuItem icon={<ArrowUpRegular />} secondaryContent="Alt+↑" disabled={at <= 0} onClick={() => moveSectionBy(kind, -1)}>
+                  {t.explorerSectionMoveUp}
+                </MenuItem>
+                <MenuItem icon={<ArrowDownRegular />} secondaryContent="Alt+↓" disabled={at < 0 || at >= neighbours.length - 1} onClick={() => moveSectionBy(kind, 1)}>
+                  {t.explorerSectionMoveDown}
+                </MenuItem>
+                <MenuDivider />
+                <MenuItem icon={collapsed ? <TextExpandRegular /> : <TextCollapseRegular />} onClick={() => toggleGroup(kind)}>
+                  {collapsed ? t.explorerSectionExpand : t.explorerSectionCollapse}
+                </MenuItem>
+                {!collapsed && rows.some(row => row.expanded) && (
+                  <MenuItem icon={<TextCollapseRegular />} onClick={() => setOpen(rows.filter(row => row.expanded).map(row => row.id), false)}>
+                    {t.explorerCollapseGroup}
+                  </MenuItem>
+                )}
+                <MenuDivider />
+                <MenuItem
+                  icon={<ArrowResetRegular />}
+                  disabled={sectionOrder.every((k, i) => k === DEFAULT_SECTION_ORDER[i])}
+                  onClick={() => { noteSectionPositions(); setSectionOrder([...DEFAULT_SECTION_ORDER]); }}
+                >
+                  {t.explorerSectionResetOrder}
+                </MenuItem>
+              </MenuList>
+            );
+          })()}
+        </MenuPopover>
+      </Menu>
+      <ExplorerContextMenu
+        menu={menu}
+        onClose={() => setMenu(null)}
+        onOpen={handleExplorerDoubleClick}
+        onCloseConfiguration={closeConfigurationNode}
+      />
+      {isDragging && <div className="vx-drop">{t.landingDropRelease}</div>}
     </div>
     </ExplorerTreeContext.Provider>
     </ActiveScopeContext.Provider>
@@ -1053,6 +1255,8 @@ interface ExplorerTreeContextValue {
   onRowKeyDown: (id: string, event: React.KeyboardEvent<HTMLDivElement>) => void;
   onDoubleClick: (node: TreeNode) => void;
   onCloseConfiguration: (node: TreeNode) => void;
+  /** Open the row's context menu at a button or at the pointer. */
+  onOpenMenu: (node: TreeNode, target: HTMLElement | PositioningVirtualElement) => void;
 }
 
 /** What the blocks need from the explorer, wherever in the layout they sit. */
@@ -1061,8 +1265,8 @@ const ExplorerTreeContext = React.createContext<ExplorerTreeContextValue | null>
 const NO_SELECTION_PATH: ReadonlySet<string> = new Set<string>();
 const NO_ROWS: FlatTreeRow<TreeNode>[] = [];
 
-/** Rendered row height before it is measured. */
-const ESTIMATED_ROW_HEIGHT = 30;
+/** A row's height (VS Code's 22px), before it is measured. */
+const ESTIMATED_ROW_HEIGHT = 22;
 
 /**
  * The selection as a row sees it. Only rows on the path to the selected node
@@ -1082,7 +1286,7 @@ function selectionFor(id: string, selectedId: string | null, selectedPathIds: Re
  * below them. Only the rows near the viewport are mounted; the row holding the
  * tab stop always is, so focus survives scrolling it away.
  */
-function ExplorerTreeBlock({ blockKey, inKindGroup }: { blockKey: string; inKindGroup?: boolean }) {
+function ExplorerTreeBlock({ blockKey }: { blockKey: string }) {
   const ctx = React.useContext(ExplorerTreeContext)!;
   const configurations = useAppStore(s => s.configurations);
   const rows = ctx.blockRows.get(blockKey) ?? NO_ROWS;
@@ -1124,7 +1328,7 @@ function ExplorerTreeBlock({ blockKey, inKindGroup }: { blockKey: string; inKind
   });
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', height: virtualizer.getTotalSize() }}>
+    <div ref={containerRef} className="vx-block" style={{ height: virtualizer.getTotalSize() }}>
       {virtualizer.getVirtualItems().map(item => {
         const row = rows[item.index];
         if (!row) return null;
@@ -1154,7 +1358,7 @@ function ExplorerTreeBlock({ blockKey, inKindGroup }: { blockKey: string; inKind
               onRowKeyDown={ctx.onRowKeyDown}
               onDoubleClick={ctx.onDoubleClick}
               onCloseConfiguration={ctx.onCloseConfiguration}
-              inKindGroup={inKindGroup && row.depth === 0}
+              onOpenMenu={ctx.onOpenMenu}
             />
           </div>
         );
@@ -1184,12 +1388,19 @@ interface TreeNodeRowProps {
   onRowKeyDown: (id: string, event: React.KeyboardEvent<HTMLDivElement>) => void;
   onDoubleClick: (node: TreeNode) => void;
   onCloseConfiguration: (node: TreeNode) => void;
-  /** Row sits under a kind group header, which already names the kind. */
-  inKindGroup?: boolean;
+  onOpenMenu: (node: TreeNode, target: HTMLElement | PositioningVirtualElement) => void;
 }
 
-const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded, hasChildren, posInSet, setSize, isTabStop, selectedId, selectedPathIds, showTechnicalDetails, version, onSelect, onToggle, onRowKeyDown, onDoubleClick, onCloseConfiguration, inKindGroup }: TreeNodeRowProps) {
+/** Whether a row has anything for its context menu beyond "open". */
+function rowHasMenu(node: TreeNode, depth: number, coarse: boolean): boolean {
+  const isConfiguration = depth === 0 && node.configIndex != null && node.type === 'file';
+  return isConfiguration || Boolean(whereUsedQueryFor(node)) || (coarse && node.configIndex != null);
+}
+
+const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded, hasChildren, posInSet, setSize, isTabStop, selectedId, selectedPathIds, showTechnicalDetails, version, onSelect, onToggle, onRowKeyDown, onDoubleClick, onCloseConfiguration, onOpenMenu }: TreeNodeRowProps) {
   const displayName = getNodeDisplayName(node, showTechnicalDetails);
+  // A section is named without the count the tree builder appends to it.
+  const name = node.type === 'section' ? splitCount(displayName).name : displayName;
 
   const handleClick = useCallback((event: React.MouseEvent) => {
     onSelect(node.id);
@@ -1228,30 +1439,32 @@ const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded,
     ? activeScopeIds.has(node.id)
     : node.data?.isActiveMappingDefinition === true;
 
+  const isConfiguration = depth === 0 && node.configIndex != null && node.type === 'file';
+  const coarse = useCoarsePointer();
+  const hasMenu = rowHasMenu(node, depth, coarse);
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    // Keys from the row's menu button stay with the button; modified keys are
-    // workspace shortcuts (Alt+Left / Alt+Right walk the navigation history).
-    if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (event.target !== event.currentTarget) return;
+    // The context menu key (or Shift+F10) opens the row's menu at the row.
+    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+      event.preventDefault();
+      onOpenMenu(node, event.currentTarget);
+      return;
+    }
+    // Modified keys are workspace shortcuts (Alt+Left / Alt+Right walk the navigation history).
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     // The explorer walks its flat list of shown rows, so ↑ / ↓ reach rows
     // that are not mounted yet.
     onRowKeyDown(node.id, event);
   };
-  const accentClass = getExplorerNodeAccentClass(node);
-  const sectionKindClass = node.type === 'section' && node.data?.sectionKind
-    ? `tree-node-section-kind-${node.data.sectionKind}`
-    : '';
-  const sectionClass = node.type === 'section' ? 'tree-node-group' : '';
-  const parentClass = hasChildren ? 'tree-node-parent' : '';
-  const kindLabel = inKindGroup ? getExplorerKindPillInGroup(node) : getExplorerKindLabel(node);
-  const canCloseConfiguration = depth === 0 && node.configIndex != null && node.type === 'file';
-  const whereUsedQuery = whereUsedQueryFor(node);
-  const triggerWhereUsed = useAppStore(s => s.triggerWhereUsed);
-  const openVersionComparePicker = useAppStore(s => s.openVersionComparePicker);
-  // Double-tap is unreliable on touch (it competes with the platform's own
-  // zoom gesture), so on a coarse pointer every node that responds to a
-  // double-click gets an explicit menu entry instead.
-  const coarse = useCoarsePointer();
-  const showRowMenu = canCloseConfiguration || Boolean(whereUsedQuery) || (coarse && node.configIndex != null);
+
+  const isFormat = node.data?.content?.kind === 'Format';
+  const direction = isConfiguration && isFormat ? node.data.content.direction as ERDirection | undefined : undefined;
+  // The description VS Code puts after a name: the version of a configuration,
+  // the label text of an item.
+  const description = isConfiguration && version != null && version !== '' ? `v${version}` : resolvedLabel;
+  const title = [displayName, resolvedLabel, isConfiguration && isFormat ? getFormatDirectionLabel(direction) : undefined]
+    .filter(Boolean).join(' — ');
 
   return (
     <div
@@ -1263,123 +1476,133 @@ const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded,
       aria-expanded={hasChildren ? expanded : undefined}
       tabIndex={isTabStop ? 0 : -1}
       data-node-id={node.id}
-      className={`tree-node tree-node-${node.type} ${sectionClass} ${parentClass} ${sectionKindClass} ${accentClass} ${isSelected ? 'selected' : ''} ${isAncestor ? 'ancestor' : ''}`}
-      data-depth={depth}
-      // Absolutely positioned rows don't collapse their margins into each
-      // other, so only the top one is kept.
-      style={{ paddingLeft: 8 + depth * 16, marginBottom: 0, ['--depth' as string]: depth }}
+      className={[
+        'vx-row',
+        `vx-row--${node.type}`,
+        isConfiguration ? 'vx-row--root' : '',
+        hasMenu ? 'vx-row--actions' : '',
+        isSelected ? 'selected' : '',
+        isAncestor ? 'ancestor' : '',
+      ].filter(Boolean).join(' ')}
+      style={{ paddingLeft: ROW_PAD + depth * INDENT }}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}
+      onContextMenu={hasMenu ? event => {
+        event.preventDefault();
+        onSelect(node.id);
+        onOpenMenu(node, pointAt(event.clientX, event.clientY));
+      } : undefined}
     >
-      {hasChildren ? (
-        <span className={`tree-chevron ${expanded ? 'open' : ''}`} />
-      ) : (
-        <span className="tree-chevron-placeholder" aria-hidden="true" />
-      )}
-      <span className="icon">{getExplorerNodeIcon(node)}</span>
-      {inKindGroup && kindLabel && (
-        // The format's direction is a property of the row, not a second
-        // label competing with the name for width — an icon with a tooltip.
-        <span className="tree-node-direction" title={kindLabel} aria-label={kindLabel} role="img">
-          {node.data?.content?.kind === 'Format' && node.data.content.direction === ERDirection.Import
-            ? <ArrowDownloadRegular fontSize={12} />
-            : <ArrowUploadRegular fontSize={12} />}
-        </span>
-      )}
-      <span className="tree-node-label" title={resolvedLabel ? `${displayName} — ${resolvedLabel}` : displayName}>
-        <span className={`tree-node-name${isActiveMappingDefinition ? ' tree-node-name--active' : ''}`}>{displayName}</span>
-        {resolvedLabel && <span className="tree-node-sublabel">{resolvedLabel}</span>}
+      <span className={`vx-twistie${hasChildren ? (expanded ? ' open' : '') : ' leaf'}`} aria-hidden>
+        <ChevronRightRegular fontSize={16} />
       </span>
-      {isActiveMappingDefinition && (
-        <span className="tree-node-active-pill" title={t.explorerActiveMappingHint}>{t.explorerActiveMapping}</span>
-      )}
-      {version != null && version !== '' && node.type === 'file' && (
-        <span className="tree-node-version-pill" title={`v${version}`}>v{version}</span>
-      )}
-      {!inKindGroup && kindLabel && <span className="tree-node-kind-pill">{kindLabel}</span>}
-      {showRowMenu && (
-        <Menu>
-          <MenuTrigger disableButtonEnhancement>
-            <button
-              type="button"
-              className="tree-node-actions"
-              title={t.explorerMoreActions}
-              aria-label={t.explorerMoreActions}
-              onClick={event => event.stopPropagation()}
-            >
-              <MoreVerticalRegular fontSize={14} />
-            </button>
-          </MenuTrigger>
-          <MenuPopover>
-            <MenuList>
-              <MenuItem
-                icon={<OpenRegular />}
-                onClick={() => onDoubleClick(node)}
-              >
-                {t.explorerOpenInTab}
-              </MenuItem>
-              {whereUsedQuery && (
-                <MenuItem icon={<SearchRegular />} onClick={() => triggerWhereUsed(whereUsedQuery, whereUsedTargetFor(node))}>
-                  {t.whereUsedAction}
-                </MenuItem>
-              )}
-              {canCloseConfiguration && (
-                <MenuItem
-                  icon={<BranchCompareRegular />}
-                  onClick={() => openVersionComparePicker(node.configIndex ?? null)}
-                >
-                  {t.compareWithVersionAction}
-                </MenuItem>
-              )}
-              {canCloseConfiguration && (
-                <MenuItem
-                  icon={<DeleteRegular />}
-                  onClick={() => onCloseConfiguration(node)}
-                >
-                  {t.closeConfiguration}
-                </MenuItem>
-              )}
-            </MenuList>
-          </MenuPopover>
-        </Menu>
-      )}
-      {showTechnicalDetails && node.type === 'datasource' && node.data?.type && (
-        <span className={`badge badge-${node.data.type.toLowerCase()}`} style={{ marginLeft: 6 }}>
-          {node.data.type}
+      <ExplorerNodeIcon node={node} expanded={expanded} />
+      <span className="vx-label" title={title}>
+        <span className={`vx-name${isActiveMappingDefinition ? ' vx-name--active' : ''}`}>{name}</span>
+        {description && <span className="vx-desc">{description}</span>}
+        {showTechnicalDetails && node.type === 'datasource' && node.data?.type && (
+          <span className="vx-desc vx-desc--type">{node.data.type}</span>
+        )}
+      </span>
+      <span className="vx-decorations">
+        {isActiveMappingDefinition && (
+          <span className="vx-decoration vx-decoration--active" title={t.explorerActiveMappingHint} aria-label={t.explorerActiveMapping}>
+            <CircleSmallFilled fontSize={16} />
+          </span>
+        )}
+        {direction != null && (
+          <span className="vx-decoration" title={getFormatDirectionLabel(direction)} aria-label={getFormatDirectionLabel(direction)} role="img">
+            {direction === ERDirection.Import ? <ArrowDownloadRegular fontSize={14} /> : <ArrowUploadRegular fontSize={14} />}
+          </span>
+        )}
+      </span>
+      {hasMenu && (
+        <span className="vx-row-actions">
+          <VxAction
+            icon={<MoreHorizontalRegular fontSize={16} />}
+            label={t.explorerMoreActions}
+            onClick={event => { event.stopPropagation(); onSelect(node.id); onOpenMenu(node, event.currentTarget); }}
+          />
+          {isConfiguration && (
+            <VxAction
+              icon={<DismissRegular fontSize={14} />}
+              label={t.closeConfiguration}
+              onClick={event => { event.stopPropagation(); onCloseConfiguration(node); }}
+            />
+          )}
         </span>
       )}
     </div>
   );
 });
 
-// ─── Kind filter chip ───
-
-function ExplorerKindChip({
-  kind, active, disabled, onToggle, icon,
-}: {
-  kind: ConfigKind;
-  active: boolean;
-  /** Nothing of this kind is loaded, so there is nothing to filter. */
-  disabled: boolean;
-  onToggle: () => void;
-  icon: React.ReactNode;
+/**
+ * The one context menu of the explorer — opened by a right click, the row's
+ * "…" button or the context menu key — with what applies to that row.
+ */
+function ExplorerContextMenu({ menu, onClose, onOpen, onCloseConfiguration }: {
+  menu: { node: TreeNode; target: HTMLElement | PositioningVirtualElement } | null;
+  onClose: () => void;
+  onOpen: (node: TreeNode) => void;
+  onCloseConfiguration: (node: TreeNode) => void;
 }) {
-  const label = getExplorerGroupLabel(kind);
-  const accent = kind === 'DataModel' ? 'model' : kind === 'ModelMapping' ? 'mapping' : 'format';
+  const triggerWhereUsed = useAppStore(s => s.triggerWhereUsed);
+  const openVersionComparePicker = useAppStore(s => s.openVersionComparePicker);
+  const compareWithBase = useAppStore(s => s.compareWithBase);
+  const node = menu?.node;
+  const isConfiguration = Boolean(node && node.type === 'file' && node.id === `cfg-${node.configIndex}`);
+  // A derived configuration can be set against its base — unless that is known
+  // to be another kind (the data model a root format or mapping hangs under).
+  const hasComparableBase = useAppStore(s => {
+    if (!node || !isConfiguration || node.configIndex == null) return false;
+    const cfg = s.configurations[node.configIndex];
+    return Boolean(cfg && baseReference(cfg) && knownBaseKind(s.configurations, s.recentFiles, cfg).kind !== 'other');
+  });
+  const whereUsedQuery = node ? whereUsedQueryFor(node) : undefined;
+
+  const close = () => {
+    onClose();
+    // Back to the row the menu was for, as a native context menu does.
+    if (node) {
+      requestAnimationFrame(() => document.querySelector<HTMLElement>(`.vx [data-node-id="${CSS.escape(node.id)}"]`)?.focus({ preventScroll: true }));
+    }
+  };
+
   return (
-    <button
-      type="button"
-      className={`explorer-kind-chip explorer-kind-chip--${accent} ${active ? 'active' : ''}`}
-      onClick={onToggle}
-      aria-pressed={active}
-      disabled={disabled}
-      title={label}
-      aria-label={label}
+    <Menu
+      open={Boolean(menu)}
+      onOpenChange={(_, data) => { if (!data.open) close(); }}
+      positioning={menu ? { target: menu.target, position: 'below', align: 'start', offset: 2 } : undefined}
     >
-      <span className="explorer-kind-chip-icon" aria-hidden="true">{icon}</span>
-      <span className="explorer-kind-chip-label">{getExplorerChipLabel(kind)}</span>
-    </button>
+      <MenuPopover>
+        {node && (
+          <MenuList>
+            <MenuItem icon={<OpenRegular />} onClick={() => onOpen(node)}>{t.explorerOpenInTab}</MenuItem>
+            {whereUsedQuery && (
+              <MenuItem icon={<SearchRegular />} onClick={() => triggerWhereUsed(whereUsedQuery, whereUsedTargetFor(node))}>
+                {t.whereUsedAction}
+              </MenuItem>
+            )}
+            {isConfiguration && (
+              <>
+                <MenuDivider />
+                <MenuItem icon={<BranchCompareRegular />} onClick={() => openVersionComparePicker(node.configIndex ?? null)}>
+                  {t.compareWithVersionAction}
+                </MenuItem>
+                {hasComparableBase && (
+                  <MenuItem icon={<BranchForkRegular />} onClick={() => { if (node.configIndex != null) void compareWithBase(node.configIndex); }}>
+                    {t.compareWithBaseAction}
+                  </MenuItem>
+                )}
+                <MenuDivider />
+                <MenuItem icon={<DeleteRegular />} onClick={() => onCloseConfiguration(node)}>{t.closeConfiguration}</MenuItem>
+              </>
+            )}
+          </MenuList>
+        )}
+      </MenuPopover>
+    </Menu>
   );
 }
 
@@ -1387,7 +1610,6 @@ function ExplorerKindChip({
 
 interface ModelGroupSectionProps {
   group: ExplorerModelGroup;
-  depth: number;
   configurations: ERConfiguration[];
   treeNodes: TreeNode[];
   filteredNodeIds: Set<string>;
@@ -1396,7 +1618,6 @@ interface ModelGroupSectionProps {
 
 function ModelGroupSection({
   group,
-  depth,
   configurations,
   treeNodes,
   filteredNodeIds,
@@ -1409,19 +1630,13 @@ function ModelGroupSection({
   const hasVisible = modelVisible || visibleChildren.length > 0 || visibleSubModels.length > 0;
   if (!hasVisible) return null;
 
-  // Indent child items with a subtle left border guide. The model node
-  // itself sits flush with the current indent level.
-  const childIndent: React.CSSProperties = depth === 0
-    ? { paddingLeft: 12, borderLeft: '2px solid var(--border-subtle, rgba(128,128,128,0.2))', marginLeft: 4 }
-    : { paddingLeft: 8, borderLeft: '2px solid var(--border-subtle, rgba(128,128,128,0.2))', marginLeft: 4 };
-
   // Each configuration is its own virtualized block (with everything open
-  // below it), so the indent guides stay plain nested boxes.
+  // below it); what hangs under a model is indented.
   return (
-    <div className="explorer-model-hierarchy-group">
+    <div className="vx-hgroup">
       {modelVisible && <ExplorerTreeBlock key={modelNode.id} blockKey={modelNode.id} />}
       {(visibleChildren.length > 0 || visibleSubModels.length > 0) && (
-        <div style={childIndent}>
+        <div className="vx-hgroup__children">
           {visibleChildren.map(idx => {
             const node = treeNodes[idx];
             return <ExplorerTreeBlock key={node.id} blockKey={node.id} />;
@@ -1430,7 +1645,6 @@ function ModelGroupSection({
             <ModelGroupSection
               key={subGroup.configIdx}
               group={subGroup}
-              depth={depth + 1}
               configurations={configurations}
               treeNodes={treeNodes}
               filteredNodeIds={filteredNodeIds}

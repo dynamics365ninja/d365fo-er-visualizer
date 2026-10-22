@@ -354,7 +354,7 @@ const TabContent = React.memo(function TabContent({ tab, config, configs, tabNod
   }
 
   if (tab.kind === 'compare') {
-    return <VersionCompareView tabId={tab.id} configIndex={tab.configIndex} otherKey={tab.otherKey} />;
+    return <VersionCompareView tabId={tab.id} configIndex={tab.configIndex} otherKey={tab.otherKey} mode={tab.mode} />;
   }
 
   if (tabNode && tabNode.type !== 'file') {

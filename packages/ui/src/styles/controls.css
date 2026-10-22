@@ -1,15 +1,3 @@
-/* Controls: widgets several views share — the filter field, the expand
-   slider, badges, path tooltips, label values, the expression renderer. */
-
-.tree-node .icon {
-  margin-right: 2px;
-  flex-shrink: 0;
-  width: 14px;
-  text-align: center;
-  font-size: var(--er-text-md);
-  color: var(--er-text-muted);
-}
-
 /* ── Modern filter field — icon left, clear button inside right ── */
 .filter-field {
   position: relative;
@@ -102,15 +90,6 @@
 
 :root[data-theme='light'] .filter-field__input:focus {
   background: #ffffff;
-}
-
-/* Legacy compat */
-.panel-filter-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  min-width: 0;
-  width: 100%;
 }
 
 /* Badge styles.
@@ -567,29 +546,6 @@
   transition: color 120ms ease, text-decoration-color 120ms ease;
 }
 
-.explorer-tree-shell .tree-node .icon {
-  width: 16px;
-  font-size: var(--er-text-lg);
-  color: var(--er-text-subtle);
-  margin-right: 0;
-}
-
-.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-model .icon {
-  color: var(--er-model);
-}
-
-.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-mapping .icon {
-  color: var(--er-mapping);
-}
-
-.explorer-tree-shell .tree-node[data-depth="0"].tree-node-accent-format .icon {
-  color: var(--er-format);
-}
-
-.explorer-tree-shell .tree-node-group .icon {
-  color: var(--er-text-subtle);
-}
-
 .prop-grid .prop-value.guid {
   font-family: var(--font-mono);
   color: var(--er-text-muted);
@@ -742,11 +698,6 @@
   color: var(--er-accent);
 }
 
-.filter-suggest__item.active .filter-suggest__count {
-  background: var(--er-surface);
-  color: var(--er-accent);
-}
-
 .filter-suggest__label {
   flex: 1;
   min-width: 0;
@@ -760,27 +711,6 @@
   background: none;
   color: var(--er-accent);
   font-weight: 700;
-}
-
-/* Number badges stay round, like VS Code's count badges. */
-.filter-suggest__count {
-  flex-shrink: 0;
-  padding: 0 6px;
-  background: var(--er-surface-3);
-  color: var(--er-text-muted);
-  font-size: var(--er-text-xs);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  border-radius: 9px;
-}
-
-/* The explorer field used to be a Fluent Input; keep its softer surface. */
-.explorer-filter-field .filter-field__input {
-  padding-top: 4px;
-  padding-bottom: 4px;
-  border-radius: var(--er-radius-md);
-  background: var(--er-bg-soft);
-  min-height: 0;
 }
 
 @media (pointer: coarse) {
@@ -1079,10 +1009,6 @@ div.path-tooltip-card {
 
 .app-shell .expand-slider__thumb {
   border-radius: var(--er-radius-sm);
-}
-
-.app-shell .explorer-filter-field .filter-field__input {
-  background: var(--er-input-bg);
 }
 
 @keyframes er-skeleton {

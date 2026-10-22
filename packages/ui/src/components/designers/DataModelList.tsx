@@ -158,7 +158,6 @@ export function DataModelList({ containers, configIndex, filter }: { containers:
               <div className="dm-list__root-head">
                 <span className="dm-list__root-name">{root.name}</span>
                 {labelOf(root.label) && <span className="dm-list__root-label">{labelOf(root.label)}</span>}
-                <span className="ds-row-count">{root.items.length}</span>
               </div>
               {root.items.map(item => renderField([item.name], item, root, 0, `${root.id}/${item.name}`))}
             </div>

@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
+import { BracesRegular, ChevronRightRegular, OpenRegular, TagRegular } from '@fluentui/react-icons';
 import { type ModelUsageNode } from '../../utils/format-model-usage';
-import { ClickablePath } from '../ClickablePath';
 import { DrillDownTrigger } from '../DrillDownPanel';
 import { ElementDrillDown } from './lineage-parts';
 import { t } from '../../i18n';
-import { getConsultantBindingLabel } from '../../utils/consultant-labels';
+import { getConsultantBindingLabel, getConsultantFormatTypeLabel } from '../../utils/consultant-labels';
 import { getFormatBindingDisplayLabel, groupFormatBindingsByCategory, type NormalizedFormatBinding, type NormalizedFormatBindingGroup } from '../../utils/format-binding-display';
 import {
   BINDING_INTENT_ORDER,
@@ -14,9 +14,8 @@ import {
   getBindingIntentLabel,
   type BindingIntent,
 } from '../../utils/format-binding-sections';
-import { getFormatTypeBadgeSurface } from '../../utils/theme-colors';
-import { ExpressionDetailLink } from './shared';
-import { getFormatTypeColor } from './format-type';
+import { FormulaLines } from './shared';
+import { FormatElementIcon, getFormatTypeColor } from './format-type';
 
 // ── Bindings tab ──
 
@@ -25,6 +24,136 @@ export const BINDING_OUTLINE_THRESHOLD = 40;
 
 /** Elements listed per model field before the rest hide behind "+N more". */
 const MODEL_USAGE_CHIP_LIMIT = 8;
+
+// ── Shared rows: both layouts read the same way ──
+//
+// A group (a parent element of the format, a record of the model) is a header
+// row that folds; an item (a format element, a model field) is a row with its
+// icon, name and a muted description, and under it one line per binding — a
+// coloured dot and label, then the value. Top-level groups stay in view while
+// their items scroll. No counts: the rows say what is there.
+
+/** The format element's icon in the colour of its type, as in the structure. */
+export function FormatTypeIcon({ type }: { type: string }) {
+  return (
+    <span className="fb-icon" style={{ color: getFormatTypeColor(type) }}>
+      <FormatElementIcon type={type} fontSize={16} />
+    </span>
+  );
+}
+
+/** A group's header: twistie, icon, title and a muted description. */
+export function BindingGroupHead({ depth, open, onToggle, icon, title, description, hint }: {
+  depth: number;
+  open: boolean;
+  onToggle: () => void;
+  icon: React.ReactNode;
+  title: React.ReactNode;
+  description?: string;
+  hint?: string;
+}) {
+  return (
+    <div
+      className={`fb-head fb-head--group${depth === 0 ? ' fb-head--top' : ''}`}
+      style={{ ['--fb-depth' as string]: depth }}
+      role="button"
+      tabIndex={0}
+      aria-expanded={open}
+      title={hint}
+      onClick={onToggle}
+      onKeyDown={event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        onToggle();
+      }}
+    >
+      <span className={`fb-twistie${open ? ' open' : ''}`} aria-hidden><ChevronRightRegular fontSize={16} /></span>
+      {icon}
+      <span className="fb-title">{title}</span>
+      {description && <span className="fb-desc">{description}</span>}
+    </div>
+  );
+}
+
+/** An item: its head row and, under the name, the lines of its bindings. */
+export function BindingItem({ depth, icon, name, hint, description, aside, actions, focused, warning, flash, itemRef, toggle, onSelect, lines }: {
+  depth: number;
+  icon: React.ReactNode;
+  name: string;
+  hint?: string;
+  description?: string;
+  aside?: React.ReactNode;
+  actions?: React.ReactNode;
+  focused?: boolean;
+  /** Read by the format but filled by nothing. */
+  warning?: boolean;
+  /** Just navigated to: a one-shot pulse. */
+  flash?: boolean;
+  itemRef?: React.Ref<HTMLDivElement>;
+  onSelect?: () => void;
+  /** An item that also has items under it (a list the format iterates). */
+  toggle?: { open: boolean; onToggle: () => void };
+  lines?: React.ReactNode;
+}) {
+  return (
+    <div
+      ref={itemRef}
+      className={`fb-item${focused ? ' is-focused' : ''}${warning ? ' fb-item--warning' : ''}${flash ? ' nav-flash' : ''}`}
+      style={{ ['--fb-depth' as string]: depth }}
+      onClick={onSelect}
+    >
+      <div
+        className="fb-head fb-head--item"
+        onClick={toggle && !onSelect ? toggle.onToggle : undefined}
+        style={toggle || onSelect ? { cursor: 'pointer' } : undefined}
+      >
+        {toggle ? (
+          <button
+            type="button"
+            className={`fb-twistie fb-twistie--button${toggle.open ? ' open' : ''}`}
+            aria-expanded={toggle.open}
+            aria-label={name}
+            onClick={event => { event.stopPropagation(); toggle.onToggle(); }}
+          >
+            <ChevronRightRegular fontSize={16} />
+          </button>
+        ) : (
+          <span className="fb-twistie fb-twistie--leaf" aria-hidden />
+        )}
+        {icon}
+        <span className="fb-name" title={hint ?? name}>{name}</span>
+        {description && <span className="fb-desc" title={description}>{description}</span>}
+        <span className="fb-spacer" />
+        {aside}
+        {actions && <span className="fb-actions">{actions}</span>}
+      </div>
+      {lines && <div className="fb-lines">{lines}</div>}
+    </div>
+  );
+}
+
+/** One line under an item: a dot in the line's colour and its label, then the value. */
+export function BindingLine({ tone, label, hint, children }: { tone: string; label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <>
+      <span className={`fb-line-label ${tone}`} title={hint}>
+        <span className="fb-dot" aria-hidden />
+        {label}
+      </span>
+      <div className="fb-line-value">{children}</div>
+    </>
+  );
+}
+
+/** A formula after the arrow that says where the value comes from. */
+export function BindingExpression({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="fb-expr">
+      <span className="fb-arrow" aria-hidden>←</span>
+      <span className="fb-expr-text">{children}</span>
+    </span>
+  );
+}
 
 /** The Bindings tab by model: summary line and the tree of model paths the format reads. */
 export function ModelUsageView({
@@ -97,7 +226,7 @@ export function ModelUsageView({
             ? <div className="fmt-bind-empty">{t.fbAllFieldsMapped}</div>
             : empty)
         : (
-          <div className="mm-tree" role="tree">
+          <div className="fb-tree" role="tree">
             {tree.map(node => (
               <ModelUsageTreeRows
                 key={node.key}
@@ -133,129 +262,109 @@ function ModelUsageTreeRows({ node, depth, mappingConfigIndex, isCollapsed, onTo
 }) {
   const [showAllUsages, setShowAllUsages] = useState(false);
   const hasChildren = node.children.length > 0;
-  const collapsed = hasChildren && isCollapsed(node.key);
+  const open = hasChildren && !isCollapsed(node.key);
   const used = node.usages.length > 0;
   const label = labelFor(node);
   const usages = showAllUsages ? node.usages : node.usages.slice(0, MODEL_USAGE_CHIP_LIMIT);
+  const icon = hasChildren
+    ? <span className="fb-icon fb-icon--record"><BracesRegular fontSize={16} /></span>
+    : <span className="fb-icon fb-icon--field"><TagRegular fontSize={16} /></span>;
 
-  const classes = [
-    'mm-tree-row',
-    used ? 'mm-binding-row' : 'mm-tree-branch',
-    hasChildren ? 'mm-tree-expandable' : '',
-    node.unmapped ? 'fmt-model-row--unmapped' : '',
-  ].filter(Boolean).join(' ');
+  const children = open && (
+    <div role="group">
+      {node.children.map(child => (
+        <ModelUsageTreeRows
+          key={child.key}
+          node={child}
+          depth={depth + 1}
+          mappingConfigIndex={mappingConfigIndex}
+          isCollapsed={isCollapsed}
+          onToggle={onToggle}
+          labelFor={labelFor}
+          showTechnicalDetails={showTechnicalDetails}
+          onOpenElement={onOpenElement}
+        />
+      ))}
+    </div>
+  );
 
-  return (
-    <div className="mm-tree-node" style={{ ['--mm-depth' as string]: depth }}>
-      <div className={classes} role="treeitem" aria-expanded={hasChildren ? !collapsed : undefined}>
-        <div
-          className="mm-tree-head"
-          onClick={hasChildren ? () => onToggle(node.key) : undefined}
-          style={hasChildren ? { cursor: 'pointer' } : undefined}
-        >
-          {hasChildren ? (
-            <button
-              type="button"
-              className={`mm-tree-toggle ${collapsed ? '' : 'open'}`}
-              aria-label={node.name}
-              onClick={event => { event.stopPropagation(); onToggle(node.key); }}
-            >
-              <span className={`tree-chevron ${collapsed ? '' : 'open'}`} />
-            </button>
-          ) : (
-            <span className="mm-tree-toggle mm-tree-toggle--leaf" aria-hidden />
-          )}
-          <span className={used ? 'mm-binding-name' : 'mm-tree-branch-name'} style={{ flex: '0 1 auto' }} title={node.path}>
-            {node.name}
-          </span>
-          {label && <span className="fmt-model-label" title={label}>{label}</span>}
-          <span className="fmt-model-head-spacer" />
-          {hasChildren && node.unmappedCount > 0 && (
-            <span
-              className="fmt-model-unmapped-badge"
-              title={t.fbBranchUnmappedCount(node.unmappedCount)}
-            >
-              {node.unmappedCount}
-            </span>
-          )}
-          <span
-            className="mm-group-count"
-            title={t.fbUsageCount(node.usageCount)}
-          >
-            {node.usageCount}
-          </span>
-        </div>
-
-        {used && (
-          <div className="fmt-model-body">
-            <span className="fmt-model-line-label">{t.fbLineMapping}</span>
-            {node.mapping ? (
-              <div className="mm-binding-expr">
-                <span className="mm-binding-arrow" aria-hidden>←</span>
-                <DrillDownTrigger expression={node.mapping.expressionAsString} configIndex={mappingConfigIndex} elementName={node.path}>
-                  <ClickablePath expression={node.mapping.expressionAsString} configIndex={mappingConfigIndex} mode="binding-expr" interactive={false} />
-                </DrillDownTrigger>
-              </div>
-            ) : node.unmapped ? (
-              <span
-                className="fmt-model-missing"
-                title={t.fbFieldNeverFilledHint}
-              >
-                {t.fbNoMappingBinding}
-              </span>
-            ) : !node.mappingLoaded ? (
-              <span className="fmt-model-muted">{t.fbMappingNotLoaded}</span>
-            ) : (
-              <span className="fmt-model-muted">{t.fbRecordFieldsBound}</span>
-            )}
-
-            <span className="fmt-model-line-label">{t.fbLineFormat}</span>
-            <div className="fmt-model-usages">
-              {usages.map((usage, i) => {
-                const property = usage.binding.bindingCategory === 'data'
-                  ? null
-                  : (showTechnicalDetails ? getFormatBindingDisplayLabel(usage.binding) : getConsultantBindingLabel(usage.binding));
-                return (
-                  <button
-                    key={`${usage.group.componentId}-${i}`}
-                    type="button"
-                    className={`fmt-model-usage fmt-bind-intent--${usage.intent}`}
-                    title={`${getBindingIntentItemLabel(usage.intent)}: ${usage.binding.expressionAsString}`}
-                    onClick={() => onOpenElement(usage.group.componentId)}
-                  >
-                    <span className="fmt-bind-intent-dot" aria-hidden="true" />
-                    <span>{usage.group.elementName}</span>
-                    {property && <span className="fmt-model-usage-prop">{property}</span>}
-                  </button>
-                );
-              })}
-              {node.usages.length > usages.length && (
-                <button type="button" className="fmt-model-summary-link fmt-model-usage-more" onClick={() => setShowAllUsages(true)}>
-                  {t.fbMoreUsages(node.usages.length - usages.length)}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+  // A record the format only reads fields of: a group.
+  if (!used) {
+    return (
+      <div role="treeitem" aria-expanded={hasChildren ? open : undefined}>
+        <BindingGroupHead
+          depth={depth}
+          open={open}
+          onToggle={() => onToggle(node.key)}
+          icon={icon}
+          title={node.name}
+          description={label}
+          hint={node.path}
+        />
+        {children}
       </div>
+    );
+  }
 
-      {hasChildren && !collapsed && (
-        <div className="mm-tree-children" role="group">
-          {node.children.map(child => (
-            <ModelUsageTreeRows
-              key={child.key}
-              node={child}
-              depth={depth + 1}
-              mappingConfigIndex={mappingConfigIndex}
-              isCollapsed={isCollapsed}
-              onToggle={onToggle}
-              labelFor={labelFor}
-              showTechnicalDetails={showTechnicalDetails}
-              onOpenElement={onOpenElement}
-            />
-          ))}
-        </div>
-      )}
+  // A field the format reads: how the mapping fills it, which elements read it.
+  return (
+    <div role="treeitem" aria-expanded={hasChildren ? open : undefined}>
+      <BindingItem
+        depth={depth}
+        icon={icon}
+        name={node.name}
+        hint={node.path}
+        description={label}
+        warning={node.unmapped}
+        toggle={hasChildren ? { open, onToggle: () => onToggle(node.key) } : undefined}
+        lines={(
+          <>
+            <BindingLine tone="fb-tone--mapping" label={t.fbLineMapping}>
+              {node.mapping ? (
+                <BindingExpression>
+                  <DrillDownTrigger expression={node.mapping.expressionAsString} configIndex={mappingConfigIndex} elementName={node.path}>
+                    <FormulaLines expression={node.mapping.expressionAsString} configIndex={mappingConfigIndex} />
+                  </DrillDownTrigger>
+                </BindingExpression>
+              ) : node.unmapped ? (
+                <span className="fb-note fb-note--warning" title={t.fbFieldNeverFilledHint}>{t.fbNoMappingBinding}</span>
+              ) : !node.mappingLoaded ? (
+                <span className="fb-note">{t.fbMappingNotLoaded}</span>
+              ) : (
+                <span className="fb-note">{t.fbRecordFieldsBound}</span>
+              )}
+            </BindingLine>
+            <BindingLine tone="fb-tone--format" label={t.fbLineFormat}>
+              <div className="fb-chips">
+                {usages.map((usage, i) => {
+                  const property = usage.binding.bindingCategory === 'data'
+                    ? null
+                    : (showTechnicalDetails ? getFormatBindingDisplayLabel(usage.binding) : getConsultantBindingLabel(usage.binding));
+                  return (
+                    <button
+                      key={`${usage.group.componentId}-${i}`}
+                      type="button"
+                      className={`fb-chip fmt-bind-intent--${usage.intent}`}
+                      title={`${getBindingIntentItemLabel(usage.intent)}: ${usage.binding.expressionAsString}`}
+                      onClick={() => onOpenElement(usage.group.componentId)}
+                    >
+                      <span className="fb-dot" aria-hidden />
+                      <span>{usage.group.elementName}</span>
+                      {property && <span className="fb-chip-prop">{property}</span>}
+                    </button>
+                  );
+                })}
+                {node.usages.length > usages.length && (
+                  <button type="button" className="fb-more" onClick={() => setShowAllUsages(true)}>
+                    {t.fbMoreUsages(node.usages.length - usages.length)}
+                  </button>
+                )}
+              </div>
+            </BindingLine>
+          </>
+        )}
+      />
+      {children}
     </div>
   );
 }
@@ -357,84 +466,55 @@ export function FormatElementBindingGroup({ row, bindings, focused, cardRef, con
 }) {
   // Values first, then conditions and properties — the inspector's order.
   const ordered = useMemo(() => groupFormatBindingsByCategory(bindings).flatMap(category => category.bindings), [bindings]);
-  const hiddenCount = row.bindings.length - bindings.length;
 
   return (
-    <div className={`fmt-bind-card ${focused ? 'is-focused' : ''}`} ref={cardRef}>
-      {/* Header: element type, name, bindings hidden by the filter, reveal action */}
-      <div className="fmt-bind-card-head">
-        {showTechnicalDetails && (
-          <span
-            className="fmt-bind-type-badge"
-            style={{
-              color: getFormatTypeColor(row.elementType),
-              background: getFormatTypeBadgeSurface(row.elementType),
-              borderColor: `${getFormatTypeColor(row.elementType)}55`,
-            }}
+    <BindingItem
+      depth={1}
+      itemRef={cardRef}
+      focused={focused}
+      icon={<FormatTypeIcon type={row.elementType} />}
+      name={row.elementName}
+      description={showTechnicalDetails ? row.elementType : getConsultantFormatTypeLabel(row.elementType)}
+      actions={onReveal && (
+        <button
+          type="button"
+          className="fb-action"
+          onClick={e => { e.stopPropagation(); onReveal(row.componentId); }}
+          title={t.openInExplorerAction}
+          aria-label={t.openInExplorerAction}
+        >
+          <OpenRegular fontSize={14} />
+        </button>
+      )}
+      lines={ordered.map((binding, i) => {
+        const intent = classifyBindingIntent(binding);
+        const label = showTechnicalDetails
+          ? getFormatBindingDisplayLabel(binding)
+          // A consultant reads what a value binding does; a switch keeps its on/off wording.
+          : binding.bindingCategory === 'data' ? getBindingIntentItemLabel(intent) : getConsultantBindingLabel(binding);
+        return (
+          <BindingLine
+            key={`${binding.bindingCategory}-${i}`}
+            tone={`fmt-bind-intent--${intent}`}
+            label={label}
+            hint={`${getBindingIntentItemLabel(intent)} — ${getBindingIntentHint(intent)}`}
           >
-            {row.elementType}
-          </span>
-        )}
-        <span className="fmt-bind-card-name" title={row.elementName}>{row.elementName}</span>
-        {hiddenCount > 0 && (
-          <span
-            className="fmt-bind-card-count"
-            title={t.fbHiddenByFilter(hiddenCount)}
-          >
-            +{hiddenCount}
-          </span>
-        )}
-        {onReveal && (
-          <button
-            className="fmt-bind-card-reveal"
-            onClick={e => { e.stopPropagation(); onReveal(row.componentId); }}
-            title={t.openInExplorerAction}
-            aria-label={t.openInExplorerAction}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 3 H3 V13 H13 V10" />
-              <path d="M9 3 H13 V7" />
-              <path d="M13 3 L7 9" />
-            </svg>
-          </button>
-        )}
-      </div>
-
-      {/* Bindings: one row per binding, flat, no extra nesting. The badge's
-          colour is the binding's intent, the same as its filter chip. */}
-      <div className="fmt-bind-card-body">
-        {ordered.map((binding, i) => {
-          const intent = classifyBindingIntent(binding);
-          const label = showTechnicalDetails
-            ? getFormatBindingDisplayLabel(binding)
-            // A consultant reads what a value binding does; a switch keeps its on/off wording.
-            : binding.bindingCategory === 'data' ? getBindingIntentItemLabel(intent) : getConsultantBindingLabel(binding);
-          return (
-            <div key={`${binding.bindingCategory}-${i}`} className="fmt-bind-row">
-              <span
-                className={`badge fmt-bind-row-label fmt-bind-intent fmt-bind-intent--${intent}`}
-                title={`${getBindingIntentItemLabel(intent)} — ${getBindingIntentHint(intent)}`}
+            {showTechnicalDetails && binding.promotedFromChild && binding.rawElementType && (
+              <span className="fb-note">{t.bindingVia} {binding.rawElementType}</span>
+            )}
+            <BindingExpression>
+              <ElementDrillDown
+                expression={binding.expressionAsString}
+                configIndex={configIndex}
+                elementId={row.componentId}
+                elementName={row.elementName}
               >
-                {label}
-              </span>
-              {showTechnicalDetails && binding.promotedFromChild && binding.rawElementType && (
-                <span className="fmt-binding-origin">{t.bindingVia} {binding.rawElementType}</span>
-              )}
-              <span className="fmt-bind-row-arrow" aria-hidden="true">←</span>
-              <span className="fmt-bind-row-expr">
-                <ElementDrillDown
-                  expression={binding.expressionAsString}
-                  configIndex={configIndex}
-                  elementId={row.componentId}
-                  elementName={row.elementName}
-                >
-                  <ExpressionDetailLink expression={binding.expressionAsString} configIndex={configIndex} interactive={false} />
-                </ElementDrillDown>
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+                <FormulaLines expression={binding.expressionAsString} configIndex={configIndex} />
+              </ElementDrillDown>
+            </BindingExpression>
+          </BindingLine>
+        );
+      })}
+    />
   );
 }

@@ -2,11 +2,14 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ArrowDownloadRegular,
   BranchCompareRegular,
+  DocumentTableRegular,
   InfoRegular,
+  ListRegular,
   OpenRegular,
 } from '@fluentui/react-icons';
 import type { ERConfiguration, ERLabel } from '@er-visualizer/core';
-import { useAppStore } from '../../state/store';
+import { useAppStore, type CompareMode } from '../../state/store';
+import { isExactBase } from '../../state/base-configuration';
 import { t, useLocale } from '../../i18n';
 import { FilterField } from '../FilterField';
 import { FormatElementIcon } from './format-type';
@@ -18,6 +21,10 @@ import { getBestVersion } from '../../utils/model-hierarchy';
 import type { SearchDoc } from '../../utils/search-index';
 import { diffFormulaLines, formatFormula, type FormulaLine, type FormulaRow } from '../../utils/expression-format';
 import { ClickablePath } from '../ClickablePath';
+import { foldUnchanged } from '../../utils/sequence-diff';
+import { useTabState } from '../../utils/tab-view-state';
+import { ComparePreview, type TemplateFocus } from './ComparePreview';
+import { useTemplateComparison } from './useTemplateComparison';
 import {
   buildVersionDiffCsv,
   diffConfigurations,
@@ -38,7 +45,12 @@ const CHANGE_MARK: Record<ChangeKind, string> = { added: '+', removed: '−', ch
 /** Entries a section shows before it offers "Show more" — a whole format can differ. */
 const SECTION_PAGE = 150;
 
-const BOOLEAN_KEYS = new Set(['crossCompany', 'isRoot', 'isEnum', 'typeHost', 'stopProcessing']);
+const BOOLEAN_KEYS = new Set([
+  'crossCompany', 'isRoot', 'isEnum', 'typeHost', 'stopProcessing',
+  'style:bold', 'style:italic', 'style:underline', 'style:wrap',
+]);
+/** Template cell properties whose value is a colour, shown with a swatch. */
+const COLOR_KEYS = new Set(['style:fontColor', 'style:fill']);
 const LABEL_KEYS = new Set(['label', 'description']);
 /** ER formulas: laid out on lines, coloured, compared line by line. */
 function isFormulaKey(key: string): boolean {
@@ -54,6 +66,7 @@ const FORMULA_CONTEXT = 3;
 
 export function propertyLabel(key: string): string {
   if (key.startsWith('@')) return key.slice(1);
+  if (key.startsWith('style:')) return t.compareStyleProps[key.slice('style:'.length)] ?? key.slice('style:'.length);
   if (key.startsWith('binding:')) return t.compareBindingOf(key.slice('binding:'.length));
   return t.compareProps[key] ?? key;
 }
@@ -71,21 +84,24 @@ export function sectionTitle(section: DiffSection): string {
  * binding, data source, model field, validation and label text that was
  * added, removed or changed, the older value beside the newer one.
  */
-export function VersionCompareView({ tabId, configIndex, otherKey }: {
+export function VersionCompareView({ tabId, configIndex, otherKey, mode = 'version' }: {
   tabId: string;
   configIndex: number;
   otherKey: string;
+  /** `base`: `otherKey` is the configuration this one was derived from, shown on the left. */
+  mode?: CompareMode;
 }) {
   const locale = useLocale();
   const configurations = useAppStore(s => s.configurations);
   const other = useAppStore(s => s.comparisonVersions[otherKey]);
+  const openVersionComparePicker = useAppStore(s => s.openVersionComparePicker);
   const config = configurations[configIndex];
 
   const diff = useMemo(() => {
     if (!config || !other || config.content.kind !== other.content.kind) return null;
-    // Equal versions keep the other one on the left.
-    return diffConfigurations(other, config);
-  }, [config, other]);
+    // Equal versions keep the other one on the left; a base always is.
+    return diffConfigurations(other, config, { keepOrder: mode === 'base' });
+  }, [config, other, mode]);
 
   const labels = useMemo(() => {
     const workspace = buildLabelPool(configurations, configIndex);
@@ -94,6 +110,21 @@ export function VersionCompareView({ tabId, configIndex, otherKey }: {
       : workspace);
     return { older: pool(diff?.older), newer: pool(diff?.newer) };
   }, [configurations, configIndex, config, diff]);
+
+  // The Excel templates of both sides, unzipped and compared once they are read.
+  const templates = useTemplateComparison(diff?.older, diff?.newer);
+  const [view, setView] = useTabState<'changes' | 'preview'>(tabId, 'compare.view', 'changes');
+  const [templateFocus, setTemplateFocus] = useState<TemplateFocus | null>(null);
+
+  const allSections = useMemo(() => {
+    if (!diff) return [];
+    if (templates.status !== 'ready' || templates.comparison.sections.length === 0) return diff.sections;
+    // The template's content right after the format structure it is part of.
+    const at = diff.sections.findIndex(section => section.kind === 'structure');
+    const out = [...diff.sections];
+    out.splice(at < 0 ? 0 : at + 1, 0, ...templates.comparison.sections);
+    return out;
+  }, [diff, templates]);
 
   const [filter, setFilter] = useState<ChangeFilter>('all');
   const [query, setQuery] = useState('');
@@ -105,6 +136,7 @@ export function VersionCompareView({ tabId, configIndex, otherKey }: {
     if (value == null) return undefined;
     if (BOOLEAN_KEYS.has(key)) return value === '1' ? t.compareYes : value;
     if (key === 'status') return t.compareStatusLabels[value] ?? value;
+    if (key.startsWith('style:') || key === 'drawingKind') return t.compareStyleValues[value] ?? value;
     if (LABEL_KEYS.has(key) && looksLikeLabelRef(value)) {
       const text = labelDisplayText(value, labels[side], labelLang);
       return text && text !== value ? `${text} (${value})` : value;
@@ -115,14 +147,27 @@ export function VersionCompareView({ tabId, configIndex, otherKey }: {
   const needle = query.trim().toLowerCase();
   const sections = useMemo(() => {
     if (!diff) return [];
-    return diff.sections
+    return allSections
       .map(section => ({
         section,
         entries: section.entries.filter(entry =>
           (filter === 'all' || entry.change === filter) && (!needle || entryMatches(entry, needle))),
       }))
       .filter(({ entries }) => entries.length > 0);
-  }, [diff, filter, needle]);
+  }, [diff, allSections, filter, needle]);
+
+  const counts = useMemo(() => {
+    const tally: Record<ChangeKind, number> = { added: 0, removed: 0, changed: 0 };
+    for (const section of allSections) for (const entry of section.entries) tally[entry.change] += 1;
+    return tally;
+  }, [allSections]);
+
+  const showInPreview = useCallback((entry: DiffEntry) => {
+    if (!entry.templateCell) return;
+    const { sheet, olderRef, newerRef } = entry.templateCell;
+    setTemplateFocus(current => ({ sheet, olderRef, newerRef, nonce: (current?.nonce ?? 0) + 1 }));
+    setView('preview');
+  }, [setView]);
 
   if (!config) return null;
   if (!other || !diff) {
@@ -131,16 +176,32 @@ export function VersionCompareView({ tabId, configIndex, otherKey }: {
 
   const loadedSide: 'older' | 'newer' = diff.newer === config ? 'newer' : 'older';
   const name = config.solutionVersion.solution.name || config.filePath;
-  const total = diff.counts.added + diff.counts.removed + diff.counts.changed;
+  const isBase = mode === 'base';
+  const sideNames = isBase
+    ? { older: t.compareBaseSide, newer: t.compareDerivedSide }
+    : { older: t.compareOlder, newer: t.compareNewer };
+  // The base version the derived configuration names, when the one compared is another.
+  const expectedBaseVersion = isBase ? config.solutionVersion.solution.baseVersion : undefined;
+  const actualBaseVersion = isBase ? getBestVersion(diff.older) : undefined;
+  const baseVersionDiffers = expectedBaseVersion != null && !isExactBase(diff.older, config);
+  const total = counts.added + counts.removed + counts.changed;
+  const isFormat = diff.older.content.kind === 'Format';
+  const showPreview = isFormat && view === 'preview';
+  const sideLabels = {
+    older: `${sideNames.older} · v${getBestVersion(diff.older) ?? '?'}`,
+    newer: `${sideNames.newer} · v${getBestVersion(diff.newer) ?? '?'}`,
+  };
 
   const exportCsv = () => {
-    const csv = buildVersionDiffCsv(diff, {
+    const csv = buildVersionDiffCsv({ ...diff, sections: allSections, counts }, {
       headers: t.compareCsvHeaders,
       change: change => t.compareChangeLabels[change],
       section: sectionTitle,
       property: propertyLabel,
     });
-    downloadTextFile(`${safeFileName(name)} v${getBestVersion(diff.older) ?? ''}-v${getBestVersion(diff.newer) ?? ''}.csv`, csv);
+    downloadTextFile(isBase
+      ? `${safeFileName(name)} vs ${safeFileName(diff.older.solutionVersion.solution.name || 'base')}.csv`
+      : `${safeFileName(name)} v${getBestVersion(diff.older) ?? ''}-v${getBestVersion(diff.newer) ?? ''}.csv`, csv);
   };
 
   const toggleSection = (id: string) => setCollapsed(current => {
@@ -150,20 +211,57 @@ export function VersionCompareView({ tabId, configIndex, otherKey }: {
   });
 
   return (
-    <div className="vcmp">
+    <div className={`vcmp${showPreview ? ' vcmp--preview' : ''}`}>
       <div className="vcmp__head">
         <div className="vcmp__title">
           <BranchCompareRegular fontSize={16} aria-hidden />
           <span className="vcmp__name" title={name}>{name}</span>
         </div>
         <div className="vcmp-sides">
-          <SideCard diff={diff} side="older" loaded={loadedSide === 'older'} locale={locale} />
-          <SideCard diff={diff} side="newer" loaded={loadedSide === 'newer'} locale={locale} />
+          <SideCard diff={diff} side="older" label={sideNames.older} loaded={loadedSide === 'older'} locale={locale} />
+          <SideCard diff={diff} side="newer" label={sideNames.newer} loaded={loadedSide === 'newer'} locale={locale} />
         </div>
-        {!diff.sameConfiguration && (
+        {isBase ? (
+          <div className="vcmp__note vcmp__note--info"><InfoRegular fontSize={13} aria-hidden /> {t.compareBaseNote(diff.older.solutionVersion.solution.name || '')}</div>
+        ) : !diff.sameConfiguration && (
           <div className="vcmp__note"><InfoRegular fontSize={13} aria-hidden /> {t.compareDifferentConfigurations}</div>
         )}
+        {baseVersionDiffers && (
+          <div className="vcmp__note">
+            <InfoRegular fontSize={13} aria-hidden />
+            <span>{t.compareBaseVersionMismatch(String(expectedBaseVersion), String(actualBaseVersion ?? '?'))}</span>
+            <button type="button" className="vcmp__note-action" onClick={() => openVersionComparePicker(configIndex, 'base')}>
+              {t.compareBasePickOther}
+            </button>
+          </div>
+        )}
         <div className="vcmp__toolbar">
+          {isFormat && (
+            <div className="spec-view__modes vcmp__views" role="tablist" aria-label={t.compareViewAria}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={!showPreview}
+                className={`spec-mode${!showPreview ? ' active' : ''}`}
+                onClick={() => setView('changes')}
+              >
+                <ListRegular fontSize={13} aria-hidden />
+                {t.compareViewChanges}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={showPreview}
+                className={`spec-mode${showPreview ? ' active' : ''}`}
+                onClick={() => setView('preview')}
+                title={t.compareViewPreviewHint}
+              >
+                <DocumentTableRegular fontSize={13} aria-hidden />
+                {t.compareViewPreview}
+              </button>
+            </div>
+          )}
+          {!showPreview && (<>
           <div className="spec-view__modes" role="group" aria-label={t.compareFilterAria}>
             {FILTERS.map(f => (
               <button
@@ -171,12 +269,12 @@ export function VersionCompareView({ tabId, configIndex, otherKey }: {
                 type="button"
                 className={`spec-mode vcmp-filter vcmp-filter--${f} ${filter === f ? 'active' : ''}`}
                 aria-pressed={filter === f}
-                disabled={f !== 'all' && diff.counts[f] === 0}
+                disabled={f !== 'all' && counts[f] === 0}
                 onClick={() => setFilter(f)}
               >
                 {f !== 'all' && <span className="vcmp-mark" aria-hidden>{CHANGE_MARK[f]}</span>}
                 {f === 'all' ? t.compareFilterAll : t.compareChangeLabels[f]}
-                <span className="spec-mode__count">{f === 'all' ? total : diff.counts[f]}</span>
+                <span className="spec-mode__count">{f === 'all' ? total : counts[f]}</span>
               </button>
             ))}
           </div>
@@ -190,7 +288,7 @@ export function VersionCompareView({ tabId, configIndex, otherKey }: {
           <button
             type="button"
             className="spec-mode"
-            onClick={() => setCollapsed(collapsed.size > 0 ? new Set() : new Set(diff.sections.map(s => s.id)))}
+            onClick={() => setCollapsed(collapsed.size > 0 ? new Set() : new Set(allSections.map(s => s.id)))}
           >
             {collapsed.size > 0 ? t.compareExpandAll : t.compareCollapseAll}
           </button>
@@ -198,35 +296,45 @@ export function VersionCompareView({ tabId, configIndex, otherKey }: {
             <ArrowDownloadRegular fontSize={14} aria-hidden />
             {t.specExportCsv}
           </button>
+          </>)}
+          {templates.status === 'loading' && <span className="vcmp__loading">{t.comparePreviewLoading}</span>}
         </div>
       </div>
 
+      {showPreview ? (
+        <div className="vcmp__preview">
+          <ComparePreview
+            diff={diff}
+            configIndex={configIndex}
+            tabId={tabId}
+            templates={templates}
+            focus={templateFocus}
+            sideLabels={sideLabels}
+            propertyLabel={propertyLabel}
+            displayValue={display}
+          />
+        </div>
+      ) : (
       <div className="vcmp__body">
         {total === 0 ? (
-          <p className="vcmp-empty">{t.compareNoChanges}</p>
+          <p className="vcmp-empty">{isBase ? t.compareBaseNoChanges : t.compareNoChanges}</p>
         ) : sections.length === 0 ? (
           <p className="vcmp-empty">{t.compareNoMatches}</p>
         ) : sections.map(({ section, entries }) => {
           const open = !collapsed.has(section.id);
           const limit = limits[section.id] ?? SECTION_PAGE;
-          const counts = countChanges(entries);
           return (
             <section key={section.id} className="vcmp-section">
               <button type="button" className="vcmp-section__head" aria-expanded={open} onClick={() => toggleSection(section.id)}>
                 <span className={`tree-chevron ${open ? 'open' : ''}`} aria-hidden />
                 <span className="vcmp-section__title">{sectionTitle(section)}</span>
-                {(['changed', 'added', 'removed'] as const).map(change => counts[change] > 0 && (
-                  <span key={change} className={`vcmp-count vcmp-count--${change}`} title={t.compareChangeLabels[change]}>
-                    {CHANGE_MARK[change]}{counts[change]}
-                  </span>
-                ))}
               </button>
               {open && (
                 <>
                   <div className="vcmp-grid vcmp-grid--head" aria-hidden>
                     <span />
-                    <span>{t.compareOlder} · v{getBestVersion(diff.older)}</span>
-                    <span>{t.compareNewer} · v{getBestVersion(diff.newer)}</span>
+                    <span>{sideLabels.older}</span>
+                    <span>{sideLabels.newer}</span>
                   </div>
                   {entries.slice(0, limit).map(entry => (
                     <EntryRow
@@ -238,6 +346,7 @@ export function VersionCompareView({ tabId, configIndex, otherKey }: {
                       tabId={tabId}
                       needle={needle}
                       display={display}
+                      onShowInPreview={showInPreview}
                     />
                   ))}
                   {entries.length > limit && (
@@ -255,6 +364,7 @@ export function VersionCompareView({ tabId, configIndex, otherKey }: {
           );
         })}
       </div>
+      )}
     </div>
   );
 }
@@ -267,13 +377,7 @@ function entryMatches(entry: DiffEntry, needle: string): boolean {
     p.before?.toLowerCase().includes(needle) || p.after?.toLowerCase().includes(needle) || p.key.toLowerCase().includes(needle));
 }
 
-function countChanges(entries: readonly DiffEntry[]): Record<ChangeKind, number> {
-  const counts: Record<ChangeKind, number> = { added: 0, removed: 0, changed: 0 };
-  for (const entry of entries) counts[entry.change] += 1;
-  return counts;
-}
-
-function SideCard({ diff, side, loaded, locale }: { diff: VersionDiff; side: 'older' | 'newer'; loaded: boolean; locale: string }) {
+function SideCard({ diff, side, label, loaded, locale }: { diff: VersionDiff; side: 'older' | 'newer'; label: string; loaded: boolean; locale: string }) {
   const cfg = side === 'older' ? diff.older : diff.newer;
   const value = (key: string) => {
     const change = diff.header.find(h => h.key === key);
@@ -292,7 +396,7 @@ function SideCard({ diff, side, loaded, locale }: { diff: VersionDiff; side: 'ol
   return (
     <div className={`vcmp-side vcmp-side--${side}${loaded ? ' vcmp-side--loaded' : ''}`}>
       <div className="vcmp-side__head">
-        <span className="vcmp-side__label">{side === 'older' ? t.compareOlder : t.compareNewer}</span>
+        <span className="vcmp-side__label">{label}</span>
         <span className="vcmp-side__version">v{getBestVersion(cfg) ?? '?'}</span>
         <span
           className={`vcmp-side__badge${loaded ? ' vcmp-side__badge--loaded' : ''}`}
@@ -313,7 +417,7 @@ function SideCard({ diff, side, loaded, locale }: { diff: VersionDiff; side: 'ol
   );
 }
 
-const EntryRow = React.memo(function EntryRow({ entry, section, configIndex, loadedSide, tabId, needle, display }: {
+const EntryRow = React.memo(function EntryRow({ entry, section, configIndex, loadedSide, tabId, needle, display, onShowInPreview }: {
   entry: DiffEntry;
   section: DiffSection;
   configIndex: number;
@@ -321,6 +425,7 @@ const EntryRow = React.memo(function EntryRow({ entry, section, configIndex, loa
   tabId: string;
   needle: string;
   display: (key: string, value: string | undefined, side: 'older' | 'newer') => string | undefined;
+  onShowInPreview: (entry: DiffEntry) => void;
 }) {
   const treeNodes = useAppStore(s => s.treeNodes);
   const navigateBeside = useAppStore(s => s.navigateToTreeNodeBeside);
@@ -350,6 +455,11 @@ const EntryRow = React.memo(function EntryRow({ entry, section, configIndex, loa
             <OpenRegular fontSize={13} />
           </button>
         )}
+        {entry.templateCell && (
+          <button type="button" className="vcmp-entry__open" onClick={() => onShowInPreview(entry)} title={t.compareShowInPreview} aria-label={t.compareShowInPreview}>
+            <DocumentTableRegular fontSize={13} />
+          </button>
+        )}
       </div>
       {entry.properties.map(property => (isFormulaKey(property.key) ? (
         <div key={property.key} className="vcmp-grid vcmp-prop vcmp-prop--formula">
@@ -372,41 +482,6 @@ const EntryRow = React.memo(function EntryRow({ entry, section, configIndex, loa
   );
 });
 
-type FoldItem<R> =
-  | { kind: 'row'; row: R }
-  | { kind: 'fold'; rows: R[] };
-
-/**
- * Unchanged runs longer than the context around a change fold into one row:
- * a 60-line formula with one changed argument shows that argument, not a
- * wall of identical lines.
- */
-function foldUnchanged<R extends { kind: string }>(rows: readonly R[], context = FORMULA_CONTEXT): Array<FoldItem<R>> {
-  const items: Array<FoldItem<R>> = [];
-  let i = 0;
-  while (i < rows.length) {
-    if (rows[i].kind !== 'same') {
-      items.push({ kind: 'row', row: rows[i++] });
-      continue;
-    }
-    let end = i;
-    while (end < rows.length && rows[end].kind === 'same') end++;
-    const run = rows.slice(i, end);
-    const keepHead = i === 0 ? 0 : context;
-    const keepTail = end === rows.length ? 0 : context;
-    // Folding fewer lines than this saves nothing worth a click.
-    if (run.length - keepHead - keepTail >= 3) {
-      run.slice(0, keepHead).forEach(row => items.push({ kind: 'row', row }));
-      items.push({ kind: 'fold', rows: run.slice(keepHead, run.length - keepTail) });
-      run.slice(run.length - keepTail).forEach(row => items.push({ kind: 'row', row }));
-    } else {
-      run.forEach(row => items.push({ kind: 'row', row }));
-    }
-    i = end;
-  }
-  return items;
-}
-
 /**
  * Two formulas line against line, coloured as in the designer. The names of
  * the version loaded in the workspace resolve on hover and open in the
@@ -427,7 +502,7 @@ function FormulaCompare({ before, after, configIndex, loadedSide, needle, onNavi
       before != null ? formatFormula(before) : [],
       after != null ? formatFormula(after) : [],
     );
-    return foldUnchanged(rows);
+    return foldUnchanged(rows, FORMULA_CONTEXT);
   }, [before, after]);
 
   return (
@@ -520,25 +595,14 @@ const LIST_MARK: Record<ListRow['kind'], string> = { same: '', changed: '~', add
  */
 function ListCompare({ property, needle }: { property: PropertyChange; needle: string }) {
   const [unfolded, setUnfolded] = useState<Set<number>>(() => new Set());
-  const { items, counts } = useMemo(() => {
-    const rows = diffListItems(property.before, property.after);
-    const tally = { changed: 0, added: 0, removed: 0 };
-    for (const row of rows) if (row.kind !== 'same') tally[row.kind] += 1;
-    return { items: foldUnchanged(rows, LIST_CONTEXT), counts: tally };
-  }, [property.before, property.after]);
+  const items = useMemo(
+    () => foldUnchanged(diffListItems(property.before, property.after), LIST_CONTEXT),
+    [property.before, property.after],
+  );
 
   return (
     <div className="vcmp-grid vcmp-prop vcmp-prop--formula">
-      <span className="vcmp-prop__key" title={property.key}>
-        {propertyLabel(property.key)}
-        <span className="vcmp-list__counts">
-          {(['changed', 'added', 'removed'] as const).map(change => counts[change] > 0 && (
-            <span key={change} className={`vcmp-count vcmp-count--${change}`} title={t.compareChangeLabels[change]}>
-              {CHANGE_MARK[change]}{counts[change]}
-            </span>
-          ))}
-        </span>
-      </span>
+      <span className="vcmp-prop__key" title={property.key}>{propertyLabel(property.key)}</span>
       <div className="vcmp-formula vcmp-list">
         {items.flatMap((item, index) => {
           if (item.kind === 'fold' && !unfolded.has(index)) {
@@ -622,7 +686,8 @@ function PropertyRow({ property, change, display }: {
   const before = display(property.key, property.before, 'older');
   const after = display(property.key, property.after, 'newer');
   const code = isCodeKey(property.key);
-  const split = change === 'changed' && before != null && after != null ? inlineChange(before, after) : null;
+  const color = COLOR_KEYS.has(property.key);
+  const split = !color && change === 'changed' && before != null && after != null ? inlineChange(before, after) : null;
   const partial = split && (split.prefix.length > 0 || split.suffix.length > 0);
   return (
     <div className="vcmp-grid vcmp-prop">
@@ -630,13 +695,17 @@ function PropertyRow({ property, change, display }: {
       <span className={`vcmp-prop__value vcmp-prop__value--before${code ? ' vcmp-code' : ''}${before == null ? ' vcmp-prop__value--none' : ''}`}>
         {before == null ? '—' : partial && split
           ? <>{split.prefix}{split.before && <del>{split.before}</del>}{split.suffix}</>
-          : <span className={change !== 'added' ? 'vcmp-del' : undefined}>{before}</span>}
+          : <span className={change !== 'added' ? 'vcmp-del' : undefined}>{color && <ColorSwatch value={before} />}{before}</span>}
       </span>
       <span className={`vcmp-prop__value vcmp-prop__value--after${code ? ' vcmp-code' : ''}${after == null ? ' vcmp-prop__value--none' : ''}`}>
         {after == null ? '—' : partial && split
           ? <>{split.prefix}{split.after && <ins>{split.after}</ins>}{split.suffix}</>
-          : <span className={change !== 'removed' ? 'vcmp-ins' : undefined}>{after}</span>}
+          : <span className={change !== 'removed' ? 'vcmp-ins' : undefined}>{color && <ColorSwatch value={after} />}{after}</span>}
       </span>
     </div>
   );
+}
+
+function ColorSwatch({ value }: { value: string }) {
+  return /^#[0-9A-F]{6}$/i.test(value) ? <i className="vcmp-swatch" style={{ background: value }} aria-hidden /> : null;
 }

@@ -37,7 +37,14 @@ export type DiffItemKind =
   | 'formatEnum'
   | 'transformation'
   | 'label'
-  | 'template';
+  | 'template'
+  // Inside the template workbook:
+  | 'sheet'
+  | 'cell'
+  | 'merge'
+  | 'drawing'
+  | 'layout'
+  | 'namedRange';
 
 /**
  * One property of an item, before and after. Keys are stable identifiers the
@@ -66,6 +73,8 @@ export interface DiffEntry {
   /** Where the item is in the explorer tree of each side (as a search hit locates it). */
   locateOlder?: SearchLocator;
   locateNewer?: SearchLocator;
+  /** An item of the template workbook: its sheet (a key of the workbook comparison) and cell on each side. */
+  templateCell?: { sheet: string; olderRef?: string; newerRef?: string };
 }
 
 export type DiffSectionKind =
@@ -78,7 +87,9 @@ export type DiffSectionKind =
   | 'fields'
   | 'formatEnums'
   | 'transformations'
-  | 'labels';
+  | 'labels'
+  | 'template'
+  | 'templateNames';
 
 export interface DiffSection {
   id: string;
@@ -330,7 +341,7 @@ function yesNo(value: boolean | undefined): string | undefined {
 }
 
 /** Properties whose value is a list — one item per line — compared item by item. */
-export const LIST_KEYS: ReadonlySet<string> = new Set(['selectedFields', 'groupedFields', 'aggregations', 'pathsToCache', 'values']);
+export const LIST_KEYS: ReadonlySet<string> = new Set(['selectedFields', 'groupedFields', 'aggregations', 'pathsToCache', 'values', 'columnWidths', 'rowHeights']);
 
 function list(values: Array<string | undefined>): string | undefined {
   const items = values.filter((v): v is string => Boolean(v && v.trim()));
@@ -398,8 +409,8 @@ const VERSION_STATUS_NAMES: Record<number, string> = Object.fromEntries(
   Object.entries(ERVersionStatus).filter(([, v]) => typeof v === 'number').map(([k, v]) => [v as number, k]),
 );
 
-/** A short fingerprint of a long value (an embedded template) and its size. */
-function fingerprint(text: string | undefined): string | undefined {
+/** A short fingerprint of a long value (an embedded template, a picture) and its size. */
+export function fingerprint(text: string | undefined): string | undefined {
   if (!text) return undefined;
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
@@ -844,8 +855,13 @@ function headerProps(cfg: ERConfiguration): Props {
 
 // ─── Entry point ───
 
-export function diffConfigurations(a: ERConfiguration, b: ERConfiguration): VersionDiff {
-  const [older, newer] = orderVersions(a, b);
+/**
+ * What changed from one configuration to the other. Two versions are put in
+ * version order; `keepOrder` keeps `a` on the left as given — a base and the
+ * configuration derived from it, whose version numbers say nothing about each other.
+ */
+export function diffConfigurations(a: ERConfiguration, b: ERConfiguration, options?: { keepOrder?: boolean }): VersionDiff {
+  const [older, newer] = options?.keepOrder ? [a, b] : orderVersions(a, b);
   if (older.content.kind !== newer.content.kind) {
     throw new Error(`Cannot compare a ${older.content.kind} with a ${newer.content.kind}.`);
   }

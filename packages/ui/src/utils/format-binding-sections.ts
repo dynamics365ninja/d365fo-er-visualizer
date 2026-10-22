@@ -76,6 +76,8 @@ export interface FormatBindingSection {
   trail: string[];
   /** Bindings whose element is not in the format tree (a stale component reference). */
   unresolved: boolean;
+  /** Type of the parent element (`XMLElement`, `ExcelRange`, …), for its icon. */
+  elementType?: string;
   entries: FormatBindingEntry[];
 }
 
@@ -98,12 +100,12 @@ export function buildFormatBindingSections(
   for (const group of groups) pending.set(normalizeGuid(group.componentId), group);
 
   const sections = new Map<string, FormatBindingSection>();
-  const addEntry = (key: string, trail: string[], unresolved: boolean, group: NormalizedFormatBindingGroup) => {
+  const addEntry = (key: string, trail: string[], unresolved: boolean, group: NormalizedFormatBindingGroup, elementType?: string) => {
     const bindings = group.bindings.filter(includeBinding);
     if (bindings.length === 0) return;
     let section = sections.get(key);
     if (!section) {
-      section = { key, trail, unresolved, entries: [] };
+      section = { key, trail, unresolved, elementType, entries: [] };
       sections.set(key, section);
     }
     section.entries.push({ group, bindings });
@@ -116,7 +118,7 @@ export function buildFormatBindingSections(
       pending.delete(id);
       const parent = ancestors[ancestors.length - 1] ?? element;
       const trail = ancestors.length > 1 ? ancestors.slice(1).map(a => a.name) : [rootElement.name];
-      addEntry(parent.id, trail, false, group);
+      addEntry(parent.id, trail, false, group, parent.elementType);
     }
     const nextAncestors = [...ancestors, element];
     for (const child of element.children ?? []) visit(child, nextAncestors);

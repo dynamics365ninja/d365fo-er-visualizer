@@ -971,7 +971,6 @@ function LabelTranslationCard({ labelRef, labels, elementName }: {
     <section className="lin-summary lin-label">
       <header className="lin-summary__head">
         <span className="lin-summary__title">{t.drillLabelTitle}</span>
-        <span className="lin-summary__count">{translations.length}</span>
       </header>
       <p className="lin-summary__hint">{t.drillLabelHint}</p>
 
@@ -1284,7 +1283,6 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
         >
           <span className={`tree-chevron ${usedDataOpen ? 'open' : ''}`} aria-hidden />
           <span className="lin-summary__title">{t.drillUsedDataTitle}</span>
-          <span className="lin-summary__count">{usedSources.length}</span>
         </button>
         {usedDataOpen && (
           usedSources.length > 0 ? (
@@ -1295,7 +1293,6 @@ function DrillDownLineageView({ expression, configIndex, configurations, element
                   <div className="lin-group__head">
                     <BadgeIcon badge={group.badge} size={12} />
                     <span className="lin-group__title">{localizeBadgeGroupLabel(group.badge)}</span>
-                    <span className="lin-group__count">{group.items.length}</span>
                   </div>
                   <ul className="lin-chips">
                     {group.items.map(src => {

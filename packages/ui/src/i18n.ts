@@ -120,7 +120,6 @@ export interface Translations {
   clearFilter: string;
   filterRecent: string;
   filterSuggestions: string;
-  filterMatchCount: (n: number) => string;
   clearSearch: string;
   clearWhereUsedSearch: string;
   noConfigurationsLoaded: string;
@@ -136,6 +135,16 @@ export interface Translations {
   explorerSort: string;
   explorerViewFlat: string;
   explorerViewHierarchy: string;
+  explorerViewHierarchyTitle: string;
+  explorerCollapseGroup: string;
+  explorerShowOnlyKind: (kind: string) => string;
+  explorerSectionActions: string;
+  explorerSectionMoveUp: string;
+  explorerSectionMoveDown: string;
+  explorerSectionCollapse: string;
+  explorerSectionExpand: string;
+  explorerSectionResetOrder: string;
+  explorerSectionDragHint: string;
   explorerSortLoadOrder: string;
   explorerSortNameAsc: string;
   explorerSortNameDesc: string;
@@ -641,7 +650,6 @@ export interface Translations {
   designerWorkspaceEyebrow: string;
   designerUnsupportedView: (kind: string) => string;
   dsCrossCompany: string;
-  dsNestedCount: (n: number) => string;
   dsLayoutKind: string;
   dsLayoutKindHint: string;
   dsLayoutRoots: string;
@@ -657,11 +665,6 @@ export interface Translations {
   dsFormulasHideAll: string;
   dsFormulaShow: string;
   dsFormulaHide: string;
-  dsEnumValueCount: (n: number) => string;
-  dsEnumValuesUsedCount: (n: number) => string;
-  dsEnumValuesInFno: string;
-  dsEnumValuesHint: string;
-  dsEnumValuesPartialHint: string;
   dsEnumValueUses: (n: number) => string;
   dsEnumValueUsesHint: (n: number) => string;
   dsGroupBy: string;
@@ -670,7 +673,6 @@ export interface Translations {
   dsImplicitHint: string;
   dsModelField: string;
   dsModelNotLoaded: string;
-  bindingCount: (n: number) => string;
   bindingVia: string;
   searchNoResultsInScope: string;
   searchRelatedOnly: string;
@@ -832,9 +834,7 @@ export interface Translations {
 
   // ─── Configuration kind labels (DependencyPromptDialog.tsx, ConfigExplorer.tsx) ───
   configKindLabels: { DataModel: string; ModelMapping: string; Format: string };
-  explorerKindPills: { DataModel: string; ModelMapping: string; Format: string };
   explorerGroupLabels: { DataModel: string; ModelMapping: string; Format: string };
-  explorerChipLabels: { DataModel: string; ModelMapping: string; Format: string };
 
   // ─── F&O ingest steps (FnoIngestPanel.tsx) ───
   fnoIngestSteps: { prepare: string; dm: string; fm: string; mm: string; finalize: string };
@@ -874,9 +874,6 @@ export interface Translations {
   mmClickToSwitch: (title: string) => string;
   mmDesignerTitle: string;
   mmDesignerHint: string;
-  mmRuleCount: (n: number) => string;
-  mmBranchBindingCount: (n: number) => string;
-  mmBranchUnmappedCount: (n: number) => string;
   mmScopeAria: string;
   mmScopeLabels: { all: string; mapped: string; unmapped: string };
   mmScopeNeedsModel: string;
@@ -931,8 +928,6 @@ export interface Translations {
   fbOnlyUnmappedHint: string;
   fbOnlyUnmapped: string;
   fbAllFieldsMapped: string;
-  fbBranchUnmappedCount: (n: number) => string;
-  fbUsageCount: (n: number) => string;
   fbLineMapping: string;
   fbFieldNeverFilledHint: string;
   fbNoMappingBinding: string;
@@ -948,7 +943,6 @@ export interface Translations {
   fbLayoutAria: string;
   fbNothingInSelectedTypes: (hiddenList: string) => string;
   fbShowAll: string;
-  fbHiddenByFilter: (n: number) => string;
 
   // ─── Drill-down panel (DrillDownPanel.tsx) ───
   drillBadgeLabels: Record<string, string>;
@@ -1109,6 +1103,32 @@ export interface Translations {
   toastNewerVersionCompared: (fileName: string, version: string | number, previousVersion: string | number) => string;
   compareNoSuchConfiguration: (fileName: string, name: string) => string;
   compareWithVersionAction: string;
+  compareWithBaseAction: string;
+  compareBaseTabLabel: (name: string, baseName: string, baseVersion: string) => string;
+  compareBaseSide: string;
+  compareDerivedSide: string;
+  compareBaseNote: (baseName: string) => string;
+  compareBaseVersionMismatch: (expected: string, actual: string) => string;
+  compareBaseNoChanges: string;
+  compareBasePickOther: string;
+  compareBaseNone: (name: string) => string;
+  compareBaseOtherKind: (baseName: string, kind: string) => string;
+  compareBaseNotInFile: (fileName: string, baseName: string) => string;
+  compareBaseFnoNotConnected: string;
+  compareBaseDownloading: (name: string) => string;
+  compareBaseFnoFailed: (name: string, message: string) => string;
+  compareBaseFnoNotFound: string;
+  comparePickerBaseTitle: (name: string) => string;
+  comparePickerBaseIntro: (baseName: string, version: string) => string;
+  comparePickerBaseLoaded: string;
+  comparePickerBaseCached: string;
+  comparePickerBaseNone: string;
+  comparePickerBaseExact: string;
+  comparePickerBaseFno: string;
+  comparePickerBaseFnoHint: string;
+  comparePickerBaseFnoOffline: string;
+  comparePickerSwitchToBase: (baseName: string) => string;
+  comparePickerSwitchToVersion: string;
   compareOlder: string;
   compareNewer: string;
   compareInWorkspace: string;
@@ -1122,7 +1142,7 @@ export interface Translations {
   compareFilterPlaceholder: string;
   compareNoChanges: string;
   compareNoMatches: string;
-  compareSectionLabels: Record<'structure' | 'datasources' | 'bindings' | 'validations' | 'definitions' | 'records' | 'fields' | 'formatEnums' | 'transformations' | 'labels', string>;
+  compareSectionLabels: Record<'structure' | 'datasources' | 'bindings' | 'validations' | 'definitions' | 'records' | 'fields' | 'formatEnums' | 'transformations' | 'labels' | 'template' | 'templateNames', string>;
   compareEmbeddedMapping: string;
   compareOrphanBindings: string;
   compareProps: Record<string, string>;
@@ -1131,6 +1151,32 @@ export interface Translations {
   compareYes: string;
   compareRenamedFrom: (path: string) => string;
   compareShowInDesigner: string;
+  compareShowInPreview: string;
+  compareStyleProps: Record<string, string>;
+  compareStyleValues: Record<string, string>;
+  compareViewAria: string;
+  compareViewChanges: string;
+  compareViewPreview: string;
+  compareViewPreviewHint: string;
+  comparePreviewFormatsOnly: string;
+  comparePreviewLoading: string;
+  comparePreviewTemplateError: (message: string) => string;
+  comparePreviewNoSheets: string;
+  comparePreviewSheets: string;
+  comparePreviewNoCellChanges: string;
+  comparePreviewChangeOf: (index: number, total: number) => string;
+  comparePreviewPrevChange: string;
+  comparePreviewNextChange: string;
+  comparePreviewSyncScroll: string;
+  comparePreviewSheetAdded: string;
+  comparePreviewSheetRemoved: string;
+  comparePreviewStyleOnly: string;
+  comparePreviewBoundChanged: string;
+  comparePreviewPickCell: string;
+  comparePreviewCellSame: string;
+  comparePreviewWrittenBy: string;
+  comparePreviewNoDocument: string;
+  comparePreviewDocumentSame: string;
   compareExportCsvHint: string;
   compareCsvHeaders: string[];
   compareShowMore: (n: number) => string;
@@ -1143,7 +1189,6 @@ export interface Translations {
   comparePickerCached: string;
   comparePickerNone: string;
   comparePickerFromFile: string;
-  comparePickerFnoNote: string;
   comparePickerLoaded: (version: string) => string;
   comparePickerOpenedAt: (when: string) => string;
 }
@@ -1203,7 +1248,6 @@ const cs: Translations = {
   clearFilter: 'Vymazat filtr',
   filterRecent: 'Naposledy hledané',
   filterSuggestions: 'Návrhy filtru',
-  filterMatchCount: (n: number) => `Počet shod: ${n}`,
   clearSearch: 'Vymazat hledání',
   clearWhereUsedSearch: 'Vymazat hledání míst použití',
   noConfigurationsLoaded: 'Nejsou načtené žádné konfigurace.',
@@ -1219,6 +1263,16 @@ const cs: Translations = {
   explorerSort: 'Řazení',
   explorerViewFlat: 'Zobrazit plochý seznam',
   explorerViewHierarchy: 'Zobrazit hierarchii modelů',
+  explorerViewHierarchyTitle: 'Hierarchie modelů',
+  explorerCollapseGroup: 'Sbalit vše v sekci',
+  explorerShowOnlyKind: (kind: string) => `Zobrazit jen: ${kind}`,
+  explorerSectionActions: 'Akce sekce',
+  explorerSectionMoveUp: 'Posunout výš',
+  explorerSectionMoveDown: 'Posunout níž',
+  explorerSectionCollapse: 'Sbalit sekci',
+  explorerSectionExpand: 'Rozbalit sekci',
+  explorerSectionResetOrder: 'Obnovit výchozí pořadí sekcí',
+  explorerSectionDragHint: 'Klepnutím sekci sbalíte nebo rozbalíte, přetažením změníte její pořadí (také Alt+↑ / Alt+↓)',
   explorerSortLoadOrder: 'Pořadí načtení',
   explorerSortNameAsc: 'Název vzestupně (A–Z)',
   explorerSortNameDesc: 'Název sestupně (Z–A)',
@@ -1719,7 +1773,6 @@ const cs: Translations = {
   designerWorkspaceEyebrow: 'Pracovní plocha designeru',
   designerUnsupportedView: (kind) => `Nepodporovaný pohled pro: ${kind}`,
   dsCrossCompany: 'napříč společnostmi',
-  dsNestedCount: (n) => `${n} ${csPlural(n, 'vnořený datový zdroj', 'vnořené datové zdroje', 'vnořených datových zdrojů')}`,
   dsLayoutKind: 'Podle druhu',
   dsLayoutKindHint: 'Všechny datové zdroje z libovolné úrovně, seskupené podle druhu — vnořený zdroj má před názvem cestu, pod kterou visí',
   dsLayoutRoots: 'Kořeny',
@@ -1735,11 +1788,6 @@ const cs: Translations = {
   dsFormulasHideAll: 'Sbalit vzorce kalkulovaných polí',
   dsFormulaShow: 'Zobrazit celý vzorec',
   dsFormulaHide: 'Skrýt vzorec',
-  dsEnumValueCount: (n) => `${n} ${csPlural(n, 'hodnota', 'hodnoty', 'hodnot')}`,
-  dsEnumValuesUsedCount: (n) => `${n} ${csPlural(n, 'použitá hodnota', 'použité hodnoty', 'použitých hodnot')}`,
-  dsEnumValuesInFno: 'hodnoty v D365FO',
-  dsEnumValuesHint: 'Hodnoty z definice výčtu; u každé je vidět, kolikrát ji definice používá',
-  dsEnumValuesPartialHint: 'Výčet AX (nebo nenačtený datový model) nese hodnoty jen v D365FO — zobrazené jsou hodnoty, které používají výrazy této definice',
   dsEnumValueUses: (n) => `${n}×`,
   dsEnumValueUsesHint: (n) => `Výrazy této definice ji používají ${n}×`,
   dsGroupBy: 'Seskupit podle',
@@ -1748,7 +1796,6 @@ const cs: Translations = {
   dsImplicitHint: 'Není deklarován jako datový zdroj — je to záznam datového modelu nebo část cesty, pod kterou jsou vnořeny další datové zdroje.',
   dsModelField: 'Pole datového modelu',
   dsModelNotLoaded: 'datový model není načten',
-  bindingCount: (n) => `${n} ${csPlural(n, 'vazba', 'vazby', 'vazeb')}`,
   bindingVia: 'přes',
   searchNoResultsInScope: 'V tomto rozsahu nic nenalezeno.',
   searchRelatedOnly: 'Jen související',
@@ -1936,9 +1983,7 @@ const cs: Translations = {
 
   // ─── Configuration kind labels (DependencyPromptDialog.tsx, ConfigExplorer.tsx) ───
   configKindLabels: { DataModel: 'Datový model', ModelMapping: 'Mapování modelu', Format: 'Formát' },
-  explorerKindPills: { DataModel: 'Model', ModelMapping: 'Mapování', Format: 'Formát' },
   explorerGroupLabels: { DataModel: 'Datové modely', ModelMapping: 'Mapování modelu', Format: 'Formáty' },
-  explorerChipLabels: { DataModel: 'Modely', ModelMapping: 'Mapování', Format: 'Formáty' },
 
   // ─── F&O ingest steps (FnoIngestPanel.tsx) ───
   fnoIngestSteps: { prepare: 'Příprava', dm: 'Datové modely', fm: 'Formáty a mapování', mm: 'Mapování modelů', finalize: 'Dokončení' },
@@ -1978,9 +2023,6 @@ const cs: Translations = {
   mmClickToSwitch: (title: string) => `${title} — kliknutím přepnete`,
   mmDesignerTitle: 'Mapování modelu',
   mmDesignerHint: 'Klikněte na řádek pro vlastnosti, na výraz pro rozpad hodnoty',
-  mmRuleCount: (n: number) => `Počet pravidel: ${n}`,
-  mmBranchBindingCount: (n: number) => `Počet vazeb v této větvi: ${n}`,
-  mmBranchUnmappedCount: (n: number) => `Nenamapovaná pole v této větvi: ${n}`,
   mmScopeAria: 'Zobrazená pole datového modelu',
   mmScopeLabels: { all: 'Vše', mapped: 'Namapované', unmapped: 'Nenamapované' },
   mmScopeNeedsModel: 'Nenamapovaná pole jsou vidět po načtení datového modelu.',
@@ -2035,8 +2077,6 @@ const cs: Translations = {
   fbOnlyUnmappedHint: 'Jen pole, která formát čte a mapování neplní',
   fbOnlyUnmapped: 'Jen bez vazby',
   fbAllFieldsMapped: 'Každé pole, které formát čte, má vazbu v mapování.',
-  fbBranchUnmappedCount: (n: number) => `Bez vazby v mapování v této větvi: ${n}`,
-  fbUsageCount: (n: number) => `Použití ve formátu: ${n}`,
   fbLineMapping: 'Mapování',
   fbFieldNeverFilledHint: 'Mapování toto pole neplní, formát tu dostane prázdnou hodnotu.',
   fbNoMappingBinding: 'Bez vazby v mapování',
@@ -2052,7 +2092,6 @@ const cs: Translations = {
   fbLayoutAria: 'Uspořádání vazeb',
   fbNothingInSelectedTypes: (hiddenList: string) => `Ve vybraných typech vazeb nic není. Skryté: ${hiddenList}.`,
   fbShowAll: 'Zobrazit vše',
-  fbHiddenByFilter: (n: number) => `Další vazby prvku skryté filtrem: ${n}`,
 
   // ─── Drill-down panel (DrillDownPanel.tsx) ───
   drillBadgeLabels: { root: 'Výraz', model: 'Model', mapping: 'Mapování', ds: 'Pole', table: 'AX tabulka', enum: 'AX výčet', class: 'AX třída', calc: 'Kalkulované pole', container: 'Složka', groupby: 'Seskupení', join: 'Spojení', object: 'AX objekt', userparameter: 'Parametr uživatele', param: 'Parametr uživatele', importformat: 'Importní formát', leaf: 'AX tabulka', unknown: 'Neznámé' },
@@ -2215,6 +2254,32 @@ const cs: Translations = {
     `${fileName} (verze ${version}) nahradil otevřenou verzi ${previousVersion} – otevřeno porovnání obou verzí.`,
   compareNoSuchConfiguration: (fileName: string, name: string) => `${fileName} neobsahuje konfiguraci stejného typu jako „${name}“ – není s čím porovnat.`,
   compareWithVersionAction: 'Porovnat s jinou verzí…',
+  compareWithBaseAction: 'Porovnat se základní konfigurací…',
+  compareBaseTabLabel: (name: string, baseName: string, baseVersion: string) => `${name} ↔ základ ${baseName} · v${baseVersion}`,
+  compareBaseSide: 'Základ (Base)',
+  compareDerivedSide: 'Odvozená',
+  compareBaseNote: (baseName: string) => `Porovnání se základní konfigurací „${baseName}“: vlevo základ, vpravo odvozená konfigurace – vidíte, co odvozená konfigurace změnila, přidala nebo odebrala. Prvky se párují podle GUID, které odvozená konfigurace ze základu přebírá.`,
+  compareBaseVersionMismatch: (expected: string, actual: string) => `Odvozená konfigurace vychází ze základu verze ${expected}, porovnává se ale s verzí ${actual} – část rozdílů může pocházet ze změn základu.`,
+  compareBaseNoChanges: 'Odvozená konfigurace se od základu neliší v ničem, co nástroj porovnává.',
+  compareBasePickOther: 'Vybrat jinou verzi základu…',
+  compareBaseNone: (name: string) => `„${name}“ není odvozená z jiné konfigurace – nemá základ, se kterým by šla porovnat.`,
+  compareBaseOtherKind: (baseName: string, kind: string) => `Základem je „${baseName}“ (${kind}) – porovnat lze jen konfigurace stejného druhu.`,
+  compareBaseNotInFile: (fileName: string, baseName: string) => `${fileName} neobsahuje základ „${baseName}“ – porovnává se s konfigurací, kterou obsahuje.`,
+  compareBaseFnoNotConnected: 'Pro stažení základu se nejprve připojte k prostředí F&O.',
+  compareBaseDownloading: (name: string) => `Stahuji základ „${name}“ z F&O…`,
+  compareBaseFnoFailed: (name: string, message: string) => `Základ „${name}“ se z F&O nepodařilo stáhnout: ${message}`,
+  compareBaseFnoNotFound: 'odpověď neobsahuje konfiguraci stejného druhu',
+  comparePickerBaseTitle: (name: string) => `Porovnat „${name}“ se základní konfigurací`,
+  comparePickerBaseIntro: (baseName: string, version: string) => `Konfigurace je odvozená ze základu „${baseName}“ verze ${version}. Vyberte, odkud základ vzít – porovnání ukáže, co odvozená konfigurace změnila. Základ se do workspace nepřidá.`,
+  comparePickerBaseLoaded: 'Ve workspace',
+  comparePickerBaseCached: 'Dříve načtené verze základu',
+  comparePickerBaseNone: 'V mezipaměti není žádná verze základu.',
+  comparePickerBaseExact: 'výchozí verze',
+  comparePickerBaseFno: 'Stáhnout základ z F&O',
+  comparePickerBaseFnoHint: 'F&O vydá platnou (dokončenou) verzi základu – může být novější než verze, ze které odvozená konfigurace vychází.',
+  comparePickerBaseFnoOffline: 'Pro stažení základu z F&O se připojte k prostředí na úvodní stránce (D365 F&O server).',
+  comparePickerSwitchToBase: (baseName: string) => `Porovnat se základem „${baseName}“…`,
+  comparePickerSwitchToVersion: 'Porovnat s jinou verzí…',
   compareOlder: 'Starší verze',
   compareNewer: 'Novější verze',
   compareInWorkspace: 've workspace',
@@ -2226,7 +2291,7 @@ const cs: Translations = {
   compareFilterAll: 'Vše',
   compareFilterAria: 'Druh změny',
   compareFilterPlaceholder: 'Filtrovat podle cesty nebo hodnoty',
-  compareNoChanges: 'Verze se neliší v ničem, co nástroj porovnává (struktura, vazby, zdroje dat, model, validace, popisky).',
+  compareNoChanges: 'Verze se neliší v ničem, co nástroj porovnává (struktura, šablona, vazby, zdroje dat, model, validace, popisky).',
   compareNoMatches: 'Filtru neodpovídá žádná změna.',
   compareSectionLabels: {
     structure: 'Struktura formátu',
@@ -2239,6 +2304,8 @@ const cs: Translations = {
     formatEnums: 'Výčty formátu',
     transformations: 'Transformace',
     labels: 'Texty popisků',
+    template: 'Šablona',
+    templateNames: 'Pojmenované oblasti šablony',
   },
   compareEmbeddedMapping: 'mapování formátu na model',
   compareOrphanBindings: 'bez prvku ve struktuře',
@@ -2286,12 +2353,67 @@ const cs: Translations = {
     versionDescription: 'Popis verze',
     status: 'Stav',
     base: 'Odvozeno od',
+    cellValue: 'Hodnota',
+    formula: 'Vzorec',
+    range: 'Oblast',
+    drawingKind: 'Druh',
+    image: 'Obrázek',
+    columnWidths: 'Šířky sloupců',
+    rowHeights: 'Výšky řádků',
+    cells: 'Vyplněných buněk',
   },
   compareBindingOf: (property: string) => `Vazba (${property})`,
   compareStatusLabels: { Draft: 'Koncept', Completed: 'Dokončeno', Shared: 'Sdíleno', Discontinued: 'Ukončeno' },
   compareYes: 'ano',
   compareRenamedFrom: (path: string) => `dříve ${path}`,
   compareShowInDesigner: 'Zobrazit v návrháři',
+  compareShowInPreview: 'Zobrazit v náhledu šablony',
+  compareStyleProps: {
+    bold: 'Tučné',
+    italic: 'Kurzíva',
+    underline: 'Podtržení',
+    fontSize: 'Velikost písma',
+    fontColor: 'Barva písma',
+    fill: 'Výplň',
+    hAlign: 'Vodorovné zarovnání',
+    vAlign: 'Svislé zarovnání',
+    wrap: 'Zalamovat text',
+    numFmt: 'Formát čísla',
+    borderLeft: 'Ohraničení vlevo',
+    borderRight: 'Ohraničení vpravo',
+    borderTop: 'Ohraničení nahoře',
+    borderBottom: 'Ohraničení dole',
+  },
+  compareStyleValues: {
+    left: 'vlevo', center: 'na střed', right: 'vpravo', justify: 'do bloku', top: 'nahoru', bottom: 'dolů',
+    centerContinuous: 'na střed výběru', distributed: 'rozložit', fill: 'vyplnit',
+    thin: 'tenké', medium: 'střední', thick: 'silné', double: 'dvojité', dotted: 'tečkované', dashed: 'čárkované', hair: 'vlasové',
+    mediumDashed: 'střední čárkované', dashDot: 'čerchované', gray125: 'vzorek 12,5 %',
+    image: 'obrázek', textBox: 'textové pole',
+  },
+  compareViewAria: 'Zobrazení porovnání',
+  compareViewChanges: 'Seznam změn',
+  compareViewPreview: 'Náhled',
+  compareViewPreviewHint: 'Výstup obou verzí vedle sebe: šablona Excelu se zvýrazněnými buňkami, nebo ukázkový dokument XML / textu řádek proti řádku',
+  comparePreviewFormatsOnly: 'Náhled porovnání je k dispozici pro formáty.',
+  comparePreviewLoading: 'Načítám šablony…',
+  comparePreviewTemplateError: (message: string) => `Šablonu se nepodařilo přečíst: ${message}`,
+  comparePreviewNoSheets: 'Šablona nemá žádný list.',
+  comparePreviewSheets: 'Listy šablony',
+  comparePreviewNoCellChanges: 'Žádná změněná buňka',
+  comparePreviewChangeOf: (index: number, total: number) => (index > 0 ? `Změna ${index} z ${total}` : `${total} ${csPlural(total, 'změna', 'změny', 'změn')}`),
+  comparePreviewPrevChange: 'Předchozí změna',
+  comparePreviewNextChange: 'Další změna',
+  comparePreviewSyncScroll: 'Posouvat společně',
+  comparePreviewSheetAdded: 'Tento list ve starší verzi není.',
+  comparePreviewSheetRemoved: 'Tento list v novější verzi není.',
+  comparePreviewStyleOnly: 'Jen vzhled',
+  comparePreviewBoundChanged: 'Změněný prvek ER',
+  comparePreviewPickCell: 'Klepněte na buňku – ukáže se, co se v ní změnilo a který prvek formátu do ní zapisuje.',
+  comparePreviewCellSame: 'beze změny',
+  comparePreviewWrittenBy: 'Zapisuje',
+  comparePreviewNoDocument: 'Náhled porovnání umí šablonu Excelu a soubory XML nebo textu. Tento formát ani jedno nemá – porovnejte jeho strukturu v seznamu změn.',
+  comparePreviewDocumentSame: 'Dokumenty se neliší',
   compareExportCsvHint: 'Stáhnout seznam změn jako CSV (otevře se v Excelu)',
   compareCsvHeaders: ['Oblast', 'Změna', 'Cesta', 'Dřívější cesta', 'Typ', 'Vlastnost', 'Starší verze', 'Novější verze'],
   compareShowMore: (n: number) => `Zobrazit ${csPlural(n, 'další', 'další', 'dalších')} ${n}`,
@@ -2304,7 +2426,6 @@ const cs: Translations = {
   comparePickerCached: 'Dříve načtené verze',
   comparePickerNone: 'V mezipaměti není žádná jiná verze této konfigurace.',
   comparePickerFromFile: 'Načíst XML z disku…',
-  comparePickerFnoNote: 'F&O přes své služby vydává jen platnou (dokončenou) verzi. Starší verzi vyexportujte v F&O (Konfigurace → Verze → Exchange → Export as XML file) a načtěte ji odsud.',
   comparePickerLoaded: (version: string) => `Ve workspace je verze ${version}.`,
   comparePickerOpenedAt: (when: string) => `načteno ${when}`,
 };
@@ -2360,7 +2481,6 @@ const en: Translations = {
   clearFilter: 'Clear filter',
   filterRecent: 'Recent filters',
   filterSuggestions: 'Filter suggestions',
-  filterMatchCount: (n: number) => `Matches: ${n}`,
   clearSearch: 'Clear search',
   clearWhereUsedSearch: 'Clear where-used search',
   noConfigurationsLoaded: 'No configurations loaded.',
@@ -2376,6 +2496,16 @@ const en: Translations = {
   explorerSort: 'Sort',
   explorerViewFlat: 'Show flat list',
   explorerViewHierarchy: 'Show model hierarchy',
+  explorerViewHierarchyTitle: 'Model hierarchy',
+  explorerCollapseGroup: 'Collapse all in the section',
+  explorerShowOnlyKind: (kind: string) => `Show only: ${kind}`,
+  explorerSectionActions: 'Section actions',
+  explorerSectionMoveUp: 'Move up',
+  explorerSectionMoveDown: 'Move down',
+  explorerSectionCollapse: 'Collapse section',
+  explorerSectionExpand: 'Expand section',
+  explorerSectionResetOrder: 'Reset the section order',
+  explorerSectionDragHint: 'Click to collapse or expand the section, drag to change its place (also Alt+↑ / Alt+↓)',
   explorerSortLoadOrder: 'Load order',
   explorerSortNameAsc: 'Name ascending (A–Z)',
   explorerSortNameDesc: 'Name descending (Z–A)',
@@ -2873,7 +3003,6 @@ const en: Translations = {
   designerWorkspaceEyebrow: 'Designer Workspace',
   designerUnsupportedView: (kind) => `Unsupported view for: ${kind}`,
   dsCrossCompany: 'cross-company',
-  dsNestedCount: (n) => `${n} nested datasource${n === 1 ? '' : 's'}`,
   dsLayoutKind: 'By kind',
   dsLayoutKindHint: 'Every datasource at any depth, grouped by kind — a nested one shows the path it hangs under before its name',
   dsLayoutRoots: 'Roots',
@@ -2889,11 +3018,6 @@ const en: Translations = {
   dsFormulasHideAll: 'Collapse the formulas of calculated fields',
   dsFormulaShow: 'Show the full formula',
   dsFormulaHide: 'Hide the formula',
-  dsEnumValueCount: (n) => `${n} value${n === 1 ? '' : 's'}`,
-  dsEnumValuesUsedCount: (n) => `${n} used value${n === 1 ? '' : 's'}`,
-  dsEnumValuesInFno: 'values in D365FO',
-  dsEnumValuesHint: 'Values from the enum definition, each with how often this definition uses it',
-  dsEnumValuesPartialHint: 'An AX enum (or a data model that is not loaded) keeps its values in D365FO only — shown are the values this definition\'s expressions use',
   dsEnumValueUses: (n) => `${n}×`,
   dsEnumValueUsesHint: (n) => `Used ${n}× in this definition's expressions`,
   dsGroupBy: 'Group By',
@@ -2902,7 +3026,6 @@ const en: Translations = {
   dsImplicitHint: 'Not declared as a datasource — a data model record or a path segment that other datasources are nested under.',
   dsModelField: 'Data model field',
   dsModelNotLoaded: 'data model not loaded',
-  bindingCount: (n) => `${n} binding${n === 1 ? '' : 's'}`,
   bindingVia: 'via',
   searchNoResultsInScope: 'No results in this scope.',
   searchRelatedOnly: 'Related only',
@@ -3090,9 +3213,7 @@ const en: Translations = {
 
   // ─── Configuration kind labels (DependencyPromptDialog.tsx, ConfigExplorer.tsx) ───
   configKindLabels: { DataModel: 'Data model', ModelMapping: 'Model mapping', Format: 'Format' },
-  explorerKindPills: { DataModel: 'Model', ModelMapping: 'Mapping', Format: 'Format' },
   explorerGroupLabels: { DataModel: 'Data Models', ModelMapping: 'Model Mappings', Format: 'Formats' },
-  explorerChipLabels: { DataModel: 'Models', ModelMapping: 'Mappings', Format: 'Formats' },
 
   // ─── F&O ingest steps (FnoIngestPanel.tsx) ───
   fnoIngestSteps: { prepare: 'Preparing', dm: 'Data models', fm: 'Formats & mappings', mm: 'Model mappings', finalize: 'Finalizing' },
@@ -3132,9 +3253,6 @@ const en: Translations = {
   mmClickToSwitch: (title: string) => `${title} — click to switch`,
   mmDesignerTitle: 'Model mapping',
   mmDesignerHint: 'Click a row for properties, the formula for its value breakdown',
-  mmRuleCount: (n: number) => `Number of rules: ${n}`,
-  mmBranchBindingCount: (n: number) => `Number of bindings in this branch: ${n}`,
-  mmBranchUnmappedCount: (n: number) => `Unmapped fields in this branch: ${n}`,
   mmScopeAria: 'Data model fields shown',
   mmScopeLabels: { all: 'Show all', mapped: 'Show mapped', unmapped: 'Show unmapped' },
   mmScopeNeedsModel: 'Load the data model to see its unmapped fields.',
@@ -3189,8 +3307,6 @@ const en: Translations = {
   fbOnlyUnmappedHint: 'Only fields the format reads and the mapping never fills',
   fbOnlyUnmapped: 'Unmapped only',
   fbAllFieldsMapped: 'Every field the format reads has a mapping binding.',
-  fbBranchUnmappedCount: (n: number) => `Without a mapping binding in this branch: ${n}`,
-  fbUsageCount: (n: number) => `Uses in the format: ${n}`,
   fbLineMapping: 'Mapping',
   fbFieldNeverFilledHint: 'The mapping never fills this field, so the format gets an empty value here.',
   fbNoMappingBinding: 'No mapping binding',
@@ -3206,7 +3322,6 @@ const en: Translations = {
   fbLayoutAria: 'Bindings layout',
   fbNothingInSelectedTypes: (hiddenList: string) => `Nothing in the selected binding types. Hidden: ${hiddenList}.`,
   fbShowAll: 'Show all',
-  fbHiddenByFilter: (n: number) => `More bindings of this element hidden by the filter: ${n}`,
 
   // ─── Drill-down panel (DrillDownPanel.tsx) ───
   drillBadgeLabels: { root: 'Expression', model: 'Model', mapping: 'Mapping', ds: 'Field', table: 'AX table', enum: 'AX enum', class: 'AX class', calc: 'Calculated field', container: 'Folder', groupby: 'Group by', join: 'Join', object: 'AX object', userparameter: 'User parameter', param: 'User parameter', importformat: 'Import format', leaf: 'AX table', unknown: 'Unknown' },
@@ -3369,6 +3484,32 @@ const en: Translations = {
     `${fileName} (version ${version}) replaced the open version ${previousVersion} — opened a comparison of the two.`,
   compareNoSuchConfiguration: (fileName: string, name: string) => `${fileName} holds no configuration of the same kind as "${name}" — nothing to compare with.`,
   compareWithVersionAction: 'Compare with another version…',
+  compareWithBaseAction: 'Compare with the base configuration…',
+  compareBaseTabLabel: (name: string, baseName: string, baseVersion: string) => `${name} ↔ base ${baseName} · v${baseVersion}`,
+  compareBaseSide: 'Base',
+  compareDerivedSide: 'Derived',
+  compareBaseNote: (baseName: string) => `Comparison with the base configuration "${baseName}": the base on the left, the derived configuration on the right — what the derived configuration changed, added or removed. Elements pair by the GUIDs the derived configuration takes over from its base.`,
+  compareBaseVersionMismatch: (expected: string, actual: string) => `The derived configuration is based on base version ${expected} but is compared with version ${actual} — some differences may come from changes to the base.`,
+  compareBaseNoChanges: 'The derived configuration does not differ from its base in anything the tool compares.',
+  compareBasePickOther: 'Pick another version of the base…',
+  compareBaseNone: (name: string) => `"${name}" is not derived from another configuration — it has no base to compare with.`,
+  compareBaseOtherKind: (baseName: string, kind: string) => `The base is "${baseName}" (${kind}) — only configurations of the same kind can be compared.`,
+  compareBaseNotInFile: (fileName: string, baseName: string) => `${fileName} does not hold the base "${baseName}" — comparing with the configuration it holds.`,
+  compareBaseFnoNotConnected: 'Connect to an F&O environment first to download the base.',
+  compareBaseDownloading: (name: string) => `Downloading the base "${name}" from F&O…`,
+  compareBaseFnoFailed: (name: string, message: string) => `The base "${name}" could not be downloaded from F&O: ${message}`,
+  compareBaseFnoNotFound: 'the response holds no configuration of the same kind',
+  comparePickerBaseTitle: (name: string) => `Compare "${name}" with its base configuration`,
+  comparePickerBaseIntro: (baseName: string, version: string) => `The configuration is derived from the base "${baseName}" version ${version}. Choose where to take the base from — the comparison shows what the derived configuration changed. The base is not added to the workspace.`,
+  comparePickerBaseLoaded: 'In the workspace',
+  comparePickerBaseCached: 'Previously loaded versions of the base',
+  comparePickerBaseNone: 'The cache holds no version of the base.',
+  comparePickerBaseExact: 'derived from',
+  comparePickerBaseFno: 'Download the base from F&O',
+  comparePickerBaseFnoHint: 'F&O serves the effective (completed) version of the base — it may be newer than the version the derived configuration is based on.',
+  comparePickerBaseFnoOffline: 'To download the base from F&O, connect to an environment on the start page (D365 F&O server).',
+  comparePickerSwitchToBase: (baseName: string) => `Compare with the base "${baseName}"…`,
+  comparePickerSwitchToVersion: 'Compare with another version…',
   compareOlder: 'Older version',
   compareNewer: 'Newer version',
   compareInWorkspace: 'in the workspace',
@@ -3380,7 +3521,7 @@ const en: Translations = {
   compareFilterAll: 'All',
   compareFilterAria: 'Kind of change',
   compareFilterPlaceholder: 'Filter by path or value',
-  compareNoChanges: 'The versions do not differ in anything the tool compares (structure, bindings, data sources, model, validations, labels).',
+  compareNoChanges: 'The versions do not differ in anything the tool compares (structure, template, bindings, data sources, model, validations, labels).',
   compareNoMatches: 'No change matches the filter.',
   compareSectionLabels: {
     structure: 'Format structure',
@@ -3393,6 +3534,8 @@ const en: Translations = {
     formatEnums: 'Format enumerations',
     transformations: 'Transformations',
     labels: 'Label texts',
+    template: 'Template',
+    templateNames: 'Template named ranges',
   },
   compareEmbeddedMapping: 'format to model mapping',
   compareOrphanBindings: 'without an element in the structure',
@@ -3440,12 +3583,67 @@ const en: Translations = {
     versionDescription: 'Version description',
     status: 'Status',
     base: 'Derived from',
+    cellValue: 'Value',
+    formula: 'Formula',
+    range: 'Range',
+    drawingKind: 'Kind',
+    image: 'Picture',
+    columnWidths: 'Column widths',
+    rowHeights: 'Row heights',
+    cells: 'Filled cells',
   },
   compareBindingOf: (property: string) => `Binding (${property})`,
   compareStatusLabels: { Draft: 'Draft', Completed: 'Completed', Shared: 'Shared', Discontinued: 'Discontinued' },
   compareYes: 'yes',
   compareRenamedFrom: (path: string) => `was ${path}`,
   compareShowInDesigner: 'Show in the designer',
+  compareShowInPreview: 'Show in the template preview',
+  compareStyleProps: {
+    bold: 'Bold',
+    italic: 'Italic',
+    underline: 'Underline',
+    fontSize: 'Font size',
+    fontColor: 'Font colour',
+    fill: 'Fill',
+    hAlign: 'Horizontal alignment',
+    vAlign: 'Vertical alignment',
+    wrap: 'Wrap text',
+    numFmt: 'Number format',
+    borderLeft: 'Left border',
+    borderRight: 'Right border',
+    borderTop: 'Top border',
+    borderBottom: 'Bottom border',
+  },
+  compareStyleValues: {
+    left: 'left', center: 'center', right: 'right', justify: 'justify', top: 'top', bottom: 'bottom',
+    centerContinuous: 'center across selection', distributed: 'distributed', fill: 'fill',
+    thin: 'thin', medium: 'medium', thick: 'thick', double: 'double', dotted: 'dotted', dashed: 'dashed', hair: 'hair',
+    mediumDashed: 'medium dashed', dashDot: 'dash dot', gray125: '12.5% pattern',
+    image: 'picture', textBox: 'text box',
+  },
+  compareViewAria: 'Comparison view',
+  compareViewChanges: 'Change list',
+  compareViewPreview: 'Preview',
+  compareViewPreviewHint: 'Both versions\' output side by side: the Excel template with its changed cells highlighted, or the sample XML / text document line against line',
+  comparePreviewFormatsOnly: 'The comparison preview is available for formats.',
+  comparePreviewLoading: 'Reading the templates…',
+  comparePreviewTemplateError: (message: string) => `The template could not be read: ${message}`,
+  comparePreviewNoSheets: 'The template has no sheet.',
+  comparePreviewSheets: 'Template sheets',
+  comparePreviewNoCellChanges: 'No changed cell',
+  comparePreviewChangeOf: (index: number, total: number) => (index > 0 ? `Change ${index} of ${total}` : `${total} ${total === 1 ? 'change' : 'changes'}`),
+  comparePreviewPrevChange: 'Previous change',
+  comparePreviewNextChange: 'Next change',
+  comparePreviewSyncScroll: 'Scroll together',
+  comparePreviewSheetAdded: 'The older version has no such sheet.',
+  comparePreviewSheetRemoved: 'The newer version has no such sheet.',
+  comparePreviewStyleOnly: 'Look only',
+  comparePreviewBoundChanged: 'Changed ER element',
+  comparePreviewPickCell: 'Click a cell to see what changed in it and which format element writes to it.',
+  comparePreviewCellSame: 'unchanged',
+  comparePreviewWrittenBy: 'Written by',
+  comparePreviewNoDocument: 'The comparison preview covers Excel templates and XML or text files. This format has neither — compare its structure in the change list.',
+  comparePreviewDocumentSame: 'The documents do not differ',
   compareExportCsvHint: 'Download the change list as CSV (opens in Excel)',
   compareCsvHeaders: ['Section', 'Change', 'Path', 'Previous path', 'Type', 'Property', 'Older version', 'Newer version'],
   compareShowMore: (n: number) => `Show ${n} more`,
@@ -3458,7 +3656,6 @@ const en: Translations = {
   comparePickerCached: 'Versions loaded before',
   comparePickerNone: 'No other version of this configuration is in the cache.',
   comparePickerFromFile: 'Load XML from disk…',
-  comparePickerFnoNote: 'F&O serves only the effective (completed) version over its services. Export an older version in F&O (Configurations → Versions → Exchange → Export as XML file) and load it from here.',
   comparePickerLoaded: (version: string) => `The workspace holds version ${version}.`,
   comparePickerOpenedAt: (when: string) => `loaded ${when}`,
 };

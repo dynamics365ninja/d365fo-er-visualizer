@@ -30,7 +30,7 @@ import { FieldSpecView, type SpecMode } from './FieldSpecView';
 import { buildFormatLineage } from '../../utils/format-lineage';
 import { FormatTypeBadge } from './format-type';
 import { FormatStructureTree } from './FormatElementTree';
-import { BINDING_OUTLINE_THRESHOLD, ModelUsageView, BindingIntentBar, BindingListEmpty, FormatElementBindingGroup } from './FormatBindingsView';
+import { BINDING_OUTLINE_THRESHOLD, ModelUsageView, BindingIntentBar, BindingListEmpty, BindingGroupHead, FormatElementBindingGroup, FormatTypeIcon } from './FormatBindingsView';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -764,56 +764,46 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
           {view === 'bindings' && bindingsLayout === 'format' && (
             bindingSections.length === 0
               ? <BindingListEmpty filter={filter} counts={bindingIntentCounts} active={bindingIntents} onShowAll={() => setBindingIntents(BINDING_INTENT_ORDER)} />
-              : bindingSections.map(section => {
-                  const collapsed = isBindingSectionCollapsed(section.key);
-                  const count = section.entries.reduce((n, entry) => n + entry.bindings.length, 0);
-                  const unresolvedName = t.fmtElementsOutsideStructure;
-                  const toggle = () => toggleBindingSection(section.key);
-                  return (
-                    <div key={section.key} className="mm-group">
-                      <div
-                        className="mm-group-header"
-                        role="button"
-                        tabIndex={0}
-                        aria-expanded={!collapsed}
-                        onClick={toggle}
-                        onKeyDown={event => {
-                          if (event.key !== 'Enter' && event.key !== ' ') return;
-                          event.preventDefault();
-                          toggle();
-                        }}
-                      >
-                        <span className={`tree-chevron ${collapsed ? '' : 'open'}`} />
-                        <span className="mm-group-name fmt-bind-section-trail" title={section.unresolved ? unresolvedName : section.trail.join(' › ')}>
-                          {section.unresolved
-                            ? <span>{unresolvedName}</span>
-                            : section.trail.map((name, i) => (
-                                <React.Fragment key={i}>
-                                  {i > 0 && <span className="fmt-bind-section-sep" aria-hidden="true">›</span>}
-                                  <span>{name}</span>
-                                </React.Fragment>
-                              ))}
-                        </span>
-                        <span className="mm-group-count" title={t.bindingCount(count)}>{count}</span>
+              : (
+                <div className="fb-tree" role="tree">
+                  {bindingSections.map(section => {
+                    const collapsed = isBindingSectionCollapsed(section.key);
+                    const unresolvedName = t.fmtElementsOutsideStructure;
+                    // The parent element first, the path down to it after it, muted — as a
+                    // search result names the file before its folder.
+                    const title = section.unresolved ? unresolvedName : section.trail[section.trail.length - 1];
+                    const path = section.unresolved ? undefined : section.trail.slice(0, -1).join(' › ') || undefined;
+                    return (
+                      <div key={section.key} className="fb-group" role="treeitem" aria-expanded={!collapsed}>
+                        <BindingGroupHead
+                          depth={0}
+                          open={!collapsed}
+                          onToggle={() => toggleBindingSection(section.key)}
+                          icon={<FormatTypeIcon type={section.elementType ?? ''} />}
+                          title={title}
+                          description={path}
+                          hint={section.unresolved ? unresolvedName : section.trail.join(' › ')}
+                        />
+                        {!collapsed && section.entries.map(entry => {
+                          const focused = entry.group.componentId === focusBindingElementId;
+                          return (
+                            <FormatElementBindingGroup
+                              key={entry.group.componentId}
+                              row={entry.group}
+                              bindings={entry.bindings}
+                              focused={focused}
+                              cardRef={focused ? focusedBindingCardRef : undefined}
+                              configIndex={configIndex}
+                              onReveal={revealFormatElementInExplorer}
+                              showTechnicalDetails={showTechnicalDetails}
+                            />
+                          );
+                        })}
                       </div>
-                      {!collapsed && section.entries.map(entry => {
-                        const focused = entry.group.componentId === focusBindingElementId;
-                        return (
-                          <FormatElementBindingGroup
-                            key={entry.group.componentId}
-                            row={entry.group}
-                            bindings={entry.bindings}
-                            focused={focused}
-                            cardRef={focused ? focusedBindingCardRef : undefined}
-                            configIndex={configIndex}
-                            onReveal={revealFormatElementInExplorer}
-                            showTechnicalDetails={showTechnicalDetails}
-                          />
-                        );
-                      })}
-                    </div>
-                  );
-                })
+                    );
+                  })}
+                </div>
+              )
           )}
 
           {view === 'datasources' && (

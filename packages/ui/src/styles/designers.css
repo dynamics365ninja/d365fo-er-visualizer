@@ -255,124 +255,6 @@
   color: var(--er-text-muted);
 }
 
-.fmt-bind-card {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 10px 8px;
-  border-bottom: 1px solid var(--border-color);
-  background: transparent;
-  transition: background-color 120ms ease;
-}
-
-.fmt-bind-card:hover {
-  background: color-mix(in srgb, var(--er-text) 3%, transparent);
-}
-
-.fmt-bind-card-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 0;
-}
-
-.fmt-bind-card-name {
-  font-weight: 600;
-  font-size: var(--er-text-md);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.fmt-bind-card-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 6px;
-  font-size: var(--er-text-xs);
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.fmt-bind-type-badge {
-  font-size: var(--er-text-2xs);
-  padding: 1px 6px;
-  border-radius: var(--er-radius-sm);
-  border: 1px solid currentColor;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  flex-shrink: 0;
-  font-weight: 600;
-}
-
-.fmt-bind-card-reveal {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: var(--er-radius-sm);
-  background: transparent;
-  color: var(--er-text-muted);
-  cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
-}
-
-.fmt-bind-card-reveal:hover {
-  background: color-mix(in srgb, var(--er-accent) 14%, transparent);
-  color: var(--er-accent);
-  border-color: color-mix(in srgb, var(--er-accent) 40%, transparent);
-}
-
-.fmt-bind-card-reveal:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--er-accent) 55%, transparent);
-  outline-offset: 1px;
-}
-
-.fmt-bind-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding-left: 2px;
-}
-
-.fmt-bind-row {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 2px 0;
-  font-size: var(--er-text-sm);
-  min-width: 0;
-}
-
-.fmt-bind-row-label {
-  flex-shrink: 0;
-  font-size: var(--er-text-2xs);
-}
-
-.fmt-bind-row-arrow {
-  color: var(--er-text-muted);
-  flex-shrink: 0;
-  font-size: var(--er-text-sm);
-  align-self: center;
-}
-
-.fmt-bind-row-expr {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  font-family: var(--font-mono);
-}
-
 /* Bindings tab: what each binding is for. One colour per intent, shared by
    the filter chips and the badge on every row. */
 .fmt-bind-intent--direct {
@@ -458,41 +340,6 @@
   color: var(--er-text-muted);
 }
 
-.fmt-bind-row-label.fmt-bind-intent {
-  color: var(--intent-color);
-  background: color-mix(in srgb, var(--intent-color) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--intent-color) 35%, transparent);
-  font-weight: 600;
-}
-
-.fmt-bind-section-trail {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.fmt-bind-section-trail > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.fmt-bind-section-sep {
-  flex-shrink: 0;
-  margin: 0 6px;
-  color: var(--er-text-muted);
-  opacity: 0.6;
-}
-
-/* A border, not an inset shadow: the flat-surface layer strips box-shadow
-   from cards with !important. */
-.fmt-bind-card.is-focused {
-  background: color-mix(in srgb, var(--er-accent) 10%, transparent);
-  border-left: 2px solid var(--er-accent);
-  padding-left: 8px;
-}
-
 .fmt-bind-empty {
   flex-wrap: wrap;
 }
@@ -575,113 +422,6 @@
 
 .fmt-model-unmapped-toggle {
   margin-left: auto;
-}
-
-.fmt-model-label {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--er-text-muted);
-  font-size: var(--er-text-sm);
-}
-
-.fmt-model-unmapped-badge {
-  flex-shrink: 0;
-  padding: 0 6px;
-  border-radius: var(--er-radius-lg);
-  background: color-mix(in srgb, var(--er-warning) 16%, transparent);
-  color: var(--er-warning);
-  font-size: var(--er-text-xs);
-  font-weight: 700;
-}
-
-.fmt-model-head-spacer {
-  flex: 1;
-}
-
-.mm-tree-row.fmt-model-row--unmapped {
-  border-left: 3px solid color-mix(in srgb, var(--er-warning) 70%, transparent);
-}
-
-.fmt-model-body {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  align-items: baseline;
-  gap: 4px 10px;
-  margin-top: 6px;
-  padding-left: 22px;
-}
-
-.fmt-model-line-label {
-  color: var(--er-text-muted);
-  font-size: var(--er-text-2xs);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.fmt-model-missing {
-  color: var(--er-warning);
-  font-size: var(--er-text-sm);
-}
-
-.fmt-model-muted {
-  color: var(--er-text-muted);
-  font-size: var(--er-text-sm);
-}
-
-.fmt-model-usages {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  min-width: 0;
-}
-
-.fmt-model-usage {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 100%;
-  height: 22px;
-  padding: 0 8px;
-  border: 1px solid var(--er-border);
-  border-radius: var(--er-radius-pill);
-  background: var(--er-surface);
-  color: var(--er-text);
-  font-size: var(--er-text-xs);
-  cursor: pointer;
-}
-
-.fmt-model-usage > span:not(.fmt-bind-intent-dot) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.fmt-model-usage:hover {
-  background: var(--er-surface-2);
-  border-color: color-mix(in srgb, var(--intent-color) 55%, transparent);
-}
-
-.fmt-model-usage:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--er-accent) 55%, transparent);
-  outline-offset: 1px;
-}
-
-.fmt-model-usage .fmt-bind-intent-dot {
-  background: var(--intent-color);
-}
-
-.fmt-model-usage-prop {
-  color: var(--er-text-muted);
-}
-
-.fmt-model-usage-more {
-  align-self: center;
-  color: var(--er-text-muted);
-  font-size: var(--er-text-xs);
 }
 
 .fmt-header {
@@ -1113,39 +853,6 @@
   flex: 1;
 }
 
-.mm-group {
-  border-bottom: 2px solid var(--border-color);
-}
-
-.mm-group-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: color-mix(in srgb, var(--bg-tertiary) 88%, transparent);
-  cursor: pointer;
-  user-select: none;
-  font-size: var(--er-text-md);
-  font-weight: 600;
-  color: var(--er-text-muted);
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  backdrop-filter: blur(8px);
-}
-
-.mm-group-header:hover {
-  background: var(--er-surface-3);
-  color: var(--er-text);
-}
-
-.mm-group-name {
-  flex: 1;
-  color: var(--syn-path);
-  font-family: var(--font-mono);
-  font-size: var(--er-text-sm);
-}
-
 .mm-binding-row {
   position: relative;
   margin: 5px 6px 5px 12px;
@@ -1153,120 +860,11 @@
   font-size: var(--er-text-md);
 }
 
-.mm-tree {
-  padding: 4px 0 12px;
-}
-
-.mm-tree-children {
-  position: relative;
-}
-
-/* Indentation rail: without a drawn hierarchy the nested paths read as a flat
-   list of rows that happen to start at different offsets. */
-.mm-tree-children::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 6px;
-  left: calc(20px + var(--mm-depth, 0) * 16px);
-  width: 1px;
-  background: color-mix(in srgb, var(--er-border-strong) 80%, transparent);
-  pointer-events: none;
-}
-
-.mm-tree-row {
-  --mm-indent: calc(var(--mm-depth, 0) * 16px);
-  margin-left: calc(12px + var(--mm-indent));
-}
-
-/* Elbow from the rail to the row, so a child visibly hangs off its parent. */
-.mm-tree-children > .mm-tree-node > .mm-tree-row::before {
-  content: '';
-  position: absolute;
-  left: -8px;
-  top: 50%;
-  width: 8px;
-  height: 1px;
-  background: color-mix(in srgb, var(--er-border-strong) 80%, transparent);
-  pointer-events: none;
-}
-
 .mm-tree-head {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-}
-
-.mm-tree-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--er-text-muted);
-  cursor: pointer;
-}
-
-.mm-tree-toggle--leaf {
-  cursor: default;
-}
-
-.mm-tree-branch {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border: 1px solid var(--er-border);
-  background: var(--er-surface-2);
-  cursor: pointer;
-  user-select: none;
-  margin-top: 0;
-  margin-bottom: 0;
-  margin-right: 0;
-  padding-top: 3px;
-  padding-bottom: 3px;
-  border-radius: 0;
-}
-
-.mm-tree-branch:hover {
-  background: var(--er-surface-3);
-  border-color: var(--er-border-strong);
-}
-
-/* Expandable rows must be visibly different from plain leaf rows — a subtle
-   accent tint plus a stronger left edge marks "this one opens". */
-.mm-tree-row.mm-tree-expandable {
-  background: color-mix(in srgb, var(--er-accent) 7%, var(--er-surface));
-  border-left: 3px solid color-mix(in srgb, var(--er-accent) 45%, transparent);
-  margin-top: 0;
-  margin-bottom: 0;
-  margin-right: 0;
-  padding-top: 3px;
-  padding-bottom: 3px;
-  border-radius: 0;
-}
-
-.mm-tree-row.mm-tree-expandable:hover {
-  background: color-mix(in srgb, var(--er-accent) 12%, var(--er-surface));
-  border-color: color-mix(in srgb, var(--er-accent) 45%, var(--er-border-strong));
-}
-
-.mm-tree-branch-name {
-  flex: 1;
-  min-width: 0;
-  color: var(--er-text);
-  font-family: var(--font-mono);
-  font-size: var(--er-text-sm);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .mm-binding-row:hover {
@@ -1303,23 +901,6 @@
   font-size: var(--er-text-sm);
   padding-left: 2px;
   min-width: 0;
-}
-
-.mm-binding-expr > :not(.mm-binding-arrow) {
-  min-width: 0;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  line-clamp: 4;
-  overflow-wrap: anywhere;
-}
-
-.mm-binding-arrow {
-  flex-shrink: 0;
-  color: var(--er-accent);
-  font-size: var(--er-text-lg);
-  line-height: 1.4;
 }
 
 .ds-row {
@@ -1395,19 +976,6 @@
 
 .ds-row-expander:hover {
   background: var(--er-surface-3);
-}
-
-/* Datasources declared below this row */
-.ds-row-count {
-  flex-shrink: 0;
-  min-width: 18px;
-  padding: 0 6px;
-  background: color-mix(in srgb, var(--er-accent) 16%, transparent);
-  color: var(--er-text);
-  font-size: var(--er-text-xs);
-  font-weight: 600;
-  text-align: center;
-  border-radius: 9px;
 }
 
 /* Rows the definition does not declare: a record the path runs through and
@@ -1503,18 +1071,6 @@
   color: var(--er-text);
 }
 
-.ds-row-groupby-column-grouped .ds-row-groupby-count {
-  border-color: color-mix(in srgb, var(--er-info-border) 72%, transparent);
-  background: color-mix(in srgb, var(--er-info-soft) 68%, transparent);
-  color: var(--er-text);
-}
-
-.ds-row-groupby-column-aggregated .ds-row-groupby-count {
-  border-color: color-mix(in srgb, var(--er-warning-border) 72%, transparent);
-  background: color-mix(in srgb, var(--er-warning-soft) 68%, transparent);
-  color: var(--er-text);
-}
-
 .ds-row-groupby-column-toggle {
   display: flex;
   align-items: center;
@@ -1530,21 +1086,6 @@
 
 .ds-row-groupby-column-toggle .fmt-ds-label {
   margin-right: auto;
-}
-
-.ds-row-groupby-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 18px;
-  padding: 0 6px;
-  border: 1px solid color-mix(in srgb, var(--border-color) 76%, transparent);
-  background: color-mix(in srgb, var(--bg-tertiary) 80%, transparent);
-  color: var(--er-text-muted);
-  font-size: var(--er-text-xs);
-  font-weight: 700;
-  border-radius: 9px;
 }
 
 .ds-row-groupby-list {
@@ -2175,27 +1716,6 @@
 
 }
 
-/* ── Model mapping: field labels and the definition switch ──
-   
-   The model field's label follows its name, as in the F&O designer; the name
-   then only takes the room it needs so the label is not pushed off the row. */
-.mm-binding-name:has(+ .mm-tree-label),
-.mm-tree-branch-name:has(+ .mm-tree-label) {
-  flex: 0 1 auto;
-  max-width: 55%;
-}
-
-.mm-tree-label {
-  flex: 1;
-  min-width: 0;
-  color: var(--er-text-muted);
-  font-size: var(--er-text-sm);
-  font-weight: 400;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .mm-definition-picker {
   gap: 4px;
   color: var(--er-text);
@@ -2338,11 +1858,6 @@
 
 .ds-row-main .ds-row-name--drill:hover {
   color: var(--er-text);
-}
-
-/* Element names on the format's binding cards: identifier blue, as elsewhere. */
-.fmt-bind-card-name {
-  color: var(--syn-identifier);
 }
 
 /* ── Groups: a draggable divider between them, and a stacked layout when the
@@ -2504,47 +2019,10 @@
   font-size: var(--er-text-sm);
 }
 
-.dm-list__root-head .ds-row-count {
-  margin-left: auto;
-}
-
 .dm-list__empty {
   padding: 12px 8px;
   color: var(--er-text-muted);
   font-size: var(--er-text-sm);
-}
-
-/* ── Model-mapping bindings, virtualized: each row is its own positioned
-   box, so it holds its margins (they are part of the measured height) and
-   draws the indentation rails and the elbow the nested markup used to. ── */
-.mm-flat-row {
-  display: flow-root;
-}
-
-.mm-flat-row:not([data-depth='0'])::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 20px;
-  width: calc(var(--mm-depth, 0) * 16px);
-  background-image: repeating-linear-gradient(
-    to right,
-    color-mix(in srgb, var(--er-border-strong) 80%, transparent) 0 1px,
-    transparent 1px 16px
-  );
-  pointer-events: none;
-}
-
-.mm-flat-row:not([data-depth='0']) > .mm-tree-row::before {
-  content: '';
-  position: absolute;
-  left: -8px;
-  top: 50%;
-  width: 8px;
-  height: 1px;
-  background: color-mix(in srgb, var(--er-border-strong) 80%, transparent);
-  pointer-events: none;
 }
 
 /* ── Datasource lists, virtualized per group: each row is positioned on its
@@ -2653,25 +2131,6 @@
 .ds-row-formula-full {
   margin: 4px 0 2px 18px;
   cursor: auto;
-}
-
-/* Enum datasources: how many values they carry — or that D365FO holds them. */
-.ds-enum-count {
-  flex-shrink: 0;
-  padding: 0 7px;
-  border-radius: var(--er-radius-pill);
-  background: color-mix(in srgb, var(--er-format) 16%, transparent);
-  color: var(--er-text);
-  font-size: var(--er-text-xs);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.ds-enum-count--partial {
-  background: transparent;
-  border: 1px dashed color-mix(in srgb, var(--er-format) 55%, transparent);
-  color: var(--er-text-muted);
-  font-weight: 500;
 }
 
 .ds-row.ds-row-enum-value {
@@ -2785,35 +2244,6 @@
   border-left: 3px solid var(--ds-group-color, transparent);
 }
 
-.fmt-bind-card-count {
-  font-variant-numeric: tabular-nums;
-  color: color-mix(in srgb, var(--ds-group-color, var(--er-text)) 70%, var(--er-text));
-  background: color-mix(in srgb, var(--ds-group-color, var(--er-text-muted)) 14%, var(--er-surface));
-  border: 1px solid color-mix(in srgb, var(--ds-group-color, var(--er-text-muted)) 22%, transparent);
-  border-radius: var(--er-radius-pill);
-  line-height: 16px;
-}
-
-/* Counts as neutral VS Code badges, not kind-tinted capsules. */
-.ds-group-count,
-.mm-group-count {
-  padding: 0 6px;
-  font-size: var(--er-text-xs);
-  font-weight: 700;
-  min-width: 20px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  color: color-mix(in srgb, var(--ds-group-color, var(--er-text)) 70%, var(--er-text));
-  line-height: 16px;
-  border: 0;
-  border-radius: 9px;
-  background: var(--er-badge-bg);
-}
-
-.fmt-bind-card-name {
-  letter-spacing: 0.1px;
-}
-
 /* ── Structure: "unbound" is the exception, so it is a dot, not a word ── */
 .fmt-unbound-marker {
   color: var(--er-warning);
@@ -2894,26 +2324,6 @@
   border: 1.5px dashed var(--er-border-strong);
   border-radius: 12px;
   background: radial-gradient(circle at 50% 50%, var(--er-accent-soft) 0 28%, transparent 30%);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fmt-bind-card,
-  .mm-tree-node > .fmt-model-body {
-    animation: none;
-  }
-
-}
-
-.fmt-bind-card {
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  animation: none;
-}
-
-.mm-tree-node > .fmt-model-body {
-  animation: none;
 }
 
 :root[data-theme='dark'] .ds-row,
@@ -3000,10 +2410,6 @@
   outline-offset: -1px;
 }
 
-.app-shell .ds-enum-count {
-  border-radius: 9px;
-}
-
 .app-shell .fmt-stat-btn:hover {
   background: var(--er-hover);
   border-color: transparent;
@@ -3022,35 +2428,6 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-}
-
-.app-shell .mm-tree-branch,
-.app-shell .mm-tree-row.mm-tree-expandable {
-  border: 0;
-  background: transparent;
-}
-
-.app-shell .mm-tree-branch:hover,
-.app-shell .mm-tree-row.mm-tree-expandable:hover {
-  background: var(--er-hover);
-}
-
-.app-shell .mm-tree-branch-name {
-  font-family: var(--er-font-sans);
-  font-size: var(--er-text-md);
-  font-weight: 600;
-}
-
-.app-shell .fmt-bind-card-count {
-  border: 0;
-  border-radius: 9px;
-  background: var(--er-badge-bg);
-  color: var(--er-badge-fg);
-}
-
-.app-shell .ds-group-count,
-.app-shell .mm-group-count {
-  color: var(--er-badge-fg);
 }
 
 .app-shell .fmt-stat-btn {
@@ -3192,18 +2569,6 @@
   color: var(--er-warning);
 }
 
-.dm-node__count {
-  margin-left: auto;
-  font-size: 9px;
-  font-weight: 400;
-  color: var(--er-text-muted);
-  white-space: nowrap;
-}
-
-.dm-node__badge + .dm-node__count {
-  margin-left: 0;
-}
-
 .dm-node__fields {
   padding: 4px 0;
   font-size: 11px;
@@ -3292,116 +2657,6 @@
 .mm-scope-hint {
   font-size: var(--er-text-xs);
   color: var(--er-text-muted);
-}
-
-/* A model field nothing binds: present, but quieter than a bound one. */
-.mm-unmapped-row .mm-binding-name {
-  color: var(--er-text-muted);
-  font-weight: 400;
-}
-
-.mm-field-type {
-  flex-shrink: 0;
-  font-family: var(--er-font-mono);
-  font-size: var(--er-text-xs);
-  color: var(--syn-field-type);
-}
-
-.mm-unmapped-tag {
-  flex-shrink: 0;
-  padding: 0 6px;
-  border-radius: var(--er-radius-pill);
-  border: 1px dashed var(--er-border-strong);
-  font-size: var(--er-text-2xs);
-  line-height: 14px;
-  color: var(--er-text-muted);
-}
-
-.mm-group-count--unmapped {
-  color: var(--er-warning);
-}
-
-/* Bound and unmapped rows indent by their depth like the branches above them.
-   The flat-list reset of `.mm-binding-row` zeroed the margin that carries the
-   indent, so bound fields sat left of their own parent. */
-.mm-flat-row > .mm-tree-row.mm-binding-row,
-.mm-flat-row > .mm-tree-row.mm-unmapped-row {
-  margin-left: calc(12px + var(--mm-indent));
-  padding-left: 10px;
-  padding-right: 10px;
-}
-
-.mm-flat-row > .mm-tree-row.mm-unmapped-row {
-  padding-top: 3px;
-  padding-bottom: 3px;
-}
-
-/* Model-mapping rows used to run together: a binding's formula read as part
-   of the next field. A hairline closes every row, bound rows get room around
-   their formula, and branches carry a tint so each group reads as one.
-   Prefixed with `.app-shell .mm-tree` to outrank the workbench reset that
-   strips row borders and backgrounds. */
-.app-shell .mm-tree .mm-flat-row > .mm-tree-row {
-  border: 0;
-  border-bottom: 1px solid var(--er-border);
-}
-
-.app-shell .mm-tree .mm-flat-row > .mm-tree-row.mm-binding-row {
-  padding-top: 6px;
-  padding-bottom: 6px;
-}
-
-.app-shell .mm-tree .mm-flat-row > .mm-tree-row.mm-binding-row .mm-binding-expr {
-  margin-top: 2px;
-}
-
-.app-shell .mm-tree .mm-flat-row > .mm-tree-row.mm-tree-branch,
-.app-shell .mm-tree .mm-flat-row > .mm-tree-row.mm-tree-expandable {
-  background: var(--er-surface-2);
-}
-
-.app-shell .mm-tree .mm-flat-row > .mm-tree-row:hover {
-  background: color-mix(in srgb, var(--er-text) 8%, var(--er-surface));
-}
-
-/* Format binding cards read as one run of text next to the model mapping's
-   tinted, ruled rows. Same surface and hairline, so a binding looks like a
-   binding in both designers. */
-.app-shell .fmt-bind-card {
-  margin-left: 12px;
-  background: var(--er-surface-2);
-  border-bottom: 1px solid var(--er-border);
-}
-
-.app-shell .fmt-bind-card:hover {
-  background: color-mix(in srgb, var(--er-text) 8%, var(--er-surface));
-}
-
-.app-shell .fmt-bind-card.is-focused {
-  background: color-mix(in srgb, var(--er-accent) 10%, var(--er-surface-2));
-}
-
-/* By-model layout: same ruled, tinted rows as the model mapping. Its rows sit
-   in `.mm-tree-node`, not the mapping's virtualised `.mm-flat-row`, so the
-   mapping rules above never reached them and the fields ran together. */
-.app-shell .mm-tree .mm-tree-node > .mm-tree-row {
-  border: 0;
-  border-bottom: 1px solid var(--er-border);
-}
-
-/* Bound fields indent by depth like their parent branch. */
-.app-shell .mm-tree .mm-tree-node > .mm-tree-row.mm-binding-row {
-  margin-left: calc(12px + var(--mm-indent));
-  padding: 6px 10px;
-}
-
-/* Only the top-level nodes are tinted; everything under them is ruled off. */
-.app-shell .mm-tree > .mm-tree-node > .mm-tree-row {
-  background: var(--er-surface-2);
-}
-
-.app-shell .mm-tree .mm-tree-node > .mm-tree-row:hover {
-  background: color-mix(in srgb, var(--er-text) 8%, var(--er-surface));
 }
 
 /* ── How elements are filled: fill pills, element badges, source chips —
@@ -3944,11 +3199,6 @@ button.src-chip:hover { border-color: var(--src-color); }
 }
 .vcmp-section__head:hover { background: var(--er-hover); }
 .vcmp-section__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vcmp-count { font-size: var(--er-text-2xs); font-weight: 600; }
-.vcmp-count:first-of-type { margin-left: auto; }
-.vcmp-count--added { color: var(--vcmp-added); }
-.vcmp-count--removed { color: var(--vcmp-removed); }
-.vcmp-count--changed { color: var(--vcmp-changed); }
 
 .vcmp-grid {
   display: grid;
@@ -4079,8 +3329,6 @@ button.src-chip:hover { border-color: var(--src-color); }
 .vcmp-list__item { position: relative; padding-left: 16px; }
 .vcmp-list__mark { position: absolute; left: 4px; font-weight: 600; }
 .vcmp-list__name { font-weight: 600; }
-.vcmp-list__counts { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
-.vcmp-prop__key:has(.vcmp-list__counts) { white-space: normal; }
 
 .vcmp-more {
   align-self: flex-start;
@@ -4140,3 +3388,505 @@ button.src-chip:hover { border-color: var(--src-color); }
 .vcmp-picker__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vcmp-picker__when { flex-shrink: 0; font-size: var(--er-text-xs); color: var(--er-text-muted); }
 .vcmp-picker__note { margin: 0; padding: 6px 8px; border-radius: var(--er-radius-md); background: var(--bg-secondary); font-size: var(--er-text-xs); color: var(--er-text-muted); }
+
+/* ── Comparison preview: the two versions' output side by side ────────────
+   The template grids are paper, as in the format preview — Excel's colours
+   stay readable in both themes; the chrome around them follows the theme. */
+.vcmp--preview { height: 100%; min-height: 0; }
+.vcmp--preview .vcmp__head { flex-shrink: 0; }
+.vcmp__preview { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.vcmp__views .spec-mode > svg { flex-shrink: 0; }
+.vcmp__loading { font-size: var(--er-text-xs); color: var(--er-text-muted); }
+.vcmp-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  vertical-align: -1px;
+  border: 1px solid var(--ui-stroke-1);
+  border-radius: 2px;
+}
+
+.tcmp, .dcmp { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* The grid is white paper in either theme, so its marks use one fixed palette. */
+.tcmp {
+  --tcmp-added: #1a7f37;
+  --tcmp-added-bg: rgba(45, 164, 78, 0.2);
+  --tcmp-removed: #cf222e;
+  --tcmp-removed-bg: rgba(207, 34, 46, 0.16);
+  --tcmp-changed: #bf8700;
+  --tcmp-changed-bg: rgba(234, 179, 8, 0.28);
+  --tcmp-bound: #0969da;
+}
+.tcmp__bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-height: 32px;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+.tcmp__sheets { display: flex; flex: 1 1 auto; min-width: 0; overflow-x: auto; }
+.tcmp__sheet {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--er-text-muted);
+  font: inherit;
+  font-size: var(--er-text-xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tcmp__sheet:hover { color: var(--er-text); background: var(--er-hover); }
+.tcmp__sheet.active { color: var(--er-text); border-bottom-color: var(--er-accent); }
+.tcmp__dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.tcmp__dot--added { background: var(--vcmp-added); }
+.tcmp__dot--removed { background: var(--vcmp-removed); }
+.tcmp__dot--changed { background: var(--vcmp-changed); }
+.tcmp__nav { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.tcmp__count { margin-right: 4px; font-size: var(--er-text-xs); color: var(--er-text-muted); white-space: nowrap; }
+.tcmp__navbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--er-radius-md);
+  background: transparent;
+  color: var(--er-text);
+  cursor: pointer;
+}
+.tcmp__navbtn:hover:not(:disabled) { background: var(--er-hover); }
+.tcmp__navbtn:disabled { opacity: 0.4; cursor: default; }
+.tcmp__sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  font-size: var(--er-text-xs);
+  color: var(--er-text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tcmp__panes { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.tcmp__pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.tcmp__pane + .tcmp__pane { border-left: 1px solid var(--border-color); }
+.tcmp__pane-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  color: var(--er-text);
+}
+.tcmp__pane-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  font-weight: 400;
+  color: var(--er-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tcmp__scroll { flex: 1; min-height: 0; overflow: auto; background: #e9e9e9; }
+.tcmp__missing { margin: 0; padding: 24px; text-align: center; font-size: var(--er-text-sm); color: #5f6368; }
+
+.tcmp-grid { position: relative; }
+.tcmp-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: Calibri, "Segoe UI", sans-serif;
+  font-size: 11px;
+  color: #1a1a1a;
+}
+.tcmp-corner,
+.tcmp-colhead,
+.tcmp-rowhead {
+  background: #f3f3f3;
+  color: #5f6368;
+  font-size: 10px;
+  font-weight: 500;
+  text-align: center;
+  border-right: 1px solid #d4d4d4;
+  border-bottom: 1px solid #d4d4d4;
+}
+.tcmp-corner, .tcmp-colhead { position: sticky; top: 0; z-index: 2; height: 20px; }
+.tcmp-corner { left: 0; z-index: 3; }
+.tcmp-rowhead { position: sticky; left: 0; z-index: 1; padding: 0 2px; }
+.tcmp-colhead.active, .tcmp-rowhead.active { background: color-mix(in srgb, var(--tcmp-bound) 22%, #f3f3f3); color: #1a1a1a; }
+.tcmp-rowhead--added { background: color-mix(in srgb, var(--tcmp-added) 22%, #f3f3f3); box-shadow: inset -3px 0 0 var(--tcmp-added); color: #1a1a1a; }
+.tcmp-rowhead--removed { background: color-mix(in srgb, var(--tcmp-removed) 22%, #f3f3f3); box-shadow: inset -3px 0 0 var(--tcmp-removed); color: #1a1a1a; }
+.tcmp-rowhead--changed { background: color-mix(in srgb, var(--tcmp-changed) 22%, #f3f3f3); box-shadow: inset -3px 0 0 var(--tcmp-changed); color: #1a1a1a; }
+.tcmp-cell {
+  position: relative;
+  padding: 1px 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: #ffffff;
+  border-right: 1px solid #e1e1e1;
+  border-bottom: 1px solid #e1e1e1;
+}
+.tcmp-cell--added { box-shadow: inset 0 0 0 2px var(--tcmp-added), inset 0 0 0 999px var(--tcmp-added-bg); }
+.tcmp-cell--removed { box-shadow: inset 0 0 0 2px var(--tcmp-removed), inset 0 0 0 999px var(--tcmp-removed-bg); }
+.tcmp-cell--changed { box-shadow: inset 0 0 0 2px var(--tcmp-changed), inset 0 0 0 999px var(--tcmp-changed-bg); }
+.tcmp-cell--style { outline: 1px dashed var(--tcmp-changed); outline-offset: -2px; }
+/* A cell some ER element writes to: the corner mark Excel uses for a note. */
+.tcmp-cell--bound::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-style: solid;
+  border-width: 0 6px 6px 0;
+  border-color: transparent color-mix(in srgb, var(--tcmp-bound) 45%, transparent) transparent transparent;
+}
+.tcmp-cell--bound-changed::after { border-width: 0 10px 10px 0; border-right-color: var(--tcmp-bound); }
+.tcmp-cell--bound-changed:not(.tcmp-cell--added):not(.tcmp-cell--removed):not(.tcmp-cell--changed) {
+  box-shadow: inset 0 0 0 1px var(--tcmp-bound), inset 0 0 0 999px rgba(9, 105, 218, 0.08);
+}
+.tcmp-cell--selected { outline: 2px solid var(--tcmp-bound); outline-offset: -2px; }
+.tcmp-cell__placeholder { color: #8a8f98; font-style: italic; }
+.tcmp-drawings { position: absolute; inset: 0; pointer-events: none; }
+.tcmp-drawings > img { position: absolute; object-fit: fill; }
+.tcmp-drawings__text {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: pre-wrap;
+  line-height: 1.1;
+  color: #1a1a1a;
+}
+
+.tcmp-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  font-size: var(--er-text-xs);
+  color: var(--er-text);
+}
+.tcmp-detail--hint { color: var(--er-text-muted); }
+.tcmp-detail__ref { font-family: var(--font-mono); font-weight: 700; }
+.tcmp-detail__change { font-weight: 600; }
+.tcmp-detail__same { color: var(--er-text-muted); }
+.tcmp-detail__prop { display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; }
+.tcmp-detail__key { color: var(--er-text-muted); }
+.tcmp-detail__before,
+.tcmp-detail__after { padding: 0 3px; border-radius: 2px; overflow-wrap: anywhere; }
+.tcmp-detail__before { background: color-mix(in srgb, var(--vcmp-removed-soft) 75%, transparent); }
+.tcmp-detail__after { background: color-mix(in srgb, var(--vcmp-added-soft) 75%, transparent); }
+.tcmp-detail__element strong { font-weight: 600; }
+.tcmp__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 4px 10px;
+  border-top: 1px solid var(--border-color);
+  font-size: var(--er-text-2xs);
+  color: var(--er-text-muted);
+}
+.tcmp__legend > span { display: inline-flex; align-items: center; gap: 5px; }
+.tcmp-swatch { display: inline-block; width: 12px; height: 10px; border-radius: 2px; background: #ffffff; }
+.tcmp-swatch--added { background: linear-gradient(var(--tcmp-added-bg), var(--tcmp-added-bg)), #ffffff; box-shadow: inset 0 0 0 1.5px var(--tcmp-added); }
+.tcmp-swatch--removed { background: linear-gradient(var(--tcmp-removed-bg), var(--tcmp-removed-bg)), #ffffff; box-shadow: inset 0 0 0 1.5px var(--tcmp-removed); }
+.tcmp-swatch--changed { background: linear-gradient(var(--tcmp-changed-bg), var(--tcmp-changed-bg)), #ffffff; box-shadow: inset 0 0 0 1.5px var(--tcmp-changed); }
+.tcmp-swatch--style { outline: 1px dashed var(--tcmp-changed); outline-offset: -1px; }
+.tcmp-swatch--bound { background: linear-gradient(225deg, var(--tcmp-bound) 0 32%, #ffffff 32%); box-shadow: inset 0 0 0 1px var(--tcmp-bound); }
+
+/* XML / text: the two sample documents line against line. */
+.dcmp__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  color: var(--er-text);
+}
+.dcmp__head > span { padding: 4px 8px 4px 52px; }
+.dcmp__head > span + span { border-left: 1px solid var(--border-color); }
+.dcmp__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--er-text-xs);
+  line-height: 20px;
+}
+.dcmp__row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px minmax(0, 1fr); }
+.dcmp__row--active { box-shadow: inset 0 2px 0 var(--er-accent-fill); }
+.dcmp__no { padding-right: 8px; background: var(--bg-secondary); color: var(--er-text-subtle); text-align: right; user-select: none; }
+.dcmp__no:nth-child(3) { border-left: 1px solid var(--border-color); }
+.dcmp__code { min-width: 0; padding: 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dcmp__code--before { background: color-mix(in srgb, var(--vcmp-removed-soft) 60%, transparent); }
+.dcmp__code--after { background: color-mix(in srgb, var(--vcmp-added-soft) 60%, transparent); }
+.dcmp__code--gap { background: repeating-linear-gradient(-45deg, transparent 0 5px, var(--ui-stroke-2) 5px 6px); }
+.dcmp__code--note { display: inline-flex; align-items: center; gap: 4px; font-family: var(--er-font-sans, inherit); font-style: italic; color: var(--er-text-muted); }
+.dcmp__fold { display: block; width: calc(100% - 16px); margin: 1px 8px; }
+
+/* A base comparison explains itself in the accent, not as a warning. */
+.vcmp__note--info { color: var(--er-accent); background: var(--er-accent-soft); }
+
+/* Picker: the base mode's F&O download, the tag on the version derived from, the switch between modes. */
+.vcmp-picker__tag {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: var(--er-radius-md);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+  font-size: var(--er-text-2xs);
+  font-weight: 600;
+}
+.vcmp-picker__fno { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 10px; }
+.vcmp-picker__fno .vcmp-picker__note { align-self: stretch; }
+.vcmp-picker__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--er-accent);
+  font: inherit;
+  font-size: var(--er-text-sm);
+  cursor: pointer;
+}
+.vcmp-picker__switch:hover { text-decoration: underline; }
+.vcmp__note-action {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ── Bindings tab: one look for "by format" and "by model" ─────────────────
+   Read like VS Code's search results: a group header (a parent element of the
+   format, a record of the model) with a twistie, icon, title, muted path or
+   label and a count; under it items (a format element, a model field) with
+   their icon, name and description, and one line per binding — a dot in the
+   binding's colour and its label in one column, the value in the next. */
+.fb-tree { padding-bottom: 16px; }
+
+.fb-head {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 24px;
+  padding: 2px 12px 2px calc(8px + var(--fb-depth, 0) * 16px);
+  color: var(--er-text);
+  font-size: var(--er-text-md);
+}
+.fb-head--group { height: 28px; cursor: pointer; user-select: none; outline: none; }
+.fb-head--group:hover { background: var(--er-hover); }
+.fb-head--group:focus-visible { outline: 1px solid var(--er-accent-fill); outline-offset: -1px; }
+/* Top-level groups stay in view while their items scroll under them. */
+.fb-head--top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--ui-stroke-2);
+}
+.fb-head--top:hover { background: var(--er-hover); }
+
+.fb-twistie {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--er-text-muted);
+  transition: transform 0.1s ease;
+}
+.fb-twistie.open { transform: rotate(90deg); }
+.fb-twistie--leaf { visibility: hidden; }
+.fb-twistie--button { cursor: pointer; }
+.fb-twistie--button:focus-visible { outline: 1px solid var(--er-accent-fill); border-radius: 3px; }
+
+.fb-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  color: var(--er-text-muted);
+}
+.fb-icon .fmt-attr-glyph { font-size: var(--er-text-sm); font-weight: 700; }
+.fb-icon--record { color: var(--kind-model); }
+.fb-icon--field { color: var(--syn-identifier); }
+
+.fb-title,
+.fb-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fb-desc {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: 8px;
+  overflow: hidden;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fb-spacer { flex: 1 1 8px; }
+
+.fb-aside { flex-shrink: 0; margin-left: 4px; font-size: var(--er-text-xs); color: var(--er-text-muted); }
+
+.fb-actions { display: inline-flex; flex-shrink: 0; margin-left: 4px; opacity: 0; }
+.fb-item:hover .fb-actions,
+.fb-item:focus-within .fb-actions,
+.fb-item.is-focused .fb-actions { opacity: 1; }
+.fb-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--er-text);
+  cursor: pointer;
+}
+.fb-action:hover { background: color-mix(in srgb, var(--er-text) 12%, transparent); }
+.fb-action:focus-visible { outline: 1px solid var(--er-accent-fill); outline-offset: -1px; }
+
+/* An item: its head and lines on the editor's ground, ruled off below. */
+.fb-item {
+  position: relative;
+  padding: 3px 0 7px;
+  border-bottom: 1px solid var(--ui-stroke-2);
+}
+.fb-item:hover { background: color-mix(in srgb, var(--er-text) 4%, transparent); }
+.fb-item.is-focused {
+  background: color-mix(in srgb, var(--er-accent-fill) 12%, transparent);
+  box-shadow: inset 2px 0 0 var(--er-accent-fill);
+}
+.fb-item--warning { box-shadow: inset 2px 0 0 var(--er-warning); }
+
+/* Lines start under the item's name: past the twistie and the icon. */
+.fb-lines {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  /* Top, not baseline: a wrapped formula's baseline is its last line. */
+  align-items: start;
+  gap: 3px 12px;
+  margin: 2px 12px 0 calc(8px + var(--fb-depth, 0) * 16px + 42px);
+}
+.fb-line-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 18px;
+  font-size: var(--er-text-xs);
+  color: var(--er-text-muted);
+  white-space: nowrap;
+}
+.fb-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--intent-color, var(--er-text-muted));
+}
+.fb-tone--mapping { --intent-color: var(--kind-mapping); }
+.fb-tone--format { --intent-color: var(--kind-format); }
+.fb-line-value { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: var(--er-text-sm); }
+
+.fb-expr { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.fb-arrow { flex-shrink: 0; font-family: var(--font-mono); font-size: var(--er-text-sm); line-height: 18px; color: var(--er-text-subtle); }
+.fb-expr-text {
+  /* Fills the line: sized to its content, a hanging indent left it a few
+     pixels short and the formula broke for no reason. */
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--er-text-sm);
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+/* A formula laid out on lines (FormulaLines): each line under its indent, a
+   line too long for the column wrapping two characters further in. */
+.formula-lines { display: block; }
+.formula-lines__line {
+  display: block;
+  padding-left: calc((var(--formula-indent, 0) * 2 + 2) * 1ch);
+  text-indent: -2ch;
+}
+
+/* The whole formula is the drill-down's click target, not just its text. */
+.fb-expr-text > .dd-trigger-expr { display: block; width: 100%; }
+.fb-note { font-size: var(--er-text-sm); line-height: 18px; color: var(--er-text-muted); }
+.fb-note--warning { color: var(--er-warning); }
+
+.fb-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.fb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--ui-stroke-1);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--er-text);
+  font: inherit;
+  font-size: var(--er-text-sm);
+  cursor: pointer;
+}
+.fb-chip:hover { border-color: var(--er-accent-border); background: var(--er-hover); }
+.fb-chip:focus-visible { outline: 1px solid var(--er-accent-fill); outline-offset: -1px; }
+.fb-chip-prop { color: var(--er-text-muted); }
+.fb-more {
+  height: 20px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--er-accent);
+  font: inherit;
+  font-size: var(--er-text-sm);
+  cursor: pointer;
+}
+.fb-more:hover { text-decoration: underline; }

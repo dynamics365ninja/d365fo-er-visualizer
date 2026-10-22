@@ -24,6 +24,8 @@ export interface XlsxWorkbook {
   definedRanges: Map<string, XlsxArea>;
   /** Every named range with the sheet its cells sit on, in document order. */
   namedAreas: XlsxNamedArea[];
+  /** The look of a cell that names no style (`cellXfs` entry 0). */
+  defaultStyle?: XlsxCellStyle;
 }
 
 /** One `<definedName>` that points at cells. */
@@ -102,6 +104,8 @@ export interface XlsxCell {
   row: number;   // 1-based
   value: string;
   type: 'string' | 'number' | 'bool' | 'error' | 'empty';
+  /** The cell's formula as written in `<f>`, without the leading `=`. */
+  formula?: string;
   styleIndex?: number;
   style?: XlsxCellStyle;
 }
@@ -176,7 +180,7 @@ export async function parseXlsxBase64(base64: string, options: XlsxParseOptions 
     sheets.push(sheet);
   }
 
-  return { sheets, definedNames, definedRanges, namedAreas };
+  return { sheets, definedNames, definedRanges, namedAreas, defaultStyle: styles[0] };
 }
 
 // ─── Decompression budget ─────────────────────────────────────────────────
@@ -705,7 +709,10 @@ function parseSheet(name: string, xml: string, sharedStrings: string[], styles: 
         type = 'number';
       }
 
-      cells.push({ ref, col, row, value, type, styleIndex, style: styleIndex !== undefined ? styles[styleIndex] : undefined });
+      const fTags = parseXmlTags(ct.inner, 'f');
+      const formula = fTags.length > 0 && fTags[0].inner ? decodeXmlEntities(fTags[0].inner) : undefined;
+
+      cells.push({ ref, col, row, value, type, formula, styleIndex, style: styleIndex !== undefined ? styles[styleIndex] : undefined });
     }
 
     if (cells.length > 0) {
