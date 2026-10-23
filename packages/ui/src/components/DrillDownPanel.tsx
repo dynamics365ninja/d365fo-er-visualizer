@@ -51,7 +51,7 @@ import {
   ChevronRightRegular,
   WarningRegular,
 } from '@fluentui/react-icons';
-import { useAppStore, resolveDeepExpression, toModelRootedPath, selectMappingDefinition, getScopedMappingDefinitions } from '../state/store';
+import { useAppStore, resolveDeepExpression, toModelRootedPath, getMappingSourcesInScope, getScopedMappingDefinitions } from '../state/store';
 import { t, getLocale, getTranslations, useLocale, type Locale } from '../i18n';
 import { dsPathToExpression } from '../utils/ds-path';
 import { substituteCurrent } from '../utils/er-references';
@@ -2014,22 +2014,19 @@ export function collectUsedSources(options: {
       return false;
     };
 
-    configurations.forEach((config: any, ci: number) => {
-      const versions: any[] = config.content.kind === 'ModelMapping'
-        ? [config.content.version]
-        : config.content.kind === 'Format'
-          ? (config.content.embeddedModelMappingVersions ?? [])
-          : [];
-      for (const version of versions) {
-        const definition = selectMappingDefinition(version, configurations, configIndex);
-        const bindings = ((definition?.bindings ?? []) as any[])
-          .filter(binding => matchesSelectedPath(binding?.path));
-        for (const binding of bindings.slice(0, 80)) {
-          const bindingExpression = String(binding?.expressionAsString ?? '').trim();
-          if (bindingExpression) collectFromExpression(expandBindingCurrentRecord(binding.path, bindingExpression, definition?.bindings ?? []), ci);
-        }
+    // One definition per mapping, and only the ones the format runs on — the
+    // other loaded mappings bind paths of the same name to other data.
+    const seenConfigs = new Set<number>();
+    for (const { mapping: definition, configIndex: ci } of getMappingSourcesInScope(configurations, configIndex)) {
+      if (seenConfigs.has(ci)) continue;
+      seenConfigs.add(ci);
+      const bindings = ((definition?.bindings ?? []) as any[])
+        .filter(binding => matchesSelectedPath(binding?.path));
+      for (const binding of bindings.slice(0, 80)) {
+        const bindingExpression = String(binding?.expressionAsString ?? '').trim();
+        if (bindingExpression) collectFromExpression(expandBindingCurrentRecord(binding.path, bindingExpression, definition?.bindings ?? []), ci);
       }
-    });
+    }
   }
 
   return Array.from(out.values()).sort((left, right) => (

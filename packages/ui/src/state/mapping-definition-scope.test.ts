@@ -315,4 +315,95 @@ describe('mapping definition scope', () => {
       expect(nodes.map(n => n.sublabel ?? '').join('\n')).toContain('SalesInvoiceDP');
     });
   });
+
+  // A second mapping of another model, with a format of its own. Paths the
+  // second mapping does not bind used to fall through to the first mapping,
+  // so both formats' drill-downs named the first mapping's definition.
+  describe('with a second mapping and format loaded', () => {
+    const OTHER_MAPPING_XML = `<?xml version="1.0" encoding="utf-8"?>
+<ERSolutionVersion>
+  <Solution>
+    <ERSolution ID.="{SOL-PAY}" Name="Payment model mapping" />
+  </Solution>
+  <Contents.>
+    <ERModelMappingVersion ID.="{PAY},1" DateTime="2026-04-14T12:00:00" Description="Payments" Number="1">
+      <Mapping>
+        <ERModelMapping ID.="{PAY}" Name="Payment model mapping" DataContainerDescriptor="Payments" Model="{PAYMODEL}" ModelName="Payment model" ModelVersion="{PAYMODEL},1">
+          <Binding>
+            <ERDataContainerBinding>
+              <Contents.>
+                <ERDataContainerPathBinding ExpressionAsString="PaymentDP.Total" Path="InvoiceBase/Total" />
+              </Contents.>
+            </ERDataContainerBinding>
+          </Binding>
+          <Datasource>
+            <ERModelDefinition>
+              <Contents.>
+                <ERModelItemDefinition>
+                  <ValueDefinition>
+                    <ERModelItemValueDefinition Name="PaymentDP">
+                      <ValueSource>
+                        <ERClassDataSourceHandler ClassName="PaymentDP" />
+                      </ValueSource>
+                    </ERModelItemValueDefinition>
+                  </ValueDefinition>
+                </ERModelItemDefinition>
+              </Contents.>
+            </ERModelDefinition>
+          </Datasource>
+        </ERModelMapping>
+      </Mapping>
+    </ERModelMappingVersion>
+  </Contents.>
+</ERSolutionVersion>`;
+    const OTHER_FORMAT_XML = FORMAT_XML
+      .replace('Name="Sales invoice (Excel)"', 'Name="Payment (Excel)"')
+      .replace('DataContainerDescriptorName="SalesInvoice" ModelGuid="{MODEL}"', 'DataContainerDescriptorName="Payments" ModelGuid="{PAYMODEL}"');
+
+    function loadBoth(): any[] {
+      const configurations = [
+        parseERConfiguration(FORMAT_XML, 'format.xml'),
+        parseERConfiguration(MAPPING_XML, 'mapping.xml'),
+        parseERConfiguration(OTHER_FORMAT_XML, 'payment.xml'),
+        parseERConfiguration(OTHER_MAPPING_XML, 'payment-mapping.xml'),
+      ] as any[];
+      useAppStore.setState({ configurations } as any);
+      return configurations;
+    }
+
+    function drill(configurations: any[], expression: string, configIndex: number) {
+      const store = useAppStore.getState();
+      return flatten(buildExpressionTree({
+        expression,
+        configIndex,
+        configurations,
+        resolveModelPath: store.resolveModelPath,
+        resolveDatasource: store.resolveDatasource,
+        findModelPathBindings: store.findModelPathBindings,
+      }));
+    }
+
+    it('does not resolve a path the format\'s own mapping leaves unbound in another mapping', () => {
+      const configurations = loadBoth();
+      const nodes = drill(configurations, 'model.InvoiceBase.DocumentDate', 2);
+      const model = nodes.find(n => n.badge === 'model');
+      expect(['SalesInvoice', 'TMSCommercialInvoice']).not.toContain(model?.definition);
+      const sublabels = nodes.map(n => n.sublabel ?? '').join('\n');
+      expect(sublabels).not.toContain('SalesInvoiceDP');
+      expect(sublabels).not.toContain('TmsCommercialInvoiceDP');
+      // The first format still resolves in its own definition.
+      expect(drill(configurations, 'model.InvoiceBase.DocumentDate', 0).find(n => n.badge === 'model')?.definition)
+        .toBe('SalesInvoice');
+    });
+
+    it('fills a container from the format\'s own mapping only', () => {
+      const configurations = loadBoth();
+      const nodes = drill(configurations, 'model.InvoiceBase', 2);
+      expect(nodes.find(n => n.badge === 'model')?.definition).toBe('Payment model mapping [Payments]');
+      const sublabels = nodes.map(n => n.sublabel ?? '').join('\n');
+      expect(sublabels).toContain('PaymentDP');
+      expect(sublabels).not.toContain('SalesInvoiceDP');
+      expect(sublabels).not.toContain('TmsCommercialInvoiceDP');
+    });
+  });
 });

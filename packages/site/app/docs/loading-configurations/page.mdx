@@ -83,23 +83,26 @@ row's own ⋮ menu offers what fits the node, such as **Where used** or closing 
 
 ## The workspace manager
 
-The **Workspace manager** (the button in the Explorer header) is the full picture of what is
-loaded: every configuration grouped by its data model, with its kind and whether it came from a
-file or from F&amp;O. From there you can:
+The **Workspace manager** (the button in the Explorer header) has two columns. On the left,
+**Available**: every configuration the browser cache holds and that is not loaded, by kind, with
+each cached version of it. On the right, the workspace: **To load** and the **Loaded
+configurations**, grouped by their data model, with their kind and whether they came from a file
+or from F&amp;O.
 
-- filter the list, add more files with **Add files…**, or jump to the F&amp;O download panel with
-  **Add from F&amp;O…**,
-- open a configuration in a tab, close individual entries, or **Close all**,
-- re-add something you closed earlier from **Available (closed / cached)** — one at a time with
-  **Add to workspace**, or everything with **Open all** — and **Remove from cache** what you no
-  longer need.
+- Click a configuration — or one of its versions — on the left to move it to **To load**; the arrow
+  sends it back. **Add all** moves the newest version of everything the filter shows. Then
+  **Load** opens the whole list at once.
+- One version of a configuration can be loaded at a time. Picking another version of a loaded
+  configuration is marked *replaces the loaded v…*, and loading it takes the other one's place.
+- Under the list, **Related** offers the data models and mappings the picked configurations work
+  with — the format's data model, the models it derives from and the mappings of all of them. They
+  are offered, not added: which mapping a format runs on cannot always be told, so you pick.
+- Filter both columns, add more files with **Add files…**, or jump to the F&amp;O download panel
+  with **Add from F&amp;O…**. A loaded configuration can be opened in a tab, compared with another
+  version or closed; **Close all** closes everything, and **Remove from cache** drops a cached
+  version you no longer need.
 
-Closed configurations stay in the browser cache and can be reopened any time. When you add a
-format or a model mapping back, the manager asks **Also load related configurations?** and offers
-the related data models and mappings in the same step — that is normally what you actually wanted,
-and it saves a second trip. The offer covers the format's data model, the models it derives from,
-and the mappings of all of them, each derivation indented under its base. Its own model is ticked;
-a mapping is ticked only when it is the only one, otherwise you pick.
+Closed configurations stay in the browser cache and can be reopened any time.
 
 ## Recent sessions and configurations
 

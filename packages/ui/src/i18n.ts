@@ -168,7 +168,18 @@ export interface Translations {
   workspaceAvailable: string;
   workspaceAvailableEmpty: string;
   workspaceFilterPlaceholder: string;
-  workspaceReopenAll: string;
+  workspaceStageAll: string;
+  workspaceStaged: string;
+  workspaceStagedEmpty: string;
+  workspaceUnstage: string;
+  workspaceLoadStaged: (n: number) => string;
+  workspaceLoadingStaged: string;
+  workspaceClearStaged: string;
+  workspaceReplacesVersion: (version: string) => string;
+  workspaceLoadedVersion: (version: string) => string;
+  workspaceVersionCount: (n: number) => string;
+  workspaceRelated: string;
+  workspaceRelatedHint: string;
   workspaceAddFromFno: string;
   workspaceSourceFile: string;
   workspaceSourceFno: string;
@@ -1291,12 +1302,23 @@ const cs: Translations = {
   workspaceLoaded: 'Načtené konfigurace',
   workspaceEmpty: 'Žádná konfigurace není načtena.',
   workspaceAddRecent: 'Přidat z nedávných',
-  workspaceAdd: 'Přidat do pracovní plochy',
+  workspaceAdd: 'Přidat k načtení',
   workspaceAddFiles: 'Přidat soubory…',
-  workspaceAvailable: 'K dispozici (zavřené / v mezipaměti)',
+  workspaceAvailable: 'K dispozici',
   workspaceAvailableEmpty: 'Žádné další konfigurace v mezipaměti.',
   workspaceFilterPlaceholder: 'Filtrovat konfigurace…',
-  workspaceReopenAll: 'Otevřít vše',
+  workspaceStageAll: 'Přidat vše',
+  workspaceStaged: 'K načtení',
+  workspaceStagedEmpty: 'Klikněte vlevo na konfiguraci nebo její verzi — přidá se sem a načtete ji tlačítkem Načíst.',
+  workspaceUnstage: 'Vrátit mezi dostupné',
+  workspaceLoadStaged: (n: number) => `Načíst ${n} ${csPlural(n, 'konfiguraci', 'konfigurace', 'konfigurací')}`,
+  workspaceLoadingStaged: 'Načítám…',
+  workspaceClearStaged: 'Zrušit výběr',
+  workspaceReplacesVersion: (version: string) => `nahradí načtenou v${version}`,
+  workspaceLoadedVersion: (version: string) => `načtena v${version}`,
+  workspaceVersionCount: (n: number) => `${n} ${csPlural(n, 'verze', 'verze', 'verzí')}`,
+  workspaceRelated: 'Související',
+  workspaceRelatedHint: 'Datový model a mapování, se kterými vybrané konfigurace pracují',
   workspaceAddFromFno: 'Přidat z F&O…',
   workspaceSourceFile: 'Soubor',
   workspaceSourceFno: 'F&O',
@@ -2524,12 +2546,23 @@ const en: Translations = {
   workspaceLoaded: 'Loaded configurations',
   workspaceEmpty: 'No configuration is loaded.',
   workspaceAddRecent: 'Add from recent',
-  workspaceAdd: 'Add to workspace',
+  workspaceAdd: 'Add to the load list',
   workspaceAddFiles: 'Add files…',
-  workspaceAvailable: 'Available (closed / cached)',
+  workspaceAvailable: 'Available',
   workspaceAvailableEmpty: 'No further cached configurations.',
   workspaceFilterPlaceholder: 'Filter configurations…',
-  workspaceReopenAll: 'Open all',
+  workspaceStageAll: 'Add all',
+  workspaceStaged: 'To load',
+  workspaceStagedEmpty: 'Click a configuration or one of its versions on the left — it lands here, and Load opens it.',
+  workspaceUnstage: 'Move back to available',
+  workspaceLoadStaged: (n: number) => `Load ${n} configuration${n === 1 ? '' : 's'}`,
+  workspaceLoadingStaged: 'Loading…',
+  workspaceClearStaged: 'Clear',
+  workspaceReplacesVersion: (version: string) => `replaces the loaded v${version}`,
+  workspaceLoadedVersion: (version: string) => `v${version} loaded`,
+  workspaceVersionCount: (n: number) => `${n} version${n === 1 ? '' : 's'}`,
+  workspaceRelated: 'Related',
+  workspaceRelatedHint: 'Data model and mappings the picked configurations work with',
   workspaceAddFromFno: 'Add from F&O…',
   workspaceSourceFile: 'File',
   workspaceSourceFno: 'F&O',
