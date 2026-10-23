@@ -246,11 +246,31 @@ export function getAllMappingSources(configurations: ERConfiguration[]): Mapping
   );
 }
 
+function normGuid(guid: string | undefined): string {
+  return (guid ?? '').trim().replace(/^\{|\}$/g, '').toLowerCase();
+}
+
+/** Data model GUIDs the `model` datasources of a format mapping point at. */
+function collectModelGuids(datasources: any[], out: Set<string>): void {
+  for (const ds of datasources ?? []) {
+    const guid = normGuid(ds?.modelInfo?.modelGuid);
+    if (guid) out.add(guid);
+    if (ds?.children?.length) collectModelGuids(ds.children, out);
+  }
+}
+
 /**
  * Every mapping definition, the ones a lookup started from `fromConfigIndex`
  * binds to first. With two formats of the same mapping open, "every loaded
  * format" names both descriptors, so a drill-down from the second format used
  * to land in the definition of whichever format loaded first.
+ *
+ * A format that names its descriptor runs on that definition and nothing
+ * else: the other definitions are left out, not just put last. Kept as a
+ * fallback, they answered every path the format's own mapping leaves unbound
+ * with a path of the same name from another loaded mapping — with two
+ * mappings and their formats open, both formats' drill-downs then named the
+ * same definition.
  */
 export function getMappingSourcesInScope(
   configurations: ERConfiguration[],
@@ -264,6 +284,16 @@ export function getMappingSourcesInScope(
   if (preferred.size === 0) return sources;
   const matches = (source: MappingSource) =>
     preferred.has((source.mapping?.dataContainerDescriptor ?? '').trim().toLowerCase());
+  const matching = sources.filter(matches);
+
+  const from = configurations[fromConfigIndex];
+  if (from?.content.kind === 'Format' && getFormatDescriptorNames(from.content as ERFormatContent).size > 0) {
+    // Two models can name a root container alike; the format's model decides.
+    const modelGuids = new Set<string>();
+    collectModelGuids((from.content as ERFormatContent).formatMappingVersion.formatMapping.datasources, modelGuids);
+    const sameModel = matching.filter(source => modelGuids.has(normGuid(source.mapping?.modelId)));
+    return sameModel.length > 0 ? sameModel : matching;
+  }
   // Stable: config order is kept within the matching and the other definitions.
-  return [...sources.filter(matches), ...sources.filter(source => !matches(source))];
+  return [...matching, ...sources.filter(source => !matches(source))];
 }

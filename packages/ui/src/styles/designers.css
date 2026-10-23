@@ -2940,7 +2940,6 @@ button.src-chip:hover { border-color: var(--src-color); }
   background: var(--bg-secondary);
   font-size: var(--er-text-xs);
 }
-.doc-preview__modes { display: inline-flex; flex-wrap: wrap; gap: 3px; }
 .doc-preview__records, .doc-preview__check { display: inline-flex; align-items: center; gap: 5px; color: var(--er-text); cursor: pointer; }
 .doc-preview__records select {
   font: inherit;

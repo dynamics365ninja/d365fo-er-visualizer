@@ -86,12 +86,13 @@ export {
 export type { TreeNode } from './tree-builder';
 export type { ConfigWarning } from './config-warnings';
 export { expressionRootToken } from './config-warnings';
-export { compareConfigVersions } from './configuration-merge';
+export { compareConfigVersions, normalizeSolutionId } from './configuration-merge';
 export type { CompareMode, OpenTab } from './navigation';
 export { openDesignerTabsForFormats, remapIdAfterConfigRemoval } from './navigation';
 export {
   activeMappingDefinitionLabel,
   getMappingDefinitions,
+  getMappingSourcesInScope,
   getScopedMappingDefinitions,
   relatedMappingDefinitionLabels,
   selectMappingDefinition,

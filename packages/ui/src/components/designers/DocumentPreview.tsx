@@ -11,13 +11,11 @@ import type { ERFormatElement } from '@er-visualizer/core';
 import { t } from '../../i18n';
 import { useTabState } from '../../utils/tab-view-state';
 import { elementFill, principalValueSource, type FormatLineage } from '../../utils/format-lineage';
-import { buildPreviewDocument, lineElementKeys, MAX_PREVIEW_LINES, type PreviewLine, type PreviewValueMode } from '../../utils/format-preview';
+import { buildPreviewDocument, lineElementKeys, MAX_PREVIEW_LINES, type PreviewLine } from '../../utils/format-preview';
 import { useVirtualTree } from '../../utils/use-virtual-tree';
 import { normalizeGuid } from '../../utils/format-binding-display';
 import { downloadTextFile, safeFileName } from '../../utils/field-spec-export';
 import { ElementFillCard } from './ElementFillCard';
-
-const MODES: PreviewValueMode[] = ['sample', 'source', 'expression', 'name'];
 
 /** A document line's height (`.doc-preview__doc` line-height); every line is measured anyway. */
 const DOC_LINE_HEIGHT = 20;
@@ -59,7 +57,6 @@ export function DocumentPreview({ lineage, root, kind, configName, configIndex, 
   onOpenStructure: (elementId: string) => void;
   tabId?: string;
 }) {
-  const [mode, setMode] = useTabState<PreviewValueMode>(tabId, 'preview.mode', 'sample');
   const [iterations, setIterations] = useTabState(tabId, 'preview.iterations', 2);
   const [showNotes, setShowNotes] = useTabState(tabId, 'preview.notes', true);
   const [hideUnbound, setHideUnbound] = useTabState(tabId, 'preview.hideUnbound', false);
@@ -67,11 +64,13 @@ export function DocumentPreview({ lineage, root, kind, configName, configIndex, 
   const [detailClosed, setDetailClosed] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const doc = useMemo(() => buildPreviewDocument(lineage, root, kind, { mode, iterations, hideUnbound }, {
+  // Sample values only: where a value comes from — the element, its binding
+  // and the D365FO source — is one click away in the detail beside the file.
+  const doc = useMemo(() => buildPreviewDocument(lineage, root, kind, { mode: 'sample', iterations, hideUnbound }, {
     repeats: t.docPreviewRepeats,
     condition: t.docPreviewCondition,
     optional: t.docPreviewOptional,
-  }), [lineage, root, kind, mode, iterations, hideUnbound]);
+  }), [lineage, root, kind, iterations, hideUnbound]);
 
   const lines = useMemo(() => (showNotes ? doc.lines : doc.lines.filter(line => !line.note)), [doc, showNotes]);
   // File line numbers: annotations are not lines of the file.
@@ -135,13 +134,6 @@ export function DocumentPreview({ lineage, root, kind, configName, configIndex, 
   return (
     <div className="doc-preview">
       <div className="doc-preview__toolbar">
-        <div className="doc-preview__modes" role="group" aria-label={t.docPreviewModeAria}>
-          {MODES.map(m => (
-            <button key={m} type="button" className={`spec-mode ${mode === m ? 'active' : ''}`} aria-pressed={mode === m} title={t.docPreviewModeHints[m]} onClick={() => setMode(m)}>
-              {t.docPreviewModeLabels[m]}
-            </button>
-          ))}
-        </div>
         <label className="doc-preview__records" title={t.docPreviewRecords}>
           <ArrowRepeatAllRegular fontSize={13} aria-hidden />
           <span>{t.docPreviewRecords}</span>

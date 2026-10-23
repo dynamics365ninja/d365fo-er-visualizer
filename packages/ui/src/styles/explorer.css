@@ -392,7 +392,8 @@
 }
 
 .ws-dialog-body {
-  max-height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -455,11 +456,128 @@
   padding: 2px 0;
 }
 
-.ws-list--available {
-  flex: 0 1 auto;
+/* Two columns: what the cache holds on the left, the workspace on the right.
+   Each column scrolls on its own once the dialog reaches its max height; the
+   minimum keeps a short list from collapsing the columns to a strip. */
+.ws-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: min(360px, 60vh);
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-md);
+  overflow: hidden;
+}
+
+.ws-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   min-height: 0;
-  max-height: none;
+  padding: 8px 6px 8px 10px;
+}
+
+.ws-column + .ws-column {
+  border-left: 1px solid var(--er-border);
+  background: var(--er-surface-sunken);
+}
+
+.ws-column-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ws-column-body > .ws-list {
+  overflow: visible;
+}
+
+.ws-column .ws-hint {
+  margin-top: 8px;
+  margin-right: 4px;
+}
+
+/* The kind as a coloured glyph: in a column a 136px pill took a third of the row. */
+.ws-kind-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  color: var(--er-text-muted);
+}
+
+.ws-kind-icon--model { color: var(--er-model); }
+.ws-kind-icon--mapping { color: var(--er-mapping); }
+.ws-kind-icon--format { color: var(--er-format); }
+
+/* A row that picks its configuration: the whole row is the button. */
+.ws-row--pick {
+  padding: 0 6px 0 0;
+}
+
+.ws-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0 5px calc(8px + var(--ws-depth, 0) * 26px);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws-row--group {
+  padding-top: 6px;
+  padding-bottom: 2px;
+}
+
+.ws-row--group:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
+.ws-row--staged {
+  background: var(--er-surface);
+  border-color: var(--er-border);
+}
+
+.ws-note {
+  color: var(--er-text-subtle);
+  font-style: italic;
+}
+
+.ws-note--warn {
+  color: var(--er-warning);
+  font-style: normal;
+}
+
+.ws-related {
+  margin-top: 8px;
+}
+
+.ws-related-head {
+  padding: 2px 8px;
+  font-size: var(--px-caption);
+  color: var(--er-text-muted);
+}
+
+/* Pinned under the right column's scrolling list, edge to edge: the column's
+   own padding is undone so the rule above it runs the full width. */
+.ws-load-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px -6px -8px -10px;
+  padding: 8px 6px 8px 18px;
+  border-top: 1px solid var(--er-border);
 }
 
 .ws-row {
@@ -662,6 +780,19 @@
     max-height: calc(100dvh - 40px) !important;
   }
 
+}
+
+/* Too narrow for two columns side by side: the workspace goes under the cache. */
+@media (max-width: 760px) {
+  .ws-columns {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .ws-column + .ws-column {
+    border-left: 0;
+    border-top: 1px solid var(--er-border);
+  }
 }
 
 @keyframes panel-body-in {
