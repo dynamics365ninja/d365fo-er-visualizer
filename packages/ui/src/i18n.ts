@@ -387,6 +387,14 @@ export interface Translations {
   landingOpen: string;
   // Landing page – footer
   landingFooter: string;
+  // Landing page – sidebar, heading and actions
+  landingNavStart: string;
+  landingNavWorkspace: string;
+  landingNavHelp: string;
+  landingNavProject: string;
+  landingTitle: string;
+  landingOpenFiles: string;
+  landingConnect: string;
 
   // Recent files, samples, validator, shortcuts, forward nav
   recentFiles: string;
@@ -1030,6 +1038,15 @@ export interface Translations {
   specCsvHeaders: string[];
   specOccurrence: Record<'always' | 'optional' | 'repeating' | 'conditional', string>;
   sourceKindLabels: Record<'table' | 'field' | 'enum' | 'class' | 'parameter' | 'datasource' | 'importFormat', string>;
+  /** The trace bar under the designer: the selected format element's way to its data. */
+  traceBarLabel: string;
+  traceBarAria: string;
+  traceStepFormat: string;
+  traceStepModel: string;
+  traceStepMapping: string;
+  traceStepExpression: string;
+  traceMappingMissing: string;
+  traceOpenDetail: string;
   specFieldsCount: (n: number) => string;
   specUnboundTitle: (n: number) => string;
   specBoundTitle: (n: number) => string;
@@ -1525,6 +1542,13 @@ const cs: Translations = {
   fnoIngestCancel: 'Zrušit stahování',
   landingOpen: 'Otevřít návrhář',
   landingFooter: 'D365 FO ER Visualizer · Electronic Reporting Configuration Inspector',
+  landingNavStart: 'Začít',
+  landingNavWorkspace: 'Pracovní plocha',
+  landingNavHelp: 'Nápověda',
+  landingNavProject: 'Web projektu',
+  landingTitle: 'Otevřete konfiguraci',
+  landingOpenFiles: 'Otevřít soubory',
+  landingConnect: 'Připojit prostředí',
 
   recentFiles: 'Nedávné soubory',
   recentConfigs: 'Nedávné konfigurace',
@@ -2190,6 +2214,14 @@ const cs: Translations = {
   specCsvHeaders: ['Cesta', 'Prvek', 'Typ prvku', 'Datový typ', 'Výskyt', 'Min. délka', 'Max. délka', 'Formát', 'Plnění', 'Výraz vazby', 'Podmínka', 'Pole modelu', 'Popisek pole modelu', 'Výraz v mapování', 'Zdroj v D365FO', 'Výběr záznamů'],
   specOccurrence: { always: 'vždy', optional: 'nepovinný (0..1)', repeating: 'opakovaný', conditional: 'podmíněný' },
   sourceKindLabels: { table: 'Tabulka', field: 'Pole tabulky', enum: 'Výčet', class: 'Třída', parameter: 'Parametr uživatele', datasource: 'Zdroj dat', importFormat: 'Importní formát' },
+  traceBarLabel: 'Trasa',
+  traceBarAria: 'Trasa vybraného prvku ke zdroji dat',
+  traceStepFormat: 'Formát',
+  traceStepModel: 'Model',
+  traceStepMapping: 'Mapování',
+  traceStepExpression: 'Výraz',
+  traceMappingMissing: 'mapování není načteno',
+  traceOpenDetail: 'Detail trasování',
   specFieldsCount: (n: number) => `${n} ${csPlural(n, 'pole', 'pole', 'polí')}`,
   specUnboundTitle: (n: number) => `${n} ${csPlural(n, 'pole bez vazby', 'pole bez vazby', 'polí bez vazby')} — zobrazit ve specifikaci`,
   specBoundTitle: (n: number) => `${n} ${csPlural(n, 'pole se plní', 'pole se plní', 'polí se plní')} — zobrazit ve specifikaci`,
@@ -2766,6 +2798,13 @@ const en: Translations = {
   fnoIngestCancel: 'Cancel download',
   landingOpen: 'Open designer',
   landingFooter: 'D365 FO ER Visualizer · Electronic Reporting Configuration Inspector',
+  landingNavStart: 'Get started',
+  landingNavWorkspace: 'Workspace',
+  landingNavHelp: 'Help',
+  landingNavProject: 'Project website',
+  landingTitle: 'Open a configuration',
+  landingOpenFiles: 'Open files',
+  landingConnect: 'Connect environment',
 
   recentFiles: 'Recent files',
   recentConfigs: 'Recent configurations',
@@ -3431,6 +3470,14 @@ const en: Translations = {
   specCsvHeaders: ['Path', 'Element', 'Element type', 'Data type', 'Occurrence', 'Min length', 'Max length', 'Format', 'Filled by', 'Binding expression', 'Condition', 'Model field', 'Model field label', 'Mapping expression', 'D365FO source', 'Record selection'],
   specOccurrence: { always: 'always', optional: 'optional (0..1)', repeating: 'repeating', conditional: 'conditional' },
   sourceKindLabels: { table: 'Table', field: 'Table field', enum: 'Enum', class: 'Class', parameter: 'User parameter', datasource: 'Data source', importFormat: 'Import format' },
+  traceBarLabel: 'Trace',
+  traceBarAria: 'Trace of the selected element to its data source',
+  traceStepFormat: 'Format',
+  traceStepModel: 'Model',
+  traceStepMapping: 'Mapping',
+  traceStepExpression: 'Expression',
+  traceMappingMissing: 'mapping not loaded',
+  traceOpenDetail: 'Trace details',
   specFieldsCount: (n: number) => `${n} ${n === 1 ? 'field' : 'fields'}`,
   specUnboundTitle: (n: number) => `${n} ${n === 1 ? 'field' : 'fields'} without a binding — show in the specification`,
   specBoundTitle: (n: number) => `${n} ${n === 1 ? 'field is' : 'fields are'} filled — show in the specification`,

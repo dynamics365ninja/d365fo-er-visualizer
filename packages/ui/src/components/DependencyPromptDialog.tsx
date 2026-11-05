@@ -9,7 +9,7 @@ import {
   DialogSurface,
   DialogTitle,
 } from '@fluentui/react-components';
-import { DataBarVerticalFilled, DocumentFilled, LinkFilled } from '@fluentui/react-icons';
+import { ConfigKindIcon } from './KindIcons';
 import { t } from '../i18n';
 
 export type DependencyKind = 'DataModel' | 'ModelMapping' | 'Format';
@@ -54,9 +54,7 @@ export function dependencyKindLabel(kind: DependencyKind | string | undefined): 
 }
 
 export function DependencyKindIcon({ kind }: { kind: DependencyKind | string | undefined }) {
-  if (kind === 'DataModel') return <DataBarVerticalFilled fontSize={14} />;
-  if (kind === 'ModelMapping') return <LinkFilled fontSize={14} />;
-  return <DocumentFilled fontSize={14} />;
+  return <ConfigKindIcon kind={kind} fontSize={14} />;
 }
 
 /**

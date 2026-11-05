@@ -3,14 +3,13 @@ import {
   ArrowRightRegular,
   ArrowSyncRegular,
   CheckmarkCircleRegular,
-  DataBarVerticalRegular,
-  DatabaseRegular,
   DocumentRegular,
-  LinkRegular,
   MathFormulaRegular,
   SearchRegular,
   TextBulletListLtrRegular,
+  TableRegular,
 } from '@fluentui/react-icons';
+import { MappingKindIcon, ModelKindIcon } from './KindIcons';
 import type { ERConfiguration } from '@er-visualizer/core';
 import { useAppStore } from '../state/store';
 import type { TreeNode } from '../state/store';
@@ -123,13 +122,13 @@ function DocIcon({ doc }: { doc: SearchDoc }) {
       return <FormatElementIcon type={doc.subtype ?? 'Unknown'} fontSize={13} />;
     case 'modelRecord':
     case 'modelField':
-      return <DataBarVerticalRegular fontSize={13} />;
+      return <ModelKindIcon fontSize={13} />;
     case 'modelEnum':
     case 'enumValue':
     case 'formatEnum':
       return <TextBulletListLtrRegular fontSize={13} />;
     case 'mappingBinding':
-      return <LinkRegular fontSize={13} />;
+      return <MappingKindIcon fontSize={13} />;
     case 'calculatedField':
       return <MathFormulaRegular fontSize={13} />;
     case 'validation':
@@ -137,7 +136,7 @@ function DocIcon({ doc }: { doc: SearchDoc }) {
     case 'transformation':
       return <ArrowSyncRegular fontSize={13} />;
     default:
-      return <DatabaseRegular fontSize={13} />;
+      return <TableRegular fontSize={13} />;
   }
 }
 

@@ -11,13 +11,13 @@ import { t } from '../i18n';
 import {
   AppsListDetailRegular,
   CursorHoverRegular,
-  DataBarVerticalFilled,
   LinkFilled,
-  DocumentFilled,
   CheckmarkCircleRegular,
   ArrowSyncRegular,
   SearchRegular,
+  TableRegular,
 } from '@fluentui/react-icons';
+import { ConfigKindIcon, FormatKindIcon, MappingKindIcon, ModelKindIcon } from './KindIcons';
 import { whereUsedQueryFor, whereUsedTargetFor } from '../utils/where-used-query';
 import { buildFormatLineage, elementFill } from '../utils/format-lineage';
 import { ElementFillCard } from './designers/ElementFillCard';
@@ -93,11 +93,10 @@ function getNodeHeaderIcon(node: any): React.ReactNode {
   const kind = node?.data?.kind ?? node?.data?.content?.kind;
   const nodeType = node?.type;
 
-  if (kind === 'DataModel') return <DataBarVerticalFilled fontSize={14} />;
-  if (kind === 'ModelMapping') return <LinkFilled fontSize={14} />;
-  if (kind === 'Format') return <DocumentFilled fontSize={14} />;
+  if (kind === 'DataModel' || kind === 'ModelMapping' || kind === 'Format') return <ConfigKindIcon kind={kind} fontSize={14} />;
 
-  if (nodeType === 'mapping' || nodeType === 'binding' || nodeType === 'formatBinding') {
+  if (nodeType === 'mapping') return <MappingKindIcon fontSize={14} />;
+  if (nodeType === 'binding' || nodeType === 'formatBinding') {
     return <LinkFilled fontSize={14} />;
   }
 
@@ -109,18 +108,19 @@ function getNodeHeaderIcon(node: any): React.ReactNode {
     return <ArrowSyncRegular fontSize={14} />;
   }
 
+  if (nodeType === 'datasource') return <TableRegular fontSize={14} />;
+
   if (
-    nodeType === 'datasource'
-    || nodeType === 'field'
+    nodeType === 'field'
     || nodeType === 'container'
     || nodeType === 'enum'
     || nodeType === 'enumValue'
     || nodeType === 'model'
   ) {
-    return <DataBarVerticalFilled fontSize={14} />;
+    return <ModelKindIcon fontSize={14} />;
   }
 
-  return <DocumentFilled fontSize={14} />;
+  return <FormatKindIcon fontSize={14} />;
 }
 
 /** Node kind rendered as a coloured pill — the same three hues as everywhere else. */

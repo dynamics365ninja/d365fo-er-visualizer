@@ -20,6 +20,9 @@
   container-type: inline-size;
 }
 :root[data-theme='light'] .vx { --vx-folder: #b8860b; }
+/* On the indigo explorer the folders take the brand gold, in both themes. */
+.wb-indigo .vx,
+:root[data-theme='light'] .wb-indigo .vx { --vx-folder: var(--er-gold); }
 
 /* Title bar: EXPLORER and its actions. */
 .vx-titlebar {
@@ -34,11 +37,12 @@
   min-width: 0;
   overflow: hidden;
   font-size: var(--er-text-xs);
-  font-weight: 400;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--er-text);
+  color: var(--er-text-subtle);
 }
 .vx-titlebar__actions { display: flex; align-items: center; gap: 2px; }
 

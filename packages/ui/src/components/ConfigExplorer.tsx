@@ -24,16 +24,12 @@ import {
   CheckmarkRegular,
   ChevronRightRegular,
   CircleSmallFilled,
-  DataBarVerticalFilled,
-  DatabaseRegular,
   DeleteRegular,
   DismissRegular,
   DismissSquareMultipleRegular,
-  DocumentFilled,
   DocumentRegular,
   FolderOpenRegular,
   FolderRegular,
-  LinkFilled,
   LinkRegular,
   ListRegular,
   MoreHorizontalRegular,
@@ -41,11 +37,13 @@ import {
   NumberSymbolSquareRegular,
   OpenRegular,
   SearchRegular,
+  TableRegular,
   TagRegular,
   TextBulletListTreeRegular,
   TextCollapseRegular,
   TextExpandRegular,
 } from '@fluentui/react-icons';
+import { ConfigKindIcon, MappingKindIcon, ModelKindIcon } from './KindIcons';
 import { whereUsedQueryFor, whereUsedTargetFor } from '../utils/where-used-query';
 import { t, useLocale } from '../i18n';
 import { treeArrowAction } from '../utils/tree-keyboard';
@@ -105,9 +103,7 @@ function getExplorerGroupLabel(kind: ConfigKind): string {
 }
 
 function KindIcon({ kind, fontSize = 16 }: { kind: ConfigKind; fontSize?: number }) {
-  if (kind === 'DataModel') return <DataBarVerticalFilled fontSize={fontSize} />;
-  if (kind === 'ModelMapping') return <LinkFilled fontSize={fontSize} />;
-  return <DocumentFilled fontSize={fontSize} />;
+  return <ConfigKindIcon kind={kind} fontSize={fontSize} />;
 }
 
 /**
@@ -128,9 +124,9 @@ function ExplorerNodeIcon({ node, expanded }: { node: TreeNode; expanded: boolea
       return <span className="vx-icon" style={{ color: getFormatTypeColor(type) }}><FormatElementIcon type={type} fontSize={16} /></span>;
     }
     case 'datasource':
-      return <span className="vx-icon vx-icon--datasource"><DatabaseRegular fontSize={16} /></span>;
+      return <span className="vx-icon vx-icon--datasource"><TableRegular fontSize={16} /></span>;
     case 'mapping':
-      return <span className="vx-icon vx-icon--mapping"><LinkFilled fontSize={16} /></span>;
+      return <span className="vx-icon vx-icon--mapping"><MappingKindIcon fontSize={16} /></span>;
     case 'binding':
     case 'formatBinding':
       return <span className="vx-icon vx-icon--binding"><LinkRegular fontSize={16} /></span>;
@@ -147,7 +143,7 @@ function ExplorerNodeIcon({ node, expanded }: { node: TreeNode; expanded: boolea
     case 'enumValue':
       return <span className="vx-icon vx-icon--enum"><CircleSmallFilled fontSize={16} /></span>;
     case 'model':
-      return <span className="vx-icon vx-icon--model"><DataBarVerticalFilled fontSize={16} /></span>;
+      return <span className="vx-icon vx-icon--model"><ModelKindIcon fontSize={16} /></span>;
     default:
       return <span className="vx-icon"><DocumentRegular fontSize={16} /></span>;
   }

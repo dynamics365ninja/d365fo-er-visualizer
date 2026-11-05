@@ -1,3 +1,7 @@
+/* Geist and Geist Mono are bundled with the build — the CSP serves fonts from
+   'self' only, and the packaged Electron shell has no network to load them. */
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
 import './index.css';
 import { applyResolvedTheme, readThemeMode, resolveThemeMode } from './theme';
 import { installFnoDebugHandle } from './fno/debug';

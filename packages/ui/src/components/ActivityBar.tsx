@@ -6,7 +6,6 @@ import {
   mergeClasses,
 } from '@fluentui/react-components';
 import {
-  HomeRegular,
   FolderRegular,
   SearchRegular,
   LinkRegular,
@@ -18,6 +17,7 @@ import type { FluentIcon } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
 import { useCoarsePointer } from '../utils/responsive';
 import { ThemeSwitch } from './ThemeSwitch';
+import { BrandMark } from './BrandWordmark';
 import { setLocale, t, useLocale } from '../i18n';
 
 interface ActivityBarProps {
@@ -35,22 +35,23 @@ interface ActivityBarProps {
 }
 
 const useStyles = makeStyles({
+  // The deep indigo rail carries the brand in both themes (`wb-indigo` re-points
+  // the tokens inside it, so the brand mark gets the bright kind hues).
   root: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 0,
+    gap: '4px',
     width: 'var(--wb-activitybar-w)',
-    padding: '4px 0',
-    backgroundColor: 'var(--er-chrome)',
-    borderRight: '1px solid var(--er-border)',
+    padding: '8px 0',
+    backgroundColor: 'var(--er-side-rail)',
     flexShrink: 0,
   },
   sep: {
     width: '24px',
     height: '1px',
     flexShrink: 0,
-    backgroundColor: 'var(--er-border)',
+    backgroundColor: 'var(--er-side-line)',
     margin: '6px 0',
   },
   spacer: {
@@ -62,36 +63,53 @@ const useStyles = makeStyles({
     display: 'flex',
     justifyContent: 'center',
   },
-  // VS Code activity bar: full-width square cells, muted icons, the active
-  // view marked by a bar on the leading edge rather than a tinted tile.
+  // Rounded tiles: muted icons, the open view lifted onto a lighter indigo
+  // tile with a gold icon.
   btn: {
     position: 'relative',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 'var(--wb-activitybar-w)',
-    width: 'var(--wb-activitybar-w)',
-    height: 'var(--wb-activitybar-w)',
+    minWidth: '40px',
+    width: '40px',
+    height: '40px',
     padding: 0,
-    borderRadius: 0,
+    borderRadius: '10px',
     border: 'none',
     backgroundColor: 'transparent',
-    color: 'var(--er-text-muted)',
+    color: 'var(--er-side-muted)',
     cursor: 'pointer',
     fontFamily: tokens.fontFamilyBase,
-    transitionProperty: 'color',
+    transitionProperty: 'color, background-color',
     transitionDuration: 'var(--er-duration-fast)',
     ':hover': {
-      backgroundColor: 'transparent',
-      color: 'var(--er-text)',
+      backgroundColor: 'var(--er-side-hover)',
+      color: 'var(--er-side-strong)',
+    },
+    ':focus-visible': {
+      outline: '2px solid var(--er-gold)',
+      outlineOffset: '1px',
     },
   },
   btnActive: {
-    color: 'var(--er-text)',
-    boxShadow: 'inset 2px 0 0 var(--er-accent-fill)',
+    backgroundColor: 'var(--er-side-active)',
+    color: 'var(--er-gold)',
     ':hover': {
-      color: 'var(--er-text)',
+      backgroundColor: 'var(--er-side-active)',
+      color: 'var(--er-gold)',
     },
+  },
+  /** The home button is the brand: the "ER" mark on a lifted tile. */
+  brandBtn: {
+    backgroundColor: 'var(--er-side-active)',
+    marginBottom: '2px',
+    ':hover': {
+      backgroundColor: 'var(--er-side-hover)',
+    },
+  },
+  brandMark: {
+    width: '22px',
+    height: '22px',
   },
   /** Text in place of an icon (the language code), sized to the 18px icons. */
   glyph: {
@@ -109,9 +127,9 @@ const useStyles = makeStyles({
 });
 
 /**
- * VS Code–style vertical icon rail. Navigation and panel toggles at the top,
- * app-wide settings (language, view mode, theme) at the bottom — every one in
- * the same 36px borderless box.
+ * The indigo icon rail. The brand mark (home), navigation and panel toggles at
+ * the top, app-wide settings (language, view mode, theme) at the bottom — every
+ * one in the same 40px rounded tile.
  */
 export function ActivityBar(props: ActivityBarProps) {
   const styles = useStyles();
@@ -120,9 +138,9 @@ export function ActivityBar(props: ActivityBarProps) {
   const setShowTechnicalDetails = useAppStore(s => s.setShowTechnicalDetails);
 
   return (
-    <nav className={mergeClasses('activity-bar', styles.root)} aria-label={t.activityBarLabel}>
+    <nav className={mergeClasses('activity-bar', 'wb-indigo', styles.root)} aria-label={t.activityBarLabel}>
       <ActivityButton
-        Icon={HomeRegular}
+        brand
         label={t.home}
         onClick={props.onGoHome}
       />
@@ -187,9 +205,10 @@ export function ActivityBar(props: ActivityBarProps) {
 }
 
 interface ActivityButtonProps {
-  /** Either an icon or a short text glyph. */
+  /** An icon, a short text glyph, or the brand mark. */
   Icon?: FluentIcon;
   glyph?: string;
+  brand?: boolean;
   label: string;
   onClick: () => void;
   active?: boolean;
@@ -197,7 +216,7 @@ interface ActivityButtonProps {
   badge?: number;
 }
 
-function ActivityButton({ Icon, glyph, label, onClick, active, shortcut, badge }: ActivityButtonProps) {
+function ActivityButton({ Icon, glyph, brand, label, onClick, active, shortcut, badge }: ActivityButtonProps) {
   const styles = useStyles();
   const coarse = useCoarsePointer();
   // A "(Ctrl+B)" hint is noise on a tablet with no keyboard attached.
@@ -211,9 +230,11 @@ function ActivityButton({ Icon, glyph, label, onClick, active, shortcut, badge }
           onClick={onClick}
           aria-label={label}
           aria-pressed={active}
-          className={mergeClasses('activity-bar__btn', styles.btn, active && styles.btnActive)}
+          className={mergeClasses('activity-bar__btn', styles.btn, brand && styles.brandBtn, active && styles.btnActive)}
         >
-          {Icon ? <Icon fontSize={22} /> : <span className={styles.glyph} aria-hidden>{glyph}</span>}
+          {brand
+            ? <BrandMark className={styles.brandMark} />
+            : Icon ? <Icon fontSize={20} /> : <span className={styles.glyph} aria-hidden>{glyph}</span>}
         </button>
       </Tooltip>
       {typeof badge === 'number' && badge > 0 && (

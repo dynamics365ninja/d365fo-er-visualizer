@@ -1,47 +1,71 @@
 /* App tokens: the aliases the stylesheets read (--bg-*, --kind-*, --syn-*, …)
-   over the shared `--er-*` brand tokens, and the VS Code "Light Modern" /
-   "Dark Modern" workbench palette that re-points those tokens for the app
-   only (the marketing site keeps the brand palette).
+   over the shared `--er-*` brand tokens, and the "Indigo Ledger" workbench
+   palette that re-points those tokens for the app only (the marketing site
+   keeps the brand palette).
+
+   Indigo Ledger: a deep indigo rail and explorer that carry the brand in both
+   themes, calm neutral surfaces with a quiet indigo cast, one indigo accent for
+   what is interactive, gold for the active place in the indigo chrome, Geist
+   and Geist Mono (bundled in main.tsx, nothing is loaded from outside).
+
+   The three ER kinds keep one hue each, chosen clear of the indigo accent:
+   model teal, mapping plum, format amber. Text pairs keep WCAG AA (4.5:1).
 
    Dark is written twice — once for the OS preference, once for the explicit
    switch; theme-tokens.test.ts keeps the two in step. */
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --er-bg: #1f1f1f;
-    --er-bg-soft: #1f1f1f;
-    --er-surface: #1f1f1f;
-    --er-surface-2: #2a2d2e;
-    --er-surface-3: #37373d;
-    --er-surface-raised: #252526;
-    --er-surface-raised-2: #2d2d30;
-    --er-surface-sunken: #181818;
-    --er-selected: #04395e;
-    --er-border: #2b2b2b;
-    --er-border-strong: #474747;
-    --er-text: #cccccc;
-    --er-text-muted: #9d9d9d;
-    --er-text-subtle: #8b8b8b;
-    --er-accent: #4daafc;
-    --er-accent-hover: #6cbaff;
-    --er-accent-active: #3794ff;
-    --er-accent-soft: #10304a;
-    --er-accent-border: rgba(0, 120, 212, 0.6);
-    --er-accent-contrast: #ffffff;
-    --er-chrome: #181818;
-    --er-hover: #2a2d2e;
-    --er-input-bg: #313131;
-    --er-input-border: #3c3c3c;
-    --er-accent-fill: #0078d4;
-    --er-accent-fill-hover: #026ec1;
-    --er-on-accent-fill: #ffffff;
-    --er-badge-bg: #616161;
-    --er-badge-fg: #f8f8f8;
-    --er-scrim: rgba(0, 0, 0, 0.5);
-    --er-shadow-color: rgba(0, 0, 0, 0.36);
-    --er-shadow-1: none;
-    --er-shadow-2: 0 2px 8px rgba(0, 0, 0, 0.36);
-    --er-shadow-3: 0 4px 16px rgba(0, 0, 0, 0.45);
+    --er-bg: #0e1022;
+    --er-bg-soft: #161930;
+    --er-surface: #161930;
+    --er-surface-2: #1b1e37;
+    --er-surface-3: #22253f;
+    --er-surface-raised: #1b1e37;
+    --er-surface-raised-2: #22253f;
+    --er-surface-sunken: #121428;
+    --er-selected: #252a5e;
+    --er-border: #282c48;
+    --er-border-strong: #383d60;
+    --er-text: #ecedf7;
+    --er-text-muted: #9a9ec0;
+    --er-text-subtle: #868bb0;
+    --er-accent: #9da2ff;
+    --er-accent-hover: #b4b8ff;
+    --er-accent-active: #8a90f5;
+    --er-accent-soft: #252a5e;
+    --er-accent-border: rgba(157, 162, 255, 0.4);
+    --er-accent-contrast: #0e1022;
+    --er-chrome: #121428;
+    --er-hover: #22253f;
+    --er-input-bg: #121428;
+    --er-input-border: #383d60;
+    --er-accent-fill: #9da2ff;
+    --er-accent-fill-hover: #b4b8ff;
+    --er-on-accent-fill: #0e1022;
+    --er-badge-bg: #2a2e4d;
+    --er-badge-fg: #ecedf7;
+    --er-model: #4fd1bd;
+    --er-model-soft: #0f2e2a;
+    --er-mapping: #e08fd0;
+    --er-mapping-soft: #331f31;
+    --er-format: #f0a35e;
+    --er-format-soft: #33260f;
+    --er-info: #8cbcf0;
+    --er-info-soft: #172a40;
+    --er-info-border: #2c4a6b;
+    --er-side-bg: #090a18;
+    --er-side-rail: #06070f;
+    --er-side-ink: #c5c8e2;
+    --er-side-muted: #7f83ad;
+    --er-side-hover: #14163a;
+    --er-side-active: #1d2050;
+    --er-side-line: #1a1c36;
+    --er-scrim: rgba(5, 6, 17, 0.6);
+    --er-shadow-color: rgba(0, 0, 0, 0.5);
+    --er-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.25);
+    --er-shadow-2: 0 10px 26px rgba(0, 0, 0, 0.4);
+    --er-shadow-3: 0 18px 48px rgba(0, 0, 0, 0.5);
   }
 
 }
@@ -49,17 +73,17 @@
 :root {
   --font-display: var(--er-font-display);
   --font-sans: var(--er-font-sans);
-  /* Single source of truth for the monospace stack — index.html preloads
-     JetBrains Mono, and every `font-family` for code/expressions/GUIDs reads
-     this token. Do not redefine it in a later theme block: those win on
-     specificity and silently swap the font back. */
+  /* Single source of truth for the monospace stack — main.tsx bundles Geist
+     Mono, and every `font-family` for code/expressions/GUIDs reads this token.
+     Do not redefine it in a later theme block: those win on specificity and
+     silently swap the font back. */
   --font-mono: var(--er-font-mono);
   --bg-primary: var(--er-bg-soft);
   --bg-secondary: var(--er-surface);
   --bg-tertiary: var(--er-surface-2);
   --border-color: var(--er-border);
   --surface-purple-border: color-mix(in srgb, var(--er-model) 42%, transparent);
-  /* The three ER component kinds — one hue each, shared with the site. */
+  /* The three ER component kinds — one hue each. */
   --kind-model: var(--er-model);
   --kind-mapping: var(--er-mapping);
   --kind-format: var(--er-format);
@@ -120,67 +144,89 @@
   --px-text: 12px;
   --px-text-sm: 11px;
   --px-caption: 10.5px;
-  --er-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, Ubuntu, 'Droid Sans', sans-serif;
+  --er-font-sans: 'Geist Variable', 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --er-font-display: var(--er-font-sans);
-  --er-font-mono: 'SF Mono', Menlo, Monaco, Consolas, 'Cascadia Mono', 'Ubuntu Mono', 'Courier New', monospace;
-  /* VS Code's own scale: 13px for rows and body, 11px for section labels. */
+  --er-font-mono: 'Geist Mono Variable', 'Cascadia Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* A dense workbench scale: 13px for rows and body, 11px for section labels,
+     14px for panel titles. */
   --er-text-2xs: 10px;
   --er-text-xs: 11px;
   --er-text-sm: 12px;
   --er-text-md: 13px;
-  --er-text-lg: 13px;
-  --er-radius-sm: 2px;
-  --er-radius-md: 3px;
-  --er-radius-lg: 4px;
-  --er-radius-xl: 6px;
-  /* Tags and chips are VS Code labels (square-ish), not capsules. Counters
-     keep their round badge shape below. */
-  --er-radius-pill: 3px;
-  --er-duration-fast: 80ms;
-  --er-duration: 120ms;
+  --er-text-lg: 14px;
+  /* Chips inside text, small buttons, controls, panels, dialogs. */
+  --er-radius-sm: 4px;
+  --er-radius-md: 6px;
+  --er-radius-lg: 9px;
+  --er-radius-xl: 14px;
+  /* Badges, kind pills and counters are capsules. */
+  --er-radius-pill: 999px;
+  --er-duration-fast: 120ms;
+  --er-duration: 180ms;
   /* Sizes of the workbench parts, shared by the TSX shell and the CSS. */
-  --wb-titlebar-h: 35px;
-  --wb-header-h: 35px;
-  --wb-statusbar-h: 22px;
-  --wb-activitybar-w: 48px;
+  --wb-titlebar-h: 44px;
+  --wb-header-h: 38px;
+  --wb-statusbar-h: 26px;
+  --wb-activitybar-w: 52px;
   --wb-row-h: 22px;
   /* One height for every control that sits in a bar: inputs, text and icon
      buttons, segmented switches. Fluent's `size="small"` buttons are 24px. */
   --wb-control-h: 24px;
-  --er-bg: #ffffff;
+  --er-bg: #f4f5f8;
   --er-bg-soft: #ffffff;
   --er-surface: #ffffff;
-  --er-surface-2: #f5f5f5;
-  --er-surface-3: #ebebeb;
+  --er-surface-2: #f8f9fb;
+  --er-surface-3: #eceef3;
   --er-surface-raised: #ffffff;
-  --er-surface-raised-2: #f8f8f8;
-  --er-surface-sunken: #f8f8f8;
-  --er-selected: #e4e6f1;
-  --er-border: #e5e5e5;
-  --er-border-strong: #cecece;
-  --er-text: #1f1f1f;
-  --er-text-muted: #616161;
-  --er-text-subtle: #717171;
-  --er-accent: #005fb8;
-  --er-accent-hover: #0258a8;
-  --er-accent-active: #004f97;
-  --er-accent-soft: #e8f1fa;
-  --er-accent-border: rgba(0, 95, 184, 0.4);
+  --er-surface-raised-2: #f8f9fb;
+  --er-surface-sunken: #f8f9fb;
+  --er-selected: #e6e8fa;
+  --er-border: #e3e5ec;
+  --er-border-strong: #cdd1dc;
+  --er-text: #111330;
+  --er-text-muted: #5e6380;
+  --er-text-subtle: #676c88;
+  --er-accent: #4248d1;
+  --er-accent-hover: #363bb8;
+  --er-accent-active: #2f33a0;
+  --er-accent-soft: #ecedfb;
+  --er-accent-border: rgba(66, 72, 209, 0.4);
   --er-accent-contrast: #ffffff;
-  --er-chrome: #f8f8f8;
-  --er-hover: #f0f0f0;
+  --er-chrome: #f8f9fb;
+  --er-hover: #f1f2f7;
   --er-input-bg: #ffffff;
-  --er-input-border: #cecece;
-  --er-accent-fill: #005fb8;
-  --er-accent-fill-hover: #0258a8;
+  --er-input-border: #cdd1dc;
+  --er-accent-fill: #4248d1;
+  --er-accent-fill-hover: #363bb8;
   --er-on-accent-fill: #ffffff;
-  --er-badge-bg: #e0e0e0;
-  --er-badge-fg: #3b3b3b;
-  --er-scrim: rgba(0, 0, 0, 0.3);
-  --er-shadow-color: rgba(0, 0, 0, 0.16);
-  --er-shadow-1: none;
-  --er-shadow-2: 0 2px 8px rgba(0, 0, 0, 0.16);
-  --er-shadow-3: 0 4px 16px rgba(0, 0, 0, 0.18);
+  --er-badge-bg: #eceef3;
+  --er-badge-fg: #3a3e5c;
+  --er-model: #0b7a6e;
+  --er-model-soft: #e1f3f0;
+  --er-mapping: #a3308a;
+  --er-mapping-soft: #f8e8f4;
+  --er-format: #ad5910;
+  --er-format-soft: #fbeee0;
+  --er-info: #2f6fb0;
+  --er-info-soft: #e6f0fa;
+  --er-info-border: #b5cfe9;
+  /* The indigo chrome: rail and explorer, in both themes. Gold marks the
+     active place in it. */
+  --er-side-bg: #161941;
+  --er-side-rail: #0f1235;
+  --er-side-ink: #c9cbea;
+  --er-side-muted: #8a8dbd;
+  --er-side-hover: #1f2350;
+  --er-side-active: #272b63;
+  --er-side-strong: #ffffff;
+  --er-side-line: #272a58;
+  --er-gold: #e2c27d;
+  --er-on-gold: #161941;
+  --er-scrim: rgba(17, 19, 48, 0.4);
+  --er-shadow-color: rgba(17, 19, 48, 0.12);
+  --er-shadow-1: 0 1px 2px rgba(17, 19, 48, 0.06);
+  --er-shadow-2: 0 10px 26px rgba(17, 19, 48, 0.12);
+  --er-shadow-3: 0 18px 48px rgba(17, 19, 48, 0.18);
   --landing-grid-primary: transparent;
   --landing-grid-secondary: transparent;
   --landing-grid-line: transparent;
@@ -250,40 +296,56 @@
   --ui-surface-2: color-mix(in srgb, var(--bg-tertiary) 86%, transparent);
   --ui-stroke-1: color-mix(in srgb, var(--border-color) 92%, transparent);
   --ui-stroke-2: color-mix(in srgb, var(--border-color) 72%, transparent);
-  --er-bg: #1f1f1f;
-  --er-bg-soft: #1f1f1f;
-  --er-surface: #1f1f1f;
-  --er-surface-2: #2a2d2e;
-  --er-surface-3: #37373d;
-  --er-surface-raised: #252526;
-  --er-surface-raised-2: #2d2d30;
-  --er-surface-sunken: #181818;
-  --er-selected: #04395e;
-  --er-border: #2b2b2b;
-  --er-border-strong: #474747;
-  --er-text: #cccccc;
-  --er-text-muted: #9d9d9d;
-  --er-text-subtle: #8b8b8b;
-  --er-accent: #4daafc;
-  --er-accent-hover: #6cbaff;
-  --er-accent-active: #3794ff;
-  --er-accent-soft: #10304a;
-  --er-accent-border: rgba(0, 120, 212, 0.6);
-  --er-accent-contrast: #ffffff;
-  --er-chrome: #181818;
-  --er-hover: #2a2d2e;
-  --er-input-bg: #313131;
-  --er-input-border: #3c3c3c;
-  --er-accent-fill: #0078d4;
-  --er-accent-fill-hover: #026ec1;
-  --er-on-accent-fill: #ffffff;
-  --er-badge-bg: #616161;
-  --er-badge-fg: #f8f8f8;
-  --er-scrim: rgba(0, 0, 0, 0.5);
-  --er-shadow-color: rgba(0, 0, 0, 0.36);
-  --er-shadow-1: none;
-  --er-shadow-2: 0 2px 8px rgba(0, 0, 0, 0.36);
-  --er-shadow-3: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --er-bg: #0e1022;
+  --er-bg-soft: #161930;
+  --er-surface: #161930;
+  --er-surface-2: #1b1e37;
+  --er-surface-3: #22253f;
+  --er-surface-raised: #1b1e37;
+  --er-surface-raised-2: #22253f;
+  --er-surface-sunken: #121428;
+  --er-selected: #252a5e;
+  --er-border: #282c48;
+  --er-border-strong: #383d60;
+  --er-text: #ecedf7;
+  --er-text-muted: #9a9ec0;
+  --er-text-subtle: #868bb0;
+  --er-accent: #9da2ff;
+  --er-accent-hover: #b4b8ff;
+  --er-accent-active: #8a90f5;
+  --er-accent-soft: #252a5e;
+  --er-accent-border: rgba(157, 162, 255, 0.4);
+  --er-accent-contrast: #0e1022;
+  --er-chrome: #121428;
+  --er-hover: #22253f;
+  --er-input-bg: #121428;
+  --er-input-border: #383d60;
+  --er-accent-fill: #9da2ff;
+  --er-accent-fill-hover: #b4b8ff;
+  --er-on-accent-fill: #0e1022;
+  --er-badge-bg: #2a2e4d;
+  --er-badge-fg: #ecedf7;
+  --er-model: #4fd1bd;
+  --er-model-soft: #0f2e2a;
+  --er-mapping: #e08fd0;
+  --er-mapping-soft: #331f31;
+  --er-format: #f0a35e;
+  --er-format-soft: #33260f;
+  --er-info: #8cbcf0;
+  --er-info-soft: #172a40;
+  --er-info-border: #2c4a6b;
+  --er-side-bg: #090a18;
+  --er-side-rail: #06070f;
+  --er-side-ink: #c5c8e2;
+  --er-side-muted: #7f83ad;
+  --er-side-hover: #14163a;
+  --er-side-active: #1d2050;
+  --er-side-line: #1a1c36;
+  --er-scrim: rgba(5, 6, 17, 0.6);
+  --er-shadow-color: rgba(0, 0, 0, 0.5);
+  --er-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --er-shadow-2: 0 10px 26px rgba(0, 0, 0, 0.4);
+  --er-shadow-3: 0 18px 48px rgba(0, 0, 0, 0.5);
   --landing-grid-primary: transparent;
   --landing-grid-secondary: transparent;
   --landing-grid-line: transparent;
@@ -305,11 +367,11 @@
   --statusbar-validator-ok: #86efac;
   --statusbar-validator-issues: #fde047;
   --syn-identifier: #0451a5;
-  --syn-path: #005fb8;
+  --syn-path: #3a40c4;
   --syn-operator: #383838;
   --syn-literal: #a31515;
   --syn-separator: var(--er-text-subtle);
-  --syn-resolved: #16825d;
+  --syn-resolved: #0b7a6e;
   --syn-field-type: var(--er-text-muted);
   --syn-calc: #098658;
   color-scheme: light;
@@ -320,40 +382,56 @@
   --ui-surface-2: var(--er-surface-2);
   --ui-stroke-1: color-mix(in srgb, var(--er-border) 60%, var(--er-border-strong));
   --ui-stroke-2: var(--er-border);
-  --er-bg: #ffffff;
+  --er-bg: #f4f5f8;
   --er-bg-soft: #ffffff;
   --er-surface: #ffffff;
-  --er-surface-2: #f5f5f5;
-  --er-surface-3: #ebebeb;
+  --er-surface-2: #f8f9fb;
+  --er-surface-3: #eceef3;
   --er-surface-raised: #ffffff;
-  --er-surface-raised-2: #f8f8f8;
-  --er-surface-sunken: #f8f8f8;
-  --er-selected: #e4e6f1;
-  --er-border: #e5e5e5;
-  --er-border-strong: #cecece;
-  --er-text: #1f1f1f;
-  --er-text-muted: #616161;
-  --er-text-subtle: #717171;
-  --er-accent: #005fb8;
-  --er-accent-hover: #0258a8;
-  --er-accent-active: #004f97;
-  --er-accent-soft: #e8f1fa;
-  --er-accent-border: rgba(0, 95, 184, 0.4);
+  --er-surface-raised-2: #f8f9fb;
+  --er-surface-sunken: #f8f9fb;
+  --er-selected: #e6e8fa;
+  --er-border: #e3e5ec;
+  --er-border-strong: #cdd1dc;
+  --er-text: #111330;
+  --er-text-muted: #5e6380;
+  --er-text-subtle: #676c88;
+  --er-accent: #4248d1;
+  --er-accent-hover: #363bb8;
+  --er-accent-active: #2f33a0;
+  --er-accent-soft: #ecedfb;
+  --er-accent-border: rgba(66, 72, 209, 0.4);
   --er-accent-contrast: #ffffff;
-  --er-chrome: #f8f8f8;
-  --er-hover: #f0f0f0;
+  --er-chrome: #f8f9fb;
+  --er-hover: #f1f2f7;
   --er-input-bg: #ffffff;
-  --er-input-border: #cecece;
-  --er-accent-fill: #005fb8;
-  --er-accent-fill-hover: #0258a8;
+  --er-input-border: #cdd1dc;
+  --er-accent-fill: #4248d1;
+  --er-accent-fill-hover: #363bb8;
   --er-on-accent-fill: #ffffff;
-  --er-badge-bg: #e0e0e0;
-  --er-badge-fg: #3b3b3b;
-  --er-scrim: rgba(0, 0, 0, 0.3);
-  --er-shadow-color: rgba(0, 0, 0, 0.16);
-  --er-shadow-1: none;
-  --er-shadow-2: 0 2px 8px rgba(0, 0, 0, 0.16);
-  --er-shadow-3: 0 4px 16px rgba(0, 0, 0, 0.18);
+  --er-badge-bg: #eceef3;
+  --er-badge-fg: #3a3e5c;
+  --er-model: #0b7a6e;
+  --er-model-soft: #e1f3f0;
+  --er-mapping: #a3308a;
+  --er-mapping-soft: #f8e8f4;
+  --er-format: #ad5910;
+  --er-format-soft: #fbeee0;
+  --er-info: #2f6fb0;
+  --er-info-soft: #e6f0fa;
+  --er-info-border: #b5cfe9;
+  --er-side-bg: #161941;
+  --er-side-rail: #0f1235;
+  --er-side-ink: #c9cbea;
+  --er-side-muted: #8a8dbd;
+  --er-side-hover: #1f2350;
+  --er-side-active: #272b63;
+  --er-side-line: #272a58;
+  --er-scrim: rgba(17, 19, 48, 0.4);
+  --er-shadow-color: rgba(17, 19, 48, 0.12);
+  --er-shadow-1: 0 1px 2px rgba(17, 19, 48, 0.06);
+  --er-shadow-2: 0 10px 26px rgba(17, 19, 48, 0.12);
+  --er-shadow-3: 0 18px 48px rgba(17, 19, 48, 0.18);
   --landing-grid-primary: transparent;
   --landing-grid-secondary: transparent;
   --landing-grid-line: transparent;
@@ -363,4 +441,62 @@
   --landing-card-hover-shadow: var(--er-shadow-2);
   --surface-hover-accent: var(--er-hover);
   --ui-radius: var(--er-radius-md);
+}
+
+/* ── The indigo chrome ──────────────────────────────────────────────────────
+   The explorer and the landing sidebar are indigo in both themes. Instead of
+   restyling every rule inside them, this scope re-points the workbench tokens
+   to a dark palette on indigo, so the rules that already read `--er-*` paint
+   the same structure in the brand colours. Fluent components keep the tokens
+   their provider resolved; the few inside these scopes are plain buttons. */
+.wb-indigo {
+  --er-bg: var(--er-side-bg);
+  --er-bg-soft: var(--er-side-bg);
+  --er-surface: var(--er-side-bg);
+  --er-surface-2: var(--er-side-hover);
+  --er-surface-3: var(--er-side-active);
+  --er-surface-raised: var(--er-side-hover);
+  --er-surface-raised-2: var(--er-side-active);
+  --er-surface-sunken: var(--er-side-rail);
+  --er-selected: var(--er-side-active);
+  --er-border: var(--er-side-line);
+  --er-border-strong: #3a3e78;
+  --er-text: #e4e5f6;
+  --er-text-muted: var(--er-side-ink);
+  --er-text-subtle: var(--er-side-muted);
+  --er-accent: #b3b7ff;
+  --er-accent-hover: #c8cbff;
+  --er-accent-active: #a3a8ff;
+  --er-accent-soft: var(--er-side-active);
+  --er-accent-border: rgba(226, 194, 125, 0.5);
+  --er-accent-contrast: var(--er-on-gold);
+  --er-chrome: var(--er-side-bg);
+  --er-hover: var(--er-side-hover);
+  --er-input-bg: var(--er-side-rail);
+  --er-input-border: #30346a;
+  --er-accent-fill: var(--er-gold);
+  --er-accent-fill-hover: #ecd29a;
+  --er-on-accent-fill: var(--er-on-gold);
+  --er-badge-bg: var(--er-side-active);
+  --er-badge-fg: #e4e5f6;
+  --er-model: #5fd3c1;
+  --er-model-soft: #173a45;
+  --er-mapping: #f09ad9;
+  --er-mapping-soft: #3a1f4a;
+  --er-format: #f2b06b;
+  --er-format-soft: #3a2a33;
+  --er-success: #7fd8a4;
+  --er-warning: #ecc77a;
+  --er-danger: #ff9aaa;
+  --er-info: #9cc7f5;
+  --syn-identifier: #9cdcfe;
+  --syn-path: #b3b7ff;
+  --syn-operator: #d4d4d4;
+  --syn-literal: #e8b48f;
+  --syn-resolved: #5fd3c1;
+  --syn-calc: #9fd08a;
+  --scrollbar-thumb: #3a3e78;
+  --scrollbar-thumb-hover: var(--er-side-muted);
+  color: var(--er-text);
+  color-scheme: dark;
 }

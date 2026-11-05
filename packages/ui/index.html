@@ -11,9 +11,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <!-- Both entries, so the browser chrome follows the OS the same way the shell
-       below does. Values are the workbench's `--er-chrome`. -->
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f8f8f8" />
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#181818" />
+       below does. Values are the indigo top bar's `--er-side-bg`. -->
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#161941" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#090a18" />
   <!-- Application shell — no indexable content. The marketing site at / is what search engines should see. -->
   <meta name="robots" content="noindex, follow" />
   <meta name="apple-mobile-web-app-title" content="ER Visualizer" />
@@ -38,8 +38,8 @@
        Electron's file:// load, /app/ for the web deployment). -->
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <!-- No web fonts: the workbench uses the platform's UI and code faces, as
-       VS Code does (see src/styles/workbench.css). -->
+  <!-- Geist and Geist Mono are bundled by src/main.tsx (served from 'self');
+       until they arrive the shell paints in the platform's UI face. -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -61,7 +61,7 @@
       height: 100vh;
       height: 100dvh;
       overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, sans-serif;
+      font-family: 'Geist Variable', 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
       /* Suppress the 350 ms double-tap-to-zoom delay so taps register at once
          and the app's own double-click handlers stay reliable on touch.
          Pinch-zoom is unaffected. */
@@ -80,12 +80,12 @@
     }
 
     @media (prefers-color-scheme: dark) {
-      html, body { background: #1f1f1f; }
+      html, body { background: #161930; }
     }
 
     /* An explicit choice already on <html> wins over the OS, as in the tokens. */
     html[data-theme='light'], html[data-theme='light'] body { background: #ffffff; }
-    html[data-theme='dark'], html[data-theme='dark'] body { background: #1f1f1f; }
+    html[data-theme='dark'], html[data-theme='dark'] body { background: #161930; }
   </style>
 </head>
 <body>
