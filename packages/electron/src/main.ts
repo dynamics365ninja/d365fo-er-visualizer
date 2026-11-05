@@ -79,7 +79,7 @@ function createWindow() {
   // is no flash of the wrong theme before the HTML paints. The renderer honours
   // an explicit stored choice, which this cannot read — the OS scheme is the
   // right guess, and any mismatch lasts only until the page loads.
-  const initialBg = nativeTheme.shouldUseDarkColors ? '#0f1011' : '#f7f7f8';
+  const initialBg = nativeTheme.shouldUseDarkColors ? '#161930' : '#ffffff';
 
   const win = new BrowserWindow({
     width: 1600,

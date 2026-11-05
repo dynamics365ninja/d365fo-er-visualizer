@@ -1740,6 +1740,221 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
+/* The designer groups and the trace bar under them. */
+.designer-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.designer-frame > .designer-tabs {
+  flex: 1;
+  height: auto;
+}
+
+/* ── Trace bar: the selected format element's way to its data ─────────────
+   One line of steps in the colours of their kinds — format, model, mapping —
+   ending on the table field in the indigo of the chrome, the place the value
+   actually comes from. Long paths ellipsise; the row scrolls when it has to. */
+.trace-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 7px 12px 7px 16px;
+  border-top: 1px solid var(--er-border);
+  background: var(--er-surface-2);
+  font-size: var(--er-text-sm);
+  container-type: inline-size;
+}
+
+.trace-bar__label {
+  flex-shrink: 0;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--er-text-subtle);
+}
+
+.trace-bar__steps {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 2px 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.trace-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 1 auto;
+  --trace-ink: var(--er-text-muted);
+  --trace-on: var(--er-surface);
+  --trace-bg: var(--er-surface);
+  --trace-line: var(--er-border);
+  --trace-text: var(--er-text);
+}
+
+.trace-step__arrow {
+  flex-shrink: 0;
+  color: var(--er-text-subtle);
+}
+
+/* The kind above the value, as on a lineage card: narrow enough that four
+   steps fit beside the designer. */
+.trace-step__chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  max-width: 380px;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 3px 10px;
+  border: 1px solid var(--trace-line);
+  border-radius: var(--er-radius-md);
+  background: var(--trace-bg);
+  color: var(--trace-text);
+}
+
+.trace-step__kind {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--trace-ink);
+  font-size: var(--er-text-2xs);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.trace-step__text {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--er-text-sm);
+  line-height: 1.35;
+}
+
+/* When the line is too long, the element and the model field stay legible;
+   the mapping expression gives way first, then the table field. */
+.trace-step--format,
+.trace-step--model {
+  flex-shrink: 0;
+}
+
+.trace-step--format .trace-step__chip,
+.trace-step--model .trace-step__chip {
+  max-width: 280px;
+}
+
+.trace-step--mapping,
+.trace-step--value {
+  flex-shrink: 4;
+  min-width: 140px;
+}
+
+.trace-step--source {
+  min-width: 170px;
+}
+
+.trace-step--format {
+  --trace-ink: var(--er-format);
+  --trace-bg: var(--er-format-soft);
+  --trace-line: color-mix(in srgb, var(--er-format) 28%, transparent);
+}
+
+.trace-step--model {
+  --trace-ink: var(--er-model);
+  --trace-bg: var(--er-model-soft);
+  --trace-line: color-mix(in srgb, var(--er-model) 28%, transparent);
+}
+
+.trace-step--mapping {
+  --trace-ink: var(--er-mapping);
+  --trace-bg: var(--er-mapping-soft);
+  --trace-line: color-mix(in srgb, var(--er-mapping) 28%, transparent);
+}
+
+/* Where the value comes from: indigo with a gold label, in both themes. */
+.trace-step--source {
+  --trace-ink: var(--er-gold);
+  --trace-bg: var(--er-side-bg);
+  --trace-line: var(--er-side-bg);
+  --trace-text: var(--er-side-strong);
+}
+
+/* A trace that breaks off: unbound, unmapped, or the mapping is not loaded. */
+.trace-step--gap .trace-step__chip {
+  border-style: dashed;
+  border-color: var(--er-border-strong);
+  background: transparent;
+}
+
+.trace-step--gap {
+  --trace-ink: var(--er-warning);
+  --trace-text: var(--er-text-muted);
+}
+
+.trace-step--value {
+  --trace-ink: var(--er-text-muted);
+}
+
+.trace-bar .trace-bar__detail.dd-trigger-expr {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+  color: var(--er-text);
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: var(--er-shadow-1);
+}
+
+.trace-bar .trace-bar__detail.dd-trigger-expr:hover {
+  background: var(--er-hover);
+  border-color: var(--er-accent-border);
+  box-shadow: var(--er-shadow-1);
+}
+
+/* A narrow designer keeps the steps and drops the words around them. */
+@container (max-width: 900px) {
+  .trace-bar__label { display: none; }
+  /* Visually hidden, not removed: it stays the button's accessible name. */
+  .trace-bar .trace-bar__detail span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .trace-bar .trace-bar__detail.dd-trigger-expr { padding: 0 8px; }
+}
+
 .designer-tab-pane {
   grid-column: 1;
   display: flex;

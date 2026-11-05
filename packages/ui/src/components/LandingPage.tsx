@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   makeStyles,
   mergeClasses,
-  shorthands,
   tokens,
   Button,
   Spinner,
@@ -13,17 +12,19 @@ import {
 } from '@fluentui/react-components';
 import {
   ArrowDownloadRegular,
+  ArrowUploadRegular,
+  BookOpenRegular,
+  ChevronRightRegular,
   CloudRegular,
-  DataBarVerticalRegular,
   DismissRegular,
-  DocumentRegular,
   FolderOpenRegular,
-  LinkRegular,
+  GlobeRegular,
   OpenRegular,
+  WindowDevToolsRegular,
 } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
 import { ThemeSwitch } from './ThemeSwitch';
-import { BrandWordmark } from './BrandWordmark';
+import { BrandMark } from './BrandWordmark';
 import { setLocale, t, useLocale } from '../i18n';
 import { RecentWork } from './RecentWork';
 import { FnoConnectPanel } from './FnoConnectPanel';
@@ -39,6 +40,9 @@ import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loadi
  * (`/`, `/features`, `/docs/*`). This screen only does the three things you
  * cannot do anywhere else — open files, connect to F&O, reopen recent work —
  * and links to the site for everything else.
+ *
+ * Laid out like the workbench it leads to: the indigo sidebar with the brand
+ * and the ways in, a light top bar, and the work itself in panels.
  */
 
 // ────────────────────────── styles ──────────────────────────
@@ -47,186 +51,387 @@ const useStyles = makeStyles({
   root: {
     minHeight: '100%',
     display: 'flex',
-    flexDirection: 'column',
+    flexWrap: 'wrap',
+    alignItems: 'stretch',
     backgroundColor: 'var(--er-bg)',
     color: 'var(--er-text)',
+    fontFamily: tokens.fontFamilyBase,
+    fontSize: '14px',
+    lineHeight: 1.5,
   },
-  // Plain ground, like VS Code's Welcome page: the content carries the page.
-  backdrop: {
-    position: 'relative',
-    isolation: 'isolate',
-  },
-  hero: {
-    display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 420px)',
-    alignItems: 'center',
-    columnGap: '48px',
-    '@media (max-width: 960px)': {
-      gridTemplateColumns: 'minmax(0, 1fr)',
-    },
-  },
-  heroText: {
+  // ── indigo sidebar ──
+  // Sticky beside the page on a desktop; on a phone it wraps above the page
+  // (the flex-wrap above) and scrolls away with it.
+  side: {
+    flex: '1 1 248px',
+    boxSizing: 'border-box',
     display: 'flex',
     flexDirection: 'column',
-    gap: '20px',
-    minWidth: 0,
+    position: 'sticky',
+    top: 0,
+    alignSelf: 'flex-start',
+    height: '100vh',
+    overflowY: 'auto',
+    padding: '24px 14px 16px',
+    backgroundColor: 'var(--er-side-bg)',
+    color: 'var(--er-side-ink)',
+    scrollbarWidth: 'thin',
+    '@media (max-width: 820px)': {
+      position: 'static',
+      height: 'auto',
+      alignSelf: 'stretch',
+    },
   },
-  topbar: {
+  brand: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '0 10px',
+    color: 'var(--er-side-strong)',
+    textDecorationLine: 'none',
+    borderRadius: 'var(--er-radius-lg)',
+    ':focus-visible': {
+      outline: '2px solid var(--er-gold)',
+      outlineOffset: '2px',
+    },
+  },
+  brandTile: {
+    display: 'grid',
+    placeItems: 'center',
+    width: '34px',
+    height: '34px',
+    flexShrink: 0,
+    borderRadius: 'var(--er-radius-lg)',
+    backgroundColor: 'var(--er-side-active)',
+  },
+  brandMark: {
+    width: '20px',
+    height: '20px',
+  },
+  brandName: {
+    fontSize: '17px',
+    fontWeight: 600,
+    letterSpacing: '-0.2px',
+    whiteSpace: 'nowrap',
+  },
+  brandSub: {
+    margin: '8px 10px 0',
+    color: 'var(--er-side-muted)',
+    fontSize: '11px',
+    fontWeight: 600,
+    letterSpacing: '1.2px',
+    textTransform: 'uppercase',
+    whiteSpace: 'nowrap',
+  },
+  navLabel: {
+    margin: '26px 10px 6px',
+    color: 'var(--er-side-muted)',
+    fontSize: '11px',
+    fontWeight: 600,
+    letterSpacing: '1px',
+    textTransform: 'uppercase',
+  },
+  nav: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  navItem: {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    padding: '0 20px',
-    height: '60px',
+    width: '100%',
+    minHeight: '40px',
+    boxSizing: 'border-box',
+    padding: '0 10px',
+    border: 'none',
+    borderRadius: 'var(--er-radius-lg)',
+    backgroundColor: 'transparent',
+    color: 'var(--er-side-ink)',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    fontWeight: 450,
+    textAlign: 'left',
+    textDecorationLine: 'none',
+    cursor: 'pointer',
+    transitionProperty: 'background-color, color',
+    transitionDuration: 'var(--er-duration-fast)',
+    ':hover': {
+      backgroundColor: 'var(--er-side-hover)',
+      color: 'var(--er-side-strong)',
+    },
+    ':focus-visible': {
+      outline: '2px solid var(--er-gold)',
+      outlineOffset: '1px',
+    },
+  },
+  navItemActive: {
+    backgroundColor: 'var(--er-side-active)',
+    color: 'var(--er-side-strong)',
+    fontWeight: 550,
+    ':hover': {
+      backgroundColor: 'var(--er-side-active)',
+    },
+  },
+  navIcon: {
     flexShrink: 0,
+    fontSize: '18px',
+  },
+  navIconActive: {
+    color: 'var(--er-gold)',
+  },
+  navCount: {
+    marginLeft: 'auto',
+    minWidth: '22px',
+    padding: '1px 6px',
+    borderRadius: 'var(--er-radius-pill)',
+    backgroundColor: 'var(--er-gold)',
+    color: 'var(--er-on-gold)',
+    fontSize: '11px',
+    fontWeight: 650,
+    lineHeight: 1.6,
+    textAlign: 'center',
+  },
+  sideBottom: {
+    marginTop: 'auto',
+    paddingTop: '24px',
+    // Stacked above the page on a phone; the page's own footer says the same.
+    '@media (max-width: 820px)': {
+      display: 'none',
+    },
+  },
+  sideFoot: {
+    margin: 0,
+    padding: '14px 10px 0',
+    borderTop: '1px solid var(--er-side-line)',
+    color: 'var(--er-side-muted)',
+    fontSize: '11px',
+    lineHeight: 1.5,
+  },
+  // ── page ──
+  page: {
+    flex: '999 1 560px',
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  topbar: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px 20px',
+    minHeight: '64px',
+    boxSizing: 'border-box',
+    padding: '12px 32px',
     borderBottom: '1px solid var(--er-border)',
     backgroundColor: 'var(--er-surface)',
+    '@media (max-width: 600px)': {
+      padding: '10px 16px',
+    },
   },
-  brand: {
+  crumbs: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    color: 'var(--er-text-muted)',
+    fontSize: '12px',
+    whiteSpace: 'nowrap',
+  },
+  crumbSep: {
+    color: 'var(--er-text-subtle)',
+    fontSize: '14px',
+  },
+  crumbCurrent: {
+    color: 'var(--er-text)',
+    fontSize: '14px',
+    fontWeight: 550,
+  },
+  topbarActions: {
     display: 'inline-flex',
     alignItems: 'center',
-    textDecorationLine: 'none',
+    gap: '10px',
+  },
+  // A sunken track with the pressed segment lifted, as in the License Hub.
+  segmented: {
+    display: 'inline-flex',
+    gap: '2px',
+    height: '36px',
+    boxSizing: 'border-box',
+    padding: '3px',
+    borderRadius: 'var(--er-radius-lg)',
+    backgroundColor: 'var(--er-surface-3)',
+  },
+  segment: {
+    minWidth: '36px',
+    padding: '0 8px',
+    border: 'none',
     borderRadius: 'var(--er-radius-md)',
-    // The wordmark is gradient-clipped text, so a colour change would not show.
+    backgroundColor: 'transparent',
+    color: 'var(--er-text-muted)',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    fontWeight: 600,
+    letterSpacing: '0.3px',
+    cursor: 'pointer',
     ':hover': {
-      opacity: 0.8,
+      color: 'var(--er-text)',
+    },
+  },
+  segmentOn: {
+    backgroundColor: 'var(--er-surface)',
+    color: 'var(--er-text)',
+    boxShadow: '0 1px 2px var(--er-shadow-color)',
+  },
+  main: {
+    flex: 1,
+    width: '100%',
+    maxWidth: '1240px',
+    boxSizing: 'border-box',
+    margin: '0 auto',
+    padding: '28px 32px 24px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '24px',
+    transitionProperty: 'max-width',
+    transitionDuration: 'var(--er-duration)',
+    '@media (max-width: 600px)': {
+      padding: '20px 16px 24px',
+    },
+  },
+  // Connected to an environment, the source panel stops being a launcher and
+  // becomes a two-pane browser over hundreds of configurations — so it gets
+  // the window.
+  mainWide: {
+    maxWidth: '1680px',
+  },
+  heading: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: '16px 24px',
+  },
+  headingText: {
+    minWidth: 0,
+    maxWidth: '760px',
+  },
+  eyebrow: {
+    margin: '0 0 6px',
+    color: 'var(--er-accent)',
+    fontSize: '11px',
+    fontWeight: 700,
+    letterSpacing: '1.2px',
+    textTransform: 'uppercase',
+  },
+  title: {
+    margin: '0 0 8px',
+    fontSize: '28px',
+    lineHeight: 1.15,
+    fontWeight: 600,
+    letterSpacing: '-0.6px',
+  },
+  lead: {
+    margin: 0,
+    color: 'var(--er-text-muted)',
+    fontSize: '14px',
+    lineHeight: 1.6,
+  },
+  actions: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px',
+  },
+  // Neutral and primary buttons of the License Hub: 38px, 9px corners.
+  btn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    minHeight: '38px',
+    padding: '0 14px',
+    border: '1px solid var(--er-border-strong)',
+    borderRadius: 'var(--er-radius-lg)',
+    backgroundColor: 'var(--er-surface)',
+    color: 'var(--er-text)',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
+    cursor: 'pointer',
+    boxShadow: 'var(--er-shadow-1)',
+    transitionProperty: 'background-color, border-color, color',
+    transitionDuration: 'var(--er-duration-fast)',
+    ':hover': {
+      backgroundColor: 'var(--er-hover)',
+      color: 'var(--er-text)',
+    },
+    ':active': {
+      transform: 'translateY(1px)',
     },
     ':focus-visible': {
       outline: '2px solid var(--er-accent)',
       outlineOffset: '2px',
     },
   },
-  topbarActions: {
-    marginLeft: 'auto',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  docsLink: {
-    color: 'var(--er-text-muted)',
-    fontSize: tokens.fontSizeBase200,
-    fontWeight: 500,
-    textDecorationLine: 'none',
-    padding: '6px 8px',
-    borderRadius: 'var(--er-radius-md)',
+  btnPrimary: {
+    border: '1px solid var(--er-accent-fill)',
+    backgroundColor: 'var(--er-accent-fill)',
+    color: 'var(--er-on-accent-fill)',
     ':hover': {
-      color: 'var(--er-accent)',
-      backgroundColor: 'var(--er-surface-2)',
+      border: '1px solid var(--er-accent-fill-hover)',
+      backgroundColor: 'var(--er-accent-fill-hover)',
+      color: 'var(--er-on-accent-fill)',
     },
   },
-  langSwitch: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '2px',
-    padding: '2px',
-    borderRadius: 'var(--er-radius-md)',
-    backgroundColor: 'var(--er-surface-2)',
-    ...shorthands.border('1px', 'solid', 'var(--er-border)'),
-  },
-  langButton: {
-    minWidth: '32px',
-    height: '24px',
-    fontSize: '11px',
-    fontWeight: 600,
-  },
-  main: {
-    flex: 1,
-    width: '100%',
-    maxWidth: '1080px',
-    margin: '0 auto',
-    padding: '56px 20px 72px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '28px',
-    transitionProperty: 'max-width, padding-top',
-    transitionDuration: 'var(--er-duration)',
-    '@media (max-width: 600px)': {
-      padding: '32px 16px 48px',
-    },
-  },
-  // Connected to an environment, the card stops being a launcher and becomes a
-  // two-pane browser over hundreds of configurations — so it gets the window.
-  mainWide: {
-    maxWidth: '1680px',
-    paddingTop: '28px',
-    paddingBottom: '32px',
-    gap: '20px',
-  },
-  badge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
-    alignSelf: 'flex-start',
-    padding: '5px 12px',
-    borderRadius: 'var(--er-radius-pill)',
-    backgroundColor: 'var(--er-surface)',
-    ...shorthands.border('1px', 'solid', 'var(--er-border)'),
-    color: 'var(--er-text-muted)',
-    fontSize: '12px',
-    fontWeight: 500,
-  },
-  badgeDot: {
-    width: '6px',
-    height: '6px',
-    borderRadius: '50%',
-    backgroundColor: 'var(--er-accent)',
-  },
-  // Just the name, large: the colour-coded "ER" mark belongs to the favicon
-  // and the toolbar, not the page body.
-  title: {
-    margin: 0,
-    fontSize: 'clamp(26px, 3vw, 34px)',
-    lineHeight: 1.1,
-    fontWeight: 600,
-    letterSpacing: '-0.01em',
-    color: 'var(--er-text)',
-  },
-  lead: {
-    margin: 0,
-    maxWidth: '62ch',
-    color: 'var(--er-text-muted)',
-    fontSize: '14px',
-    lineHeight: 1.6,
-  },
-  // ── workspace card ──
+  // ── source panel ──
   card: {
+    border: '1px solid var(--er-border)',
     borderRadius: 'var(--er-radius-xl)',
-    ...shorthands.border('1px', 'solid', 'var(--er-border)'),
     backgroundColor: 'var(--er-surface)',
+    boxShadow: 'var(--er-shadow-1)',
     overflow: 'hidden',
   },
-  cardTabs: {
+  cardHead: {
     display: 'flex',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: '4px',
-    padding: '8px',
-    borderBottom: '1px solid var(--er-border)',
-    backgroundColor: 'var(--er-surface-2)',
+    justifyContent: 'space-between',
+    gap: '12px',
+    minHeight: '64px',
+    boxSizing: 'border-box',
+    padding: '12px 20px',
+  },
+  cardTitle: {
+    margin: 0,
+    fontSize: '16px',
+    fontWeight: 600,
+    letterSpacing: '-0.2px',
   },
   cardTab: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '7px',
-    height: '32px',
-    padding: '0 14px',
+    height: '30px',
+    padding: '0 12px',
+    border: 'none',
     borderRadius: 'var(--er-radius-md)',
-    ...shorthands.border('1px', 'solid', 'transparent'),
     backgroundColor: 'transparent',
     color: 'var(--er-text-muted)',
-    fontFamily: tokens.fontFamilyBase,
+    fontFamily: 'inherit',
     fontSize: '13px',
     fontWeight: 500,
     cursor: 'pointer',
-    ':hover': { color: 'var(--er-text)', backgroundColor: 'var(--er-surface)' },
+    ':hover': { color: 'var(--er-text)' },
   },
   cardTabActive: {
     backgroundColor: 'var(--er-surface)',
-    ...shorthands.borderColor('var(--er-border)'),
     color: 'var(--er-text)',
-    fontWeight: 600,
-    boxShadow: 'var(--er-shadow-1)',
+    fontWeight: 550,
+    boxShadow: '0 1px 2px var(--er-shadow-color)',
   },
   cardBody: {
-    padding: '20px',
+    padding: '0 20px 20px',
   },
   // ── drop zone ──
   dropzone: {
@@ -235,37 +440,41 @@ const useStyles = makeStyles({
     alignItems: 'center',
     justifyContent: 'center',
     gap: '10px',
-    minHeight: '208px',
-    padding: '28px',
-    borderRadius: 'var(--er-radius-lg)',
-    ...shorthands.border('1px', 'dashed', 'var(--er-border-strong)'),
-    backgroundColor: 'var(--er-bg-soft)',
+    minHeight: '220px',
+    boxSizing: 'border-box',
+    padding: '36px 24px',
+    borderRadius: 'var(--er-radius-xl)',
+    border: '1.5px dashed var(--er-border-strong)',
+    backgroundColor: 'var(--er-surface-2)',
     cursor: 'pointer',
     textAlign: 'center',
-    transitionProperty: 'border-color, background-color',
-    transitionDuration: 'var(--er-duration)',
     ':hover': {
-      ...shorthands.borderColor('var(--er-accent)'),
+      border: '1.5px dashed var(--er-accent)',
       backgroundColor: 'var(--er-accent-soft)',
     },
     ':focus-visible': {
-      ...shorthands.outline('2px', 'solid', 'var(--er-accent)'),
+      outline: '2px solid var(--er-accent)',
       outlineOffset: '2px',
     },
   },
   dropzoneDragging: {
-    ...shorthands.border('1px', 'solid', 'var(--er-accent)'),
+    border: '1.5px solid var(--er-accent)',
     backgroundColor: 'var(--er-accent-soft)',
   },
   dropIcon: {
+    display: 'grid',
+    placeItems: 'center',
+    width: '52px',
+    height: '52px',
+    borderRadius: 'var(--er-radius-xl)',
+    backgroundColor: 'var(--er-accent-soft)',
     color: 'var(--er-accent)',
-    display: 'inline-flex',
   },
   dropTitle: {
     margin: 0,
-    fontFamily: 'var(--er-font-display)',
-    fontSize: '17px',
-    fontWeight: 700,
+    fontSize: '16px',
+    fontWeight: 600,
+    letterSpacing: '-0.2px',
   },
   dropHint: {
     margin: 0,
@@ -279,69 +488,38 @@ const useStyles = makeStyles({
     gap: '6px',
     marginTop: '6px',
   },
+  // A pill in the tint of its kind, led by a dot.
   kindPill: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: '5px',
-    padding: '3px 9px',
+    gap: '6px',
+    padding: '2px 10px',
     borderRadius: 'var(--er-radius-pill)',
-    ...shorthands.border('1px', 'solid', 'var(--er-border)'),
-    backgroundColor: 'var(--er-surface)',
-    fontSize: '11px',
-    fontWeight: 500,
-    color: 'var(--er-text-muted)',
-  },
-  kindModel: { color: 'var(--er-model)' },
-  kindMapping: { color: 'var(--er-mapping)' },
-  kindFormat: { color: 'var(--er-format)' },
-  footer: {
-    borderTop: '1px solid var(--er-border)',
-    padding: '18px 20px',
-    textAlign: 'center',
-    color: 'var(--er-text-subtle)',
     fontSize: '12px',
+    fontWeight: 500,
+    '::before': {
+      content: '""',
+      width: '6px',
+      height: '6px',
+      borderRadius: '50%',
+      backgroundColor: 'currentColor',
+    },
+  },
+  kindModel: { backgroundColor: 'var(--er-model-soft)', color: 'var(--er-model)' },
+  kindMapping: { backgroundColor: 'var(--er-mapping-soft)', color: 'var(--er-mapping)' },
+  kindFormat: { backgroundColor: 'var(--er-format-soft)', color: 'var(--er-format)' },
+  footer: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: '10px',
+    marginTop: '8px',
+    paddingTop: '16px',
+    borderTop: '1px solid var(--er-border)',
+    color: 'var(--er-text-muted)',
+    fontSize: '11px',
   },
 });
-
-/**
- * A decorative miniature of the workspace — the three kinds in the explorer
- * and a value path traced through them. Sample names only, no strings to
- * translate; hidden from assistive tech and from narrow screens (see
- * `.landing-preview` in the stylesheet).
- */
-function LandingPreview() {
-  return (
-    <div className="landing-preview" aria-hidden="true">
-      <div className="landing-preview__chrome">
-        <span /><span /><span />
-      </div>
-      <div className="landing-preview__body">
-        <div className="landing-preview__row landing-preview__row--model">
-          <DataBarVerticalRegular fontSize={14} />
-          <b>TaxDeclarationModel</b>
-          <i>v136</i>
-        </div>
-        <div className="landing-preview__row landing-preview__row--mapping">
-          <LinkRegular fontSize={14} />
-          <b>TaxDeclarationMapping</b>
-          <i>v136.306</i>
-        </div>
-        <div className="landing-preview__row landing-preview__row--format">
-          <DocumentRegular fontSize={14} />
-          <b>VATStatementFormat</b>
-          <i>v136.115</i>
-        </div>
-        <div className="landing-preview__trace">
-          <span className="landing-preview__node landing-preview__node--format">Tax_Base</span>
-          <span className="landing-preview__arrow" />
-          <span className="landing-preview__node landing-preview__node--mapping">$TaxAmount</span>
-          <span className="landing-preview__arrow" />
-          <span className="landing-preview__node landing-preview__node--model">TaxTrans</span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 interface LandingPageProps {
   onFilesLoaded: () => void;
@@ -443,181 +621,237 @@ export function LandingPage({ onFilesLoaded }: LandingPageProps) {
 
   // Browsing a live environment needs the width; the launcher does not.
   const wideLayout = sourceTab === 'remote' && fnoConnected;
+  // Hidden during an F&O ingest so nobody jumps into a half-loaded workspace.
+  const canReturn = configs.length > 0 && !fnoIngestStatus;
 
   return (
     <div
-      className={mergeClasses(styles.root, styles.backdrop)}
+      className={styles.root}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
-      <header className={styles.topbar}>
+      {/* Outside the drop zone, so "Open files" in the heading works from
+          either tab. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".xml"
+        style={{ display: 'none' }}
+        onChange={e => { processFiles(e.target.files); e.target.value = ''; }}
+      />
+
+      <aside className={mergeClasses('wb-indigo', styles.side)}>
         <a
           className={styles.brand}
           href={marketingHomeHref()}
           title={t.landingHomeLinkLabel}
           aria-label={t.landingHomeLinkLabel}
         >
-          <BrandWordmark short />
+          <span className={styles.brandTile}><BrandMark className={styles.brandMark} /></span>
+          <span className={styles.brandName}>{t.appName}</span>
         </a>
-        <div className={styles.topbarActions}>
-          <a className={styles.docsLink} href={docsHref()} target="_blank" rel="noreferrer noopener">
+        <p className={styles.brandSub}>Electronic Reporting</p>
+
+        <p className={styles.navLabel}>{t.landingNavStart}</p>
+        <nav className={styles.nav} aria-label={t.landingSourceLabel}>
+          <button
+            type="button"
+            className={mergeClasses(styles.navItem, sourceTab === 'local' && styles.navItemActive)}
+            aria-current={sourceTab === 'local' ? 'page' : undefined}
+            onClick={() => setSourceTab('local')}
+          >
+            <FolderOpenRegular className={mergeClasses(styles.navIcon, sourceTab === 'local' && styles.navIconActive)} />
+            {t.fnoTabLocal}
+          </button>
+          <button
+            type="button"
+            className={mergeClasses(styles.navItem, sourceTab === 'remote' && styles.navItemActive)}
+            aria-current={sourceTab === 'remote' ? 'page' : undefined}
+            onClick={() => setSourceTab('remote')}
+          >
+            <CloudRegular className={mergeClasses(styles.navIcon, sourceTab === 'remote' && styles.navIconActive)} />
+            {t.fnoTabRemote}
+          </button>
+          {canReturn && (
+            <button type="button" className={styles.navItem} onClick={onFilesLoaded}>
+              <WindowDevToolsRegular className={styles.navIcon} />
+              {t.landingNavWorkspace}
+              <span className={styles.navCount}>{configs.length}</span>
+            </button>
+          )}
+        </nav>
+
+        <p className={styles.navLabel}>{t.landingNavHelp}</p>
+        <nav className={styles.nav} aria-label={t.landingNavHelp}>
+          <a className={styles.navItem} href={docsHref()} target="_blank" rel="noreferrer noopener">
+            <BookOpenRegular className={styles.navIcon} />
             {t.landingDocsLink}
           </a>
-          <div className={styles.langSwitch} aria-label={t.language} role="group">
-            <Button
-              appearance={isCs ? 'primary' : 'subtle'}
-              size="small"
-              className={styles.langButton}
-              onClick={() => setLocale('cs')}
-              aria-pressed={isCs}
-              title={t.languageCzech}
-            >
-              CZ
-            </Button>
-            <Button
-              appearance={isCs ? 'subtle' : 'primary'}
-              size="small"
-              className={styles.langButton}
-              onClick={() => setLocale('en')}
-              aria-pressed={!isCs}
-              title={t.languageEnglish}
-            >
-              EN
-            </Button>
-          </div>
-          <ThemeSwitch />
+          <a className={styles.navItem} href={marketingHomeHref()}>
+            <GlobeRegular className={styles.navIcon} />
+            {t.landingNavProject}
+          </a>
+        </nav>
+
+        <div className={styles.sideBottom}>
+          <p className={styles.sideFoot}>{t.landingFooter}</p>
         </div>
-      </header>
+      </aside>
 
-      <main className={mergeClasses(styles.main, wideLayout && styles.mainWide)}>
-        <div className={mergeClasses(styles.hero, 'landing-hero')}>
-          <div className={styles.heroText}>
-            <span className={styles.badge}>
-              <span className={styles.badgeDot} aria-hidden="true" />
-              {t.landingBadge}
-            </span>
-            <h1 className={styles.title}>D365FO {t.appName}</h1>
-            <p className={styles.lead}>{t.landingSub}</p>
+      <div className={styles.page}>
+        <header className={styles.topbar}>
+          <div className={styles.crumbs}>
+            <span>{t.appName}</span>
+            <ChevronRightRegular className={styles.crumbSep} aria-hidden />
+            <strong className={styles.crumbCurrent}>{t.home}</strong>
           </div>
-          {!wideLayout && <LandingPreview />}
-        </div>
-
-        <section className={styles.card}>
-          <div className={styles.cardTabs} role="tablist" aria-label={t.landingSourceLabel}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={sourceTab === 'local'}
-              className={mergeClasses(styles.cardTab, sourceTab === 'local' && styles.cardTabActive)}
-              onClick={() => setSourceTab('local')}
-            >
-              <FolderOpenRegular fontSize={16} />
-              {t.fnoTabLocal}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={sourceTab === 'remote'}
-              className={mergeClasses(styles.cardTab, sourceTab === 'remote' && styles.cardTabActive)}
-              onClick={() => setSourceTab('remote')}
-            >
-              <CloudRegular fontSize={16} />
-              {t.fnoTabRemote}
-            </button>
-          </div>
-
-          <div className={styles.cardBody}>
-            {sourceTab === 'local' ? (
-              <div
-                className={mergeClasses(styles.dropzone, isDragging && styles.dropzoneDragging)}
-                onClick={handleOpenFiles}
-                onKeyDown={e => e.key === 'Enter' && handleOpenFiles()}
-                role="button"
-                tabIndex={0}
-                aria-label={t.landingDropAriaLabel}
+          <div className={styles.topbarActions}>
+            <div className={styles.segmented} aria-label={t.language} role="group">
+              <button
+                type="button"
+                className={mergeClasses(styles.segment, isCs && styles.segmentOn)}
+                onClick={() => setLocale('cs')}
+                aria-pressed={isCs}
+                title={t.languageCzech}
               >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept=".xml"
-                  style={{ display: 'none' }}
-                  // The input sits inside the clickable dropzone: without this the
-                  // programmatic .click() bubbles back into handleOpenFiles forever.
-                  onClick={e => e.stopPropagation()}
-                  onChange={e => { processFiles(e.target.files); e.target.value = ''; }}
-                />
-                {loading ? (
-                  <Spinner size="medium" label={t.landingLoading} labelPosition="below" />
-                ) : (
-                  <>
-                    <span className={styles.dropIcon} aria-hidden="true">
-                      {isDragging ? <ArrowDownloadRegular fontSize={30} /> : <FolderOpenRegular fontSize={30} />}
-                    </span>
-                    <h2 className={styles.dropTitle}>
-                      {isDragging ? t.landingDropRelease : t.landingDropPrimary}
-                    </h2>
-                    <p className={styles.dropHint}>{t.landingDropSecondary}</p>
-                    <div className={styles.kinds}>
-                      <span className={styles.kindPill}>
-                        <DataBarVerticalRegular fontSize={13} className={styles.kindModel} />
-                        {t.landingPillModel}
-                      </span>
-                      <span className={styles.kindPill}>
-                        <LinkRegular fontSize={13} className={styles.kindMapping} />
-                        {t.landingPillMapping}
-                      </span>
-                      <span className={styles.kindPill}>
-                        <DocumentRegular fontSize={13} className={styles.kindFormat} />
-                        {t.landingPillFormat}
-                      </span>
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : (
-              <FnoConnectPanel onFilesLoaded={onFilesLoaded} />
-            )}
+                CZ
+              </button>
+              <button
+                type="button"
+                className={mergeClasses(styles.segment, !isCs && styles.segmentOn)}
+                onClick={() => setLocale('en')}
+                aria-pressed={!isCs}
+                title={t.languageEnglish}
+              >
+                EN
+              </button>
+            </div>
+            <ThemeSwitch />
           </div>
-        </section>
+        </header>
 
-        {errors.map((e, i) => (
-          <MessageBar key={i} intent="error" layout="multiline">
-            <MessageBarBody>
-              <MessageBarTitle>{t.landingErrors}</MessageBarTitle>
-              {e}
-            </MessageBarBody>
-            <MessageBarActions
-              containerAction={
-                <Button
-                  appearance="transparent"
-                  aria-label={t.landingDismiss}
-                  icon={<DismissRegular />}
-                  size="small"
-                  onClick={() => setErrors(prev => prev.filter((_, idx) => idx !== i))}
-                />
-              }
-            />
-          </MessageBar>
-        ))}
+        <main className={mergeClasses(styles.main, wideLayout && styles.mainWide)}>
+          <div className={styles.heading}>
+            <div className={styles.headingText}>
+              <p className={styles.eyebrow}>{t.landingBadge}</p>
+              <h1 className={styles.title}>{t.landingTitle}</h1>
+              <p className={styles.lead}>{t.landingSub}</p>
+            </div>
+            <div className={styles.actions}>
+              <button type="button" className={styles.btn} onClick={() => setSourceTab('remote')}>
+                <CloudRegular fontSize={16} aria-hidden />
+                {t.landingConnect}
+              </button>
+              <button type="button" className={mergeClasses(styles.btn, styles.btnPrimary)} onClick={handleOpenFiles}>
+                <FolderOpenRegular fontSize={16} aria-hidden />
+                {t.landingOpenFiles}
+              </button>
+            </div>
+          </div>
 
-        {/* Hidden during an F&O ingest so nobody jumps into a half-loaded workspace. */}
-        {configs.length > 0 && !fnoIngestStatus && (
-          <MessageBar intent="info">
-            <MessageBarBody>{t.landingLoaded(configs.length)}</MessageBarBody>
-            <MessageBarActions>
-              <Button appearance="primary" size="small" icon={<OpenRegular />} onClick={onFilesLoaded}>
-                {t.landingOpen}
-              </Button>
-            </MessageBarActions>
-          </MessageBar>
-        )}
+          <section className={styles.card} aria-labelledby="landing-source-title">
+            <div className={styles.cardHead}>
+              <h2 id="landing-source-title" className={styles.cardTitle}>{t.landingSourceLabel}</h2>
+              <div className={styles.segmented} role="tablist" aria-label={t.landingSourceLabel}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sourceTab === 'local'}
+                  className={mergeClasses(styles.cardTab, sourceTab === 'local' && styles.cardTabActive)}
+                  onClick={() => setSourceTab('local')}
+                >
+                  <FolderOpenRegular fontSize={15} />
+                  {t.fnoTabLocal}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sourceTab === 'remote'}
+                  className={mergeClasses(styles.cardTab, sourceTab === 'remote' && styles.cardTabActive)}
+                  onClick={() => setSourceTab('remote')}
+                >
+                  <CloudRegular fontSize={15} />
+                  {t.fnoTabRemote}
+                </button>
+              </div>
+            </div>
 
-        <RecentWork onFilesLoaded={onFilesLoaded} />
-      </main>
+            <div className={styles.cardBody}>
+              {sourceTab === 'local' ? (
+                <div
+                  className={mergeClasses('landing-dropzone', styles.dropzone, isDragging && styles.dropzoneDragging)}
+                  onClick={handleOpenFiles}
+                  onKeyDown={e => e.key === 'Enter' && handleOpenFiles()}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={t.landingDropAriaLabel}
+                >
+                  {loading ? (
+                    <Spinner size="medium" label={t.landingLoading} labelPosition="below" />
+                  ) : (
+                    <>
+                      <span className={styles.dropIcon} aria-hidden="true">
+                        {isDragging ? <ArrowDownloadRegular fontSize={26} /> : <ArrowUploadRegular fontSize={26} />}
+                      </span>
+                      <h2 className={styles.dropTitle}>
+                        {isDragging ? t.landingDropRelease : t.landingDropPrimary}
+                      </h2>
+                      <p className={styles.dropHint}>{t.landingDropSecondary}</p>
+                      <div className={styles.kinds}>
+                        <span className={mergeClasses(styles.kindPill, styles.kindModel)}>{t.landingPillModel}</span>
+                        <span className={mergeClasses(styles.kindPill, styles.kindMapping)}>{t.landingPillMapping}</span>
+                        <span className={mergeClasses(styles.kindPill, styles.kindFormat)}>{t.landingPillFormat}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <FnoConnectPanel onFilesLoaded={onFilesLoaded} />
+              )}
+            </div>
+          </section>
 
-      <footer className={styles.footer}>{t.landingFooter}</footer>
+          {errors.map((e, i) => (
+            <MessageBar key={i} intent="error" layout="multiline">
+              <MessageBarBody>
+                <MessageBarTitle>{t.landingErrors}</MessageBarTitle>
+                {e}
+              </MessageBarBody>
+              <MessageBarActions
+                containerAction={
+                  <Button
+                    appearance="transparent"
+                    aria-label={t.landingDismiss}
+                    icon={<DismissRegular />}
+                    size="small"
+                    onClick={() => setErrors(prev => prev.filter((_, idx) => idx !== i))}
+                  />
+                }
+              />
+            </MessageBar>
+          ))}
+
+          {canReturn && (
+            <MessageBar intent="info">
+              <MessageBarBody>{t.landingLoaded(configs.length)}</MessageBarBody>
+              <MessageBarActions>
+                <Button appearance="primary" size="small" icon={<OpenRegular />} onClick={onFilesLoaded}>
+                  {t.landingOpen}
+                </Button>
+              </MessageBarActions>
+            </MessageBar>
+          )}
+
+          <RecentWork onFilesLoaded={onFilesLoaded} />
+
+          <footer className={styles.footer}>
+            <span>{t.landingFooter}</span>
+            <a href={docsHref()} target="_blank" rel="noreferrer noopener">{t.landingDocsLink}</a>
+          </footer>
+        </main>
+      </div>
     </div>
   );
 }

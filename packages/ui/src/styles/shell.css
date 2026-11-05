@@ -27,20 +27,32 @@
 
 }
 
-/* ── Activity bar: the shared theme switch sits in the rail as one more cell ── */
-.activity-bar .er-theme-switch {
-  border-color: transparent;
-  width: var(--wb-activitybar-w);
-  min-width: var(--wb-activitybar-w);
-  height: var(--wb-activitybar-w);
-  border-radius: 0;
+/* ── Activity bar: the shared theme switch sits in the indigo rail as one more
+   tile, with the same size, colours and hover as its neighbours. ── */
+.app-shell .activity-bar .er-theme-switch {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--er-side-muted);
 }
 
-.activity-bar .er-theme-switch:hover {
-  border-color: transparent;
-  background: var(--er-surface-2);
-  color: var(--er-text);
-  border-radius: 0;
+.app-shell .activity-bar .er-theme-switch:hover {
+  border: 0;
+  background: var(--er-side-hover);
+  color: var(--er-side-strong);
+}
+
+.app-shell .activity-bar .er-theme-switch:focus-visible {
+  outline: 2px solid var(--er-gold);
+  outline-offset: 1px;
+}
+
+.app-shell .activity-bar .er-theme-switch > svg {
+  width: 20px;
+  height: 20px;
 }
 
 @media (pointer: coarse) {
@@ -54,24 +66,4 @@
 
 .app-statusbar {
   box-shadow: none;
-}
-
-.app-shell .activity-bar .er-theme-switch {
-  border: 0;
-  background: transparent;
-  color: var(--er-text-muted);
-}
-
-.app-shell .activity-bar .er-theme-switch:hover {
-  width: var(--wb-activitybar-w);
-  min-width: var(--wb-activitybar-w);
-  height: var(--wb-activitybar-w);
-  border: 0;
-  background: transparent;
-  color: var(--er-text);
-}
-
-.app-shell .activity-bar .er-theme-switch > svg {
-  width: 20px;
-  height: 20px;
 }

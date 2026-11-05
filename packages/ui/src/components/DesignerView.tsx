@@ -4,15 +4,16 @@ import {
   ArrowEnterRegular,
   CursorHoverRegular,
   DataPieRegular,
-  DataBarVerticalFilled,
   LinkFilled,
-  DocumentFilled,
   CheckmarkCircleRegular,
   ArrowSyncRegular,
+  TableRegular,
 } from '@fluentui/react-icons';
+import { ConfigKindIcon, FormatKindIcon, MappingKindIcon, ModelKindIcon } from './KindIcons';
 import { useAppStore, selectMappingDefinition, lastActiveFormatIndex, getMappingDefinitions, isSplitView, type DesignerPane, type OpenTab } from '../state/store';
 import { draggedTabId, isTabDrag } from '../utils/tab-drag';
 import { TabStrip } from './TabBar';
+import { TraceBar } from './designers/TraceBar';
 import { SPLIT_MAX, SPLIT_MIN, useIsNarrow, useSplitRatio } from '../utils/split-ratio';
 
 /**
@@ -112,11 +113,10 @@ function getNodeHeaderIcon(node: any): React.ReactNode {
   const kind = node?.data?.kind ?? node?.data?.content?.kind;
   const nodeType = node?.type;
 
-  if (kind === 'DataModel') return <DataBarVerticalFilled fontSize={14} />;
-  if (kind === 'ModelMapping') return <LinkFilled fontSize={14} />;
-  if (kind === 'Format') return <DocumentFilled fontSize={14} />;
+  if (kind === 'DataModel' || kind === 'ModelMapping' || kind === 'Format') return <ConfigKindIcon kind={kind} fontSize={14} />;
 
-  if (nodeType === 'mapping' || nodeType === 'binding' || nodeType === 'formatBinding') {
+  if (nodeType === 'mapping') return <MappingKindIcon fontSize={14} />;
+  if (nodeType === 'binding' || nodeType === 'formatBinding') {
     return <LinkFilled fontSize={14} />;
   }
 
@@ -128,18 +128,19 @@ function getNodeHeaderIcon(node: any): React.ReactNode {
     return <ArrowSyncRegular fontSize={14} />;
   }
 
+  if (nodeType === 'datasource') return <TableRegular fontSize={14} />;
+
   if (
-    nodeType === 'datasource'
-    || nodeType === 'field'
+    nodeType === 'field'
     || nodeType === 'container'
     || nodeType === 'enum'
     || nodeType === 'enumValue'
     || nodeType === 'model'
   ) {
-    return <DataBarVerticalFilled fontSize={14} />;
+    return <ModelKindIcon fontSize={14} />;
   }
 
-  return <DocumentFilled fontSize={14} />;
+  return <FormatKindIcon fontSize={14} />;
 }
 
 export function DesignerView() {
@@ -229,6 +230,7 @@ export function DesignerView() {
      scroll position or an opened branch were gone on the way back. Each group
      has its own tab strip above its column, as in an IDE. */
   return (
+    <div className="designer-frame">
     <div
       ref={setGridEl}
       className={`designer-tabs${split ? ' designer-tabs--split' : ''}${split && narrow ? ' designer-tabs--narrow' : ''}`}
@@ -320,6 +322,9 @@ export function DesignerView() {
           ))}
         </div>
       )}
+    </div>
+    {/* The selected format element's way to its data, below every group. */}
+    <TraceBar />
     </div>
   );
 }

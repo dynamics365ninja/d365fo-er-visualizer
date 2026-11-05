@@ -60,7 +60,8 @@ const useStyles = makeStyles({
   tabActive: {
     backgroundColor: 'var(--er-bg-soft)',
     color: 'var(--er-text)',
-    boxShadow: 'inset 0 1px 0 var(--er-accent-fill)',
+    fontWeight: 550,
+    boxShadow: 'inset 0 2px 0 var(--er-accent-fill)',
     '&:hover': {
       color: 'var(--er-text)',
     },

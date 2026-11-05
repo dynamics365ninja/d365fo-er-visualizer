@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DataBarVerticalFilled } from '@fluentui/react-icons';
+import { ModelKindIcon } from '../KindIcons';
 import { DataModelList } from './DataModelList';
 import { DataModelGraph } from './DataModelGraph';
 import { FilterField } from '../FilterField';
@@ -94,7 +94,7 @@ export function ModelDesigner({ config, focusNode }: { config: ERConfiguration; 
       {/* Header bar */}
       <div className="fmt-header">
         <span className="fmt-header-title">
-          <DataBarVerticalFilled fontSize={15} />
+          <ModelKindIcon fontSize={15} />
           {t.dmDesignerTitle}
         </span>
         <div className="fmt-header-stats">

@@ -28,6 +28,8 @@ import { useAppStore, focusedTabId } from '../state/store';
 import { ConfigExplorer } from './ConfigExplorer';
 import { PropertyInspector } from './PropertyInspector';
 import { Toolbar } from './Toolbar';
+import { IndigoScope } from './IndigoScope';
+import { ModelKindIcon } from './KindIcons';
 
 /**
  * Split at the workspace boundary: the designer pulls React Flow, JSZip and the
@@ -96,6 +98,10 @@ const useAppStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
+  },
+  /** The indigo top bar and status bar keep their height in the column. */
+  chromeBar: {
+    flexShrink: 0,
   },
   main: {
     flex: 1,
@@ -203,9 +209,10 @@ const useAppStyles = makeStyles({
     minWidth: 0,
     flex: 1,
     fontSize: 'var(--er-text-xs)',
-    fontWeight: 400,
-    letterSpacing: '0.02em',
+    fontWeight: 600,
+    letterSpacing: '0.08em',
     textTransform: 'uppercase',
+    color: 'var(--er-text-muted)',
   },
   panelHeaderActions: {
     display: 'flex',
@@ -236,8 +243,8 @@ const useAppStyles = makeStyles({
     color: 'var(--er-text-muted)',
     fontSize: 'var(--er-text-xs)',
     fontFamily: tokens.fontFamilyBase,
-    fontWeight: 400,
-    letterSpacing: '0.02em',
+    fontWeight: 600,
+    letterSpacing: '0.08em',
     textTransform: 'uppercase',
     cursor: 'pointer',
     // A narrow panel used to wrap "Kde je použito" onto a second line.
@@ -254,7 +261,7 @@ const useAppStyles = makeStyles({
   },
   rightTabActive: {
     color: 'var(--er-text)',
-    boxShadow: 'inset 0 -1px 0 var(--er-accent-fill)',
+    boxShadow: 'inset 0 -2px 0 var(--er-accent-fill)',
     ':hover': {
       color: 'var(--er-text)',
     },
@@ -583,7 +590,11 @@ export function App() {
         onGoHome={() => { setShowLanding(true); }}
       />
       <div className={styles.workarea}>
-          <Toolbar />
+          {/* The top bar and the status bar are indigo, like the rail and the
+              explorer: the light designer sits in an indigo frame. */}
+          <IndigoScope className={styles.chromeBar}>
+            <Toolbar />
+          </IndigoScope>
           <div className={styles.main}>
             {showRight && rightFullscreen ? (
               <div className={mergeClasses(styles.sidebar, styles.sidebarRight, styles.sidebarRightFullscreen)}>
@@ -611,11 +622,11 @@ export function App() {
                   </div>
                 </div>
                 {showLeft && (
-                  <div className={mergeClasses(styles.sidebar, styles.narrowPane)}>
+                  <IndigoScope className={mergeClasses(styles.sidebar, styles.narrowPane)}>
                     <ErrorBoundary label={t.explorer}>
                       <ConfigExplorer />
                     </ErrorBoundary>
-                  </div>
+                  </IndigoScope>
                 )}
                 {showRight && (
                   <div className={mergeClasses(styles.sidebar, styles.sidebarRight, styles.narrowPane)}>
@@ -642,11 +653,12 @@ export function App() {
                 {showLeft && (
                   <>
                     <Panel id="explorer" order={1} defaultSize={leftPaneSize} minSize={isCompact ? 28 : 15} maxSize={isCompact ? 60 : 40}>
-                      <div className={styles.sidebar}>
+                      {/* The explorer is indigo in both themes, like the rail beside it. */}
+                      <IndigoScope className={styles.sidebar}>
                         <ErrorBoundary label={t.explorer}>
                           <ConfigExplorer />
                         </ErrorBoundary>
-                      </div>
+                      </IndigoScope>
                     </Panel>
                     <PanelResizeHandle className={styles.resizeHandle} />
                   </>
@@ -685,10 +697,12 @@ export function App() {
               </PanelGroup>
             )}
           </div>
-          <StatusBar
-            warningsOpen={statusWarningsOpen}
-            setWarningsOpen={setStatusWarningsOpen}
-          />
+          <IndigoScope className={styles.chromeBar}>
+            <StatusBar
+              warningsOpen={statusWarningsOpen}
+              setWarningsOpen={setStatusWarningsOpen}
+            />
+          </IndigoScope>
       </div>
       <ToastHost />
       <FnoIngestOverlay />
@@ -874,7 +888,7 @@ function StatusBar({ warningsOpen, setWarningsOpen }: {
           className={styles.chip}
           title={t.statusDerivedFromModelTitle(activeRelationship.kind, activeRelationship.parentName)}
         >
-          <LinkRegular fontSize={12} />
+          <ModelKindIcon fontSize={13} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
             {t.statusDerivedFromModel}{activeRelationship.parentName}
           </span>
