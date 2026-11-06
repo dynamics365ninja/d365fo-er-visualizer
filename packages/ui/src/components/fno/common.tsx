@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { Badge } from '@fluentui/react-components';
+import { Badge, mergeClasses } from '@fluentui/react-components';
 import type { ErComponentType } from '@er-visualizer/fno-client';
 import { t } from '../../i18n';
 import { useFnoPanelStyles } from './styles';
@@ -17,15 +17,17 @@ export function fnoComponentTypeLabel(type: string): string {
 }
 
 // ── Helper: type badge ──────────────────────────────────────────────────
+// A pill in the kind's own tint (model teal, mapping plum, format amber), as
+// the workspace marks the kinds everywhere else.
 export const TypeBadge: React.FC<{ type: ErComponentType }> = ({ type }) => {
   const styles = useFnoPanelStyles();
-  const color =
-    type === 'ModelMapping' ? 'success' :
-    type === 'Format' ? 'informative' :
-    type === 'DataModel' ? 'important' : 'subtle';
+  const kindClass =
+    type === 'ModelMapping' ? styles.typeBadgeMapping :
+    type === 'Format' ? styles.typeBadgeFormat :
+    type === 'DataModel' ? styles.typeBadgeModel : undefined;
   const label = fnoComponentTypeLabel(type);
   return (
-    <Badge appearance="tint" color={color} size="small" className={styles.typeBadge}>
+    <Badge appearance="tint" size="small" className={mergeClasses(styles.typeBadge, kindClass)}>
       {label}
     </Badge>
   );

@@ -10,15 +10,11 @@ import {
   SearchRegular,
   LinkRegular,
   AppsListDetailRegular,
-  EyeRegular,
-  CodeRegular,
 } from '@fluentui/react-icons';
 import type { FluentIcon } from '@fluentui/react-icons';
-import { useAppStore } from '../state/store';
 import { useCoarsePointer } from '../utils/responsive';
-import { ThemeSwitch } from './ThemeSwitch';
 import { BrandMark } from './BrandWordmark';
-import { setLocale, t, useLocale } from '../i18n';
+import { t, useLocale } from '../i18n';
 
 interface ActivityBarProps {
   showLeft: boolean;
@@ -35,15 +31,18 @@ interface ActivityBarProps {
 }
 
 const useStyles = makeStyles({
-  // The deep indigo rail carries the brand in both themes (`wb-indigo` re-points
-  // the tokens inside it, so the brand mark gets the bright kind hues).
+  // The indigo rail carries the brand in both themes (`wb-indigo` re-points
+  // the tokens inside it, so the brand mark gets the bright kind hues). A shade
+  // darker than the explorer beside it, the full height of the window.
   root: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     gap: '4px',
     width: 'var(--wb-activitybar-w)',
-    padding: '8px 0',
+    height: '100%',
+    boxSizing: 'border-box',
+    padding: '10px 0',
     backgroundColor: 'var(--er-side-rail)',
     flexShrink: 0,
   },
@@ -53,9 +52,6 @@ const useStyles = makeStyles({
     flexShrink: 0,
     backgroundColor: 'var(--er-side-line)',
     margin: '6px 0',
-  },
-  spacer: {
-    flex: 1,
   },
   btnWrap: {
     position: 'relative',
@@ -111,13 +107,6 @@ const useStyles = makeStyles({
     width: '22px',
     height: '22px',
   },
-  /** Text in place of an icon (the language code), sized to the 18px icons. */
-  glyph: {
-    fontSize: '11px',
-    fontWeight: 700,
-    letterSpacing: '0.04em',
-    lineHeight: 1,
-  },
   badge: {
     position: 'absolute',
     top: 0,
@@ -127,15 +116,13 @@ const useStyles = makeStyles({
 });
 
 /**
- * The indigo icon rail. The brand mark (home), navigation and panel toggles at
- * the top, app-wide settings (language, view mode, theme) at the bottom — every
- * one in the same 40px rounded tile.
+ * The indigo icon rail: the brand mark (home), then the explorer and the
+ * panels as icons, each in the same 40px rounded tile. The language, the view
+ * mode and the theme are in the header.
  */
 export function ActivityBar(props: ActivityBarProps) {
   const styles = useStyles();
-  const currentLocale = useLocale();
-  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
-  const setShowTechnicalDetails = useAppStore(s => s.setShowTechnicalDetails);
+  useLocale(); // the labels and tooltips follow the language switch
 
   return (
     <nav className={mergeClasses('activity-bar', 'wb-indigo', styles.root)} aria-label={t.activityBarLabel}>
@@ -177,37 +164,13 @@ export function ActivityBar(props: ActivityBarProps) {
         shortcut="Ctrl+J"
       />
 
-      <div className={styles.spacer} />
-      <div className={styles.sep} />
-
-      {/* Two locales, so one button that names the current one — the same
-          convention as the theme switch below. */}
-      <ActivityButton
-        glyph={t.languageCode}
-        label={`${t.language}: ${t.languageCurrent}`}
-        // eslint-disable-next-line no-restricted-syntax -- picks the other locale, not text
-        onClick={() => setLocale(currentLocale === 'cs' ? 'en' : 'cs')}
-      />
-      <ActivityButton
-        Icon={showTechnicalDetails ? CodeRegular : EyeRegular}
-        label={showTechnicalDetails ? t.technicalView : t.consultantView}
-        onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-        active={showTechnicalDetails}
-      />
-      {/* The switch shared with the site rather than an `ActivityButton`;
-          `.activity-bar .er-theme-switch` in index.css drops its border and
-          matches the rail's touch size, so it lines up with its neighbours. */}
-      <div className={styles.btnWrap}>
-        <ThemeSwitch />
-      </div>
     </nav>
   );
 }
 
 interface ActivityButtonProps {
-  /** An icon, a short text glyph, or the brand mark. */
+  /** An icon, or the brand mark. */
   Icon?: FluentIcon;
-  glyph?: string;
   brand?: boolean;
   label: string;
   onClick: () => void;
@@ -216,7 +179,7 @@ interface ActivityButtonProps {
   badge?: number;
 }
 
-function ActivityButton({ Icon, glyph, brand, label, onClick, active, shortcut, badge }: ActivityButtonProps) {
+function ActivityButton({ Icon, brand, label, onClick, active, shortcut, badge }: ActivityButtonProps) {
   const styles = useStyles();
   const coarse = useCoarsePointer();
   // A "(Ctrl+B)" hint is noise on a tablet with no keyboard attached.
@@ -234,7 +197,7 @@ function ActivityButton({ Icon, glyph, brand, label, onClick, active, shortcut, 
         >
           {brand
             ? <BrandMark className={styles.brandMark} />
-            : Icon ? <Icon fontSize={20} /> : <span className={styles.glyph} aria-hidden>{glyph}</span>}
+            : Icon && <Icon fontSize={20} />}
         </button>
       </Tooltip>
       {typeof badge === 'number' && badge > 0 && (

@@ -14,7 +14,7 @@ import { FilterField } from '../FilterField';
 import { t, useLocale } from '../../i18n';
 import { countTerms, suggestionsFromCounts, type FilterSuggestion } from '../../utils/filter-suggestions';
 import { useTabState } from '../../utils/tab-view-state';
-import { findTreeNodeByMatch, DesignerHint, SlidingTabs, datasourceFocusKey, collectDatasourceTerms, EMPTY_STRING_SET, RevealInExplorerMenu, fieldTypeLabel, FormulaLines } from './shared';
+import { findTreeNodeByMatch, DesignerHint, SlidingTabs, TabLabel, datasourceFocusKey, collectDatasourceTerms, EMPTY_STRING_SET, RevealInExplorerMenu, fieldTypeLabel, FormulaLines } from './shared';
 import { BindingExpression, BindingGroupHead, BindingItem, BindingLine } from './FormatBindingsView';
 import { getBindingIntentHint, getBindingIntentItemLabel } from '../../utils/format-binding-sections';
 import { isBarePath } from '../../utils/er-references';
@@ -395,9 +395,9 @@ export function MappingDesigner({ mapping, configIndex, focusNode, tabId }: { ma
       <div className="fmt-toolbar">
         <SlidingTabs
           tabs={[
-            { id: 'bindings' as const, label: `${t.bindings} (${totalShown})` },
-            { id: 'datasources' as const, label: `${t.dataSources} (${countDeclaredDatasources(mm.datasources)})` },
-            { id: 'validations' as const, label: `${t.propValidations} (${filteredValidations.length})` },
+            { id: 'bindings' as const, label: <TabLabel text={t.bindings} count={totalShown} /> },
+            { id: 'datasources' as const, label: <TabLabel text={t.dataSources} count={countDeclaredDatasources(mm.datasources)} /> },
+            { id: 'validations' as const, label: <TabLabel text={t.propValidations} count={filteredValidations.length} /> },
           ]}
           activeId={view}
           onChange={setView}

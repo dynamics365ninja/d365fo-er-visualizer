@@ -395,6 +395,10 @@ export interface Translations {
   landingTitle: string;
   landingOpenFiles: string;
   landingConnect: string;
+  // Workspace header – view mode switch
+  viewModeLabel: string;
+  viewConsultantShort: string;
+  viewTechnicalShort: string;
 
   // Recent files, samples, validator, shortcuts, forward nav
   recentFiles: string;
@@ -1549,6 +1553,9 @@ const cs: Translations = {
   landingTitle: 'Otevřete konfiguraci',
   landingOpenFiles: 'Otevřít soubory',
   landingConnect: 'Připojit prostředí',
+  viewModeLabel: 'Pohled',
+  viewConsultantShort: 'Konzultant',
+  viewTechnicalShort: 'Technický',
 
   recentFiles: 'Nedávné soubory',
   recentConfigs: 'Nedávné konfigurace',
@@ -2214,7 +2221,7 @@ const cs: Translations = {
   specCsvHeaders: ['Cesta', 'Prvek', 'Typ prvku', 'Datový typ', 'Výskyt', 'Min. délka', 'Max. délka', 'Formát', 'Plnění', 'Výraz vazby', 'Podmínka', 'Pole modelu', 'Popisek pole modelu', 'Výraz v mapování', 'Zdroj v D365FO', 'Výběr záznamů'],
   specOccurrence: { always: 'vždy', optional: 'nepovinný (0..1)', repeating: 'opakovaný', conditional: 'podmíněný' },
   sourceKindLabels: { table: 'Tabulka', field: 'Pole tabulky', enum: 'Výčet', class: 'Třída', parameter: 'Parametr uživatele', datasource: 'Zdroj dat', importFormat: 'Importní formát' },
-  traceBarLabel: 'Trasa',
+  traceBarLabel: 'Trasování ke zdroji',
   traceBarAria: 'Trasa vybraného prvku ke zdroji dat',
   traceStepFormat: 'Formát',
   traceStepModel: 'Model',
@@ -2805,6 +2812,9 @@ const en: Translations = {
   landingTitle: 'Open a configuration',
   landingOpenFiles: 'Open files',
   landingConnect: 'Connect environment',
+  viewModeLabel: 'View',
+  viewConsultantShort: 'Consultant',
+  viewTechnicalShort: 'Technical',
 
   recentFiles: 'Recent files',
   recentConfigs: 'Recent configurations',
@@ -3470,7 +3480,7 @@ const en: Translations = {
   specCsvHeaders: ['Path', 'Element', 'Element type', 'Data type', 'Occurrence', 'Min length', 'Max length', 'Format', 'Filled by', 'Binding expression', 'Condition', 'Model field', 'Model field label', 'Mapping expression', 'D365FO source', 'Record selection'],
   specOccurrence: { always: 'always', optional: 'optional (0..1)', repeating: 'repeating', conditional: 'conditional' },
   sourceKindLabels: { table: 'Table', field: 'Table field', enum: 'Enum', class: 'Class', parameter: 'User parameter', datasource: 'Data source', importFormat: 'Import format' },
-  traceBarLabel: 'Trace',
+  traceBarLabel: 'Trace to source',
   traceBarAria: 'Trace of the selected element to its data source',
   traceStepFormat: 'Format',
   traceStepModel: 'Model',

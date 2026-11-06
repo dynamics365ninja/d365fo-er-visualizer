@@ -177,6 +177,16 @@ export function DesignerHint({ text }: { text: string }) {
   );
 }
 
+/** A tab's name with its count as a small pill beside it (Indigo Ledger tabs). */
+export function TabLabel({ text, count }: { text: string; count: number }) {
+  return (
+    <>
+      {text}
+      <span className="fmt-sliding-tabs__count">{count}</span>
+    </>
+  );
+}
+
 /** Segmented tab strip with a sliding highlight that animates to the active tab's own position/width. */
 export function SlidingTabs<TId extends string>({ tabs, activeId, onChange }: {
   tabs: Array<{ id: TId; label: React.ReactNode; title?: string }>;

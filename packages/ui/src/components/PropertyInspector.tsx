@@ -169,7 +169,7 @@ export function PropertyInspector({ nodeOverride }: { nodeOverride?: any } = {})
         <div className="property-empty-title">{t.noSelection}</div>
         <div className="property-empty-hint">{t.selectElementHint}</div>
         {/* Keyboard-only tips; a tablet without a hardware keyboard cannot act
-            on them, and the ActivityBar rail already offers the same targets. */}
+            on them, and the sidebar already offers the same targets. */}
         {!coarse && (
           <div className="property-empty-tips">
             <div className="property-empty-tip">

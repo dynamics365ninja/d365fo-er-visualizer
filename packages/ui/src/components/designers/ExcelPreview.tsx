@@ -128,17 +128,19 @@ const excelPaper = {
   cellBorder: '#d4d4d4',
   gridBg: '#e9e9e9',
   sectionBg: '#f7f7f7',
-  rangeBg: '#eef4f0',
+  // A pale indigo, the paper's own version of the app's selection tint.
+  rangeBg: '#eef0fb',
 };
 
 /** Theme-aware chrome around the paper: ribbon, sheet tabs, range accents. */
 const excelColors = {
-  sheetTab: '#217346',
-  sheetTabText: '#fff',
+  // The open sheet takes the app's accent fill, like every other selected tab.
+  sheetTab: 'var(--er-accent-fill)',
+  sheetTabText: 'var(--er-on-accent-fill)',
   cellBorder: 'var(--border-subtle)',
-  // The Excel green is kept for borders and accents only — green text on a
-  // green tint was unreadable in both themes.
-  rangeBorder: '#217346',
+  // Ranges are outlined on the white paper in the light theme's indigo — the
+  // dark theme's lighter accent would vanish against white.
+  rangeBorder: '#4248d1',
   cellBg: 'var(--bg-primary)',
 };
 

@@ -616,9 +616,9 @@ export const FnoConnectPanel: React.FC<FnoConnectPanelProps> = ({ onFilesLoaded 
         <div className={styles.pageHeaderIcon}>
           <LinkMultiple20Regular fontSize={22} />
         </div>
-        <div>
+        <div className={styles.pageTitle}>
           <Subtitle2>{t.fnoHeading}</Subtitle2>
-          <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block', marginTop: '4px' }}>{t.fnoSubheading}</Caption1>
+          <Caption1 style={{ color: tokens.colorNeutralForeground2, display: 'block', marginTop: '2px', fontSize: 'var(--er-text-md)' }}>{t.fnoSubheading}</Caption1>
         </div>
       </div>
 

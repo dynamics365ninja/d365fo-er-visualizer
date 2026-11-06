@@ -22,7 +22,7 @@ import { ERDirection, type ERConfiguration, type ERDataModelContent, type ERData
 import { resolveLabel, buildLabelPool, labelLanguageTag } from '../../utils/label-resolver';
 import { useCompactLayout } from '../../utils/responsive';
 import { useTabState } from '../../utils/tab-view-state';
-import { findTreeNodeByMatch, SlidingTabs, datasourceFocusKey, collectDatasourceTerms, EMPTY_STRING_SET, RenderWhileVisible } from './shared';
+import { findTreeNodeByMatch, SlidingTabs, TabLabel, datasourceFocusKey, collectDatasourceTerms, EMPTY_STRING_SET, RenderWhileVisible } from './shared';
 import { type GroupedDatasourceListHandle, GroupedDatasourceList } from './DatasourceTree';
 import { MappingDesigner } from './ModelMappingDesigner';
 import { FormatPreview } from './FormatPreview';
@@ -84,9 +84,10 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
   const [filter, setFilter] = useTabState(tabId, 'format.filter', '');
   const [view, setView] = useTabState<'structure' | 'spec' | 'bindings' | 'datasources' | 'preview' | 'embedded-mapping'>(tabId, 'format.view', 'structure');
   const [specMode, setSpecMode] = useTabState<SpecMode>(tabId, 'format.specMode', 'all');
-  // Start collapsed: a fully expanded format tree buries the top level under
-  // hundreds of rows. Expand-all is one click away in the toolbar.
-  const [structureExpandMode, setStructureExpandMode] = useState<'all' | 'none'>('none');
+  // Start expanded: the structure is what a format is, so it opens showing all
+  // of it. Collapse-all is one click away in the toolbar, and the tree is
+  // virtualized, so a large format costs only the rows on screen.
+  const [structureExpandMode, setStructureExpandMode] = useState<'all' | 'none'>('all');
   const [structureExpandVersion, setStructureExpandVersion] = useState(0);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [selectedEmbeddedMappingIdx, setSelectedEmbeddedMappingIdx] = useTabState(tabId, 'format.embeddedMapping', 0);
@@ -490,7 +491,7 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
     const tabs: Array<{ id: FormatViewId; label: React.ReactNode; title: string }> = [
       {
         id: 'structure',
-        label: `${t.structure} (${stats.totalElements})`,
+        label: <TabLabel text={t.structure} count={stats.totalElements} />,
         title: t.fmtTabStructureTitle,
       },
       {
@@ -500,12 +501,12 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
       },
       {
         id: 'bindings',
-        label: `${t.bindings} (${shownBindingCount})`,
+        label: <TabLabel text={t.bindings} count={shownBindingCount} />,
         title: t.fmtTabBindingsTitle,
       },
       {
         id: 'datasources',
-        label: `${t.dataSources} (${stats.datasources})`,
+        label: <TabLabel text={t.dataSources} count={stats.datasources} />,
         title: t.fmtTabDatasourcesTitle,
       },
       {
@@ -517,7 +518,7 @@ export function FormatDesigner({ config, configIndex, focusNode, tabId }: { conf
     if (fc.embeddedModelMappingVersions.length > 0) {
       tabs.push({
         id: 'embedded-mapping',
-        label: `${t.fmtTabEmbeddedMapping} (${fc.embeddedModelMappingVersions.length})`,
+        label: <TabLabel text={t.fmtTabEmbeddedMapping} count={fc.embeddedModelMappingVersions.length} />,
         title: t.fmtTabEmbeddedMappingTitle,
       });
     }

@@ -1,0 +1,2250 @@
+/* Indigo Ledger — designers. Loaded after the component stylesheets (see index.css).
+
+   The format, mapping and model designers as the License Hub draws its
+   panels: a card header with the title and quiet pills, page tabs that are
+   underlined, filters as segmented switches on a sunken track, rounded rows
+   that light up on hover, capsules without borders in the tint of what they
+   mark, formulas in code boxes. No coloured rails, no category washes. The
+   few rules ledger.css already sets (row radius and selection, the header's
+   padding, the selected spec row) are not repeated here. */
+
+/* ── Designer header: title in an indigo tile, counts as tinted pills ──
+   The type badge of a format is styled inline by FormatTypeBadge; only
+   !important reaches past an inline style, so its shape is set that way. */
+.app-shell .fmt-header {
+  border-bottom-color: var(--er-border);
+}
+
+.app-shell .fmt-header-title {
+  gap: 9px;
+  font-weight: 600;
+}
+
+.app-shell .fmt-header-title > svg {
+  box-sizing: content-box;
+  flex-shrink: 0;
+  padding: 5px;
+  border-radius: var(--er-radius-md);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+.app-shell .fmt-header > span:first-child:not(.fmt-header-title) {
+  box-sizing: border-box;
+  height: 26px;
+  padding: 0 11px !important;
+  border: 0 !important;
+  border-radius: var(--er-radius-pill) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+}
+
+.app-shell .fmt-header-stats {
+  gap: 6px;
+  align-items: center;
+}
+
+/* Every count is a capsule in its own colour: the stat's text colour (the
+   model's teal, the format's amber, muted otherwise) tints its ground. */
+.app-shell .fmt-header .fmt-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: color-mix(in srgb, currentColor 10%, var(--er-surface));
+  font-size: var(--er-text-sm);
+  font-weight: 500;
+  line-height: 1;
+}
+
+.app-shell .fmt-header .fmt-stat-bound {
+  background: var(--er-success-soft);
+  color: var(--er-success);
+}
+
+.app-shell .fmt-header .fmt-stat-unbound {
+  background: var(--er-warning-soft);
+  color: var(--er-warning);
+}
+
+.app-shell .fmt-header .fmt-stat-btn {
+  min-height: 0;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background-color var(--er-duration-fast) ease, box-shadow var(--er-duration-fast) ease;
+}
+
+.app-shell .fmt-header .mm-definition-picker {
+  background: var(--er-surface-3);
+  color: var(--er-text);
+}
+
+.app-shell .fmt-header .fmt-stat-btn:hover {
+  background: color-mix(in srgb, currentColor 17%, var(--er-surface));
+}
+
+/* The counter that filters the specification is pressed: a ring in its colour. */
+.app-shell .fmt-header .fmt-stat-btn.active {
+  background: color-mix(in srgb, currentColor 16%, var(--er-surface));
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, currentColor 55%, transparent);
+}
+
+.app-shell .fmt-header-hint {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--er-radius-md);
+}
+
+.app-shell .fmt-header-hint:hover,
+.app-shell .fmt-header-hint:focus-visible {
+  background: var(--er-hover);
+  color: var(--er-text);
+}
+
+/* ── Linked mappings (import formats): a quiet line with mapping capsules ── */
+.app-shell .fmt-linked-mappings-bar {
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--er-surface);
+  border-bottom-color: var(--er-border);
+}
+
+.app-shell .fmt-linked-mappings-label {
+  gap: 6px;
+  font-size: var(--er-text-sm);
+  font-weight: 550;
+  color: var(--er-text-muted);
+}
+
+.app-shell .fmt-linked-mappings-empty {
+  font-style: normal;
+  opacity: 1;
+  color: var(--er-text-subtle);
+}
+
+.app-shell .fmt-linked-mapping-chip {
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-mapping-soft);
+  color: var(--er-mapping);
+  font-size: var(--er-text-sm);
+  font-weight: 550;
+}
+
+.app-shell .fmt-linked-mapping-chip:hover {
+  background: color-mix(in srgb, var(--er-mapping) 18%, var(--er-surface));
+}
+
+/* ── Designer toolbar: a taller bar for the page tabs and 30px controls ── */
+.app-shell .fmt-toolbar {
+  min-height: 44px;
+  column-gap: 12px;
+  border-bottom-color: var(--er-border);
+}
+
+/* ── Switches: segmented on a sunken track. SlidingTabs outside a toolbar,
+   and the page tabs' own look below. ── */
+.app-shell .fmt-sliding-tabs {
+  gap: 2px;
+  padding: 3px;
+  border: 0;
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-3);
+}
+
+.app-shell .fmt-sliding-tabs__thumb {
+  top: 3px;
+  bottom: 3px;
+  border: 0;
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface);
+  box-shadow: 0 1px 2px var(--er-shadow-color);
+}
+
+.app-shell .fmt-sliding-tabs__btn {
+  padding: 4px 12px;
+  border-radius: var(--er-radius-md);
+  font-size: var(--er-text-sm);
+  font-weight: 550;
+  color: var(--er-text-muted);
+}
+
+.app-shell .fmt-sliding-tabs__btn.active {
+  color: var(--er-text);
+  font-weight: 550;
+}
+
+.app-shell .fmt-sliding-tabs__btn:hover:not(.active) {
+  color: var(--er-text);
+}
+
+/* Page tabs (the first switch of a designer toolbar): navigation, so they
+   are underlined — muted labels 20px apart, the open page in full ink over a
+   2px indigo line, a grey line under a hovered one. */
+.app-shell .fmt-toolbar > .fmt-sliding-tabs,
+.app-shell .fmt-toolbar .fmt-sliding-tabs:first-child {
+  gap: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  min-height: 43px;
+}
+
+.app-shell .fmt-toolbar > .fmt-sliding-tabs .fmt-sliding-tabs__thumb,
+.app-shell .fmt-toolbar .fmt-sliding-tabs:first-child .fmt-sliding-tabs__thumb {
+  top: auto;
+  bottom: 0;
+  height: 2px;
+  border: 0;
+  border-radius: 2px 2px 0 0;
+  background: var(--er-accent);
+  box-shadow: none;
+}
+
+.app-shell .fmt-toolbar > .fmt-sliding-tabs .fmt-sliding-tabs__btn,
+.app-shell .fmt-toolbar .fmt-sliding-tabs:first-child .fmt-sliding-tabs__btn {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 2px;
+  border-radius: 0;
+  background: transparent;
+  font-size: var(--er-text-md);
+  font-weight: 550;
+  color: var(--er-text-muted);
+  transition: color var(--er-duration-fast) ease, box-shadow var(--er-duration-fast) ease;
+}
+
+.app-shell .fmt-toolbar > .fmt-sliding-tabs .fmt-sliding-tabs__btn:hover:not(.active),
+.app-shell .fmt-toolbar .fmt-sliding-tabs:first-child .fmt-sliding-tabs__btn:hover:not(.active) {
+  background: transparent;
+  color: var(--er-text);
+  box-shadow: inset 0 -2px 0 var(--er-border-strong);
+}
+
+.app-shell .fmt-toolbar > .fmt-sliding-tabs .fmt-sliding-tabs__btn.active,
+.app-shell .fmt-toolbar .fmt-sliding-tabs:first-child .fmt-sliding-tabs__btn.active {
+  color: var(--er-text);
+  font-weight: 550;
+}
+
+/* ── Expand / collapse in the designer bars: a two-segment switch ──
+   3px track, 24px segments; the thumb is one segment wide. */
+.app-shell .fmt-toolbar .expand-slider,
+.app-shell .fmt-header-tools .expand-slider {
+  height: auto;
+  padding: 3px;
+  gap: 2px;
+  border: 0;
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-3);
+}
+
+.app-shell .fmt-toolbar .expand-slider__option,
+.app-shell .fmt-header-tools .expand-slider__option {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--er-radius-md);
+}
+
+.app-shell .fmt-toolbar .expand-slider__option:hover,
+.app-shell .fmt-header-tools .expand-slider__option:hover {
+  color: var(--er-text);
+}
+
+.app-shell .fmt-toolbar .expand-slider__thumb,
+.app-shell .fmt-header-tools .expand-slider__thumb {
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 4px);
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface);
+  box-shadow: 0 1px 2px var(--er-shadow-color);
+}
+
+.app-shell .fmt-toolbar .expand-slider__thumb--right,
+.app-shell .fmt-header-tools .expand-slider__thumb--right {
+  transform: translateX(calc(100% + 2px));
+}
+
+/* ── Embedded mapping versions: quiet buttons, the open one in indigo ── */
+.app-shell .fmt-tab-btn {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--er-radius-md);
+  background: transparent;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 550;
+  box-shadow: none;
+}
+
+.app-shell .fmt-tab-btn:hover:not(.active) {
+  background: var(--er-hover);
+  color: var(--er-text);
+}
+
+.app-shell .fmt-tab-btn.active {
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+  box-shadow: none;
+}
+
+/* ── Format structure: 30px rounded rows inset from the card's edge, the
+   type icon on a tile in its colour, every marker a capsule ── */
+.app-shell .fmt-structure-list {
+  padding: 6px 8px 16px;
+}
+
+.app-shell .fmt-element-row {
+  min-height: 30px;
+  gap: 8px;
+  margin-bottom: 1px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-right: 8px;
+  font-size: var(--er-text-md);
+}
+
+.app-shell .fmt-element-row.search-match:not(.selected) {
+  background: var(--er-accent-soft);
+  box-shadow: none;
+}
+
+.app-shell .fmt-toggle {
+  width: 18px;
+  height: 22px;
+  border-radius: var(--er-radius-sm);
+}
+
+.app-shell .fmt-toggle:hover {
+  background: var(--er-surface-3);
+}
+
+.app-shell .fmt-element-row .fmt-type-icon {
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--er-radius-md);
+  background: color-mix(in srgb, currentColor 11%, transparent);
+  font-size: var(--er-text-lg);
+}
+
+.app-shell .fmt-type-badge {
+  padding: 1px 8px;
+  border-radius: var(--er-radius-pill);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.app-shell .fmt-element-name {
+  font-weight: 550;
+}
+
+.app-shell .fmt-meta {
+  font-size: var(--er-text-sm);
+  color: var(--er-text-subtle);
+}
+
+/* A constant is code: a small chip on the row. */
+.app-shell .fmt-const-value {
+  padding: 1px 6px;
+  border-radius: var(--er-radius-sm);
+  background: var(--er-surface-2);
+  box-shadow: inset 0 0 0 1px var(--er-border);
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .fmt-cond-badge,
+.app-shell .fmt-transform {
+  padding: 1px 8px;
+  border-radius: var(--er-radius-pill);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  line-height: 16px;
+}
+
+.app-shell .fmt-cond-badge {
+  background: var(--er-warning-soft);
+  color: var(--er-warning);
+}
+
+.app-shell .fmt-transform {
+  gap: 4px;
+  background: var(--er-success-soft);
+  color: var(--er-success);
+}
+
+.app-shell .fmt-binding-inline {
+  font-size: var(--er-text-sm);
+  color: var(--er-text-muted);
+}
+
+/* Unbound: a hollow dot in the warning colour, as the License Hub marks a
+   status that is not reached yet. */
+.app-shell .fmt-unbound-marker {
+  width: 8px;
+  height: 8px;
+  border: 0;
+  background: none;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+  color: var(--er-warning);
+  opacity: 0.8;
+}
+
+.app-shell .fmt-row-actions {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--er-radius-md);
+}
+
+.app-shell .fmt-row-actions:hover {
+  background: var(--er-surface-3);
+  color: var(--er-text);
+}
+
+.app-shell .fmt-match-reason {
+  gap: 8px;
+  padding: 2px 8px 6px 0;
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .fmt-match-reason__prop {
+  padding: 1px 8px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ── Binding detail under the selected element: a box on the card, a
+   caption per category, a capsule per binding, each formula in a code box ── */
+.app-shell .fmt-binding-expanded {
+  margin-top: 4px;
+  margin-right: 8px;
+  margin-bottom: 10px;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-2);
+}
+
+.app-shell .fmt-binding-expanded > div + div {
+  margin-top: 8px;
+}
+
+.app-shell .fmt-binding-category-title,
+.app-shell .fmt-detail-section-title,
+.app-shell .fmt-detail-subsection-title {
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--er-text-muted);
+}
+
+.app-shell .fmt-binding-category-title {
+  padding: 2px 0 6px;
+}
+
+.app-shell .fmt-binding-detail-row {
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+/* The binding's capsule (ledger-panels draws the badges) lines up with the
+   first line of its code box. */
+.app-shell .fmt-binding-detail-row .badge,
+.app-shell .fmt-detail-binding .badge {
+  margin-top: 4px;
+}
+
+.app-shell .fmt-binding-formula {
+  padding: 5px 10px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface);
+  font-size: var(--er-text-sm);
+  line-height: 1.5;
+  color: var(--er-text);
+}
+
+.app-shell .fmt-binding-origin {
+  margin-top: 5px;
+  font-size: var(--er-text-xs);
+}
+
+/* ── Focused node tab (one element or model node in a tab of its own):
+   a card header, captions, each binding in a box, child rows rounded ── */
+.app-shell .focused-node-tab-header {
+  min-height: 48px;
+  box-sizing: border-box;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom-color: var(--er-border);
+  background: var(--er-surface);
+}
+
+.app-shell .focused-node-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--er-radius-md);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+.app-shell .focused-node-tab-title {
+  font-size: var(--er-text-lg);
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--er-text);
+}
+
+.app-shell .focused-node-tab-body {
+  padding: 12px;
+}
+
+.app-shell .fmt-detail-section {
+  border-bottom-color: var(--er-border);
+}
+
+.app-shell .fmt-detail-section-title {
+  padding: 14px 16px 6px;
+  background: transparent;
+}
+
+.app-shell .fmt-detail-subsection-title {
+  padding: 10px 16px 4px;
+}
+
+.app-shell .fmt-detail-binding {
+  margin: 6px 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-2);
+}
+
+.app-shell .fmt-detail-child {
+  min-height: 32px;
+  box-sizing: border-box;
+  margin: 0 8px 1px;
+  padding: 6px 10px;
+  border-radius: 7px;
+}
+
+.app-shell .fmt-detail-child:hover {
+  background: var(--er-hover);
+}
+
+/* The data model's summary of the node a tab was opened on. */
+.app-shell .focused-detail-shell {
+  gap: 10px;
+  padding: 12px 16px 14px;
+}
+
+.app-shell .focused-detail-shell > .fmt-detail-section-title {
+  padding: 2px 0 0;
+}
+
+.app-shell .focused-detail-card {
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+}
+
+.app-shell .focused-detail-card__head {
+  min-height: 36px;
+  box-sizing: border-box;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--er-border);
+  background: var(--er-surface-2);
+}
+
+.app-shell .focused-detail-card__title {
+  font-weight: 600;
+}
+
+.app-shell .focused-detail-card__badge {
+  padding: 1px 8px;
+  border: 0;
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+  font-weight: 550;
+}
+
+.app-shell .focused-detail-grid {
+  gap: 0;
+}
+
+.app-shell .focused-detail-grid__label,
+.app-shell .focused-detail-grid__value {
+  padding: 8px 12px;
+  border-top: 1px solid var(--er-border);
+  background: transparent;
+}
+
+.app-shell .focused-detail-grid__label {
+  font-weight: 450;
+  color: var(--er-text-muted);
+}
+
+.app-shell .focused-detail-grid__value {
+  font-size: var(--er-text-md);
+}
+
+.app-shell .focused-detail-grid > :nth-child(-n + 2) {
+  border-top: 0;
+}
+
+.app-shell .focused-detail-binding-row {
+  padding: 8px 12px;
+  border-top-color: var(--er-border);
+}
+
+.app-shell .focused-detail-binding-row__source {
+  opacity: 1;
+}
+
+/* ── Filter bars (bindings, mapping scope, data sources): a white line with
+   a segmented switch and toggle capsules that carry their count ── */
+.app-shell .fmt-bind-intent-bar {
+  gap: 6px 8px;
+  padding: 8px 16px;
+  background: var(--er-surface);
+  border-bottom-color: var(--er-border);
+}
+
+.app-shell .fmt-bind-layout {
+  gap: 2px;
+  padding: 3px;
+  border: 0;
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-3);
+}
+
+.app-shell .fmt-bind-layout button {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--er-radius-md);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 550;
+}
+
+.app-shell .fmt-bind-layout button:hover:not(.active):not(:disabled) {
+  color: var(--er-text);
+}
+
+.app-shell .fmt-bind-layout button.active {
+  background: var(--er-surface);
+  color: var(--er-text);
+  box-shadow: 0 1px 2px var(--er-shadow-color);
+}
+
+.app-shell .fmt-bind-layout button:disabled {
+  color: var(--er-text-subtle);
+  opacity: 0.6;
+}
+
+/* A count inside a segment or a capsule is a capsule of its own. */
+.app-shell .fmt-bind-layout .mm-scope-count,
+.app-shell .spec-mode__count {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 0 6px;
+  border-radius: var(--er-radius-pill);
+  background: color-mix(in srgb, var(--er-text-muted) 13%, transparent);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-2xs);
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.app-shell .fmt-bind-layout button.active .mm-scope-count,
+.app-shell .spec-mode.active .spec-mode__count {
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+.app-shell .mm-scope-hint {
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .fmt-bind-bar-sep {
+  height: 18px;
+  margin: 0 4px;
+  background: var(--er-border);
+}
+
+/* Toggle capsules: grey while off, tinted in their intent's colour while on;
+   the dot fills, the count sits in a small white capsule. */
+.app-shell .fmt-bind-intent-chip,
+.app-shell .ds-list-bar__formulas {
+  box-sizing: border-box;
+  height: 26px;
+  gap: 6px;
+  padding: 0 4px 0 10px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 550;
+}
+
+.app-shell .fmt-bind-intent-chip:not(:has(.fmt-bind-intent-count)) {
+  padding-right: 12px;
+}
+
+.app-shell .fmt-bind-intent-chip:hover:not(:disabled),
+.app-shell .ds-list-bar__formulas:hover {
+  background: color-mix(in srgb, var(--er-text) 7%, var(--er-surface-3));
+  color: var(--er-text);
+}
+
+.app-shell .fmt-bind-intent-chip.active {
+  background: color-mix(in srgb, var(--intent-color, var(--er-accent)) 15%, var(--er-surface));
+  color: var(--er-text);
+}
+
+.app-shell .fmt-bind-intent-chip.active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--intent-color, var(--er-accent)) 22%, var(--er-surface));
+}
+
+.app-shell .ds-list-bar__formulas.active {
+  background: color-mix(in srgb, var(--syn-calc) 15%, var(--er-surface));
+  color: var(--er-text);
+}
+
+.app-shell .fmt-bind-intent-dot {
+  width: 7px;
+  height: 7px;
+}
+
+.app-shell .fmt-bind-intent-chip .fmt-bind-intent-count,
+.app-shell .ds-list-bar__formulas .fmt-bind-intent-count {
+  min-width: 18px;
+  box-sizing: border-box;
+  padding: 0 6px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-2xs);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* "By model": the summary line, its warnings as capsules. */
+.app-shell .fmt-model-summary {
+  gap: 6px 14px;
+  padding: 10px 16px;
+  border-bottom-color: var(--er-border);
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .fmt-model-summary-link {
+  font-weight: 550;
+}
+
+.app-shell .fmt-model-summary-warning {
+  padding: 1px 9px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-warning-soft);
+  font-weight: 550;
+}
+
+/* ── Empty lists: centred, a list glyph on an indigo tile, the reason under it ── */
+.app-shell .ds-empty,
+.app-shell .fmt-bind-empty {
+  gap: 12px;
+  padding: 44px 20px;
+  font-size: var(--er-text-md);
+  color: var(--er-text-muted);
+}
+
+.app-shell .ds-empty::before,
+.app-shell .fmt-bind-empty::before {
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: var(--er-radius-xl);
+  background:
+    linear-gradient(var(--er-accent), var(--er-accent)) 15px 17px / 18px 2px no-repeat,
+    linear-gradient(var(--er-accent), var(--er-accent)) 15px 23px / 18px 2px no-repeat,
+    linear-gradient(var(--er-accent), var(--er-accent)) 15px 29px / 11px 2px no-repeat,
+    var(--er-accent-soft);
+}
+
+/* ── Bindings tab and the mapping's binding tree: rounded rows inset from
+   the edge, top-level groups as grey bands, each binding a capsule with its
+   formula in a code box beside it ── */
+.app-shell .fb-tree {
+  padding: 6px 8px 16px;
+}
+
+.app-shell .fb-head {
+  min-height: 30px;
+  padding: 4px 10px 4px calc(10px + var(--fb-depth, 0) * 16px);
+}
+
+.app-shell .fb-head--group {
+  height: auto;
+  min-height: 34px;
+  border-radius: 7px;
+}
+
+.app-shell .fb-head--group:hover {
+  background: var(--er-hover);
+}
+
+.app-shell .fb-head--top {
+  margin-top: 6px;
+  border-bottom: 0;
+  background: var(--er-surface-2);
+}
+
+.app-shell .fb-group:first-child > .fb-head--top {
+  margin-top: 0;
+}
+
+.app-shell .fb-head--top:hover {
+  background: var(--er-hover);
+}
+
+.app-shell .fb-twistie {
+  border-radius: var(--er-radius-sm);
+}
+
+.app-shell .fb-twistie--button:hover {
+  background: var(--er-surface-3);
+  color: var(--er-text);
+}
+
+.app-shell .fb-icon {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  border-radius: var(--er-radius-md);
+  background: color-mix(in srgb, currentColor 11%, transparent);
+}
+
+.app-shell .fb-title {
+  font-weight: 600;
+}
+
+.app-shell .fb-name {
+  font-weight: 550;
+}
+
+.app-shell .fb-desc {
+  margin-left: 10px;
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .fb-aside {
+  padding: 1px 8px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+}
+
+.app-shell .fb-action {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--er-radius-md);
+}
+
+.app-shell .fb-action:hover {
+  background: var(--er-surface-3);
+}
+
+.app-shell .fb-item {
+  margin-bottom: 2px;
+  padding: 4px 0 10px;
+  border-bottom: 0;
+  border-radius: 7px;
+}
+
+.app-shell .fb-item:hover {
+  background: var(--er-hover);
+}
+
+/* Read by the format, filled by nothing: the field's icon turns amber; the
+   line under it says why. */
+.app-shell .fb-item--warning {
+  box-shadow: none;
+}
+
+.app-shell .fb-item--warning > .fb-head .fb-icon {
+  color: var(--er-warning);
+}
+
+.app-shell .fb-item.is-focused {
+  background: var(--er-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+}
+
+/* Lines start under the name: past the twistie (16 + 4) and the tile (22 + 8). */
+.app-shell .fb-lines {
+  gap: 6px 10px;
+  margin: 4px 12px 0 calc(10px + var(--fb-depth, 0) * 16px + 50px);
+}
+
+.app-shell .fb-line-label {
+  gap: 5px;
+  height: 20px;
+  margin-top: 2px;
+  padding: 0 9px 0 7px;
+  border-radius: var(--er-radius-pill);
+  background: color-mix(in srgb, var(--intent-color, var(--er-text-muted)) 13%, var(--er-surface));
+  color: var(--er-text);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+}
+
+.app-shell .fb-dot {
+  width: 6px;
+  height: 6px;
+}
+
+.app-shell .fb-line-value {
+  gap: 4px;
+}
+
+.app-shell .fb-expr {
+  padding: 3px 10px;
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface-2);
+  box-shadow: inset 0 0 0 1px var(--er-border);
+}
+
+.app-shell .fb-arrow,
+.app-shell .fb-expr-text {
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .fb-note--warning {
+  align-self: flex-start;
+  padding: 1px 9px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-warning-soft);
+  font-weight: 550;
+}
+
+.app-shell .fb-chips {
+  gap: 6px;
+}
+
+.app-shell .fb-chip {
+  height: 24px;
+  gap: 6px;
+  padding: 0 10px 0 9px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  color: var(--er-text);
+  font-size: var(--er-text-sm);
+  font-weight: 500;
+}
+
+.app-shell .fb-chip:hover {
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+.app-shell .fb-more {
+  height: 24px;
+  font-weight: 550;
+}
+
+/* ── Data sources: no coloured edge per kind any more — a dot on the group
+   band says the kind; rows are rounded and inset, the nesting drawn by thin
+   guides under the chevrons ── */
+.app-shell .ds-group-header {
+  margin: 4px 6px;
+  padding: 7px 10px;
+  gap: 8px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--er-surface-2);
+  backdrop-filter: none;
+  color: var(--er-text);
+  font-size: var(--er-text-md);
+  font-weight: 600;
+}
+
+.app-shell .ds-group-header:hover {
+  background: var(--er-hover);
+}
+
+.app-shell .ds-group-dot {
+  width: 7px;
+  height: 7px;
+}
+
+.app-shell .ds-row {
+  margin: 0 6px 1px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 0;
+  box-shadow: none;
+}
+
+.app-shell .ds-row-wrap.search-match .ds-row {
+  background: var(--er-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+}
+
+.app-shell .ds-flat-row:not([data-depth='0'])::before {
+  left: 18px;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--er-border) 0 1px,
+    transparent 1px 22px
+  );
+}
+
+.app-shell .ds-row-main {
+  gap: 8px;
+}
+
+.app-shell .ds-row-name {
+  font-weight: 550;
+}
+
+.app-shell .ds-row-meta {
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .ds-row-expander {
+  border-radius: var(--er-radius-md);
+}
+
+.app-shell .ds-row-expander:hover {
+  background: var(--er-surface-3);
+}
+
+.app-shell .ds-row-where-used,
+.app-shell .ds-row-fx {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--er-radius-md);
+}
+
+.app-shell .ds-row-where-used:hover,
+.app-shell .ds-row-fx:hover {
+  background: var(--er-surface-3);
+  color: var(--er-text);
+}
+
+.app-shell .ds-row-fx.is-open {
+  background: color-mix(in srgb, var(--syn-calc) 14%, var(--er-surface));
+  color: var(--syn-calc);
+}
+
+.app-shell .ds-enum-value-uses {
+  padding: 0 7px;
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+  line-height: 18px;
+}
+
+/* A grouping datasource: its grouped and aggregated fields in a box, the
+   two columns as plain boxes, the fields as capsules. */
+.app-shell .ds-row-groupby-meta {
+  margin: 6px 8px 8px 40px;
+  padding: 10px 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-2);
+}
+
+.app-shell .ds-row-groupby-column,
+.app-shell .ds-row-groupby-column-grouped,
+.app-shell .ds-row-groupby-column-aggregated {
+  padding: 8px 10px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface);
+}
+
+.app-shell .ds-row-groupby-column .fmt-ds-label {
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--er-text-muted);
+}
+
+.app-shell .ds-row-groupby-item {
+  gap: 8px;
+  padding: 2px 4px 2px 10px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+}
+
+.app-shell .ds-row-groupby-item:hover {
+  background: var(--er-accent-soft);
+}
+
+.app-shell .ds-row-groupby-fn-badge {
+  border: 0;
+  font-size: var(--er-text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.app-shell .ds-row-groupby-fn-sum { background: var(--er-success-soft); color: var(--er-success); }
+.app-shell .ds-row-groupby-fn-count { background: var(--er-info-soft); color: var(--er-info); }
+.app-shell .ds-row-groupby-fn-avg { background: var(--er-warning-soft); color: var(--er-warning); }
+.app-shell .ds-row-groupby-fn-min { background: var(--er-model-soft); color: var(--er-model); }
+.app-shell .ds-row-groupby-fn-max { background: var(--er-format-soft); color: var(--er-format); }
+.app-shell .ds-row-groupby-fn-generic { background: var(--er-surface); color: var(--er-text-muted); }
+
+/* ── Model mapping validations: rounded rows, each rule in a box ── */
+.app-shell .mm-validation-list {
+  padding: 6px 8px 16px;
+}
+
+.app-shell .mm-binding-row.mm-validation-row,
+.app-shell .mm-binding-row.mm-validation-row:hover {
+  margin: 0 0 2px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 7px;
+}
+
+.app-shell .mm-binding-row.mm-validation-row:hover {
+  background: var(--er-hover);
+}
+
+.app-shell .mm-binding-row.mm-validation-row.search-match {
+  background: var(--er-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+}
+
+.app-shell .mm-tree-head {
+  gap: 8px;
+}
+
+.app-shell .mm-validation-rule {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-2);
+}
+
+.app-shell .mm-validation-rule-title {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.app-shell .mm-validation-badge {
+  padding: 1px 8px;
+  border: 0;
+  background: var(--er-surface-3);
+  font-weight: 550;
+}
+
+/* ── Data model list: roots as grey bands led by a teal dot; fields are the
+   datasource rows above ── */
+.app-shell .dm-list__rows {
+  padding: 6px 2px 16px;
+}
+
+.app-shell .dm-list__root + .dm-list__root {
+  margin-top: 8px;
+}
+
+.app-shell .dm-list__root-head {
+  margin: 4px 6px;
+  padding: 8px 12px;
+  border-bottom: 0;
+  border-radius: 7px;
+  background: var(--er-surface-2);
+  color: var(--er-text);
+  font-size: var(--er-text-md);
+}
+
+.app-shell .dm-list__root-head::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--er-model);
+}
+
+.app-shell .dm-list__root-label {
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .dm-list__empty {
+  padding: 20px 16px;
+  font-size: var(--er-text-md);
+}
+
+/* ── Data model graph: nodes are small cards — a header in the kind's tint,
+   the badge a capsule on it. Heights stay what the layout reserves
+   (30px header, 20px per field). ── */
+.app-shell .dm-node {
+  box-sizing: border-box;
+  border-color: var(--er-border);
+  box-shadow: var(--er-shadow-1);
+}
+
+.app-shell .dm-node:hover {
+  border-color: var(--er-border-strong);
+}
+
+.app-shell .dm-node.is-selected {
+  border-color: var(--er-accent);
+  box-shadow: 0 0 0 3px var(--er-accent-soft-2);
+}
+
+.app-shell .dm-node__head {
+  gap: 7px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--er-border);
+  font-size: var(--er-text-md);
+  font-weight: 600;
+  color: var(--er-text);
+}
+
+.app-shell .dm-node--root .dm-node__head {
+  color: var(--er-model);
+}
+
+.app-shell .dm-node--enum .dm-node__head {
+  color: var(--er-format);
+}
+
+.app-shell .dm-node__badge {
+  padding: 1px 7px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface);
+  font-size: var(--er-text-2xs);
+  font-weight: 600;
+}
+
+.app-shell .dm-node__badge--root { color: var(--er-model); }
+.app-shell .dm-node__badge--enum { color: var(--er-format); }
+
+.app-shell .dm-node__field {
+  padding: 0 12px;
+  border-bottom-color: var(--er-border);
+}
+
+/* ── Fill kinds, element badges, source chips: capsules without borders in
+   the tint of what they mark (spec, preview, inspector, dialogs) ── */
+.fill-pill {
+  height: 20px;
+  padding: 0 8px;
+  border: 0;
+  background: var(--fill-soft, var(--er-surface-3));
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  letter-spacing: 0;
+}
+
+.fill-pill--compact { height: 18px; padding: 0 7px; }
+.fill-pill--model { --fill-soft: var(--er-success-soft); }
+.fill-pill--calculated { --fill-soft: var(--er-model-soft); }
+.fill-pill--datasource { --fill-soft: var(--er-info-soft); }
+.fill-pill--constant { --fill-soft: var(--er-surface-3); }
+.fill-pill--unbound { --fill-soft: var(--er-warning-soft); }
+.fill-pill--structure { --fill-soft: var(--er-surface-3); }
+
+.elem-badge {
+  gap: 3px;
+  height: 18px;
+  padding: 0 7px;
+  border: 0;
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+}
+
+.elem-badge--repeat { background: var(--er-accent-soft); color: var(--er-accent); }
+.elem-badge--condition { background: var(--er-warning-soft); color: var(--er-warning); }
+.elem-badge--optional { font-family: inherit; font-variant-numeric: tabular-nums; }
+
+/* A repetition read from the data, not declared: the capsule is dashed. */
+.elem-badge--inferred {
+  outline: 1px dashed color-mix(in srgb, currentColor 50%, transparent);
+  outline-offset: -1px;
+}
+
+.src-chips { gap: 4px; }
+
+.src-chip {
+  --src-soft: var(--er-surface-3);
+  gap: 5px;
+  height: 20px;
+  padding: 0 9px 0 3px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--src-soft);
+  font-size: var(--er-text-xs);
+}
+
+button.src-chip:hover {
+  background: color-mix(in srgb, var(--src-color) 22%, var(--er-surface));
+}
+
+.src-chip__kind {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.src-chip--table, .src-chip--field { --src-soft: var(--er-format-soft); }
+.src-chip--enum { --src-soft: var(--er-model-soft); }
+.src-chip--class { --src-soft: var(--er-mapping-soft); }
+.src-chip--param { --src-soft: var(--er-info-soft); }
+.src-chip--ds { --src-soft: var(--er-surface-3); }
+
+.src-chips__more {
+  padding: 0 7px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  font-size: var(--er-text-2xs);
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.src-unmapped {
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-warning-soft);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+}
+
+/* ── Field specification: a header line with kind capsules, a segmented
+   mode switch and the primary export; the grid reads as a Ledger table ── */
+.app-shell .spec-view__head {
+  gap: 8px 14px;
+  padding: 10px 16px;
+  border-bottom-color: var(--er-border);
+  background: var(--er-surface);
+}
+
+.app-shell .spec-view__summary {
+  gap: 6px;
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .spec-view__total {
+  margin-right: 4px;
+  font-size: var(--er-text-md);
+}
+
+.app-shell .spec-view__kind {
+  gap: 6px;
+  padding: 1px 9px 1px 8px;
+  border-radius: var(--er-radius-pill);
+  background: color-mix(in srgb, var(--fill-color, var(--er-text-muted)) 12%, var(--er-surface));
+  color: var(--fill-color, var(--er-text-muted));
+  font-weight: 550;
+}
+
+.app-shell .spec-view__kind-dot {
+  width: 6px;
+  height: 6px;
+}
+
+/* Segmented switches (spec modes, comparison views and filters). Outside a
+   switch the same button is a plain neutral button. */
+.app-shell .spec-mode {
+  box-sizing: border-box;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+  color: var(--er-text);
+  font-size: var(--er-text-md);
+  font-weight: 500;
+  box-shadow: var(--er-shadow-1);
+}
+
+.app-shell .spec-mode:hover:not(:disabled) {
+  background: var(--er-hover);
+}
+
+.app-shell .spec-view__modes {
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-3);
+}
+
+.app-shell .spec-view__modes .spec-mode {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--er-radius-md);
+  background: transparent;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 550;
+  box-shadow: none;
+}
+
+.app-shell .spec-view__modes .spec-mode:hover:not(:disabled):not(.active) {
+  background: transparent;
+  color: var(--er-text);
+}
+
+.app-shell .spec-view__modes .spec-mode.active {
+  border: 0;
+  background: var(--er-surface);
+  color: var(--er-text);
+  box-shadow: 0 1px 2px var(--er-shadow-color);
+}
+
+.app-shell .spec-view__modes .spec-mode__count {
+  margin-left: 1px;
+}
+
+.app-shell .spec-view__export {
+  box-sizing: border-box;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--er-radius-lg);
+  background: var(--er-accent-fill);
+  color: var(--er-on-accent-fill);
+  font-size: var(--er-text-md);
+  font-weight: 500;
+  box-shadow: var(--er-shadow-1);
+}
+
+.app-shell .spec-view__export:hover:not(:disabled) {
+  background: var(--er-accent-fill-hover);
+}
+
+/* Which mapping the spec reads: a quiet line; without one, an amber callout. */
+.app-shell .spec-view__context {
+  gap: 4px 12px;
+  padding: 8px 16px;
+  border-bottom-color: var(--er-border);
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .spec-view__context--warn {
+  margin: 10px 16px;
+  padding: 8px 12px;
+  border-bottom: 0;
+  border-radius: var(--er-radius-lg);
+  background: var(--er-warning-soft);
+  color: var(--er-warning);
+}
+
+.app-shell .spec-view__context-note {
+  font-style: normal;
+}
+
+.app-shell .spec-view__empty {
+  padding: 40px 20px;
+  font-size: var(--er-text-md);
+}
+
+/* Column heads as Ledger table heads; rows 16px in at the first column. */
+.app-shell .spec-grid--head {
+  padding: 9px 14px 9px 8px;
+  border-top: 1px solid var(--er-border);
+  border-bottom: 1px solid var(--er-border);
+  background: var(--er-surface-2);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.app-shell .spec-grid--head > :first-child {
+  padding-left: 8px;
+}
+
+.app-shell .spec-row {
+  padding: 9px 14px 9px 8px;
+  border-bottom: 1px solid var(--er-border);
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .spec-row--section {
+  background: var(--er-surface-2);
+}
+
+.app-shell .spec-row:not(.selected):hover {
+  background: var(--er-hover);
+}
+
+.app-shell .spec-cell {
+  line-height: 20px;
+}
+
+.app-shell .spec-expr,
+.app-shell .spec-constant,
+.app-shell .spec-condition,
+.app-shell .spec-model__path,
+.app-shell .spec-muted {
+  font-size: var(--er-text-xs);
+}
+
+.app-shell .spec-type__rules,
+.app-shell .spec-model__label {
+  font-size: var(--er-text-xs);
+}
+
+/* ── The fill card (inspector, preview detail): a box on its card ── */
+.fill-card {
+  margin: 10px 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-2);
+  font-size: var(--er-text-sm);
+}
+
+.fill-card__head {
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.fill-card__title {
+  font-size: var(--er-text-md);
+  font-weight: 600;
+  letter-spacing: -0.1px;
+}
+
+.fill-card__rows {
+  gap: 6px 12px;
+}
+
+.fill-card__rows dt {
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  line-height: 20px;
+}
+
+.fill-card__rows dd {
+  line-height: 20px;
+}
+
+.fill-card__expr,
+.fill-card__model {
+  font-size: var(--er-text-xs);
+}
+
+.fill-card--compact {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* ── Document preview: white bars over the document, a grey gutter, notes
+   and selections as soft capsules, the detail as a side card ── */
+.app-shell .doc-preview-host__head {
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom-color: var(--er-border);
+  background: var(--er-surface);
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .doc-preview__toolbar {
+  gap: 8px 16px;
+  padding: 8px 16px;
+  border-bottom-color: var(--er-border);
+  background: var(--er-surface);
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .doc-preview__records,
+.app-shell .doc-preview__check {
+  gap: 6px;
+}
+
+.app-shell .doc-preview__check input,
+.app-shell .tcmp__sync input {
+  accent-color: var(--er-accent);
+}
+
+.app-shell .doc-preview__records select {
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--er-input-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-input-bg);
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .doc-preview__records select:hover {
+  border-color: var(--er-border-strong);
+}
+
+.app-shell .doc-preview__records select:focus-visible {
+  outline: none;
+  border-color: var(--er-accent);
+  box-shadow: 0 0 0 3px var(--er-accent-soft-2);
+}
+
+.app-shell .doc-preview__action {
+  box-sizing: border-box;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+  font-size: var(--er-text-sm);
+  font-weight: 500;
+  box-shadow: var(--er-shadow-1);
+}
+
+.app-shell .doc-preview__action:hover {
+  background: var(--er-hover);
+}
+
+.app-shell .doc-preview__legend {
+  gap: 4px 14px;
+  padding: 7px 16px;
+  border-bottom-color: var(--er-border);
+  font-size: var(--er-text-xs);
+}
+
+.app-shell .doc-legend {
+  gap: 6px;
+}
+
+.app-shell .doc-legend__swatch {
+  border-radius: 3px;
+}
+
+.app-shell .doc-preview__hint {
+  font-style: normal;
+  color: var(--er-text-subtle);
+}
+
+.app-shell .doc-preview__doc {
+  background: var(--er-surface);
+}
+
+.app-shell .doc-preview__gutter {
+  background: var(--er-surface-2);
+  border-right-color: var(--er-border);
+}
+
+.app-shell .doc-band {
+  border-radius: var(--er-radius-pill);
+}
+
+.app-shell .doc-preview__truncated {
+  margin: 10px 16px 0;
+  padding: 8px 12px;
+  border-left: 0;
+  border-radius: var(--er-radius-lg);
+  background: var(--er-warning-soft);
+  color: var(--er-warning);
+}
+
+.app-shell .doc-preview__note-text {
+  height: 18px;
+  padding: 0 9px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-accent-soft);
+  font-size: var(--er-text-xs);
+  font-style: normal;
+  font-weight: 550;
+  line-height: 18px;
+}
+
+.app-shell .doc-preview__note--condition .doc-preview__note-text {
+  background: var(--er-warning-soft);
+}
+
+.app-shell .doc-preview__note--optional .doc-preview__note-text {
+  background: var(--er-surface-3);
+}
+
+.app-shell .doc-preview__note-text:hover {
+  text-decoration: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 40%, transparent);
+}
+
+.app-shell .doc-seg {
+  border-radius: 3px;
+}
+
+.app-shell .doc-seg--hover {
+  background: var(--er-accent-soft);
+}
+
+.app-shell .doc-seg--selected {
+  background: var(--er-accent-soft-2);
+  outline: 1px solid var(--er-accent-border);
+}
+
+.app-shell .doc-preview__detail {
+  padding: 14px 16px;
+  background: var(--er-surface);
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .doc-preview__detail-head {
+  gap: 8px;
+}
+
+.app-shell .doc-preview__detail-name {
+  font-size: var(--er-text-lg);
+  letter-spacing: -0.2px;
+}
+
+.app-shell .doc-preview__detail-close {
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: var(--er-radius-md);
+}
+
+.app-shell .doc-preview__detail-close:hover {
+  background: var(--er-hover);
+  color: var(--er-text);
+}
+
+.app-shell .doc-preview__detail-path {
+  margin: 2px 0 10px;
+  font-size: var(--er-text-xs);
+}
+
+/* ── Version comparison: a card header with the two versions as boxes,
+   sections as table bands, changes marked by a round capsule instead of a
+   coloured edge ── */
+.app-shell .vcmp__head {
+  gap: 10px;
+  padding: 14px 16px 12px;
+  border-bottom-color: var(--er-border);
+  background: var(--er-surface);
+}
+
+.app-shell .vcmp__title {
+  gap: 9px;
+  font-size: var(--er-text-lg);
+  letter-spacing: -0.2px;
+}
+
+.app-shell .vcmp__title > svg {
+  box-sizing: content-box;
+  padding: 5px;
+  border-radius: var(--er-radius-md);
+  background: var(--er-accent-soft);
+}
+
+.app-shell .vcmp__note {
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--er-radius-lg);
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .vcmp-side {
+  padding: 10px 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-2);
+}
+
+.app-shell .vcmp-side--loaded {
+  border-color: var(--er-accent-soft-2);
+  background: var(--er-accent-soft);
+  box-shadow: none;
+}
+
+.app-shell .vcmp-side__label {
+  font-size: var(--er-text-xs);
+  letter-spacing: 0.06em;
+}
+
+.app-shell .vcmp-side__version {
+  font-size: var(--er-text-lg);
+  font-weight: 600;
+}
+
+.app-shell .vcmp-side__badge {
+  padding: 1px 8px;
+  border: 0;
+  background: var(--er-surface-3);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+}
+
+.app-shell .vcmp-side__badge--loaded {
+  background: var(--er-surface);
+  color: var(--er-accent);
+}
+
+.app-shell .vcmp-side__meta {
+  gap: 2px 10px;
+  margin-top: 6px;
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .vcmp__toolbar {
+  gap: 8px 10px;
+}
+
+.app-shell .vcmp-empty {
+  padding: 40px 20px;
+  font-size: var(--er-text-md);
+}
+
+.app-shell .vcmp-section {
+  border-bottom-color: var(--er-border);
+}
+
+.app-shell .vcmp-section__head {
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 16px;
+  border-bottom-color: var(--er-border);
+  background: var(--er-surface-2);
+  font-size: var(--er-text-md);
+}
+
+.app-shell .vcmp-section__head:hover {
+  background: var(--er-hover);
+}
+
+.app-shell .vcmp-grid--head {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-right: 16px;
+  border-bottom-color: var(--er-border);
+  font-size: var(--er-text-sm);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* 15px in where the coloured edge used to be, so the columns stay aligned
+   with the head above. */
+.app-shell .vcmp-entry {
+  padding: 8px 16px 9px 15px;
+  border-left: 0;
+  border-bottom-color: var(--er-border);
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .vcmp-entry__head {
+  gap: 8px;
+  line-height: 22px;
+}
+
+.app-shell .vcmp-entry__head .vcmp-mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: var(--er-text-sm);
+  line-height: 1;
+}
+
+.app-shell .vcmp-entry__head .vcmp-mark--added { background: var(--vcmp-added-soft); }
+.app-shell .vcmp-entry__head .vcmp-mark--removed { background: var(--vcmp-removed-soft); }
+.app-shell .vcmp-entry__head .vcmp-mark--changed { background: var(--vcmp-changed-soft); }
+
+.app-shell .vcmp-entry__type {
+  padding: 1px 8px;
+  background: var(--er-surface-3);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+}
+
+.app-shell .vcmp-entry__was {
+  font-style: normal;
+}
+
+.app-shell .vcmp-entry__open {
+  width: 24px;
+  height: 24px;
+}
+
+.app-shell .vcmp-entry__open:hover {
+  background: var(--er-hover);
+}
+
+.app-shell .vcmp-prop__value del,
+.app-shell .vcmp-prop__value ins,
+.app-shell .vcmp-mark-del,
+.app-shell .vcmp-mark-ins {
+  border-radius: 3px;
+}
+
+.app-shell .vcmp-formula__fold {
+  margin: 2px 0;
+  padding: 1px 8px;
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface-3);
+  font-size: var(--er-text-xs);
+  line-height: 18px;
+}
+
+.app-shell .vcmp-formula__fold:hover {
+  background: var(--er-accent-soft);
+}
+
+.app-shell .vcmp-more {
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+  color: var(--er-text);
+  font-size: var(--er-text-sm);
+  font-weight: 500;
+  box-shadow: var(--er-shadow-1);
+}
+
+.app-shell .vcmp-more:hover {
+  background: var(--er-hover);
+}
+
+/* The version picker is a dialog (rendered outside the shell): a list box of
+   rounded rows, notes as soft callouts, the "derived from" tag a capsule. */
+.vcmp-picker__heading {
+  margin: 0 0 6px;
+  font-size: var(--er-text-xs);
+  letter-spacing: 0.06em;
+}
+
+.vcmp-picker__list {
+  padding: 4px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+}
+
+.vcmp-picker__list li + li {
+  border-top: 0;
+}
+
+.vcmp-picker__row {
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: var(--er-radius-md);
+}
+
+.vcmp-picker__version {
+  font-weight: 600;
+}
+
+.vcmp-picker__note {
+  padding: 8px 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-2);
+  font-size: var(--er-text-sm);
+}
+
+.vcmp-picker__tag {
+  padding: 1px 8px;
+  border-radius: var(--er-radius-pill);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+}
+
+/* ── Comparison preview: sheet tabs underlined in the bar, pane heads as
+   grey table heads, the cell detail and legend as quiet footers. The grids
+   stay white paper. ── */
+.app-shell .tcmp__bar {
+  gap: 6px 14px;
+  min-height: 44px;
+  padding: 0 12px 0 16px;
+  border-bottom-color: var(--er-border);
+  background: var(--er-surface);
+}
+
+.app-shell .tcmp__sheets {
+  align-self: stretch;
+  gap: 18px;
+}
+
+.app-shell .tcmp__sheet {
+  height: auto;
+  min-height: 43px;
+  gap: 6px;
+  padding: 0 2px;
+  font-size: var(--er-text-md);
+  font-weight: 550;
+}
+
+.app-shell .tcmp__sheet:hover {
+  background: transparent;
+  border-bottom-color: var(--er-border-strong);
+}
+
+.app-shell .tcmp__sheet.active,
+.app-shell .tcmp__sheet.active:hover {
+  border-bottom-color: var(--er-accent);
+}
+
+.app-shell .tcmp__count,
+.app-shell .tcmp__sync {
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .tcmp__navbtn {
+  width: 28px;
+  height: 28px;
+}
+
+.app-shell .tcmp__pane + .tcmp__pane {
+  border-left-color: var(--er-border);
+}
+
+.app-shell .tcmp__pane-head {
+  height: 34px;
+  padding: 0 12px;
+  border-bottom-color: var(--er-border);
+  background: var(--er-surface-2);
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .tcmp-detail {
+  gap: 6px 16px;
+  min-height: 38px;
+  padding: 8px 16px;
+  border-top-color: var(--er-border);
+  background: var(--er-surface-2);
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .tcmp-detail__ref {
+  padding: 1px 6px;
+  border-radius: var(--er-radius-sm);
+  background: var(--er-surface);
+  box-shadow: inset 0 0 0 1px var(--er-border);
+  font-weight: 600;
+}
+
+.app-shell .tcmp-detail__before,
+.app-shell .tcmp-detail__after {
+  padding: 0 5px;
+  border-radius: var(--er-radius-sm);
+}
+
+.app-shell .tcmp__legend {
+  gap: 4px 16px;
+  padding: 8px 16px;
+  border-top-color: var(--er-border);
+  font-size: var(--er-text-xs);
+}
+
+.app-shell .tcmp__legend > span {
+  gap: 6px;
+}
+
+.app-shell .tcmp-swatch {
+  border-radius: 3px;
+}
+
+.app-shell .dcmp__head {
+  border-bottom-color: var(--er-border);
+  background: var(--er-surface-2);
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .dcmp__head > span {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.app-shell .dcmp__no {
+  background: var(--er-surface-2);
+}
+
+/* ── No tab open: centred on the card — an indigo tile, a caption, a title,
+   the hint, and the two steps as small boxes ── */
+.app-shell .designer-empty-card {
+  width: min(520px, 100%);
+  justify-items: center;
+  gap: 14px;
+  padding: 36px 28px;
+  text-align: center;
+}
+
+.app-shell .designer-empty-card__header {
+  flex-direction: column;
+  gap: 14px;
+}
+
+.app-shell .designer-empty-card__icon {
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: var(--er-radius-xl);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+.app-shell .designer-empty-card__eyebrow {
+  margin-bottom: 4px;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.app-shell .designer-empty-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+}
+
+.app-shell .designer-empty-card__text {
+  max-width: 400px;
+  font-size: var(--er-text-md);
+}
+
+.app-shell .designer-empty-card__steps {
+  justify-content: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.app-shell .designer-empty-step {
+  flex: 0 1 auto;
+  gap: 8px;
+  padding: 7px 12px 7px 7px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-2);
+  font-weight: 500;
+}
+
+.app-shell .designer-empty-step__icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: var(--er-radius-md);
+  background: var(--er-accent-soft);
+}
+
+@media (max-width: 760px) {
+  .app-shell .designer-empty-card {
+    padding: 24px 16px;
+  }
+
+}
+
+/* ── Loading: a title bar and lines of text that shimmer, not boxes ── */
+.app-shell .panel-skeleton {
+  gap: 14px;
+  padding: 22px 20px;
+}
+
+.app-shell .panel-skeleton__bar {
+  --skeleton-w: 36%;
+  height: 18px;
+  margin-bottom: 10px;
+  border-radius: var(--er-radius-pill);
+}
+
+.app-shell .panel-skeleton__row {
+  height: 12px;
+  border-radius: var(--er-radius-pill);
+}
+
+/* ── Dragging a tab: rounded drop halves, the target named in a capsule ── */
+.app-shell .designer-drop-zone {
+  margin: 8px;
+  border-radius: var(--er-radius-xl);
+}
+
+.app-shell .designer-drop-zone--over {
+  border-color: var(--er-accent-border);
+  background: color-mix(in srgb, var(--er-accent-soft) 85%, transparent);
+}
+
+.app-shell .designer-drop-zone__label {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface);
+  box-shadow: var(--er-shadow-2);
+}
+
+/* ── Touch: the controls sized here keep their 36px targets ── */
+@media (pointer: coarse) {
+  .app-shell .fmt-header .fmt-stat-btn,
+  .app-shell .fmt-tab-btn,
+  .app-shell .fmt-bind-intent-chip,
+  .app-shell .ds-list-bar__formulas,
+  .app-shell .spec-mode,
+  .app-shell .spec-view__export,
+  .app-shell .doc-preview__action {
+    min-height: 36px;
+  }
+
+  .app-shell .fmt-bind-layout button,
+  .app-shell .spec-view__modes .spec-mode {
+    min-height: 34px;
+  }
+
+  /* 36px tall from controls.css, as everywhere else (see ledger-panels). */
+  .app-shell .fmt-toolbar .expand-slider__option,
+  .app-shell .fmt-header-tools .expand-slider__option {
+    width: 34px;
+  }
+
+  .app-shell .fmt-element-row,
+  .app-shell .ds-row,
+  .app-shell .fb-head--group {
+    min-height: 40px;
+  }
+
+}

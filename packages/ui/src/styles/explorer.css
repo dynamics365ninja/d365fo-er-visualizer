@@ -3,7 +3,8 @@
    (like the find widget's options), collapsible sticky section headers, and
    22px tree rows: twistie, icon, name, a muted description,
    decorations on the right that give way to actions on hover.
-   Colours are the workbench tokens, so both themes follow VS Code Modern. */
+   Colours are the workbench tokens; inside the indigo sidebar (`wb-indigo`)
+   those are the sidebar's, so both themes follow it. */
 .vx {
   --vx-selection: color-mix(in srgb, var(--er-text) 13%, transparent);
   --vx-toggle-bg: color-mix(in srgb, var(--er-accent-fill) 32%, transparent);
@@ -803,3 +804,117 @@
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+
+/* ── Indigo Ledger: the explorer as a readable list on indigo ─────────────
+   Configurations stand out — bold, their kind in a coloured tile, the version
+   as a pill on the right; what is inside them is quieter and hangs from indent
+   guides, so the depth reads at a glance. Sections are captions led by a dot
+   in their kind's colour. Rows, the filter and the small buttons take the
+   sidebar's rounded shapes. */
+.wb-indigo .vx {
+  --vx-indent: 14px;
+  --vx-guide: color-mix(in srgb, var(--er-side-ink) 16%, transparent);
+  font-size: 13px;
+}
+
+/* Rows. */
+.vx-row {
+  height: 28px;
+  line-height: 28px;
+  margin: 0 8px;
+  border-radius: 7px;
+  color: var(--er-text-muted);
+}
+.vx-row:hover { color: var(--er-text); }
+.wb-indigo .vx-row:not(.vx-row--root) {
+  background-image: repeating-linear-gradient(to right, var(--vx-guide) 0 1px, transparent 1px var(--vx-indent));
+  background-size: calc(var(--vx-depth, 0) * var(--vx-indent)) 100%;
+  background-position: 15px 0;
+  background-repeat: no-repeat;
+}
+.vx-row.selected,
+.vx-tree:focus-within .vx-row.selected {
+  color: var(--er-side-strong);
+  font-weight: 550;
+}
+
+/* A configuration: bold name, its kind in a tile, the version on the right. */
+.vx-row--root {
+  height: 32px;
+  line-height: 32px;
+  margin-top: 2px;
+  color: var(--er-text);
+  font-weight: 600;
+}
+.vx-row--root .vx-icon {
+  flex-basis: 22px;
+  width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  border-radius: 6px;
+}
+.vx-row--root .vx-icon--model { background: var(--er-model-soft); }
+.vx-row--root .vx-icon--mapping { background: var(--er-mapping-soft); }
+.vx-row--root .vx-icon--format { background: var(--er-format-soft); }
+.vx-row--root .vx-icon > svg { width: 14px; height: 14px; }
+.vx-row--root .vx-label { align-items: center; }
+.vx-row--root .vx-desc {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 7px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-side-hover);
+  color: var(--er-side-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 450;
+  line-height: 18px;
+  opacity: 1;
+}
+.vx-row--root.selected .vx-desc { background: var(--er-side-bg); color: var(--er-gold); }
+.vx-row--root.selected .vx-icon { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--er-gold) 55%, transparent); }
+
+/* Section headers: a caption with a dot in the kind's colour. */
+.vx-pane__header {
+  gap: 4px;
+  padding: 0 12px 0 6px;
+  border-top-color: transparent;
+  color: var(--er-side-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.vx-pane:not(.vx-pane--collapsed) > .vx-pane__header { height: 32px; }
+.vx-pane:not(.vx-pane--collapsed) + .vx-pane:not(.vx-pane--collapsed) { margin-top: 14px; }
+.vx-pane__header .vx-twistie { color: var(--er-side-muted); }
+.vx-pane--model .vx-pane__title::before,
+.vx-pane--mapping .vx-pane__title::before,
+.vx-pane--format .vx-pane__title::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 8px 1px 0;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: currentColor;
+}
+.vx-pane--model .vx-pane__title::before { background: var(--kind-model); }
+.vx-pane--mapping .vx-pane__title::before { background: var(--kind-mapping); }
+.vx-pane--format .vx-pane__title::before { background: var(--kind-format); }
+
+/* The filter and the small buttons. */
+.vx-filter { padding: 0 10px 10px 10px; }
+.vx-filter__box {
+  height: 32px;
+  border-radius: var(--er-radius-lg);
+}
+.vx .vx-filter__box .filter-field__input { height: 30px; }
+.vx-toggle {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--er-radius-md);
+}
+.vx-action { border-radius: var(--er-radius-md); }
+.vx .vx-welcome__button { border-radius: var(--er-radius-lg); }
+.vx-titlebar { height: 44px; padding-left: 18px; }
