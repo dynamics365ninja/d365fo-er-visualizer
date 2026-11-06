@@ -105,12 +105,12 @@ const ComponentRow: React.FC<ComponentRowProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalXS, flexWrap: 'wrap' }}>
           <TypeBadge type={comp.componentType} />
           {comp.countryRegion && (
-            <Badge appearance="outline" size="small" style={{ fontSize: '10px' }}>
+            <Badge appearance="tint" size="small" className={styles.pillNeutral}>
               {comp.countryRegion}
             </Badge>
           )}
           {canResolveMappingViaParent && !hasGuid && (
-            <Badge appearance="outline" color="success" size="small" style={{ fontSize: '10px' }}>
+            <Badge appearance="tint" size="small" className={styles.pillSuccess}>
               {t.fnoViaParent}
             </Badge>
           )}
@@ -118,7 +118,7 @@ const ComponentRow: React.FC<ComponentRowProps> = ({
               it before the download rather than after. */}
           {comp.draftOnly && (
             <Tooltip content={t.fnoDraftOnlyHint} relationship="description">
-              <Badge appearance="outline" color="warning" size="small" style={{ fontSize: '10px' }}>
+              <Badge appearance="tint" size="small" className={styles.pillWarning}>
                 {t.fnoDraftOnly}
               </Badge>
             </Tooltip>
@@ -129,7 +129,7 @@ const ComponentRow: React.FC<ComponentRowProps> = ({
           {comp.configurationName}
         </Body1Strong>
         {comp.version && (
-          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>v{comp.version}</Caption1>
+          <Caption1 className={styles.versionPill}>v{comp.version}</Caption1>
         )}
         {/* A hit pulled out of some other model is meaningless
             without its owner — and clicking it opens that model. */}
@@ -342,14 +342,14 @@ export const ConfigurationBrowser: React.FC<ConfigurationBrowserProps> = ({
 
         {searchActive && !search.running && filteredComponents.length === 0 && (
           <div className={styles.emptyState}>
-            <DocumentSearchRegular fontSize={32} style={{ opacity: 0.3 }} />
-            <Caption1>{t.fnoSearchNoHits(componentFilter.trim() || search.query)}</Caption1>
+            <DocumentSearchRegular className={styles.emptyIcon} />
+            <Caption1 className={styles.emptyTitle}>{t.fnoSearchNoHits(componentFilter.trim() || search.query)}</Caption1>
           </div>
         )}
         {!searchActive && !loadingComponents && filteredComponents.length === 0 && solutionPath.length > 0 && (
           <div className={styles.emptyState}>
-            <DocumentTableRegular fontSize={32} style={{ opacity: 0.3 }} />
-            <Caption1>
+            <DocumentTableRegular className={styles.emptyIcon} />
+            <Caption1 className={styles.emptyTitle}>
               {componentFilter.trim()
                 ? t.fnoSearchNoHits(componentFilter.trim())
                 : t.fnoNoChildren(solutionPath[solutionPath.length - 1])}
@@ -358,8 +358,8 @@ export const ConfigurationBrowser: React.FC<ConfigurationBrowserProps> = ({
         )}
         {!searchActive && !loadingComponents && filteredComponents.length === 0 && solutionPath.length === 0 && !loadingSolutions && (
           <div className={styles.emptyState}>
-            <ChevronDownRegular fontSize={32} style={{ opacity: 0.3 }} />
-            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+            <ChevronDownRegular className={styles.emptyIcon} />
+            <Caption1 className={styles.emptyHint}>
               {t.fnoPickModelHint}
             </Caption1>
           </div>

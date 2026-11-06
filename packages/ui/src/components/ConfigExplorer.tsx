@@ -81,7 +81,7 @@ const KINDS: readonly ConfigKind[] = ['DataModel', 'ModelMapping', 'Format'];
 const KIND_ACCENT: Record<ConfigKind, 'model' | 'mapping' | 'format'> = { DataModel: 'model', ModelMapping: 'mapping', Format: 'format' };
 
 /** Indentation per tree level and the row's own left padding — VS Code's tree metrics. */
-const INDENT = 8;
+const INDENT = 14;
 const ROW_PAD = 8;
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
@@ -1480,7 +1480,8 @@ const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded,
         isSelected ? 'selected' : '',
         isAncestor ? 'ancestor' : '',
       ].filter(Boolean).join(' ')}
-      style={{ paddingLeft: ROW_PAD + depth * INDENT }}
+      // `--vx-depth` draws the indent guides (explorer.css).
+      style={{ paddingLeft: ROW_PAD + depth * INDENT, ['--vx-depth' as string]: depth }}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}

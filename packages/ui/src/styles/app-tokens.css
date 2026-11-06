@@ -3,10 +3,11 @@
    palette that re-points those tokens for the app only (the marketing site
    keeps the brand palette).
 
-   Indigo Ledger: a deep indigo rail and explorer that carry the brand in both
-   themes, calm neutral surfaces with a quiet indigo cast, one indigo accent for
-   what is interactive, gold for the active place in the indigo chrome, Geist
-   and Geist Mono (bundled in main.tsx, nothing is loaded from outside).
+   Indigo Ledger: an indigo sidebar (brand, navigation, explorer) that carries
+   the brand in both themes, light header and footer, the work in rounded
+   panels on a calm grey ground, one indigo accent for what is interactive,
+   gold for the active place in the sidebar, Geist and Geist Mono (bundled in
+   main.tsx, nothing is loaded from outside).
 
    The three ER kinds keep one hue each, chosen clear of the indigo accent:
    model teal, mapping plum, format amber. Text pairs keep WCAG AA (4.5:1).
@@ -34,6 +35,7 @@
     --er-accent-hover: #b4b8ff;
     --er-accent-active: #8a90f5;
     --er-accent-soft: #252a5e;
+    --er-accent-soft-2: #31377a;
     --er-accent-border: rgba(157, 162, 255, 0.4);
     --er-accent-contrast: #0e1022;
     --er-chrome: #121428;
@@ -164,10 +166,10 @@
   --er-duration-fast: 120ms;
   --er-duration: 180ms;
   /* Sizes of the workbench parts, shared by the TSX shell and the CSS. */
-  --wb-titlebar-h: 44px;
-  --wb-header-h: 38px;
+  --wb-titlebar-h: 52px;
+  --wb-header-h: 40px;
   --wb-statusbar-h: 26px;
-  --wb-activitybar-w: 52px;
+  --wb-activitybar-w: 56px;
   --wb-row-h: 22px;
   /* One height for every control that sits in a bar: inputs, text and icon
      buttons, segmented switches. Fluent's `size="small"` buttons are 24px. */
@@ -190,6 +192,7 @@
   --er-accent-hover: #363bb8;
   --er-accent-active: #2f33a0;
   --er-accent-soft: #ecedfb;
+  --er-accent-soft-2: #dee0f8;
   --er-accent-border: rgba(66, 72, 209, 0.4);
   --er-accent-contrast: #ffffff;
   --er-chrome: #f8f9fb;
@@ -314,6 +317,7 @@
   --er-accent-hover: #b4b8ff;
   --er-accent-active: #8a90f5;
   --er-accent-soft: #252a5e;
+  --er-accent-soft-2: #31377a;
   --er-accent-border: rgba(157, 162, 255, 0.4);
   --er-accent-contrast: #0e1022;
   --er-chrome: #121428;
@@ -400,6 +404,7 @@
   --er-accent-hover: #363bb8;
   --er-accent-active: #2f33a0;
   --er-accent-soft: #ecedfb;
+  --er-accent-soft-2: #dee0f8;
   --er-accent-border: rgba(66, 72, 209, 0.4);
   --er-accent-contrast: #ffffff;
   --er-chrome: #f8f9fb;
@@ -461,7 +466,7 @@
   --er-selected: var(--er-side-active);
   --er-border: var(--er-side-line);
   --er-border-strong: #3a3e78;
-  --er-text: #e4e5f6;
+  --er-text: #e8e9f8;
   --er-text-muted: var(--er-side-ink);
   --er-text-subtle: var(--er-side-muted);
   --er-accent: #b3b7ff;
@@ -478,7 +483,7 @@
   --er-accent-fill-hover: #ecd29a;
   --er-on-accent-fill: var(--er-on-gold);
   --er-badge-bg: var(--er-side-active);
-  --er-badge-fg: #e4e5f6;
+  --er-badge-fg: #e8e9f8;
   --er-model: #5fd3c1;
   --er-model-soft: #173a45;
   --er-mapping: #f09ad9;

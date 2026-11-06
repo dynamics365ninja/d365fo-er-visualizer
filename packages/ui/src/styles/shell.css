@@ -1,5 +1,5 @@
-/* Shell: the workbench frame that is not styled in TSX — the activity bar's
-   theme switch and the status bar. */
+/* Shell: the workbench frame that is not styled in TSX — the rail on touch,
+   the status bar and the gap between the cards of the work area. */
 
 .app-statusbar button,
 .app-statusbar span {
@@ -7,12 +7,6 @@
 }
 
 @media (pointer: coarse) {
-  .app-shell .activity-bar__btn {
-    min-width: 44px;
-    width: 44px;
-    height: 44px;
-  }
-
   .app-shell .app-statusbar {
     height: 44px;
     min-height: 44px;
@@ -27,43 +21,47 @@
 
 }
 
-/* ── Activity bar: the shared theme switch sits in the indigo rail as one more
-   tile, with the same size, colours and hover as its neighbours. ── */
-.app-shell .activity-bar .er-theme-switch {
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
-  border: 0;
-  border-radius: 10px;
+.app-statusbar {
+  box-shadow: none;
+}
+
+/* The gap between two cards of the work area is their resize handle: empty
+   ground that shows a line while hovered or dragged. */
+.wb-card-gap {
+  position: relative;
+  flex: 0 0 12px;
+  width: 12px;
+  cursor: col-resize;
+}
+
+.wb-card-gap::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 5px;
+  width: 2px;
+  border-radius: 2px;
   background: transparent;
-  color: var(--er-side-muted);
+  transition: background-color 100ms;
 }
 
-.app-shell .activity-bar .er-theme-switch:hover {
-  border: 0;
-  background: var(--er-side-hover);
-  color: var(--er-side-strong);
+.wb-card-gap[data-resize-handle-state='hover']::after,
+.wb-card-gap[data-resize-handle-state='drag']::after {
+  background: var(--er-accent-fill);
+  transition-delay: 150ms;
 }
 
-.app-shell .activity-bar .er-theme-switch:focus-visible {
-  outline: 2px solid var(--er-gold);
-  outline-offset: 1px;
+.wb-card-gap[data-resize-handle-state='drag']::after {
+  transition-delay: 0ms;
 }
 
-.app-shell .activity-bar .er-theme-switch > svg {
-  width: 20px;
-  height: 20px;
-}
-
+/* The rail's tiles grow to a touch target on a tablet. */
 @media (pointer: coarse) {
-  .app-shell .activity-bar .er-theme-switch {
+  .app-shell .activity-bar__btn {
     min-width: 44px;
     width: 44px;
     height: 44px;
   }
 
-}
-
-.app-statusbar {
-  box-shadow: none;
 }

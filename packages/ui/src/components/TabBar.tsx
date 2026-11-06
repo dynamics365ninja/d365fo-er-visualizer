@@ -15,16 +15,16 @@ import { t, useLocale } from '../i18n';
 import { draggedTabId, isTabDrag, startTabDrag } from '../utils/tab-drag';
 
 const useStyles = makeStyles({
-  // VS Code editor tab strip: the strip is chrome, the active tab is cut
-  // from the editor below it (same ground, no rule underneath) and carries
-  // a line along its top edge.
+  // Card tabs, as in the design: the strip is a soft band along the top of the
+  // designer card, the open tab is a white card tab with rounded top corners
+  // that runs into the content below it.
   root: {
     display: 'flex',
-    alignItems: 'stretch',
+    alignItems: 'flex-end',
     gap: 0,
-    padding: 0,
-    backgroundColor: 'var(--er-chrome)',
-    // An inset rule instead of a border, so the active tab can paint over it.
+    padding: '0 6px 0 8px',
+    backgroundColor: 'var(--er-surface-2)',
+    // An inset rule instead of a border, so the open tab can paint over it.
     boxShadow: 'inset 0 -1px 0 var(--er-border)',
     overflowX: 'auto',
     overflowY: 'hidden',
@@ -36,42 +36,65 @@ const useStyles = makeStyles({
     position: 'relative',
     display: 'inline-flex',
     alignItems: 'center',
-    gap: '6px',
-    height: '100%',
-    maxWidth: '240px',
+    gap: '8px',
+    height: '32px',
+    boxSizing: 'border-box',
+    maxWidth: '260px',
+    marginRight: '2px',
     paddingLeft: '12px',
     paddingRight: '30px',
-    borderRadius: 0,
-    border: 'none',
-    borderRight: '1px solid var(--er-border)',
+    borderRadius: 'var(--er-radius-lg) var(--er-radius-lg) 0 0',
+    border: '1px solid transparent',
+    borderBottom: 'none',
     backgroundColor: 'transparent',
     color: 'var(--er-text-muted)',
     fontSize: 'var(--er-text-md)',
-    fontWeight: 400,
+    fontWeight: 450,
     cursor: 'pointer',
     userSelect: 'none',
     whiteSpace: 'nowrap',
-    transitionProperty: 'color',
+    transitionProperty: 'color, background-color',
     transitionDuration: 'var(--er-duration-fast)',
     '&:hover': {
       color: 'var(--er-text)',
+      backgroundColor: 'var(--er-hover)',
     },
   },
   tabActive: {
-    backgroundColor: 'var(--er-bg-soft)',
+    backgroundColor: 'var(--er-surface)',
+    border: '1px solid var(--er-border)',
+    borderBottom: 'none',
     color: 'var(--er-text)',
     fontWeight: 550,
-    boxShadow: 'inset 0 2px 0 var(--er-accent-fill)',
+    // Over the strip's rule: the tab and the content are one surface.
+    height: '33px',
+    marginBottom: '-1px',
+    zIndex: 1,
     '&:hover': {
       color: 'var(--er-text)',
+      backgroundColor: 'var(--er-surface)',
     },
   },
-  /** The tab on screen in the group without focus: marked, but quieter than the focused one. */
+  /** The tab on screen in the group without focus: open, but quieter than the focused one. */
   tabSide: {
-    backgroundColor: 'var(--er-bg-soft)',
-    boxShadow: 'inset 0 1px 0 var(--er-border-strong)',
-    color: 'var(--er-text)',
+    backgroundColor: 'var(--er-surface)',
+    border: '1px solid var(--er-border)',
+    borderBottom: 'none',
+    color: 'var(--er-text-muted)',
+    height: '33px',
+    marginBottom: '-1px',
+    zIndex: 1,
   },
+  /** The kind of the configuration, as a small square in its colour. */
+  kindDot: {
+    width: '8px',
+    height: '8px',
+    flexShrink: 0,
+    borderRadius: '2px',
+  },
+  kindModel: { backgroundColor: 'var(--er-model)' },
+  kindMapping: { backgroundColor: 'var(--er-mapping)' },
+  kindFormat: { backgroundColor: 'var(--er-format)' },
   tabDrillDown: {
     fontStyle: 'italic',
   },
@@ -154,7 +177,14 @@ export function TabStrip({ pane }: { pane: DesignerPane }) {
   const setDraggingTab = useAppStore(s => s.setDraggingTab);
   const [menu, setMenu] = useState<{ tabId: string; target: HTMLElement } | null>(null);
   const [dropHint, setDropHint] = useState<{ tabId: string; after: boolean } | null>(null);
+  // The kind of each loaded configuration, for the coloured square of its tab.
+  const configKinds = useAppStore(useShallow(s => s.configurations.map(cfg => cfg.content.kind as string)));
   useLocale(); // re-render on language change so aria labels stay localized
+  const kindDotClass = (kind: string | undefined) =>
+    kind === 'DataModel' ? styles.kindModel
+      : kind === 'ModelMapping' ? styles.kindMapping
+        : kind === 'Format' ? styles.kindFormat
+          : undefined;
 
   if (tabs.length === 0) return null;
 
@@ -245,6 +275,9 @@ export function TabStrip({ pane }: { pane: DesignerPane }) {
                 <span className={styles.icon} aria-hidden>
                   <BranchCompareRegular fontSize={13} />
                 </span>
+              )}
+              {!isDrillDown && !isCompare && kindDotClass(configKinds[tab.configIndex]) && (
+                <span className={mergeClasses(styles.kindDot, kindDotClass(configKinds[tab.configIndex]))} aria-hidden />
               )}
               <span className={styles.label}>{tab.label}</span>
               <Button

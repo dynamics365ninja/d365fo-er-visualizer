@@ -1,0 +1,267 @@
+/* Ledger: the content of the work area as the Indigo Ledger design draws it —
+   panel headers with a title and quiet counts, rows with rounded corners and a
+   soft indigo selection, the property inspector as label / value lines on a
+   white card. Loaded after the component stylesheets, so these few rules
+   restyle what they already lay out instead of repeating it. */
+
+/* ── Designer headers: title row and page tabs ── */
+.app-shell .fmt-header {
+  min-height: 48px;
+  padding: 8px 16px;
+  gap: 10px;
+}
+
+.app-shell .fmt-header-title {
+  font-size: var(--er-text-lg);
+  letter-spacing: -0.2px;
+}
+
+.app-shell .fmt-toolbar {
+  padding-left: 16px;
+  padding-right: 12px;
+}
+
+/* ── Rows: rounded, a soft indigo band with a hairline ring when selected ── */
+.app-shell .fmt-element-row,
+.app-shell .ds-row,
+.app-shell .mm-binding-row {
+  border-radius: 7px;
+}
+
+.app-shell .fmt-element-row.selected,
+.app-shell .fmt-element-row.selected:hover {
+  background: var(--er-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+}
+
+.app-shell .spec-row.selected {
+  background: var(--er-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+}
+
+/* ── Property inspector: name and kind on top, then label / value lines ── */
+.app-shell .prop-head {
+  gap: 6px;
+  padding: 14px 16px 12px;
+}
+
+.app-shell .prop-head__name {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.app-shell .prop-head__kind {
+  border: 0;
+  background: var(--er-surface-2);
+  padding: 2px 10px;
+}
+
+.app-shell .prop-head__kind--model { background: var(--er-model-soft); }
+.app-shell .prop-head__kind--mapping { background: var(--er-mapping-soft); }
+.app-shell .prop-head__kind--format { background: var(--er-format-soft); }
+
+.app-shell .prop-grid {
+  grid-template-columns: minmax(96px, 36%) 1fr;
+  font-size: var(--er-text-md);
+}
+
+.app-shell .prop-grid .prop-label {
+  padding: 9px 8px 9px 16px;
+  background: transparent;
+  font-size: var(--er-text-sm);
+  font-weight: 450;
+  color: var(--er-text-muted);
+  border-top-color: var(--er-border);
+}
+
+.app-shell .prop-grid .prop-value {
+  padding: 9px 16px 9px 8px;
+  font-size: var(--er-text-md);
+  border-top-color: var(--er-border);
+}
+
+/* Grouped properties: a rounded box on the card, its title a quiet caption. */
+.app-shell .property-card {
+  border-radius: var(--er-radius-lg) !important;
+  border-color: var(--er-border);
+}
+
+.app-shell .property-card-title {
+  padding: 8px 12px;
+  background: var(--er-surface-2);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--er-text-muted);
+}
+
+/* ── The designer's empty state sits on the white card ── */
+.app-shell .designer-empty-card {
+  border-radius: var(--er-radius-xl);
+}
+
+/* ── Badges: capsules in the tint of what they mark (dialogs too, which
+   render outside the shell) ── */
+.badge {
+  border-radius: var(--er-radius-pill);
+  padding: 1px 8px;
+}
+
+.badge-tiny {
+  padding: 1px 7px;
+}
+
+.badge-datamodel,
+.badge-modelmapping,
+.badge-format {
+  border: 0;
+  font-weight: 550;
+}
+
+.badge-datamodel { background: var(--er-model-soft); color: var(--er-model); }
+.badge-modelmapping { background: var(--er-mapping-soft); color: var(--er-mapping); }
+.badge-format { background: var(--er-format-soft); color: var(--er-format); }
+
+/* ── Search and where-used: results grouped by configuration ──
+   Each configuration is a rounded box with its name and kind on top; the
+   categories inside are quiet captions led by a dot in their colour, and
+   the hits are rounded rows that light up on hover — no rails, no tints. */
+.app-shell .search-panel {
+  background: var(--er-surface) !important;
+  padding: 12px !important;
+}
+
+.app-shell .search-results {
+  gap: 8px;
+}
+
+.app-shell .search-result-group {
+  border: 1px solid var(--er-border) !important;
+  border-left: 1px solid var(--er-border) !important;
+  border-radius: var(--er-radius-lg) !important;
+  background: var(--er-surface) !important;
+}
+
+.app-shell .search-result-group-header {
+  min-height: 40px;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--er-surface-2) !important;
+  border-bottom: 1px solid var(--er-border) !important;
+  font-size: var(--er-text-md);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--er-text);
+}
+
+.app-shell .search-result-group-header:hover {
+  background: var(--er-hover) !important;
+}
+
+.app-shell .search-result-group-header[aria-expanded='false'] {
+  border-bottom: 0 !important;
+}
+
+.app-shell .search-result-group-name {
+  font-family: var(--font-sans);
+}
+
+.app-shell .search-result-group-model {
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  padding: 1px 8px;
+}
+
+.app-shell .search-result-group-body {
+  padding: 4px 0 6px;
+}
+
+.app-shell .search-cat__header {
+  gap: 7px;
+  padding: 8px 14px 4px;
+  background: transparent;
+  border-top: 0;
+}
+
+.app-shell .search-cat__marker {
+  width: 6px;
+  height: 6px;
+  min-height: 0;
+  align-self: center;
+  border-radius: 50%;
+}
+
+.app-shell .search-cat__title {
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--er-text-muted);
+}
+
+.app-shell .search-cat__rows .search-hit,
+.app-shell .search-result-group-body .search-hit {
+  width: auto;
+  margin: 0 6px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+}
+
+.app-shell .search-cat__rows .search-hit:hover,
+.app-shell .search-result-group-body .search-hit:hover {
+  background: var(--er-hover);
+}
+
+.app-shell .search-result-group-body .search-cat__rows .search-hit + .search-hit,
+.app-shell .search-result-group-body .search-hit + .search-hit {
+  border-top: 0;
+}
+
+.app-shell .search-hit__location {
+  color: var(--er-text);
+  font-weight: 550;
+}
+
+/* The matched text: a soft indigo mark, not a loud warning colour. */
+.app-shell .search-highlight {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: var(--er-accent-soft-2) !important;
+  color: var(--er-text);
+  font-weight: 650;
+}
+
+/* ── Workspace manager: where a configuration came from, as a quiet pill ── */
+.ws-source {
+  padding: 0 8px;
+  border-radius: var(--er-radius-pill);
+  font-size: var(--er-text-2xs);
+  font-weight: 550;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  line-height: 18px;
+}
+
+/* ── Tab counts: a grey pill beside the name, indigo on the open tab (as the
+   License Hub's tabs show them) ── */
+.fmt-sliding-tabs__count {
+  margin-left: 7px;
+  padding: 0 7px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.fmt-sliding-tabs__btn.active .fmt-sliding-tabs__count {
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}

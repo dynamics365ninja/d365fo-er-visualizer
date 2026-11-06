@@ -13,7 +13,6 @@ import { ConfigKindIcon, FormatKindIcon, MappingKindIcon, ModelKindIcon } from '
 import { useAppStore, selectMappingDefinition, lastActiveFormatIndex, getMappingDefinitions, isSplitView, type DesignerPane, type OpenTab } from '../state/store';
 import { draggedTabId, isTabDrag } from '../utils/tab-drag';
 import { TabStrip } from './TabBar';
-import { TraceBar } from './designers/TraceBar';
 import { SPLIT_MAX, SPLIT_MIN, useIsNarrow, useSplitRatio } from '../utils/split-ratio';
 
 /**
@@ -230,7 +229,6 @@ export function DesignerView() {
      scroll position or an opened branch were gone on the way back. Each group
      has its own tab strip above its column, as in an IDE. */
   return (
-    <div className="designer-frame">
     <div
       ref={setGridEl}
       className={`designer-tabs${split ? ' designer-tabs--split' : ''}${split && narrow ? ' designer-tabs--narrow' : ''}`}
@@ -322,9 +320,6 @@ export function DesignerView() {
           ))}
         </div>
       )}
-    </div>
-    {/* The selected format element's way to its data, below every group. */}
-    <TraceBar />
     </div>
   );
 }

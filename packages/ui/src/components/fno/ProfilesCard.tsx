@@ -142,9 +142,9 @@ export const ProfilesCard: React.FC<ProfilesCardProps> = ({
 
       {profiles.length === 0 ? (
         <div className={styles.profileEmptyState}>
-          <ServerRegular fontSize={28} style={{ color: tokens.colorNeutralForeground3 }} />
-          <Body1Strong>{t.fnoNoProfiles}</Body1Strong>
-          <Caption1 style={{ color: tokens.colorNeutralForeground3, maxWidth: '420px' }}>
+          <ServerRegular className={styles.emptyIcon} />
+          <Body1Strong className={styles.emptyTitle}>{t.fnoNoProfiles}</Body1Strong>
+          <Caption1 className={styles.emptyHint} style={{ maxWidth: '420px' }}>
             {t.fnoNoProfilesHint}
           </Caption1>
           <Button

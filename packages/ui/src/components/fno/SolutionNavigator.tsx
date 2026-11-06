@@ -94,10 +94,10 @@ export const SolutionNavigator: React.FC<SolutionNavigatorProps> = ({
       ? children.filter(c => solNodeMatchesFilter(c, q))
       : children;
 
-    // Fluent spacingHorizontalM ≈ 12px; add 16px per extra level
-    const basePad = 12;
+    // The row's own 10px inset, plus 16px per extra level. (The selected row
+    // used to be 3px shorter to make room for a left rail it no longer has.)
+    const basePad = 10;
     const padLeft = depth > 0 ? `${basePad + depth * 16}px` : undefined;
-    const padLeftActive = depth > 0 ? `${basePad + depth * 16 - 3}px` : undefined;
 
     return (
       <React.Fragment key={sol.solutionName}>
@@ -108,7 +108,7 @@ export const SolutionNavigator: React.FC<SolutionNavigatorProps> = ({
               ? (depth > 0 ? styles.listItemChildActive : styles.listItemActive)
               : (depth > 0 ? styles.listItemChild : ''),
           )}
-          style={depth > 0 ? { paddingLeft: isActive ? padLeftActive : padLeft } : undefined}
+          style={depth > 0 ? { paddingLeft: padLeft } : undefined}
           onClick={() => handlePickSolution(sol.solutionName)}
           role="button"
           tabIndex={0}
@@ -141,7 +141,7 @@ export const SolutionNavigator: React.FC<SolutionNavigatorProps> = ({
             )}
           </div>
           {hasChildren && (
-            <Badge appearance="outline" size="small" style={{ flexShrink: 0, fontSize: '10px' }}>
+            <Badge appearance="tint" size="small" className={styles.pillNeutral} style={{ flexShrink: 0 }}>
               {children.length}
             </Badge>
           )}
@@ -228,9 +228,9 @@ export const SolutionNavigator: React.FC<SolutionNavigatorProps> = ({
             cross-model search exists for — say so instead of a blank. */}
         {!loadingSolutions && solutionTree.length > 0 && visibleSolutionTree.length === 0 && (
           <div className={styles.emptyState}>
-            <DocumentSearchRegular fontSize={28} style={{ opacity: 0.3 }} />
-            <Caption1>{t.fnoNoModelMatch(solutionFilter.trim())}</Caption1>
-            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+            <DocumentSearchRegular className={styles.emptyIcon} />
+            <Caption1 className={styles.emptyTitle}>{t.fnoNoModelMatch(solutionFilter.trim())}</Caption1>
+            <Caption1 className={styles.emptyHint}>
               {t.fnoNoModelMatchHint}
             </Caption1>
           </div>
@@ -238,9 +238,9 @@ export const SolutionNavigator: React.FC<SolutionNavigatorProps> = ({
 
         {!loadingSolutions && solutionTree.length === 0 && !solutionFilter && (
           <div className={styles.emptyState}>
-            <TableSimpleRegular fontSize={32} style={{ opacity: 0.3 }} />
-            <Caption1>{t.fnoNoSolutionsFound}</Caption1>
-            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+            <TableSimpleRegular className={styles.emptyIcon} />
+            <Caption1 className={styles.emptyTitle}>{t.fnoNoSolutionsFound}</Caption1>
+            <Caption1 className={styles.emptyHint}>
               {t.fnoCustomRootHint}
             </Caption1>
             <div className={styles.emptyStateRow}>

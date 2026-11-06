@@ -4,6 +4,7 @@ import {
   Tooltip,
   Divider,
   makeStyles,
+  mergeClasses,
 } from '@fluentui/react-components';
 import {
   ArrowLeftRegular,
@@ -11,39 +12,25 @@ import {
   FolderOpenRegular,
 } from '@fluentui/react-icons';
 import { useAppStore } from '../state/store';
-import { t } from '../i18n';
+import { setLocale, t, useLocale } from '../i18n';
 import { loadBrowserFiles, openFilesWithSystemDialog } from '../utils/file-loading';
-import { BrandWordmark } from './BrandWordmark';
+import { ThemeSwitch } from './ThemeSwitch';
 
 const useStyles = makeStyles({
+  // The workspace header, light like the landing page's top bar: what you do
+  // with files and history on the left, how the app looks on the right.
   root: {
-    // The wordmark is centred on the bar itself, not on what is left beside
-    // the button group — that changes width with the locale and with whether
-    // the history buttons are live.
-    position: 'relative',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    padding: '0 8px',
-    backgroundColor: 'var(--er-chrome)',
+    justifyContent: 'space-between',
+    gap: '12px',
+    padding: '0 12px',
+    backgroundColor: 'var(--er-surface)',
     borderBottom: '1px solid var(--er-border)',
     height: 'var(--wb-titlebar-h)',
     minHeight: 'var(--wb-titlebar-h)',
     flexShrink: 0,
-  },
-  brand: {
-    position: 'absolute',
-    left: '50%',
-    top: '50%',
-    transform: 'translate(-50%, -50%)',
-    display: 'flex',
-    // Decoration, not a control: never take a click meant for the toolbar.
-    pointerEvents: 'none',
-    userSelect: 'none',
-    // Below this the load button claims the middle.
-    '@media (max-width: 860px)': {
-      display: 'none',
-    },
+    boxSizing: 'border-box',
   },
   leftGroup: {
     display: 'flex',
@@ -51,6 +38,12 @@ const useStyles = makeStyles({
     gap: '6px',
     minWidth: 0,
     flexShrink: 1,
+  },
+  rightGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexShrink: 0,
   },
   nav: {
     display: 'flex',
@@ -64,20 +57,82 @@ const useStyles = makeStyles({
   hiddenInput: {
     display: 'none',
   },
+  // On a phone the button keeps its icon and tooltip; the words would wrap.
+  loadLabel: {
+    '@media (max-width: 480px)': {
+      display: 'none',
+    },
+  },
+  // Segmented switches of the License Hub: a sunken track, the pressed
+  // segment lifted.
+  segmented: {
+    display: 'inline-flex',
+    gap: '2px',
+    height: '32px',
+    boxSizing: 'border-box',
+    padding: '3px',
+    borderRadius: 'var(--er-radius-lg)',
+    backgroundColor: 'var(--er-surface-3)',
+  },
+  segment: {
+    minWidth: '34px',
+    padding: '0 10px',
+    border: 'none',
+    borderRadius: 'var(--er-radius-md)',
+    backgroundColor: 'transparent',
+    color: 'var(--er-text-muted)',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    fontWeight: 550,
+    whiteSpace: 'nowrap',
+    cursor: 'pointer',
+    ':hover': {
+      color: 'var(--er-text)',
+    },
+    ':focus-visible': {
+      outline: '2px solid var(--er-accent)',
+      outlineOffset: '1px',
+    },
+  },
+  segmentOn: {
+    backgroundColor: 'var(--er-surface)',
+    color: 'var(--er-text)',
+    boxShadow: '0 1px 2px var(--er-shadow-color)',
+  },
+  // On a narrow screen the view mode gives way; it is in the explorer too.
+  viewMode: {
+    '@media (max-width: 720px)': {
+      display: 'none',
+    },
+  },
+  theme: {
+    // The shared switch is 36px; the header's controls are 32px.
+    '& .er-theme-switch': {
+      width: '32px',
+      minWidth: '32px',
+      height: '32px',
+    },
+  },
 });
 
 /**
- * Slim top toolbar — file/history operations. View toggles, the language and
- * the theme live on the left ActivityBar.
+ * The workspace header — history and loading files on the left; the view mode,
+ * the language and the theme on the right. The explorer and the panels are
+ * toggled from the rail.
  */
 export function Toolbar() {
   const styles = useStyles();
+  const currentLocale = useLocale();
+  // eslint-disable-next-line no-restricted-syntax -- which language button is pressed, not text
+  const isCs = currentLocale === 'cs';
   const loadXmlFile = useAppStore(s => s.loadXmlFile);
   const canNavigateBack = useAppStore(s => s.canNavigateBack);
   const canNavigateForward = useAppStore(s => s.canNavigateForward);
   const navigateBack = useAppStore(s => s.navigateBack);
   const navigateForward = useAppStore(s => s.navigateForward);
   const pushToast = useAppStore(s => s.pushToast);
+  const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
+  const setShowTechnicalDetails = useAppStore(s => s.setShowTechnicalDetails);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reportLoadErrors = useCallback((errors: string[]) => {
@@ -100,6 +155,7 @@ export function Toolbar() {
     }
     if (result.errors.length > 0) reportLoadErrors(result.errors);
   }, [loadXmlFile, reportLoadErrors]);
+
 
   return (
     <div className={styles.root}>
@@ -145,13 +201,53 @@ export function Toolbar() {
             icon={<FolderOpenRegular />}
             onClick={handleOpenFiles}
           >
-            {t.loadXml}
+            <span className={styles.loadLabel}>{t.loadXml}</span>
           </Button>
         </Tooltip>
       </div>
 
-      <div className={styles.brand} aria-hidden="true">
-        <BrandWordmark />
+      <div className={styles.rightGroup}>
+        <div className={mergeClasses(styles.segmented, styles.viewMode)} role="group" aria-label={t.viewModeLabel}>
+          <button
+            type="button"
+            className={mergeClasses(styles.segment, !showTechnicalDetails && styles.segmentOn)}
+            aria-pressed={!showTechnicalDetails}
+            title={t.consultantView}
+            onClick={() => setShowTechnicalDetails(false)}
+          >
+            {t.viewConsultantShort}
+          </button>
+          <button
+            type="button"
+            className={mergeClasses(styles.segment, showTechnicalDetails && styles.segmentOn)}
+            aria-pressed={showTechnicalDetails}
+            title={t.technicalView}
+            onClick={() => setShowTechnicalDetails(true)}
+          >
+            {t.viewTechnicalShort}
+          </button>
+        </div>
+        <div className={styles.segmented} role="group" aria-label={t.language}>
+          <button
+            type="button"
+            className={mergeClasses(styles.segment, isCs && styles.segmentOn)}
+            aria-pressed={isCs}
+            title={t.languageCzech}
+            onClick={() => setLocale('cs')}
+          >
+            CZ
+          </button>
+          <button
+            type="button"
+            className={mergeClasses(styles.segment, !isCs && styles.segmentOn)}
+            aria-pressed={!isCs}
+            title={t.languageEnglish}
+            onClick={() => setLocale('en')}
+          >
+            EN
+          </button>
+        </div>
+        <span className={styles.theme}><ThemeSwitch /></span>
       </div>
     </div>
   );

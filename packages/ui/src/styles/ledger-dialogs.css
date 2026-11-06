@@ -1,0 +1,925 @@
+/* Indigo Ledger — dialogs. Loaded after the component stylesheets (see index.css). */
+
+/* Fluent renders dialogs, menus, popovers and tooltips in portals outside
+   `.app-shell`, and injects its own styles after ours: a single class ties on
+   specificity and loses on order. The rules for Fluent's parts therefore lead
+   with `body` (one element more) and never depend on the shell. Hover rules
+   of Fluent are `.class:hover`, so ours carry a class more where they meet. */
+
+/* ── Dialogs: 16px corners and the dialog shadow; a 22px header with an 18px
+   title; the actions in a soft footer bar under a hairline, edge to edge.
+   The drill-down dialog draws its own title bar and is left alone. ── */
+body .fui-DialogSurface:not(.dd-dialog-surface) {
+  padding-top: 22px;
+  border-radius: 16px;
+  box-shadow: var(--er-shadow-3);
+}
+
+body .fui-DialogSurface:not(.dd-dialog-surface) .fui-DialogTitle {
+  padding-bottom: 6px;
+  color: var(--er-text);
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+body .fui-DialogSurface:not(.dd-dialog-surface) .fui-DialogContent {
+  line-height: 1.5;
+}
+
+/* With a footer, the surface ends where the footer does. */
+body .fui-DialogSurface:not(.dd-dialog-surface):has(> .fui-DialogBody > .fui-DialogActions) {
+  padding-bottom: 0;
+}
+
+/* The footer: the soft ground of a sunken bar (in light the same as
+   surface-2; in dark one step below the raised dialog, where surface-2
+   would vanish), spanning the dialog's whole width. */
+body .fui-DialogSurface:not(.dd-dialog-surface) > .fui-DialogBody > .fui-DialogActions {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px -24px 0;
+  padding: 14px 24px 16px;
+  border-top: 1px solid var(--er-border);
+  border-radius: 0 0 15px 15px;
+  background: var(--er-surface-sunken);
+}
+
+/* ── Buttons: Ledger weight. Radius (9px) and the hover tint come from the
+   theme (fluent-themes.ts). ── */
+body .fui-Button {
+  font-weight: 500;
+}
+
+/* ── Menus: a white popover with a hairline and the popover shadow; items
+   are 32px rounded rows that light up on hover, in body text, not grey. ── */
+body .fui-MenuPopover {
+  padding: 4px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  box-shadow: var(--er-shadow-2);
+}
+
+body .fui-MenuItem {
+  gap: 8px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: var(--er-radius-md);
+  font-size: var(--er-text-md);
+  line-height: 20px;
+}
+
+body .fui-MenuItem:not([aria-disabled='true']) {
+  color: var(--er-text);
+}
+
+/* Icons at the text's scale, muted until the row is hovered (then the
+   theme turns them the accent). */
+body .fui-MenuItem__icon {
+  width: 16px;
+  height: 20px;
+  font-size: 16px;
+  color: var(--er-text-muted);
+}
+
+body .fui-MenuDivider {
+  margin: 4px -4px;
+}
+
+/* Dropdown and combobox lists: the same popover, the same rows. */
+body .fui-Listbox {
+  padding: 4px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  box-shadow: var(--er-shadow-2);
+}
+
+body .fui-Option {
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: var(--er-radius-md);
+}
+
+/* ── Popovers: a white card with a hairline; the drop shadow keeps the
+   arrow in, so the arrow takes the hairline and a near-square tip. ── */
+body .fui-PopoverSurface {
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  filter: drop-shadow(0 10px 18px var(--er-shadow-color));
+}
+
+body .fui-PopoverSurface > div:empty,
+body .fui-PopoverSurface > div:empty::before {
+  border-bottom-left-radius: 2px;
+}
+
+body .fui-PopoverSurface > div:empty::before {
+  border-color: var(--er-border);
+}
+
+/* The status bar's warnings: a 44px header with the title and the close
+   button, the warnings as rounded rows led by a dot in their severity's
+   colour. The dot takes the colour the old left rail had (its border colour,
+   inherited), so no severity class is needed here. */
+.app-statusbar__warnings > div:has(> .fui-Button) {
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 6px 8px 6px 14px;
+  border-bottom-color: var(--er-border);
+}
+
+.app-statusbar__warnings > div:has(> .fui-Button) .fui-Body1Strong {
+  font-size: var(--er-text-lg);
+  letter-spacing: -0.2px;
+}
+
+.app-statusbar__warnings > ul {
+  padding: 4px;
+}
+
+.app-statusbar__warnings > ul > li {
+  position: relative;
+  padding: 8px 10px 8px 26px;
+  border-bottom: 0;
+  border-left-width: 0;
+  border-radius: 7px;
+}
+
+.app-statusbar__warnings > ul > li:hover {
+  background: var(--er-hover);
+}
+
+.app-statusbar__warnings > ul > li::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: 11px;
+  width: 0;
+  height: 6px;
+  border-left: 6px solid;
+  border-left-color: inherit;
+  border-radius: 50%;
+}
+
+/* ── Tooltips: a small indigo label, the brand's chrome colour in both
+   themes (one step lighter than the sidebar, so it still reads over it). ── */
+body .fui-Tooltip__content {
+  padding: 5px 10px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--er-radius-md);
+  background-color: var(--er-side-active);
+  color: var(--er-side-strong);
+  font-size: var(--er-text-sm);
+  line-height: 17px;
+  filter: drop-shadow(0 6px 14px var(--er-shadow-color));
+}
+
+body .fui-Tooltip__content > div:empty,
+body .fui-Tooltip__content > div:empty::before {
+  border-bottom-left-radius: 2px;
+}
+
+/* ── Fields: one even border, a 3px accent ring on focus instead of
+   Fluent's underline. ── */
+body :is(.fui-Input, .fui-Textarea, .fui-Dropdown, .fui-Combobox, .fui-SpinButton)::after {
+  content: none;
+}
+
+body :is(.fui-Input, .fui-Textarea, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):focus-within {
+  border-color: var(--er-accent);
+  box-shadow: 0 0 0 3px var(--er-accent-soft-2);
+}
+
+/* On indigo the page's soft ring would glare; the accent at a quarter. */
+.wb-indigo :is(.fui-Input, .fui-Textarea, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--er-accent) 28%, transparent);
+}
+
+/* The theme rounds small parts to 6px; a 16px box keeps 4px. */
+body .fui-Checkbox__indicator {
+  border-radius: var(--er-radius-sm);
+}
+
+/* ── Message bars: rounded tinted boxes. Error, warning and success take
+   the state tints from the theme; information is Fluent's grey, so the two
+   variables it reads are re-pointed on the bar itself (blue) and handed
+   back to its children, whose buttons read them too. ── */
+body .fui-MessageBar {
+  --colorNeutralBackground3: var(--er-info-soft);
+  --colorNeutralStroke1: var(--er-info-border);
+  --colorNeutralForeground3: var(--er-info);
+  padding-left: 14px;
+  border-radius: var(--er-radius-lg);
+}
+
+body .fui-MessageBar > :not(.fui-MessageBar__icon) {
+  --colorNeutralBackground3: var(--er-surface-2);
+  --colorNeutralStroke1: var(--er-input-border);
+  --colorNeutralForeground3: var(--er-text-subtle);
+}
+
+body .fui-MessageBar__icon {
+  font-size: 18px;
+}
+
+/* ── Status bar: a white footer. Its items are quiet text that turns into
+   a pill on hover; the validator is a status pill led by a dot — green
+   while the configuration is fine, amber with warnings. ── */
+.app-shell .app-statusbar {
+  gap: 4px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-top: 1px solid var(--er-border);
+  background: var(--er-surface);
+  color: var(--er-text-muted);
+}
+
+@media (pointer: coarse) {
+  .app-shell .app-statusbar {
+    height: 44px;
+    min-height: 44px;
+  }
+}
+
+.app-shell .app-statusbar > span:not([role='button']) {
+  align-self: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--er-radius-pill);
+  transition: background-color var(--er-duration-fast) var(--er-ease), color var(--er-duration-fast) var(--er-ease);
+}
+
+.app-shell .app-statusbar > span:not([role='button']):hover {
+  background: var(--er-hover);
+  color: var(--er-text);
+}
+
+.app-shell .app-statusbar > [role='button'] {
+  align-self: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 10px 0 9px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-success-soft);
+  color: var(--er-success);
+  font-weight: 550;
+  cursor: default;
+}
+
+.app-shell .app-statusbar > [role='button'] > svg {
+  display: none;
+}
+
+.app-shell .app-statusbar > [role='button']::before {
+  content: '';
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.app-shell .app-statusbar > [role='button']:hover {
+  background: color-mix(in srgb, var(--er-success) 14%, var(--er-success-soft));
+}
+
+/* Warnings: the validator in its issues state. */
+.app-shell .app-statusbar > .app-statusbar__validator--issues {
+  background: var(--er-warning-soft);
+  color: var(--er-warning);
+  cursor: pointer;
+}
+
+.app-shell .app-statusbar > .app-statusbar__validator--issues:hover {
+  background: color-mix(in srgb, var(--er-warning) 16%, var(--er-warning-soft));
+}
+
+/* ── Workspace manager: two rounded boxes on the dialog, titled in sentence
+   case; configurations are rounded rows led by a tile in their kind's tint,
+   versions are pills; the load list holds white cards; empty lists say so
+   in a dashed placeholder. ── */
+.ws-surface .ws-titlebar {
+  padding-right: 48px;
+}
+
+.ws-surface .ws-dialog-close {
+  top: 20px;
+  right: 18px;
+}
+
+.ws-surface .ws-toolbar {
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.ws-surface .ws-columns {
+  gap: 12px;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.ws-surface .ws-column,
+.ws-surface .ws-column + .ws-column {
+  padding: 4px 4px 6px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-xl);
+  background: var(--er-surface-sunken);
+  overflow: hidden;
+}
+
+.ws-surface .ws-column-body {
+  padding: 0 2px;
+}
+
+.ws-surface .ws-section-head {
+  min-height: 36px;
+  margin: 0 0 2px;
+  padding: 6px 4px 4px 10px;
+  color: var(--er-text);
+  font-size: var(--er-text-lg);
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  text-transform: none;
+}
+
+.ws-surface .ws-section-head--spaced {
+  margin-top: 14px;
+}
+
+/* The kinds inside the cache list: small captions. */
+.ws-surface .ws-subhead {
+  padding: 12px 10px 4px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.ws-surface .ws-list > .ws-subhead:first-child {
+  padding-top: 4px;
+}
+
+.ws-surface .ws-row {
+  gap: 10px;
+  padding: 6px 6px 6px calc(8px + var(--ws-depth, 0) * 18px);
+  border: 0;
+  border-radius: 7px;
+}
+
+.ws-surface .ws-row:hover {
+  background: var(--er-hover);
+}
+
+/* A picking row: the button inside carries the padding; a version hangs
+   under its configuration's name (tile 26px + gap 10px). */
+.ws-surface .ws-row--pick {
+  padding: 0 6px 0 0;
+}
+
+.ws-surface .ws-row-main {
+  gap: 10px;
+  padding: 6px 0 6px calc(8px + var(--ws-depth, 0) * 36px);
+  border-radius: 7px;
+}
+
+.ws-surface .ws-row--group {
+  padding-top: 8px;
+  padding-bottom: 2px;
+}
+
+.ws-surface .ws-row--group:hover {
+  background: transparent;
+}
+
+/* Picked for loading: a white card with a hairline ring. */
+.ws-surface .ws-row--staged,
+.ws-surface .ws-row--staged:hover {
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-raised);
+  box-shadow: var(--er-shadow-1), inset 0 0 0 1px var(--er-border);
+}
+
+.ws-surface .ws-row--staged:hover {
+  box-shadow: var(--er-shadow-1), inset 0 0 0 1px var(--er-border-strong);
+}
+
+.ws-surface .ws-kind-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--er-surface-3);
+}
+
+.ws-surface .ws-kind-icon--model { background: var(--er-model-soft); }
+.ws-surface .ws-kind-icon--mapping { background: var(--er-mapping-soft); }
+.ws-surface .ws-kind-icon--format { background: var(--er-format-soft); }
+
+.ws-surface .ws-row-body {
+  gap: 3px;
+}
+
+.ws-surface .ws-row-meta {
+  gap: 6px;
+  font-size: var(--er-text-xs);
+}
+
+.ws-surface .ws-version {
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-badge-bg);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 500;
+  line-height: 18px;
+}
+
+/* Notes are status pills: what is loaded (accent), what a pick replaces (amber). */
+.ws-surface .ws-note {
+  padding: 0 8px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+  font-style: normal;
+  font-weight: 550;
+  line-height: 18px;
+}
+
+.ws-surface .ws-note--warn {
+  background: var(--er-warning-soft);
+  color: var(--er-warning);
+}
+
+.ws-surface .ws-related {
+  margin-top: 10px;
+}
+
+.ws-surface .ws-related-head {
+  padding: 8px 10px 4px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ws-surface .ws-empty {
+  margin: 2px 6px 8px;
+  padding: 18px 14px;
+  border: 1px dashed var(--er-border-strong);
+  border-radius: var(--er-radius-lg);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-md);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.ws-surface .ws-column .ws-hint {
+  margin: 6px 2px 0;
+  padding: 9px 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-raised);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  line-height: 1.45;
+}
+
+/* The load bar closes the right box: white, under a hairline. */
+.ws-surface .ws-load-bar {
+  gap: 8px;
+  margin: 6px -4px -6px;
+  padding: 10px 10px 10px 12px;
+  border-top: 1px solid var(--er-border);
+  background: var(--er-surface-raised);
+}
+
+.ws-surface .ws-load-bar .fui-Button {
+  min-height: 30px;
+}
+
+/* ── Dependency prompt: each candidate a rounded row with its kind as a
+   tinted tile and label; a ticked row takes the soft indigo selection. No
+   coloured rails; the note is a soft indigo box. ── */
+.dep-prompt .dep-prompt__body {
+  margin-bottom: 14px;
+  line-height: 1.55;
+}
+
+.dep-prompt .dep-prompt__note {
+  margin: -4px 0 14px;
+  padding: 9px 12px;
+  border: 1px solid var(--er-accent-soft-2);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-accent-soft);
+  color: var(--er-text);
+}
+
+.dep-prompt .dep-prompt__list {
+  gap: 6px;
+}
+
+.dep-prompt .dep-prompt__row {
+  padding: 2px 10px 2px 2px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-raised);
+  box-shadow: none;
+  transition: background-color var(--er-duration-fast) var(--er-ease), border-color var(--er-duration-fast) var(--er-ease);
+}
+
+.dep-prompt .dep-prompt__row:hover {
+  background: var(--er-hover);
+}
+
+.dep-prompt .dep-prompt__row:has(input:checked) {
+  border-color: var(--er-accent-soft-2);
+  background: var(--er-accent-soft);
+}
+
+.dep-prompt .dep-prompt__row--unavailable,
+.dep-prompt .dep-prompt__row--unavailable:hover {
+  border-style: dashed;
+  background: transparent;
+}
+
+/* The kind: a tinted tile and the label in the kind's colour; the minimum
+   width keeps the names lined up across rows. */
+.dep-prompt .ws-kind {
+  gap: 7px;
+  min-width: 128px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--er-text-sm);
+  font-weight: 550;
+  letter-spacing: 0;
+}
+
+.dep-prompt .ws-kind > svg {
+  box-sizing: content-box;
+  padding: 4px;
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface-3);
+}
+
+.dep-prompt .ws-kind--model > svg { background: var(--er-model-soft); }
+.dep-prompt .ws-kind--mapping > svg { background: var(--er-mapping-soft); }
+.dep-prompt .ws-kind--format > svg { background: var(--er-format-soft); }
+
+.dep-prompt .dep-prompt__meta {
+  padding: 0 7px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-badge-bg);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  line-height: 18px;
+}
+
+.dep-prompt .dep-prompt__unavailable {
+  color: var(--er-text-subtle);
+  font-style: normal;
+}
+
+/* ── Version compare picker: the title led by an accent tile, the loaded
+   version as a status pill, the cached versions as rounded rows in a soft
+   box with the version as a mono pill; the mode switch is a quiet link
+   button. ── */
+.vcmp-picker .vcmp-picker__title {
+  gap: 10px;
+}
+
+.vcmp-picker .vcmp-picker__title > svg {
+  box-sizing: content-box;
+  padding: 5px;
+  border-radius: var(--er-radius-md);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+.vcmp-picker .vcmp-picker__intro {
+  margin: 0 0 10px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-md);
+  line-height: 1.55;
+}
+
+.vcmp-picker .vcmp-picker__loaded {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 1px 10px 1px 8px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  line-height: 18px;
+}
+
+.vcmp-picker .vcmp-picker__loaded::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.vcmp-picker .vcmp-picker__heading {
+  margin: 4px 0 6px;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.vcmp-picker .vcmp-picker__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 12px;
+  padding: 4px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-sunken);
+}
+
+.vcmp-picker .vcmp-picker__list li + li {
+  border-top: 0;
+}
+
+.vcmp-picker .vcmp-picker__row {
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: var(--er-text-md);
+}
+
+.vcmp-picker .vcmp-picker__row:hover,
+.vcmp-picker .vcmp-picker__row:focus-visible {
+  background: var(--er-hover);
+}
+
+.vcmp-picker .vcmp-picker__version {
+  box-sizing: border-box;
+  min-width: 52px;
+  padding: 0 8px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-badge-bg);
+  color: var(--er-text);
+  font-family: var(--font-mono);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  line-height: 20px;
+  text-align: center;
+}
+
+.vcmp-picker .vcmp-picker__tag {
+  padding: 0 8px;
+  border-radius: var(--er-radius-pill);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  line-height: 18px;
+}
+
+.vcmp-picker .vcmp-picker__none {
+  margin: 0 0 12px;
+  padding: 16px 14px;
+  border: 1px dashed var(--er-border-strong);
+  border-radius: var(--er-radius-lg);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-md);
+  text-align: center;
+}
+
+.vcmp-picker .vcmp-picker__fno {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.vcmp-picker .vcmp-picker__note {
+  padding: 9px 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-sunken);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  line-height: 1.5;
+}
+
+.vcmp-picker .vcmp-picker__switch {
+  margin: 2px 0 0 -10px;
+  padding: 5px 10px;
+  border-radius: var(--er-radius-md);
+  font-weight: 550;
+}
+
+.vcmp-picker .vcmp-picker__switch:hover {
+  background: var(--er-accent-soft);
+  text-decoration: none;
+}
+
+/* ── F&O download progress. The overlay is a dialog: 16px corners, an
+   18px title, rounded rows in a soft box (the running one in the indigo
+   selection, no tinted washes or hairlines), kinds and origins as pills,
+   the hint and buttons in a footer bar. The card in the explorer is the
+   same on indigo. ── */
+.fno-ingest-backdrop {
+  background: var(--er-scrim);
+  backdrop-filter: blur(6px) saturate(0.9);
+}
+
+.fno-ingest.fno-ingest--overlay {
+  gap: 14px;
+  padding: 22px 24px 0;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--er-surface-raised);
+  box-shadow: var(--er-shadow-3);
+}
+
+.fno-ingest.fno-ingest--card {
+  padding: 14px;
+  border-radius: var(--er-radius-xl);
+}
+
+.fno-ingest .fno-ingest__title {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.fno-ingest--overlay .fno-ingest__title {
+  font-size: 18px;
+  line-height: 24px;
+  letter-spacing: -0.3px;
+}
+
+.fno-ingest .fno-ingest__subtitle {
+  font-size: var(--er-text-sm);
+}
+
+.fno-ingest .fno-ingest__chip {
+  padding: 0 8px;
+  font-weight: 550;
+  line-height: 18px;
+}
+
+.fno-ingest .fno-ingest__elapsed {
+  padding: 0 8px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-badge-bg);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  line-height: 20px;
+}
+
+.fno-ingest .fno-ingest__bar {
+  background: var(--er-accent-fill);
+}
+
+.fno-ingest .fno-ingest__step {
+  font-weight: 550;
+}
+
+.fno-ingest .fno-ingest__step-dot {
+  height: 4px;
+  border-radius: var(--er-radius-pill);
+}
+
+.fno-ingest .fno-ingest__list {
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-sunken);
+}
+
+.fno-ingest .fno-ingest-row {
+  min-height: 30px;
+  padding: 3px 8px;
+  border-bottom: 0;
+  border-radius: 7px;
+}
+
+.fno-ingest .fno-ingest-row--downloading {
+  background: var(--er-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+}
+
+.wb-indigo .fno-ingest .fno-ingest-row--downloading {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--er-accent) 30%, transparent);
+}
+
+.fno-ingest .fno-ingest-row--failed {
+  background: transparent;
+}
+
+.fno-ingest .fno-ingest-row--failed .fno-ingest-row__state {
+  color: var(--er-danger);
+}
+
+.fno-ingest .fno-ingest-row__kind {
+  padding: 1px 8px 1px 6px;
+  border-radius: var(--er-radius-pill);
+  font-weight: 550;
+  line-height: 16px;
+}
+
+.fno-ingest .fno-ingest-row__kind--datamodel { background: var(--er-model-soft); }
+.fno-ingest .fno-ingest-row__kind--modelmapping { background: var(--er-mapping-soft); }
+.fno-ingest .fno-ingest-row__kind--format { background: var(--er-format-soft); }
+
+.fno-ingest .fno-ingest__list--compact .fno-ingest-row__kind {
+  padding: 3px;
+}
+
+.fno-ingest .fno-ingest-row__origin {
+  padding: 0 8px;
+  border-radius: var(--er-radius-pill);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  letter-spacing: 0;
+  line-height: 18px;
+  text-transform: none;
+}
+
+.fno-ingest .fno-ingest-row__origin--auto {
+  background: var(--er-badge-bg);
+  color: var(--er-text-muted);
+}
+
+.fno-ingest--overlay .fno-ingest__foot {
+  gap: 8px;
+  margin: 4px -24px 0;
+  padding: 14px 24px 16px;
+  border-top: 1px solid var(--er-border);
+  background: var(--er-surface-sunken);
+}
+
+.fno-ingest--overlay .fno-ingest__hint {
+  font-size: var(--er-text-sm);
+  color: var(--er-text-muted);
+}
+
+/* Loading rows in the F&O lists: rounded rows like the real ones, a soft
+   shimmer from the surface tokens (both themes), no hairlines. */
+.fno-skeleton-row {
+  margin: 2px 6px;
+  padding: 9px 10px;
+  border-bottom: 0;
+  border-radius: 7px;
+}
+
+.fno-skeleton-row .fno-skeleton-block {
+  border-radius: var(--er-radius-pill);
+  background: linear-gradient(90deg, var(--er-surface-2) 0%, var(--er-surface-3) 40%, var(--er-surface-2) 80%);
+  background-size: 800px 100%;
+}
+
+.fno-skeleton-row .fno-skeleton-icon {
+  border-radius: 7px;
+}
+
+/* ── Recent work: configuration chips and rows are rounded and light up
+   in the hover tint; versions are mono pills; no hairlines between rows. ── */
+.recent-session__configs .recent-config-chip {
+  padding: 5px 8px;
+  border-radius: 7px;
+}
+
+.recent-session__configs .recent-config-chip:hover:not(:disabled) {
+  background: var(--er-hover);
+}
+
+.recent-work .recent-version {
+  padding: 0 7px;
+  background: var(--er-badge-bg);
+  font-size: var(--er-text-xs);
+  line-height: 18px;
+}
+
+.recent-work .recent-configs {
+  gap: 2px;
+  padding: 6px;
+}
+
+.recent-work .recent-configs .recent-config + .recent-config {
+  border-top: 0;
+}
+
+.recent-work .recent-config__open {
+  padding: 10px 44px 10px 14px;
+  border-radius: var(--er-radius-lg);
+}
+
+.recent-work .recent-config__open:hover:not(:disabled) {
+  background: var(--er-hover);
+}

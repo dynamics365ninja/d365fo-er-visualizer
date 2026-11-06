@@ -1,0 +1,2116 @@
+/* Indigo Ledger — panels. Loaded after the component stylesheets (see index.css).
+   The shared controls, the search / where-used / property panels and the
+   drill-down as the design draws them: rounded inputs with an indigo focus
+   ring, segmented switches on a sunken track, capsules for every label,
+   rounded rows instead of hairline lists, cards on the grey ground. */
+
+/* ═══════════════════════════ Shared controls ═══════════════════════════ */
+
+/* ── Filter field: a 30px rounded input with an indigo focus ring (34px as
+   the search box). The explorer's filter sits inside its own box and keeps
+   its rules, hence the `:not()`. ── */
+.filter-field:not(.vx-filter__field) > .filter-field__input {
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 30px 0 32px;
+  line-height: 28px;
+  border: 1px solid var(--er-input-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-input-bg);
+  color: var(--er-text);
+  font-family: var(--font-sans);
+  font-size: var(--er-text-md);
+  box-shadow: none;
+  transition:
+    border-color var(--er-duration-fast) var(--er-ease),
+    box-shadow var(--er-duration-fast) var(--er-ease);
+}
+
+.filter-field:not(.vx-filter__field) > .filter-field__input::placeholder {
+  color: var(--er-text-subtle);
+  opacity: 1;
+}
+
+.filter-field:not(.vx-filter__field) > .filter-field__input:hover {
+  border-color: var(--er-border-strong);
+  background: var(--er-input-bg);
+}
+
+.filter-field:not(.vx-filter__field) > .filter-field__input:focus {
+  outline: none;
+  border-color: var(--er-accent);
+  background: var(--er-input-bg);
+  box-shadow: 0 0 0 3px var(--er-accent-soft-2);
+}
+
+.filter-field:not(.vx-filter__field) > .filter-field__icon {
+  left: 11px;
+  width: 14px;
+  height: 14px;
+  color: var(--er-text-subtle);
+}
+
+.filter-field:not(.vx-filter__field):focus-within > .filter-field__icon {
+  color: var(--er-accent);
+}
+
+/* The clear button: a quiet icon button inside the field. */
+.filter-field:not(.vx-filter__field) > .filter-field__clear {
+  right: 5px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--er-radius-md);
+}
+
+.filter-field:not(.vx-filter__field) > .filter-field__clear:hover {
+  background: var(--er-hover);
+  color: var(--er-text);
+}
+
+/* ── Filter suggestions: a popover with rounded items; the keyboard cursor
+   is the soft indigo selection, the typed part a soft mark ── */
+.filter-suggest {
+  top: calc(100% + 6px);
+  padding: 4px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+  box-shadow: var(--er-shadow-2);
+}
+
+.filter-suggest__group {
+  padding: 8px 10px 4px;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--er-text-muted);
+}
+
+.filter-suggest__item {
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: var(--er-radius-md);
+  font-size: var(--er-text-md);
+  color: var(--er-text);
+}
+
+.filter-suggest__item.active {
+  background: var(--er-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+  color: var(--er-text);
+}
+
+.filter-suggest__label mark {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: var(--er-accent-soft-2);
+  color: var(--er-text);
+  font-weight: 600;
+}
+
+/* The indigo explorer does not re-point the highlight token; its marks stay
+   indigo text on the row. */
+.wb-indigo .filter-suggest__label mark {
+  padding: 0;
+  background: none;
+  color: var(--er-accent);
+}
+
+.wb-indigo .filter-suggest__item.active {
+  box-shadow: none;
+}
+
+/* ── Expand / collapse switch: a segmented control — a sunken track, the
+   last-used side lifted onto a white segment ── */
+.expand-slider {
+  height: auto;
+  padding: 3px;
+  gap: 2px;
+  border: 0;
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-3);
+}
+
+.expand-slider .expand-slider__thumb {
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 4px);
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface);
+  box-shadow: 0 1px 2px var(--er-shadow-color);
+}
+
+.expand-slider .expand-slider__thumb--right {
+  transform: translateX(calc(100% + 2px));
+}
+
+/* 24px segments, the same as the designer bars draw them (ledger-designers). */
+.expand-slider .expand-slider__option,
+.app-shell .expand-slider--compact .expand-slider__option {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--er-radius-md);
+  color: var(--er-text-muted);
+}
+
+.expand-slider .expand-slider__option:hover,
+.expand-slider .expand-slider__option.active {
+  color: var(--er-text);
+}
+
+/* Touch: the segments widen with the 36px height controls.css gives them. */
+@media (pointer: coarse) {
+  .expand-slider .expand-slider__option,
+  .app-shell .expand-slider--compact .expand-slider__option {
+    width: 34px;
+  }
+}
+
+/* ── Type badges: capsules in the tint of what they mark, no outline ── */
+.badge {
+  gap: 4px;
+  border: 0;
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.badge-tiny {
+  font-size: var(--er-text-2xs);
+  line-height: 16px;
+}
+
+.badge-table,
+.badge-xml,
+.badge-info {
+  background: var(--er-info-soft);
+  color: var(--er-info);
+}
+
+.badge-enum {
+  background: var(--er-warning-soft);
+  color: var(--er-warning);
+}
+
+.badge-class,
+.badge-import {
+  background: var(--er-model-soft);
+  color: var(--er-model);
+}
+
+.badge-calc,
+.badge-export,
+.badge-csv,
+.badge-success {
+  background: var(--er-success-soft);
+  color: var(--er-success);
+}
+
+.badge-param {
+  background: var(--er-danger-soft);
+  color: var(--er-danger);
+}
+
+.badge-prop {
+  padding: 1px 8px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-warning-soft);
+  color: var(--er-warning);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+}
+
+/* ── Touch tooltip: a small popover card ── */
+.touch-title-tip {
+  padding: 8px 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+  box-shadow: var(--er-shadow-2);
+  font-size: var(--er-text-md);
+}
+
+/* ── Path tooltip card: a popover — the kind as a capsule led by a dot,
+   the name, its facts, and the way to open it in a soft footer ── */
+div.path-tooltip-card {
+  --tip-soft: var(--er-accent-soft);
+  min-width: 260px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background-color: var(--er-surface);
+  box-shadow: var(--er-shadow-2);
+  font-family: var(--font-sans);
+}
+
+div.path-tooltip-card--model-field {
+  --tip-soft: var(--er-model-soft);
+}
+
+.path-tooltip-card__head {
+  gap: 6px;
+  padding: 12px 14px 10px;
+}
+
+.path-tooltip-card__eyebrow {
+  align-self: flex-start;
+  gap: 6px;
+  padding: 1px 9px 1px 8px;
+  border-radius: var(--er-radius-pill);
+  background: var(--tip-soft);
+  color: var(--tip-accent);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  line-height: 18px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.path-tooltip-card__dot {
+  background: currentColor;
+  box-shadow: none;
+}
+
+.path-tooltip-card__title {
+  font-family: var(--font-mono);
+  font-size: var(--er-text-md);
+  font-weight: 600;
+}
+
+.path-tooltip-card__path {
+  font-family: var(--font-mono);
+}
+
+.path-tooltip-card__rows {
+  gap: 6px 14px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--er-border);
+}
+
+.path-tooltip-card__row dt {
+  font-size: var(--er-text-sm);
+}
+
+.path-tooltip-card__foot {
+  padding: 8px 14px;
+  border-top: 1px solid var(--er-border);
+  background: var(--er-surface-2);
+  font-size: var(--er-text-sm);
+}
+
+/* ── Clickable paths: a soft indigo halo on hover instead of an underline
+   swap; the "can resolve" hint is a dashed indigo underline ── */
+.clickable-path-segment {
+  transition:
+    color var(--er-duration-fast) var(--er-ease),
+    background-color var(--er-duration-fast) var(--er-ease),
+    box-shadow var(--er-duration-fast) var(--er-ease);
+}
+
+.clickable-path-segment:hover {
+  border-radius: 3px;
+  background: var(--er-accent-soft);
+  box-shadow: 0 0 0 2px var(--er-accent-soft);
+}
+
+.clickable-path-can-resolve {
+  border-bottom: 1px dashed color-mix(in srgb, var(--er-accent) 35%, transparent);
+}
+
+.clickable-path-can-resolve:hover {
+  border-bottom-color: color-mix(in srgb, var(--er-accent) 75%, transparent);
+}
+
+/* ── Expressions: a code block — rounded, soft, a hairline ── */
+.er-expr {
+  padding: 10px 12px;
+  font-size: var(--er-text-sm);
+  border: 1px solid var(--er-border);
+  border-color: var(--er-border) !important;
+  border-radius: var(--er-radius-lg) !important;
+  background: var(--er-surface-2) !important;
+  box-shadow: none;
+}
+
+.dd-dialog-surface .er-expr {
+  background: var(--er-surface-2) !important;
+}
+
+/* Path parts inside an expression: inline code chips on a soft indigo, no
+   outline, no lift on hover. The token colours stay. */
+.er-expr .er-token-ds-segment {
+  border: 1px solid transparent;
+  border-radius: var(--er-radius-sm);
+  background: var(--er-accent-soft);
+  transition:
+    background-color var(--er-duration-fast) var(--er-ease),
+    color var(--er-duration-fast) var(--er-ease),
+    box-shadow var(--er-duration-fast) var(--er-ease);
+}
+
+.er-expr .er-token-ds-segment:hover {
+  border-color: transparent;
+  background: var(--er-accent-soft-2);
+  color: var(--er-text);
+  box-shadow: none;
+  transform: none;
+}
+
+.er-expr .er-token-ds-segment--self,
+.er-expr .er-token-ds-segment--self:hover {
+  border-color: transparent;
+  background: var(--er-accent-soft-2);
+  color: var(--er-text);
+  box-shadow: inset 0 0 0 1px var(--er-accent-border);
+}
+
+.er-expr .er-token-ds-segment--static,
+.er-expr .er-token-ds-segment--static:hover {
+  border-color: transparent;
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  box-shadow: none;
+}
+
+/* ── Label values: the translations in a soft rounded box, no rail ── */
+.label-value__translations {
+  padding: 4px 10px;
+  border-left: 0;
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface-2);
+  box-shadow: inset 0 0 0 1px var(--er-border);
+}
+
+.label-value__lang {
+  font-family: var(--font-sans);
+  color: var(--er-text-muted);
+}
+
+/* ── Error boundary: a white card with a danger capsule, a code block and
+   a primary button — no red rail ── */
+.error-boundary {
+  padding: 32px 24px;
+  background: var(--er-bg);
+}
+
+.error-boundary__card {
+  padding: 24px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-xl);
+  background: var(--er-surface);
+  box-shadow: var(--er-shadow-1);
+}
+
+.error-boundary__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 1px 10px 1px 8px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-danger-soft);
+  color: var(--er-danger);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  line-height: 18px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.error-boundary__eyebrow::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.error-boundary__title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.error-boundary__text {
+  font-size: var(--er-text-md);
+}
+
+.error-boundary__details {
+  padding: 10px 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-2);
+  font-family: var(--font-mono);
+  font-size: var(--er-text-sm);
+}
+
+.error-boundary__btn {
+  height: 32px;
+  margin-right: 8px;
+  padding: 0 14px;
+  border-radius: var(--er-radius-lg);
+  background: var(--er-accent-fill);
+  color: var(--er-on-accent-fill);
+  font-size: var(--er-text-md);
+  font-weight: 500;
+  box-shadow: var(--er-shadow-1);
+}
+
+.error-boundary__btn:hover {
+  background: var(--er-accent-fill-hover);
+}
+
+/* ── Resize grip: a small triangle of dots in the corner ── */
+.dialog-resize-grip::before {
+  right: 7px;
+  bottom: 7px;
+  width: 12px;
+  height: 12px;
+  background: radial-gradient(circle, currentColor 1.1px, transparent 1.5px) 0 0 / 4px 4px;
+  clip-path: polygon(100% -1.5px, 100% 100%, -1.5px 100%);
+  opacity: 0.6;
+}
+
+@media (pointer: coarse) {
+  .filter-field:not(.vx-filter__field) > .filter-field__input,
+  .search-panel .search-panel__field > .filter-field__input {
+    height: 36px;
+    line-height: 34px;
+  }
+}
+
+/* ═══════════════════════════ Search panel ═══════════════════════════ */
+
+/* ── Search box and the bar under it: a 34px field, the count as quiet
+   meta, the reach filter a quiet toggle ── */
+.app-shell .search-panel__body {
+  padding: 4px 4px 0;
+  gap: 10px;
+}
+
+.search-panel .search-panel__field > .filter-field__input {
+  height: 34px;
+  line-height: 32px;
+  padding-left: 34px;
+}
+
+.search-panel .search-panel__field > .filter-field__icon {
+  left: 12px;
+}
+
+.app-shell .search-panel__hint {
+  font-size: var(--er-text-md);
+  line-height: 1.5;
+  color: var(--er-text-muted);
+}
+
+.app-shell .search-panel__kpi {
+  padding: 1px 9px;
+  border: 0;
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-weight: 550;
+  line-height: 18px;
+}
+
+.app-shell .search-panel__results-bar {
+  gap: 8px;
+  min-height: 30px;
+  padding: 0;
+  border-top: 0;
+}
+
+.app-shell .search-panel__results-count {
+  font-size: var(--er-text-sm);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--er-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.app-shell .search-panel__results-actions {
+  align-items: center;
+  gap: 6px;
+}
+
+.app-shell .search-reach-toggle {
+  justify-content: center;
+  gap: 5px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--er-radius-md);
+  background: transparent;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 550;
+}
+
+.app-shell .search-reach-toggle:hover {
+  background: var(--er-hover);
+  color: var(--er-text);
+}
+
+.app-shell .search-reach-toggle.active {
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+}
+
+.app-shell .search-reach-toggle__badge {
+  padding: 0 6px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface);
+  font-size: var(--er-text-xs);
+  line-height: 16px;
+}
+
+/* ── Kind facets: capsules on the sunken tone, the chosen one indigo ── */
+.app-shell .search-facets {
+  gap: 6px;
+  padding: 0 0 4px;
+}
+
+.app-shell .search-facet {
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 550;
+  transition:
+    background-color var(--er-duration-fast) var(--er-ease),
+    color var(--er-duration-fast) var(--er-ease);
+}
+
+.app-shell .search-facet:hover {
+  background: var(--er-border);
+  color: var(--er-text);
+}
+
+.app-shell .search-facet.active {
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+.app-shell .search-facet__count {
+  color: var(--er-text-subtle);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-shell .search-facet.active .search-facet__count {
+  color: var(--er-accent);
+}
+
+/* ── Scope and reach switches: segmented controls ── */
+.app-shell .search-scope-toggle {
+  height: auto;
+  padding: 3px;
+  gap: 2px;
+  border: 0;
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-3);
+}
+
+.app-shell .search-scope-toggle .search-scope-toggle__btn {
+  height: 24px;
+  min-height: 0;
+  padding: 0 10px;
+  border-radius: var(--er-radius-md);
+  background: transparent;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 550;
+  box-shadow: none;
+  transition:
+    background-color var(--er-duration-fast) var(--er-ease),
+    color var(--er-duration-fast) var(--er-ease);
+}
+
+.app-shell .search-scope-toggle .search-scope-toggle__btn:hover:not(.active) {
+  background: transparent;
+  color: var(--er-text);
+}
+
+.app-shell .search-scope-toggle .search-scope-toggle__btn.active {
+  background: var(--er-surface);
+  color: var(--er-text);
+  box-shadow: 0 1px 2px var(--er-shadow-color);
+}
+
+/* ── Examples: a rounded box of question rows; the query each one runs is
+   an inline code chip that turns indigo on hover ── */
+.app-shell .search-panel .search-example-board {
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+}
+
+.app-shell .search-example-board__title {
+  padding: 6px 8px 2px;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--er-text-muted);
+}
+
+.app-shell .search-example-board__group {
+  gap: 2px;
+}
+
+.app-shell .search-example-board__group-title {
+  padding: 8px 8px 2px;
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  color: var(--er-text);
+}
+
+.app-shell .search-example-board__chips {
+  gap: 1px;
+}
+
+.app-shell .search-example-chip {
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 7px;
+  transition: background-color var(--er-duration-fast) var(--er-ease);
+}
+
+.app-shell .search-example-chip:hover {
+  background: var(--er-hover);
+}
+
+.app-shell .search-example-chip__label {
+  font-size: var(--er-text-md);
+  font-weight: 500;
+}
+
+.app-shell .search-example-chip__query {
+  padding: 1px 6px;
+  border-radius: var(--er-radius-sm);
+  background: var(--er-surface-2);
+  box-shadow: inset 0 0 0 1px var(--er-border);
+  color: var(--er-text-muted);
+}
+
+.app-shell .search-example-chip:hover .search-example-chip__query {
+  background: var(--er-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+  color: var(--er-accent);
+}
+
+/* ── Result rows (the groups are in ledger.css): kind tags become
+   capsules, the opened reference the soft indigo selection ── */
+.app-shell .search-cat--references {
+  --search-cat-color: var(--er-text-subtle);
+}
+
+.app-shell .search-hit .search-hit__tag {
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  line-height: 18px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.app-shell .search-hit .search-hit__tag--table,
+.app-shell .search-hit .search-hit__tag--model,
+.app-shell .search-hit .search-hit__tag--enum {
+  background: var(--er-model-soft);
+  color: var(--er-model);
+}
+
+.app-shell .search-hit .search-hit__tag--field,
+.app-shell .search-hit .search-hit__tag--format {
+  background: var(--er-mapping-soft);
+  color: var(--er-mapping);
+}
+
+.app-shell .search-hit .search-hit__tag--class,
+.app-shell .search-hit .search-hit__tag--edt {
+  background: var(--er-info-soft);
+  color: var(--er-info);
+}
+
+.app-shell .search-hit .search-hit__tag--formula,
+.app-shell .search-hit .search-hit__tag--visibility {
+  background: var(--er-format-soft);
+  color: var(--er-format);
+}
+
+.app-shell .search-hit.wu-ref-row--active {
+  border-left-color: transparent;
+  background: var(--er-accent-soft) !important;
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+}
+
+.app-shell .wu-ref-leaf {
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+}
+
+.app-shell .wu-ref-breadcrumb {
+  gap: 2px;
+  font-size: var(--er-text-xs);
+}
+
+.app-shell .wu-ref-bc-sep {
+  opacity: 1;
+  font-weight: 400;
+  color: var(--er-text-subtle);
+}
+
+.app-shell .search-doc__icon {
+  color: var(--er-text-subtle);
+}
+
+.app-shell .search-doc__kind {
+  padding: 0 7px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-weight: 550;
+  line-height: 17px;
+}
+
+.app-shell .search-doc__where-used {
+  width: 24px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--er-radius-md);
+}
+
+.app-shell .search-doc__where-used:hover {
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+/* ── More results: a neutral button. Nothing found: an empty state with a
+   search glyph in an indigo tile. ── */
+.app-shell .search-panel__more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  margin-top: 10px;
+  padding: 0 14px;
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+  color: var(--er-text);
+  font-size: var(--er-text-md);
+  font-weight: 500;
+  box-shadow: var(--er-shadow-1);
+}
+
+.app-shell .search-panel__more:hover {
+  border-color: var(--er-border-strong);
+  background: var(--er-hover);
+}
+
+.app-shell .search-panel__empty {
+  position: relative;
+  padding: 92px 12px 28px;
+  font-size: var(--er-text-md);
+  line-height: 1.5;
+  color: var(--er-text-muted);
+}
+
+.app-shell .search-panel__empty::before,
+.app-shell .search-panel__empty::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.app-shell .search-panel__empty::before {
+  top: 28px;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--er-radius-xl);
+  background: var(--er-accent-soft);
+}
+
+.app-shell .search-panel__empty::after {
+  top: 41px;
+  width: 22px;
+  height: 22px;
+  background: var(--er-accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'%3E%3Ccircle cx='6.5' cy='6.5' r='4'/%3E%3Cpath d='M10 10l2.5 2.5'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'%3E%3Ccircle cx='6.5' cy='6.5' r='4'/%3E%3Cpath d='M10 10l2.5 2.5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+@media (pointer: coarse) {
+  .app-shell .search-scope-toggle .search-scope-toggle__btn {
+    height: 32px;
+    padding: 0 12px;
+  }
+}
+
+/* ═══════════════════════════ Where-used ═══════════════════════════ */
+
+/* ── Impact cards: rounded boxes like the search groups — a soft head with
+   the kind as a capsule and the name in sans, rounded usage rows inside,
+   roles as tinted capsules ── */
+.app-shell .impact {
+  gap: 8px;
+}
+
+.app-shell .impact__summary {
+  font-size: var(--er-text-sm);
+}
+
+.app-shell .impact__indirect {
+  padding: 1px 10px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  line-height: 18px;
+}
+
+.app-shell .impact__indirect:hover {
+  background: var(--er-accent-soft-2);
+}
+
+.app-shell .impact__indirect--inline {
+  align-self: flex-start;
+  margin: 8px 12px 4px;
+}
+
+.app-shell .impact-card {
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+}
+
+.app-shell .impact-card--target {
+  border-color: var(--er-accent-border);
+  box-shadow: 0 0 0 3px var(--er-accent-soft);
+}
+
+.app-shell .impact-card__head {
+  column-gap: 8px;
+  row-gap: 2px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--er-border);
+  background: var(--er-surface-2);
+  transition: background-color var(--er-duration-fast) var(--er-ease);
+}
+
+.app-shell .impact-card__head[aria-expanded='false'] {
+  border-bottom: 0;
+}
+
+.app-shell .impact-card__head:hover {
+  background: var(--er-hover);
+}
+
+.app-shell .impact-kind {
+  height: 18px;
+  padding: 0 8px;
+  line-height: 18px;
+  background: var(--kind-soft, var(--er-surface-3));
+  color: var(--kind-color, var(--er-text-muted));
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+}
+
+.app-shell .impact-kind--table,
+.app-shell .impact-kind--field { --kind-soft: var(--er-format-soft); }
+.app-shell .impact-kind--modelField { --kind-soft: var(--er-model-soft); }
+.app-shell .impact-kind--datasource { --kind-soft: var(--er-mapping-soft); }
+.app-shell .impact-kind--enum { --kind-soft: var(--er-info-soft); }
+.app-shell .impact-kind--class,
+.app-shell .impact-kind--parameter { --kind-soft: var(--er-success-soft); }
+
+.app-shell .impact-card__name {
+  font-family: var(--font-sans);
+  font-size: var(--er-text-md);
+  font-weight: 600;
+}
+
+.app-shell .impact-card__subtitle {
+  font-size: var(--er-text-xs);
+}
+
+.app-shell .impact-card__counts {
+  font-weight: 500;
+}
+
+.app-shell .impact-card__body {
+  padding: 4px 0 8px;
+}
+
+.app-shell .impact-section {
+  padding: 4px 0 2px;
+}
+
+.app-shell .impact-section + .impact-section {
+  border-top: 0;
+}
+
+.app-shell .impact-section__head {
+  gap: 7px;
+  padding: 6px 14px 4px;
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  color: var(--er-text-muted);
+}
+
+.app-shell .impact-section__rows {
+  gap: 1px;
+}
+
+.app-shell .impact-row {
+  width: auto;
+  gap: 2px;
+  margin: 0 6px;
+  padding: 6px 10px 6px 28px;
+  border-radius: 7px;
+  transition: background-color var(--er-duration-fast) var(--er-ease);
+}
+
+.app-shell .impact-row:hover {
+  background: var(--er-hover);
+}
+
+.app-shell .impact-row__leaf {
+  font-size: var(--er-text-md);
+  font-weight: 550;
+}
+
+.app-shell .impact-row__type {
+  padding: 0 6px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  line-height: 16px;
+}
+
+.app-shell .impact-row__path,
+.app-shell .impact-row__expr {
+  font-size: var(--er-text-xs);
+}
+
+.app-shell .impact-role {
+  padding: 0 7px;
+  border: 0;
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-weight: 550;
+  line-height: 16px;
+}
+
+.app-shell .impact-role--fills {
+  background: var(--er-mapping-soft);
+  color: var(--er-mapping);
+}
+
+.app-shell .impact-role--condition {
+  background: var(--er-warning-soft);
+  color: var(--er-warning);
+}
+
+.app-shell .impact-role--context {
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+}
+
+.app-shell .impact-section__more {
+  margin: 4px 12px 2px 34px;
+  padding: 2px 8px;
+  border-radius: var(--er-radius-pill);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+}
+
+.app-shell .impact-section__more:hover {
+  background: var(--er-accent-soft);
+}
+
+/* The plain-text references under the cards: a quiet disclosure row. */
+.app-shell .impact-text {
+  margin-top: 12px;
+}
+
+.app-shell .impact-text > summary {
+  padding: 6px 8px;
+  border-radius: var(--er-radius-md);
+  font-size: var(--er-text-sm);
+  font-weight: 550;
+  color: var(--er-text-muted);
+}
+
+.app-shell .impact-text > summary:hover {
+  background: var(--er-hover);
+  color: var(--er-text);
+}
+
+.app-shell .impact-text[open] > summary {
+  margin-bottom: 8px;
+}
+
+.app-shell .wu-empty {
+  padding: 10px 12px;
+  border-radius: var(--er-radius-lg) !important;
+  background: var(--er-surface-2);
+  font-style: normal;
+  color: var(--er-text-muted);
+}
+
+/* ═══════════════════════════ Property inspector ═══════════════════════════ */
+
+/* ── The inspector fills the white card edge to edge: the head is its
+   header band, the label / value lines run to the card's edges ── */
+.app-shell .property-inspector {
+  padding: 0 0 16px;
+  gap: 0;
+  background: var(--er-surface) !important;
+}
+
+/* Actions: small neutral buttons under the lines. */
+.app-shell .prop-actions {
+  gap: 8px;
+  padding: 14px 16px 0;
+  border-top: 1px solid var(--er-border);
+}
+
+.app-shell .prop-actions .prop-action {
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface);
+  color: var(--er-text);
+  font-size: var(--er-text-sm);
+  font-weight: 500;
+  box-shadow: var(--er-shadow-1);
+}
+
+.app-shell .prop-actions .prop-action svg {
+  color: var(--er-text-muted);
+}
+
+.app-shell .prop-actions .prop-action:hover {
+  border-color: var(--er-border-strong);
+  background: var(--er-hover);
+  color: var(--er-text);
+}
+
+.app-shell .prop-actions .prop-action:hover svg {
+  color: var(--er-text);
+}
+
+.app-shell .prop-actions .prop-action:active {
+  transform: translateY(1px);
+}
+
+/* Grouped properties sit as rounded boxes inset from the card's edges. */
+.app-shell .property-inspector .property-card {
+  margin: 12px 16px 0;
+  background: var(--er-surface);
+}
+
+/* ── Property sections (a format element's tab): rounded boxes with a
+   caption head, spaced apart ── */
+.app-shell .property-section {
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg) !important;
+  background: var(--er-surface);
+}
+
+.app-shell .property-section + .property-section {
+  margin-top: 12px;
+}
+
+.app-shell .property-section-title {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--er-border);
+  background: var(--er-surface-2);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--er-text-muted);
+}
+
+/* ── Nothing selected: the empty state — an indigo tile, a title, a hint
+   and the shortcuts as key caps ── */
+.app-shell .property-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+  padding: 40px 24px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: center;
+}
+
+.app-shell .property-empty-icon-stack {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 14px;
+  border-radius: var(--er-radius-xl);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+.app-shell .property-empty-title {
+  margin-bottom: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.app-shell .property-empty-hint {
+  max-width: 240px;
+  font-size: var(--er-text-md);
+  line-height: 1.5;
+  color: var(--er-text-muted);
+  opacity: 1;
+}
+
+.app-shell .property-empty-tips {
+  gap: 6px;
+  max-width: 220px;
+  margin-top: 20px;
+}
+
+.app-shell .property-empty-tip {
+  gap: 10px;
+}
+
+.app-shell .property-empty-tip-key {
+  min-width: 52px;
+  justify-content: center;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: var(--er-radius-sm);
+  background: var(--er-surface-2);
+  box-shadow: inset 0 0 0 1px var(--er-border), inset 0 -1px 0 var(--er-border-strong);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+}
+
+.app-shell .property-empty-tip-label {
+  font-size: var(--er-text-sm);
+}
+
+/* ═══════════════════════════ Drill-down ═══════════════════════════ */
+
+/* ── Dialog: a 16px sheet — the title row on white with the icon in an
+   indigo tile, the toolbar under it, the lineage as cards on the grey
+   ground ── */
+.fui-DialogSurface.dd-dialog-surface.dd-dialog-surface--resizable {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--er-border);
+  border-radius: 16px;
+  background-color: var(--er-surface);
+  box-shadow: var(--er-shadow-3);
+}
+
+.dd-dialog-surface.dd-dialog-surface--resizable .dd-dialog-body {
+  gap: 0;
+  max-height: none;
+  background: var(--er-bg);
+}
+
+.dd-dialog-surface .dd-dialog-body > .dd-dialog-titlebar {
+  min-height: 58px;
+  padding: 18px 60px 10px 24px !important;
+  background: var(--er-surface);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 26px;
+  letter-spacing: -0.3px;
+}
+
+.dd-dialog-surface .dd-dialog-title {
+  gap: 10px;
+}
+
+.dd-dialog-surface .dd-dialog-title > svg {
+  flex-shrink: 0;
+  box-sizing: content-box;
+  padding: 6px;
+  border-radius: var(--er-radius-md);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+.dd-dialog-surface .dd-dialog-title__actions {
+  gap: 6px;
+  padding-left: 16px;
+}
+
+.dd-dialog-titlebar .dd-dialog-title__actions .fui-Button {
+  gap: 6px;
+  min-width: 0;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+  color: var(--er-text);
+  font-size: var(--er-text-md);
+  font-weight: 500;
+  letter-spacing: 0;
+  box-shadow: var(--er-shadow-1);
+}
+
+.dd-dialog-titlebar .dd-dialog-title__actions .fui-Button:hover,
+.dd-dialog-titlebar .dd-dialog-title__actions .fui-Button:hover:active {
+  border-color: var(--er-border-strong);
+  background: var(--er-hover);
+  color: var(--er-text);
+}
+
+.dd-dialog-titlebar .dd-dialog-title__actions .fui-Button .fui-Button__icon {
+  color: var(--er-text-muted);
+}
+
+.dd-dialog-titlebar .dd-dialog-title__actions .fui-Button:hover .fui-Button__icon {
+  color: var(--er-text);
+}
+
+/* Close: a quiet icon button centred on the title row. */
+.dd-dialog-surface .dd-dialog-body .dd-dialog-close {
+  top: 17px;
+  right: 16px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  border-radius: var(--er-radius-md);
+  color: var(--er-text-muted);
+}
+
+.dd-dialog-surface .dd-dialog-body .dd-dialog-close:hover {
+  background: var(--er-hover);
+  color: var(--er-text);
+}
+
+.dd-dialog-surface .dd-dialog-body .dd-dialog-content {
+  margin: 0;
+  background: transparent;
+}
+
+.dd-dialog-content > .dd-panel--dialog {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .fui-DialogSurface.dd-dialog-surface.dd-dialog-surface--resizable {
+    border: 0;
+    border-radius: 0;
+  }
+
+  .dd-dialog-surface .dd-dialog-body > .dd-dialog-titlebar {
+    padding: 14px 56px 8px 16px !important;
+  }
+
+  .dd-dialog-surface .dd-dialog-body .dd-dialog-close {
+    top: 13px;
+    right: 12px;
+  }
+}
+
+/* ── Panel and tab host: the grey ground the cards sit on ── */
+.drilldown-tab-host {
+  background: var(--er-bg) !important;
+}
+
+.dd-panel {
+  border-color: var(--er-border) !important;
+  background: var(--er-bg) !important;
+}
+
+.dd-panel.dd-panel--empty {
+  border-radius: var(--er-radius-xl) !important;
+  background: var(--er-surface) !important;
+}
+
+/* ── Header band: white, a hairline under it; the "Drill-down" mark is an
+   indigo capsule, the element a neutral one ── */
+.dd-panel .dd-hero {
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--er-border);
+  border-bottom-color: var(--er-border) !important;
+  background: var(--er-surface) !important;
+}
+
+/* In the dialog the band continues the title row above it. */
+.dd-panel--dialog .dd-hero {
+  padding: 2px 24px 14px;
+}
+
+.dd-panel .dd-hero__top {
+  gap: 8px;
+  min-height: 30px;
+}
+
+.dd-hero .dd-hero__badge {
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: none;
+}
+
+.dd-hero .dd-hero__badge-icon {
+  display: inline-flex;
+}
+
+.dd-hero .dd-hero__meta {
+  min-width: 0;
+  max-width: 42ch;
+  height: 24px;
+  overflow: hidden;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 500;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Header buttons: neutral, the ghost one quiet. */
+.dd-hero .dd-hero__btn {
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-lg) !important;
+  background: var(--er-surface);
+  color: var(--er-text);
+  font-size: var(--er-text-md);
+  font-weight: 500;
+  box-shadow: var(--er-shadow-1) !important;
+}
+
+.dd-hero .dd-hero__btn:hover {
+  border-color: var(--er-border-strong);
+  background: var(--er-hover);
+  color: var(--er-text);
+}
+
+.dd-hero .dd-hero__btn.dd-hero__btn--ghost {
+  border-color: transparent;
+  border-radius: var(--er-radius-md) !important;
+  background: transparent;
+  color: var(--er-text-muted);
+  box-shadow: none !important;
+}
+
+.dd-hero .dd-hero__btn.dd-hero__btn--ghost:hover {
+  background: var(--er-hover);
+  color: var(--er-text);
+}
+
+/* Detail / tree and compact / full: segmented controls. */
+.dd-panel .dd-view-toggle,
+.dd-panel .dd-tree-label-toggle {
+  height: auto;
+  margin-left: 0;
+  padding: 3px;
+  gap: 2px;
+  border: 0;
+  border-radius: var(--er-radius-lg) !important;
+  background: var(--er-surface-3);
+}
+
+.dd-panel .dd-hero__top .dd-view-toggle {
+  margin-left: auto;
+}
+
+.dd-panel .dd-view-toggle__btn,
+.dd-panel .dd-tree-label-toggle__btn {
+  gap: 6px;
+  height: 24px;
+  min-height: 0;
+  padding: 0 10px;
+  border-radius: var(--er-radius-md) !important;
+  background: transparent;
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 550;
+  transition:
+    background-color var(--er-duration-fast) var(--er-ease),
+    color var(--er-duration-fast) var(--er-ease);
+}
+
+.dd-panel .dd-view-toggle__btn:hover,
+.dd-panel .dd-tree-label-toggle__btn:hover {
+  background: transparent;
+  color: var(--er-text);
+}
+
+.dd-panel .dd-view-toggle__btn.is-active,
+.dd-panel .dd-tree-label-toggle__btn.is-active {
+  background: var(--er-surface);
+  color: var(--er-text);
+  box-shadow: 0 1px 2px var(--er-shadow-color);
+}
+
+/* "Unresolved": a neutral toggle button, indigo while on. */
+.dd-panel .dd-tree-debug-toggle {
+  height: 30px;
+  margin-left: 0;
+  padding: 0 12px;
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+  color: var(--er-text);
+  font-size: var(--er-text-md);
+  font-weight: 500;
+  box-shadow: var(--er-shadow-1);
+}
+
+.dd-panel .dd-tree-debug-toggle:hover {
+  border-color: var(--er-border-strong);
+  background: var(--er-hover);
+}
+
+.dd-panel .dd-tree-debug-toggle.is-active {
+  border-color: var(--er-accent-border);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+  box-shadow: none;
+}
+
+/* Validation rules: a soft box of white rule boxes. */
+.dd-panel .dd-validation-summary {
+  gap: 10px;
+  margin-top: 2px;
+  padding: 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-2);
+}
+
+.dd-panel .dd-validation-summary__title,
+.dd-panel .dd-validation-summary__expr-label {
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--er-text-muted);
+}
+
+.dd-panel .dd-validation-summary__meta {
+  font-size: var(--er-text-sm);
+}
+
+.dd-panel .dd-validation-summary__rule {
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+}
+
+.dd-panel .dd-validation-summary__rule-index {
+  font-size: var(--er-text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-panel .dd-validation-summary__rule-action {
+  padding: 1px 9px;
+  border: 0;
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  line-height: 18px;
+}
+
+/* ── Body: the value path and the used data as white cards ── */
+.dd-panel .dd-frame-content {
+  padding: 16px;
+}
+
+.dd-panel--dialog .dd-frame-content {
+  padding: 20px 24px 24px;
+}
+
+.dd-panel .lin {
+  gap: 16px;
+  padding: 0;
+}
+
+.lin .lin-summary,
+.lin .lin-path {
+  min-width: 0;
+  padding: 0 0 14px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-xl);
+  background: var(--er-surface);
+  box-shadow: var(--er-shadow-1);
+}
+
+.lin .lin-summary > :not(.lin-summary__head),
+.lin .lin-path > :not(.lin-path__head) {
+  margin-left: 16px;
+  margin-right: 16px;
+}
+
+/* Card header: the title in sentence case, a hairline under it. */
+.lin .lin-summary__head,
+.lin .lin-path__head {
+  box-sizing: border-box;
+  gap: 8px;
+  min-height: 46px;
+  margin: 0 0 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--er-border);
+}
+
+.lin .lin-summary__head--toggle {
+  width: 100%;
+  border-radius: calc(var(--er-radius-xl) - 1px) calc(var(--er-radius-xl) - 1px) 0 0;
+  transition: background-color var(--er-duration-fast) var(--er-ease);
+}
+
+.lin .lin-summary__head--toggle:hover {
+  background: var(--er-hover);
+}
+
+.lin .lin-summary__head--toggle:hover .lin-summary__title {
+  color: var(--er-text);
+}
+
+.lin .lin-summary__head--toggle[aria-expanded='false'] {
+  margin-bottom: 0;
+  border-bottom: 0;
+  border-radius: calc(var(--er-radius-xl) - 1px);
+}
+
+.lin .lin-summary:has(> .lin-summary__head--toggle[aria-expanded='false']) {
+  padding-bottom: 0;
+}
+
+.lin .lin-summary__title {
+  font-size: var(--er-text-lg);
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--er-text);
+}
+
+.lin .lin-summary__hint {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: var(--er-text-md);
+  color: var(--er-text-muted);
+}
+
+.lin .lin-summary__empty {
+  font-size: var(--er-text-md);
+  font-style: normal;
+  color: var(--er-text-muted);
+}
+
+/* "Unresolved" in the card head: a capsule, indigo while on. */
+.lin .lin-path__toggle {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-sm);
+  font-weight: 550;
+}
+
+.lin .lin-path__toggle:hover {
+  background: var(--er-border);
+  color: var(--er-text);
+}
+
+.lin .lin-path__toggle.is-active {
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+/* ── The lineage outline: rounded rows, the stage as a neutral capsule,
+   the revealed step the soft indigo selection ── */
+.lin .lin-row {
+  gap: 8px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 7px;
+  transition: background-color var(--er-duration-fast) var(--er-ease);
+}
+
+.lin .lin-row:hover {
+  background: var(--er-hover);
+}
+
+.lin .lin-row.is-highlight {
+  background: var(--er-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+}
+
+.lin .lin-row--origin {
+  background: var(--er-surface-2);
+  box-shadow: inset 0 0 0 1px var(--er-border);
+}
+
+.lin .lin-row__toggle {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--er-radius-md);
+}
+
+.lin .lin-row__toggle:not(.lin-row__toggle--leaf):hover {
+  background: var(--er-surface-3);
+  color: var(--er-text);
+}
+
+.lin .lin-row__stage {
+  padding: 0 8px;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 550;
+  line-height: 18px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.lin .lin-row--origin .lin-row__stage {
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+/* The mapping definition a model path resolves in: a mapping capsule. */
+.lin .lin-row__def {
+  gap: 6px;
+  padding: 0 9px;
+  border: 0;
+  background: var(--er-mapping-soft);
+  color: var(--er-mapping);
+  font-size: var(--er-text-xs);
+  line-height: 20px;
+}
+
+.lin .lin-row__def-label {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.lin .lin-row__more {
+  padding: 0 7px;
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A formula on the path: a soft code box with a caption. */
+.lin .lin-formula {
+  margin: 6px 0 8px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-2);
+}
+
+.lin .lin-formula__label {
+  padding: 8px 12px 2px;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--er-text-muted);
+}
+
+.lin .lin-formula .er-expr {
+  padding: 4px 12px 10px;
+  border: 0;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none;
+}
+
+/* The part of the expression the breakdown is scoped to: the soft indigo
+   selection, with a small neutral button to clear it. */
+.lin .lin-scope {
+  gap: 10px;
+  margin: 10px 0 6px;
+  padding: 6px 6px 6px 12px;
+  border: 0;
+  border-radius: var(--er-radius-lg);
+  background: var(--er-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+}
+
+.lin .lin-scope__label {
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--er-accent);
+}
+
+.lin .lin-scope__reset {
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface);
+  color: var(--er-text);
+  font-size: var(--er-text-sm);
+  font-weight: 500;
+  box-shadow: var(--er-shadow-1);
+}
+
+.lin .lin-scope__reset:hover {
+  border-color: var(--er-border-strong);
+  background: var(--er-hover);
+  color: var(--er-text);
+}
+
+/* ── Used data: a caption per kind, the sources as capsules ── */
+.lin .lin-group {
+  margin-top: 12px;
+}
+
+.lin .lin-group__head {
+  gap: 6px;
+  padding: 0 0 6px;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--er-text-muted);
+}
+
+.lin .lin-chips {
+  gap: 6px;
+}
+
+.lin .lin-chip {
+  gap: 6px;
+  padding: 3px 11px 3px 9px;
+  border: 0;
+  border-radius: var(--er-radius-pill);
+  background: var(--er-surface-3);
+  color: var(--er-text-muted);
+  transition:
+    background-color var(--er-duration-fast) var(--er-ease),
+    color var(--er-duration-fast) var(--er-ease);
+}
+
+.lin .lin-chip:hover {
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+}
+
+.lin .lin-chip.is-active {
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+}
+
+.lin .lin-chip__name {
+  font-size: var(--er-text-md);
+  font-weight: 550;
+  color: var(--er-text);
+}
+
+.lin .lin-chip:hover .lin-chip__name,
+.lin .lin-chip.is-active .lin-chip__name {
+  color: inherit;
+}
+
+/* ── Label translations: soft rounded rows, the user's language selected ── */
+.lin .lin-label__meta {
+  gap: 4px 14px;
+  margin-bottom: 12px;
+  font-size: var(--er-text-md);
+}
+
+.lin .lin-label__meta dt {
+  font-weight: 500;
+}
+
+.lin .lin-label__list {
+  gap: 2px;
+}
+
+.lin .lin-label__item {
+  gap: 12px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--er-surface-2);
+}
+
+.lin .lin-label__item.is-active {
+  background: var(--er-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+}
+
+.lin .lin-label__lang {
+  min-width: 56px;
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+}
+
+/* ── Cut-off notice: a warning box ── */
+.dd-truncated {
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--er-warning-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-warning-soft);
+  font-size: var(--er-text-md);
+}
+
+.dd-truncated--floating {
+  box-shadow: var(--er-shadow-2);
+}
+
+/* ── Empty drill-down: the empty state ── */
+.dd-panel--empty .dd-empty-state {
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.dd-panel--empty .dd-empty-state__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--er-radius-xl);
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+  opacity: 1;
+}
+
+.dd-panel--empty .dd-empty-state__title {
+  margin-bottom: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.dd-panel--empty .dd-empty-state__text {
+  max-width: 380px;
+  font-size: var(--er-text-md);
+  line-height: 1.5;
+}
+
+/* ── Formula triggers in the designers: a soft indigo halo on hover ── */
+.dd-trigger-expr:hover {
+  background: var(--er-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--er-accent-soft-2);
+}
+
+.dd-trigger-expr:focus-visible {
+  background: var(--er-accent-soft);
+  box-shadow: 0 0 0 3px var(--er-accent-soft-2);
+}
+
+.dd-collapsible__trigger {
+  gap: 8px;
+  border-radius: var(--er-radius-md);
+}
+
+.dd-collapsible__trigger:hover {
+  background: var(--er-hover);
+}
+
+/* ── Tree view: graph nodes as white cards with a tinted head on the grey
+   ground; the selected node gets the indigo ring ── */
+.dd-panel .ddt-canvas {
+  background: var(--er-bg);
+}
+
+.dd-panel .ddt-canvas .react-flow__controls {
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+  box-shadow: var(--er-shadow-2);
+}
+
+.dd-panel .ddt-canvas .react-flow__controls-button {
+  border-top-color: var(--er-border);
+  background: var(--er-surface);
+  color: var(--er-text-muted);
+  fill: var(--er-text-muted);
+}
+
+.dd-panel .ddt-canvas .react-flow__controls-button:hover {
+  background: var(--er-hover);
+  color: var(--er-text);
+  fill: var(--er-text);
+}
+
+.ddt-canvas .ddt-node {
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+  box-shadow: var(--er-shadow-1);
+  transition:
+    box-shadow var(--er-duration-fast) var(--er-ease),
+    border-color var(--er-duration-fast) var(--er-ease);
+}
+
+.ddt-canvas .ddt-node.ddt-node--root {
+  border-width: 1px;
+  border-color: var(--er-accent-border);
+}
+
+.ddt-canvas .ddt-node--clickable:hover {
+  border-color: var(--er-accent-border);
+  box-shadow: var(--er-shadow-2);
+  transform: none;
+}
+
+.ddt-canvas .react-flow__node.ddt-node-wrap--selected .ddt-node,
+.ddt-canvas .ddt-node.ddt-node--selected {
+  border-color: var(--er-accent);
+  box-shadow: 0 0 0 3px var(--er-accent-soft-2), var(--er-shadow-2);
+}
+
+.ddt-canvas .ddt-node__head {
+  gap: 6px;
+  padding: 6px 10px 5px;
+  border-bottom: 1px solid var(--er-border);
+  background: var(--ddt-bg, var(--er-surface-2));
+}
+
+.ddt-canvas .ddt-node--root .ddt-node__head,
+.ddt-canvas .ddt-node--class .ddt-node__head {
+  background: var(--er-accent-soft);
+}
+
+.ddt-canvas .ddt-node--ds .ddt-node__head,
+.ddt-canvas .ddt-node--calc .ddt-node__head,
+.ddt-canvas .ddt-node--groupby .ddt-node__head {
+  background: var(--er-surface-2);
+}
+
+.ddt-canvas .ddt-node--table .ddt-node__head,
+.ddt-canvas .ddt-node--leaf .ddt-node__head {
+  background: var(--er-success-soft);
+}
+
+.ddt-canvas .ddt-node--enum .ddt-node__head {
+  background: var(--er-warning-soft);
+}
+
+.ddt-canvas .ddt-node--root .ddt-node__icon,
+.ddt-canvas .ddt-node--root .ddt-node__badge {
+  color: var(--er-accent);
+}
+
+.ddt-canvas .ddt-node--root .ddt-node__pin {
+  background: var(--er-accent);
+}
+
+.ddt-canvas .ddt-node__badge {
+  font-size: var(--er-text-xs);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 1;
+}
+
+.ddt-canvas .ddt-node__label {
+  color: var(--er-text);
+  font-size: var(--er-text-md);
+  font-weight: 600;
+}
+
+.ddt-canvas .ddt-node--root .ddt-node__label {
+  font-size: var(--er-text-sm);
+  font-weight: 500;
+}
+
+.ddt-canvas .ddt-node__sub {
+  color: var(--er-text-muted);
+}
+
+.ddt-canvas .ddt-node__action {
+  border: 1px solid var(--er-border-strong);
+  border-radius: var(--er-radius-md);
+  background: var(--er-surface);
+  color: var(--er-text);
+  font-weight: 500;
+  box-shadow: var(--er-shadow-1);
+}
+
+.ddt-canvas .ddt-node__action:hover {
+  border-color: var(--er-border-strong);
+  background: var(--er-hover);
+}
+
+.ddt-canvas .ddt-auto-compact-hint {
+  border: 0;
+  background: var(--er-accent-soft);
+  color: var(--er-accent);
+  font-weight: 550;
+  box-shadow: var(--er-shadow-1);
+}
+
+/* ── Dependency prompt: rounded rows (the kind is the capsule in the row,
+   so no coloured rail), the note a soft box ── */
+.dep-prompt .dep-prompt__list {
+  gap: 6px;
+}
+
+.dep-prompt .dep-prompt__row {
+  padding: 8px 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface);
+  box-shadow: none;
+}
+
+.dep-prompt .dep-prompt__note {
+  padding: 10px 12px;
+  border: 1px solid var(--er-border);
+  border-radius: var(--er-radius-lg);
+  background: var(--er-surface-2);
+  font-size: var(--er-text-md);
+}

@@ -28,7 +28,6 @@ import { useAppStore, focusedTabId } from '../state/store';
 import { ConfigExplorer } from './ConfigExplorer';
 import { PropertyInspector } from './PropertyInspector';
 import { Toolbar } from './Toolbar';
-import { IndigoScope } from './IndigoScope';
 import { ModelKindIcon } from './KindIcons';
 
 /**
@@ -44,6 +43,11 @@ const DesignerView = React.lazy(() =>
 );
 const SearchPanel = React.lazy(() =>
   loadSearchPanel().then(m => ({ default: m.SearchPanel })),
+);
+/* The trace bar reads the format lineage and opens the drill-down, both of
+   which live in the designer's chunk. */
+const TraceBar = React.lazy(() =>
+  import('./designers/TraceBar').then(m => ({ default: m.TraceBar })),
 );
 
 /**
@@ -66,6 +70,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { ToastHost } from './ToastHost';
 import { FnoIngestOverlay } from './FnoIngestPanel';
 import { ActivityBar } from './ActivityBar';
+import { IndigoScope } from './IndigoScope';
 import { TouchTitleTooltip } from './TouchTitleTooltip';
 import { VersionComparePicker } from './VersionComparePicker';
 import { useCompactLayout, useStackedLayout } from '../utils/responsive';
@@ -82,12 +87,13 @@ const useAppStyles = makeStyles({
     overflow: 'auto',
     backgroundColor: 'var(--bg-primary)',
   },
+  // The light work area sits on the grey ground beside the indigo sidebar.
   shell: {
     position: 'fixed',
     inset: 0,
     display: 'flex',
     overflow: 'hidden',
-    backgroundColor: 'var(--er-bg-soft)',
+    backgroundColor: 'var(--er-bg)',
     color: 'var(--er-text)',
     fontFamily: tokens.fontFamilyBase,
   },
@@ -95,38 +101,58 @@ const useAppStyles = makeStyles({
     flex: 1,
     minWidth: 0,
     minHeight: 0,
+    height: '100%',
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
   },
-  /** The indigo top bar and status bar keep their height in the column. */
-  chromeBar: {
-    flexShrink: 0,
-  },
+  /* Between the header and the status bar: the panels, then the trace of the
+     selected element, as rounded cards on the ground. */
   main: {
     flex: 1,
     display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
     minHeight: 0,
-    backgroundColor: 'var(--er-bg-soft)',
+    padding: '12px',
+    boxSizing: 'border-box',
+    '@media (max-width: 600px)': {
+      gap: '8px',
+      padding: '8px',
+    },
   },
+  panels: {
+    flex: 1,
+    display: 'flex',
+    minHeight: 0,
+    minWidth: 0,
+  },
+  /** The indigo explorer beside the rail fills its column. */
   sidebar: {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
     minHeight: 0,
-    backgroundColor: 'var(--er-chrome)',
-    borderRight: '1px solid var(--er-border)',
     overflow: 'hidden',
+    backgroundColor: 'var(--er-side-bg)',
   },
-  sidebarRight: {
-    borderRight: 'none',
-    borderLeft: '1px solid var(--er-border)',
+  /** A panel of the work area: the designer, the properties, search. */
+  card: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    minHeight: 0,
+    minWidth: 0,
+    backgroundColor: 'var(--er-surface)',
+    border: '1px solid var(--er-border)',
+    borderRadius: 'var(--er-radius-xl)',
+    boxShadow: 'var(--er-shadow-1)',
+    overflow: 'hidden',
+    boxSizing: 'border-box',
   },
   sidebarRightFullscreen: {
     height: '100%',
     width: '100%',
-    borderLeft: 'none',
-    borderRight: 'none',
   },
   /* ── Narrow (tablet portrait / phone) single-column layout ───────────────
      Below the breakpoint there is no room for three columns, so panels stack
@@ -152,15 +178,6 @@ const useAppStyles = makeStyles({
   narrowHidden: {
     display: 'none',
   },
-  center: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-    minHeight: 0,
-    minWidth: 0,
-    backgroundColor: 'var(--er-bg-soft)',
-    overflow: 'hidden',
-  },
   panelContent: {
     flex: 1,
     minHeight: 0,
@@ -174,8 +191,8 @@ const useAppStyles = makeStyles({
     minHeight: 0,
     overflow: 'hidden',
   },
-  // A VS Code sash: the panels' own borders draw the line, the handle only
-  // lights up while hovered or dragged (the hit area is wider than this).
+  // The sidebar's edge: the handle only lights up while hovered or dragged
+  // (the hit area is wider than the line).
   resizeHandle: {
     width: '4px',
     marginLeft: '-2px',
@@ -219,8 +236,8 @@ const useAppStyles = makeStyles({
     alignItems: 'center',
     gap: '2px',
   },
-  // Right panel tab strip — VS Code panel tabs: uppercase labels, the open
-  // one underlined.
+  // Right panel tab strip: the panels by name, the open one underlined in the
+  // accent.
   rightTabStrip: {
     display: 'flex',
     alignItems: 'stretch',
@@ -241,11 +258,9 @@ const useAppStyles = makeStyles({
     borderRadius: 0,
     backgroundColor: 'transparent',
     color: 'var(--er-text-muted)',
-    fontSize: 'var(--er-text-xs)',
+    fontSize: 'var(--er-text-md)',
     fontFamily: tokens.fontFamilyBase,
-    fontWeight: 600,
-    letterSpacing: '0.08em',
-    textTransform: 'uppercase',
+    fontWeight: 500,
     cursor: 'pointer',
     // A narrow panel used to wrap "Kde je použito" onto a second line.
     // Shrink to an ellipsis instead.
@@ -261,6 +276,7 @@ const useAppStyles = makeStyles({
   },
   rightTabActive: {
     color: 'var(--er-text)',
+    fontWeight: 600,
     boxShadow: 'inset 0 -2px 0 var(--er-accent-fill)',
     ':hover': {
       color: 'var(--er-text)',
@@ -289,10 +305,10 @@ const useStatusBarStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     gap: '2px',
-    padding: '0 4px',
     height: 'var(--wb-statusbar-h)',
     minHeight: 'var(--wb-statusbar-h)',
-    backgroundColor: 'var(--er-chrome)',
+    padding: '0 8px',
+    backgroundColor: 'var(--er-surface)',
     color: 'var(--er-text-muted)',
     fontSize: 'var(--er-text-sm)',
     fontFamily: tokens.fontFamilyBase,
@@ -454,16 +470,12 @@ export function App() {
   }, []);
 
   // A side panel needs a bigger share of a tablet than of a desktop monitor:
-  // 26 % of an 834 px viewport is a 217 px tree, which truncates almost every
-  // element name. The percentages still add up to 100 because at most one side
-  // panel is open once `isCompact` holds.
-  const leftPaneSize = isCompact ? 42 : 26;
-  const rightPaneSize = isCompact ? 46 : 28;
-  const centerPaneSize = isCompact
-    ? 100 - (showLeft ? leftPaneSize : 0) - (showRight ? rightPaneSize : 0)
-    // The desktop numbers deliberately overshoot 100 and get normalised by the
-    // panel group; they are kept verbatim so the desktop split does not move.
-    : showLeft && showRight ? 56 : showLeft || showRight ? 78 : 100;
+  // 25 % of an 834 px viewport is a 208 px tree, which truncates almost every
+  // element name. The sidebar is a share of the window; the right panel a
+  // share of the work area beside it.
+  const leftPaneSize = isCompact ? 42 : 25;
+  const rightPaneSize = isCompact ? 50 : 34;
+  const centerPaneSize = showRight ? 100 - rightPaneSize : 100;
 
   /* From the keyboard (Ctrl+F), an open panel whose box does not have the
      cursor gets it back instead of closing; a click on the activity bar
@@ -576,6 +588,91 @@ export function App() {
     );
   }
 
+  const goHome = () => { setShowLanding(true); };
+  const rightPanel = (fullscreen: boolean, narrow = false) => (
+    <RightPanel
+      tab={rightTab}
+      onTabChange={handleRightTabChange}
+      fullscreen={fullscreen}
+      hideSizeToggle={narrow}
+      onExpand={() => setRightFullscreen(true)}
+      onCollapse={() => setRightFullscreen(false)}
+      onClose={() => { setShowRight(false); setRightFullscreen(false); }}
+      panelContentClass={styles.panelContent}
+    />
+  );
+  const explorer = (className?: string) => (
+    <IndigoScope className={className}>
+      <ErrorBoundary label={t.explorer}>
+        <ConfigExplorer />
+      </ErrorBoundary>
+    </IndigoScope>
+  );
+  const designer = (
+    <ErrorBoundary label={t.errorAreaDesigner}>
+      <React.Suspense fallback={<PanelLoading />}>
+        <DesignerView />
+      </React.Suspense>
+    </ErrorBoundary>
+  );
+
+  /* Header, the panels as cards, the trace of the selected element, footer. */
+  const workarea = (
+    <div className={styles.workarea}>
+      <Toolbar />
+      <div className={styles.main}>
+        <div className={styles.panels}>
+          {showRight && rightFullscreen ? (
+            <div className={mergeClasses(styles.card, styles.sidebarRightFullscreen)}>
+              {rightPanel(true)}
+            </div>
+          ) : isStacked ? (
+            /* One column at a time: the designer stays mounted underneath so
+               toggling a panel does not throw away its scroll and tab state. */
+            <div className={styles.narrowStack}>
+              <div className={mergeClasses(styles.card, (showLeft || showRight) && styles.narrowHidden)}>
+                <div className={styles.panelContent}>{designer}</div>
+              </div>
+              {showLeft && explorer(mergeClasses(styles.sidebar, styles.card, styles.narrowPane))}
+              {showRight && (
+                <div className={mergeClasses(styles.card, styles.narrowPane)}>
+                  {rightPanel(false, true)}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Side panels come and go, so every panel carries an id and an
+               order: without them the group ranks panels by when they
+               mounted. */
+            <PanelGroup direction="horizontal">
+              <Panel id="designer" order={1} defaultSize={centerPaneSize} minSize={isCompact ? 30 : 35}>
+                <div className={styles.card}>
+                  <div className={styles.panelContent}>{designer}</div>
+                </div>
+              </Panel>
+              {showRight && (
+                <>
+                  <PanelResizeHandle className="wb-card-gap" />
+                  <Panel id="side-panel" order={2} defaultSize={rightPaneSize} minSize={isCompact ? 30 : 22} maxSize={isCompact ? 65 : 55}>
+                    <div className={styles.card}>{rightPanel(false)}</div>
+                  </Panel>
+                </>
+              )}
+            </PanelGroup>
+          )}
+        </div>
+        {/* Empty until a format element is selected. */}
+        <React.Suspense fallback={null}>
+          <TraceBar />
+        </React.Suspense>
+      </div>
+      <StatusBar
+        warningsOpen={statusWarningsOpen}
+        setWarningsOpen={setStatusWarningsOpen}
+      />
+    </div>
+  );
+
   return (
     <div className={mergeClasses('app-shell', styles.shell)}>
       <ActivityBar
@@ -587,123 +684,27 @@ export function App() {
         onToggleRight={toggleProperties}
         onToggleSearch={() => toggleSearch()}
         onToggleWhereUsed={() => toggleWhereUsed()}
-        onGoHome={() => { setShowLanding(true); }}
+        onGoHome={goHome}
       />
-      <div className={styles.workarea}>
-          {/* The top bar and the status bar are indigo, like the rail and the
-              explorer: the light designer sits in an indigo frame. */}
-          <IndigoScope className={styles.chromeBar}>
-            <Toolbar />
-          </IndigoScope>
-          <div className={styles.main}>
-            {showRight && rightFullscreen ? (
-              <div className={mergeClasses(styles.sidebar, styles.sidebarRight, styles.sidebarRightFullscreen)}>
-                <RightPanel
-                  tab={rightTab}
-                  onTabChange={handleRightTabChange}
-                  fullscreen
-                  onExpand={() => setRightFullscreen(true)}
-                  onCollapse={() => setRightFullscreen(false)}
-                  onClose={() => { setShowRight(false); setRightFullscreen(false); }}
-                  panelContentClass={styles.panelContent}
-                />
-              </div>
-            ) : isStacked ? (
-              /* One column at a time: the designer stays mounted underneath so
-                 toggling a panel does not throw away its scroll and tab state. */
-              <div className={styles.narrowStack}>
-                <div className={mergeClasses(styles.center, (showLeft || showRight) && styles.narrowHidden)}>
-                  <div className={styles.panelContent}>
-                    <ErrorBoundary label={t.errorAreaDesigner}>
-                      <React.Suspense fallback={<PanelLoading />}>
-                        <DesignerView />
-                      </React.Suspense>
-                    </ErrorBoundary>
-                  </div>
-                </div>
-                {showLeft && (
-                  <IndigoScope className={mergeClasses(styles.sidebar, styles.narrowPane)}>
-                    <ErrorBoundary label={t.explorer}>
-                      <ConfigExplorer />
-                    </ErrorBoundary>
-                  </IndigoScope>
-                )}
-                {showRight && (
-                  <div className={mergeClasses(styles.sidebar, styles.sidebarRight, styles.narrowPane)}>
-                    <RightPanel
-                      tab={rightTab}
-                      onTabChange={handleRightTabChange}
-                      fullscreen={false}
-                      hideSizeToggle
-                      onExpand={() => setRightFullscreen(true)}
-                      onCollapse={() => setRightFullscreen(false)}
-                      onClose={() => { setShowRight(false); setRightFullscreen(false); }}
-                      panelContentClass={styles.panelContent}
-                    />
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* Side panels come and go, so every panel carries an id and an
-                 order: without them the group ranks panels by when they
-                 mounted, and an explorer reopened next to an open designer
-                 became the second panel — dragging its splitter to the left
-                 then widened it. */
-              <PanelGroup direction="horizontal">
-                {showLeft && (
-                  <>
-                    <Panel id="explorer" order={1} defaultSize={leftPaneSize} minSize={isCompact ? 28 : 15} maxSize={isCompact ? 60 : 40}>
-                      {/* The explorer is indigo in both themes, like the rail beside it. */}
-                      <IndigoScope className={styles.sidebar}>
-                        <ErrorBoundary label={t.explorer}>
-                          <ConfigExplorer />
-                        </ErrorBoundary>
-                      </IndigoScope>
-                    </Panel>
-                    <PanelResizeHandle className={styles.resizeHandle} />
-                  </>
-                )}
-
-                <Panel id="designer" order={2} defaultSize={centerPaneSize} minSize={isCompact ? 22 : 30}>
-                  <div className={styles.center}>
-                      <div className={styles.panelContent}>
-                      <ErrorBoundary label={t.errorAreaDesigner}>
-                        <React.Suspense fallback={<PanelLoading />}>
-                          <DesignerView />
-                        </React.Suspense>
-                      </ErrorBoundary>
-                    </div>
-                  </div>
-                </Panel>
-
-                {showRight && (
-                  <>
-                    <PanelResizeHandle className={styles.resizeHandle} />
-                    <Panel id="side-panel" order={3} defaultSize={rightPaneSize} minSize={isCompact ? 30 : 20} maxSize={isCompact ? 65 : 50}>
-                      <div className={mergeClasses(styles.sidebar, styles.sidebarRight)}>
-                        <RightPanel
-                          tab={rightTab}
-                          onTabChange={handleRightTabChange}
-                          fullscreen={false}
-                          onExpand={() => setRightFullscreen(true)}
-                          onCollapse={() => setRightFullscreen(false)}
-                          onClose={() => { setShowRight(false); setRightFullscreen(false); }}
-                          panelContentClass={styles.panelContent}
-                        />
-                      </div>
-                    </Panel>
-                  </>
-                )}
-              </PanelGroup>
-            )}
-          </div>
-          <IndigoScope className={styles.chromeBar}>
-            <StatusBar
-              warningsOpen={statusWarningsOpen}
-              setWarningsOpen={setStatusWarningsOpen}
-            />
-          </IndigoScope>
-      </div>
+      {isStacked ? workarea : (
+        /* The rail and the explorer span the window's height; the header and
+           the work area sit beside them. The work panel keeps its place
+           whether or not the explorer is open, so hiding it does not remount
+           the designer. */
+        <PanelGroup direction="horizontal">
+          {showLeft && (
+            <>
+              <Panel id="explorer" order={1} defaultSize={leftPaneSize} minSize={isCompact ? 28 : 15} maxSize={isCompact ? 60 : 40}>
+                {explorer(styles.sidebar)}
+              </Panel>
+              <PanelResizeHandle className={styles.resizeHandle} />
+            </>
+          )}
+          <Panel id="work" order={2} defaultSize={showLeft ? 100 - leftPaneSize : 100} minSize={40}>
+            {workarea}
+          </Panel>
+        </PanelGroup>
+      )}
       <ToastHost />
       <FnoIngestOverlay />
       <VersionComparePicker />
@@ -753,7 +754,7 @@ function RightPanel({
   return (
     <>
       <div className={styles.rightTabStrip} role="tablist">
-        {/* Properties belongs here too: the ActivityBar can switch to it, so
+        {/* Properties belongs here too: the sidebar can switch to it, so
             without this tab the strip showed no selection at all. */}
         <button
           type="button"
@@ -840,7 +841,7 @@ function RightPanel({
  * Slim footer: download progress, what the active tab derives from, validator
  * state and the current view mode. The number of loaded configurations is not
  * repeated here — the Explorer already lists them. Navigation (Home) and per-configuration
- * actions live in the ActivityBar and the Explorer — the status bar used to
+ * actions live in the sidebar and the Explorer — the status bar used to
  * repeat both.
  */
 function StatusBar({ warningsOpen, setWarningsOpen }: {
@@ -905,7 +906,13 @@ function StatusBar({ warningsOpen, setWarningsOpen }: {
       >
         <PopoverTrigger disableButtonEnhancement>
           <span
-            className={mergeClasses(styles.chip, styles.warnBtn, warnings.length === 0 ? styles.warnOk : styles.warnIssues)}
+            className={mergeClasses(
+              styles.chip,
+              styles.warnBtn,
+              warnings.length === 0 ? styles.warnOk : styles.warnIssues,
+              // Stable hooks for the status pill's colour (ledger-dialogs.css).
+              warnings.length === 0 ? 'app-statusbar__validator app-statusbar__validator--ok' : 'app-statusbar__validator app-statusbar__validator--issues',
+            )}
             onClick={() => warnings.length > 0 && setWarningsOpen(v => !v)}
             title={warnings.length === 0 ? t.validatorOk : t.validatorIssues(warnings.length)}
             role="button"
@@ -919,7 +926,7 @@ function StatusBar({ warningsOpen, setWarningsOpen }: {
             </span>
           </span>
         </PopoverTrigger>
-        <PopoverSurface className={styles.popover}>
+        <PopoverSurface className={mergeClasses(styles.popover, 'app-statusbar__warnings')}>
           <div className={styles.popoverHeader}>
             <Body1Strong>{t.warnings} ({warnings.length})</Body1Strong>
             <Button
