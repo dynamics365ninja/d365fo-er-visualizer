@@ -8,6 +8,7 @@ import { buildImpactIndex, findImpactEntities, type FormatUsage, type ImpactMatc
 import { getConsultantFormatTypeLabel } from '../utils/consultant-labels';
 import { useLocale } from '../i18n';
 import { FormatElementIcon } from './designers/format-type';
+import { parseBoolean, usePreference } from '../utils/ui-preferences';
 
 /** How many rows a section lists before "show all". */
 const SECTION_ROWS = 12;
@@ -70,7 +71,7 @@ export function WhereUsedView({ query, target, scope, filter, expandSignal, onEm
   const treeNodes = useAppStore(s => s.treeNodes);
   const navigateToTreeNode = useAppStore(s => s.navigateToTreeNode);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
-  const [includeIndirect, setIncludeIndirect] = useState(false);
+  const [includeIndirect, setIncludeIndirect] = usePreference('whereUsed.includeIndirect', false, parseBoolean);
 
   const index = useMemo(() => buildImpactIndex(configurations), [configurations]);
   const labelPool = useMemo(() => {

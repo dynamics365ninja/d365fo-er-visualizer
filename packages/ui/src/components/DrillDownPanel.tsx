@@ -2617,6 +2617,22 @@ export function DrillDownPanel({ expression, configIndex, elementName }: {
   );
 }
 
+function readStoredDrillDown(key: string): string | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredDrillDown(key: string, value: string): void {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.setItem(key, value);
+  } catch {
+    // Storage full or blocked: the choice lasts for this session only.
+  }
+}
+
 export function DrillDownBody({ expression, configIndex, elementName, variant = 'inline', onPopOut, onViewModeChange }: {
   expression: string;
   configIndex: number;
@@ -2632,34 +2648,26 @@ export function DrillDownBody({ expression, configIndex, elementName, variant = 
   const DRILLDOWN_UNRESOLVED_KEY = 'er-visualizer.drilldown.showUnresolvedRefs';
   const DRILLDOWN_LABEL_MODE_KEY = 'er-visualizer.drilldown.treeLabelMode';
 
-  const [viewMode, setViewMode] = useState<'workbench' | 'tree'>(() => {
-    if (typeof window === 'undefined') return 'workbench';
-    const persisted = window.localStorage.getItem(DRILLDOWN_VIEW_MODE_KEY);
-    return persisted === 'tree' ? 'tree' : 'workbench';
-  });
-  const [showUnresolvedRefs, setShowUnresolvedRefs] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return window.localStorage.getItem(DRILLDOWN_UNRESOLVED_KEY) === '1';
-  });
-  const [treeLabelMode, setTreeLabelMode] = useState<TreeLabelMode>(() => {
-    if (typeof window === 'undefined') return 'full';
-    const persisted = window.localStorage.getItem(DRILLDOWN_LABEL_MODE_KEY);
-    return persisted === 'compact' ? 'compact' : 'full';
-  });
+  // Remembered per browser. Storage that is blocked or full must not take the
+  // panel down, so every access is guarded.
+  const [viewMode, setViewMode] = useState<'workbench' | 'tree'>(() =>
+    readStoredDrillDown(DRILLDOWN_VIEW_MODE_KEY) === 'tree' ? 'tree' : 'workbench');
+  const [showUnresolvedRefs, setShowUnresolvedRefs] = useState<boolean>(() =>
+    readStoredDrillDown(DRILLDOWN_UNRESOLVED_KEY) === '1');
+  const [treeLabelMode, setTreeLabelMode] = useState<TreeLabelMode>(() =>
+    readStoredDrillDown(DRILLDOWN_LABEL_MODE_KEY) === 'compact' ? 'compact' : 'full');
 
   React.useEffect(() => {
-    if (typeof window !== 'undefined') window.localStorage.setItem(DRILLDOWN_VIEW_MODE_KEY, viewMode);
+    writeStoredDrillDown(DRILLDOWN_VIEW_MODE_KEY, viewMode);
     onViewModeChange?.(viewMode);
   }, [viewMode, onViewModeChange]);
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(DRILLDOWN_UNRESOLVED_KEY, showUnresolvedRefs ? '1' : '0');
+    writeStoredDrillDown(DRILLDOWN_UNRESOLVED_KEY, showUnresolvedRefs ? '1' : '0');
   }, [showUnresolvedRefs]);
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(DRILLDOWN_LABEL_MODE_KEY, treeLabelMode);
+    writeStoredDrillDown(DRILLDOWN_LABEL_MODE_KEY, treeLabelMode);
   }, [treeLabelMode]);
 
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);

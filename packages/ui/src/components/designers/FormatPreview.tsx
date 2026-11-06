@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { ArrowDownloadRegular, ArrowUploadRegular, DocumentPdfRegular } from '@fluentui/react-icons';
 import { useAppStore } from '../../state/store';
 import { t } from '../../i18n';
@@ -10,6 +10,9 @@ import { ExcelVisualPreview } from './ExcelPreview';
 import { unwrapConverterRoot, detectFormatType } from './format-type';
 import { DocumentPreview } from './DocumentPreview';
 import { buildFormatLineage } from '../../utils/format-lineage';
+import { oneOf, parseBoolean, usePreference } from '../../utils/ui-preferences';
+
+const parsePlaceholderMode = oneOf<PreviewPlaceholderMode>(['sample', 'omit', 'braces']);
 
 type DelimitedPreviewData = {
   delimiter: string;
@@ -50,8 +53,8 @@ export function FormatPreview({ rootElement, direction, bindingMap, configIndex,
     if (!cfg || cfg.content.kind !== 'Format') return undefined;
     return (cfg.content as ERFormatContent).formatVersion.format.template;
   });
-  const [placeholderMode, setPlaceholderMode] = useState<PreviewPlaceholderMode>('sample');
-  const [csvFirstRowHeader, setCsvFirstRowHeader] = useState(true);
+  const [placeholderMode, setPlaceholderMode] = usePreference<PreviewPlaceholderMode>('preview.placeholders', 'sample', parsePlaceholderMode);
+  const [csvFirstRowHeader, setCsvFirstRowHeader] = usePreference('preview.csvFirstRowHeader', true, parseBoolean);
   const showTechnicalDetails = useAppStore(s => s.showTechnicalDetails);
   const previewOptions = useMemo<PreviewRenderOptions>(
     () => ({ placeholderMode, showTechnicalDetails }),

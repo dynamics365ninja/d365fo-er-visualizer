@@ -25,6 +25,13 @@ import {
   AppsListDetailRegular,
 } from '@fluentui/react-icons';
 import { useAppStore, focusedTabId } from '../state/store';
+import {
+  loadPanelVisibility,
+  panelGroupSaveId,
+  savePanelVisibility,
+  type PanelVisibility,
+  type SidePanelTab,
+} from '../utils/ui-preferences';
 import { ConfigExplorer } from './ConfigExplorer';
 import { PropertyInspector } from './PropertyInspector';
 import { Toolbar } from './Toolbar';
@@ -396,9 +403,18 @@ const useStatusBarStyles = makeStyles({
 export function App() {
   useLocale();
   const styles = useAppStyles();
-  const [showLeft, setShowLeft] = useState(true);
-  const [showRight, setShowRight] = useState(false);
-  const [rightTab, setRightTab] = useState<'properties' | 'search' | 'where-used'>('properties');
+  // The side panels open as the user left them. Only the user's own toggles
+  // are remembered: a drill-down tab hiding both, or a narrow window dropping
+  // the explorer, is not a choice to bring back after a reload.
+  const [initialPanels] = useState(loadPanelVisibility);
+  const [showLeft, setShowLeft] = useState(initialPanels.explorer);
+  const [showRight, setShowRight] = useState(initialPanels.side);
+  const [rightTab, setRightTab] = useState<SidePanelTab>(initialPanels.sideTab);
+  const panelsRef = useRef<PanelVisibility>(initialPanels);
+  panelsRef.current = { explorer: showLeft, side: showRight, sideTab: rightTab };
+  const rememberPanels = useCallback((change: Partial<PanelVisibility>) => {
+    savePanelVisibility({ ...panelsRef.current, ...change });
+  }, []);
   const [rightFullscreen, setRightFullscreen] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const landingRequest = useAppStore(s => s.landingRequest);
@@ -418,11 +434,18 @@ export function App() {
   const whereUsedTrigger = useAppStore(s => s.whereUsedTrigger);
   const setSearchPanelMode = useAppStore(s => s.setSearchPanelMode);
 
+  // The search panel serves both tabs; a remembered where-used tab has to
+  // put it in that mode.
+  useEffect(() => {
+    if (initialPanels.sideTab !== 'properties') setSearchPanelMode(initialPanels.sideTab);
+  }, [initialPanels, setSearchPanelMode]);
+
   useEffect(() => {
     if (!whereUsedTrigger) return;
     setShowRight(true);
     setRightTab('where-used');
     setSearchPanelMode('where-used');
+    rememberPanels({ side: true, sideTab: 'where-used' });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [whereUsedTrigger?.version]);
 
@@ -460,14 +483,16 @@ export function App() {
   }, [isCompact, showLeft, showRight]);
 
   const toggleExplorer = useCallback(() => {
-    setShowLeft(prev => {
-      if (!prev && isCompactRef.current) {
-        setShowRight(false);
-        setRightFullscreen(false);
-      }
-      return !prev;
-    });
-  }, []);
+    const next = !panelsRef.current.explorer;
+    setShowLeft(next);
+    if (next && isCompactRef.current) {
+      setShowRight(false);
+      setRightFullscreen(false);
+      rememberPanels({ explorer: true, side: false });
+    } else {
+      rememberPanels({ explorer: next });
+    }
+  }, [rememberPanels]);
 
   // A side panel needs a bigger share of a tablet than of a desktop monitor:
   // 25 % of an 834 px viewport is a 208 px tree, which truncates almost every
@@ -476,6 +501,24 @@ export function App() {
   const leftPaneSize = isCompact ? 42 : 25;
   const rightPaneSize = isCompact ? 50 : 34;
   const centerPaneSize = showRight ? 100 - rightPaneSize : 100;
+
+  const closeSidePanel = useCallback(() => {
+    setShowRight(false);
+    setRightFullscreen(false);
+    rememberPanels({ side: false });
+  }, [rememberPanels]);
+
+  const openSidePanel = useCallback((tab: SidePanelTab) => {
+    setRightTab(tab);
+    if (tab !== 'properties') setSearchPanelMode(tab);
+    setShowRight(true);
+    if (isCompactRef.current) {
+      setShowLeft(false);
+      rememberPanels({ side: true, sideTab: tab, explorer: false });
+    } else {
+      rememberPanels({ side: true, sideTab: tab });
+    }
+  }, [rememberPanels, setSearchPanelMode]);
 
   /* From the keyboard (Ctrl+F), an open panel whose box does not have the
      cursor gets it back instead of closing; a click on the activity bar
@@ -486,16 +529,12 @@ export function App() {
         requestSearchFocus();
         return;
       }
-      setShowRight(false);
-      setRightFullscreen(false);
+      closeSidePanel();
     } else {
-      setRightTab('search');
-      setSearchPanelMode('search');
-      setShowRight(true);
-      if (isCompactRef.current) setShowLeft(false);
+      openSidePanel('search');
       requestSearchFocus();
     }
-  }, [showRight, rightTab, setSearchPanelMode]);
+  }, [showRight, rightTab, closeSidePanel, openSidePanel]);
 
   const toggleWhereUsed = useCallback((fromShortcut = false) => {
     if (showRight && rightTab === 'where-used') {
@@ -503,33 +542,26 @@ export function App() {
         requestSearchFocus();
         return;
       }
-      setShowRight(false);
-      setRightFullscreen(false);
+      closeSidePanel();
     } else {
-      setRightTab('where-used');
-      setSearchPanelMode('where-used');
-      setShowRight(true);
-      if (isCompactRef.current) setShowLeft(false);
+      openSidePanel('where-used');
       requestSearchFocus();
     }
-  }, [showRight, rightTab, setSearchPanelMode]);
+  }, [showRight, rightTab, closeSidePanel, openSidePanel]);
 
-  const handleRightTabChange = useCallback((tab: 'properties' | 'search' | 'where-used') => {    setRightTab(tab);
-    if (tab === 'search') setSearchPanelMode('search');
-    else if (tab === 'where-used') setSearchPanelMode('where-used');
-    if (tab !== 'properties') requestSearchFocus();
-  }, [setSearchPanelMode]);
+  const handleRightTabChange = useCallback((tab: SidePanelTab) => {
+    setRightTab(tab);
+    if (tab !== 'properties') {
+      setSearchPanelMode(tab);
+      requestSearchFocus();
+    }
+    rememberPanels({ sideTab: tab });
+  }, [setSearchPanelMode, rememberPanels]);
 
   const toggleProperties = useCallback(() => {
-    if (showRight && rightTab === 'properties') {
-      setShowRight(false);
-      setRightFullscreen(false);
-    } else {
-      setRightTab('properties');
-      setShowRight(true);
-      if (isCompactRef.current) setShowLeft(false);
-    }
-  }, [showRight, rightTab]);
+    if (showRight && rightTab === 'properties') closeSidePanel();
+    else openSidePanel('properties');
+  }, [showRight, rightTab, closeSidePanel, openSidePanel]);
 
   // Keep the latest landing state readable from the (stable) keydown handler.
   const landingVisibleRef = useRef(isLandingVisible);
@@ -597,7 +629,7 @@ export function App() {
       hideSizeToggle={narrow}
       onExpand={() => setRightFullscreen(true)}
       onCollapse={() => setRightFullscreen(false)}
-      onClose={() => { setShowRight(false); setRightFullscreen(false); }}
+      onClose={closeSidePanel}
       panelContentClass={styles.panelContent}
     />
   );
@@ -643,8 +675,9 @@ export function App() {
           ) : (
             /* Side panels come and go, so every panel carries an id and an
                order: without them the group ranks panels by when they
-               mounted. */
-            <PanelGroup direction="horizontal">
+               mounted. The ids also key the remembered sizes, one layout
+               per set of panels shown. */
+            <PanelGroup direction="horizontal" autoSaveId={panelGroupSaveId('work', isCompact)}>
               <Panel id="designer" order={1} defaultSize={centerPaneSize} minSize={isCompact ? 30 : 35}>
                 <div className={styles.card}>
                   <div className={styles.panelContent}>{designer}</div>
@@ -690,8 +723,8 @@ export function App() {
         /* The rail and the explorer span the window's height; the header and
            the work area sit beside them. The work panel keeps its place
            whether or not the explorer is open, so hiding it does not remount
-           the designer. */
-        <PanelGroup direction="horizontal">
+           the designer. The explorer's width is remembered. */
+        <PanelGroup direction="horizontal" autoSaveId={panelGroupSaveId('shell', isCompact)}>
           {showLeft && (
             <>
               <Panel id="explorer" order={1} defaultSize={leftPaneSize} minSize={isCompact ? 28 : 15} maxSize={isCompact ? 60 : 40}>
@@ -739,8 +772,8 @@ function RightPanel({
   onClose,
   panelContentClass,
 }: {
-  tab: 'properties' | 'search' | 'where-used';
-  onTabChange: (tab: 'properties' | 'search' | 'where-used') => void;
+  tab: SidePanelTab;
+  onTabChange: (tab: SidePanelTab) => void;
   fullscreen: boolean;
   /** Narrow layout: the panel already fills the viewport, so expand/collapse
    *  would be a no-op control taking up scarce header width. */
