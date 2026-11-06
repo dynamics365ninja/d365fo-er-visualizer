@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Button,
   Menu,
@@ -180,6 +180,18 @@ export function TabStrip({ pane }: { pane: DesignerPane }) {
   // The kind of each loaded configuration, for the coloured square of its tab.
   const configKinds = useAppStore(useShallow(s => s.configurations.map(cfg => cfg.content.kind as string)));
   useLocale(); // re-render on language change so aria labels stay localized
+  const tablistRef = useRef<HTMLDivElement>(null);
+  // A strip too narrow for its tabs scrolls (on a tablet the tabs keep a
+  // readable width instead of shrinking): keep the open tab in view.
+  useEffect(() => {
+    const strip = tablistRef.current;
+    const shown = strip?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    if (!strip || !shown) return;
+    const bounds = strip.getBoundingClientRect();
+    const tab = shown.getBoundingClientRect();
+    if (tab.left < bounds.left) strip.scrollLeft -= bounds.left - tab.left;
+    else if (tab.right > bounds.right) strip.scrollLeft += tab.right - bounds.right;
+  }, [shownTabId, tabs.length]);
   const kindDotClass = (kind: string | undefined) =>
     kind === 'DataModel' ? styles.kindModel
       : kind === 'ModelMapping' ? styles.kindMapping
@@ -197,9 +209,10 @@ export function TabStrip({ pane }: { pane: DesignerPane }) {
   };
 
   return (
-    <div className={styles.root}>
+    <div className={mergeClasses('wb-tabstrip', styles.root)}>
       <div
-        className={styles.tabs}
+        ref={tablistRef}
+        className={mergeClasses('wb-tabstrip__tabs', styles.tabs)}
         role="tablist"
         onDragOver={e => { if (isTabDrag(e)) e.preventDefault(); }}
         onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropHint(null); }}
@@ -224,6 +237,7 @@ export function TabStrip({ pane }: { pane: DesignerPane }) {
               tabIndex={0}
               draggable
               className={mergeClasses(
+                'wb-tab',
                 styles.tab,
                 shown && (groupFocused ? styles.tabActive : styles.tabSide),
                 isDrillDown && styles.tabDrillDown,
@@ -285,7 +299,7 @@ export function TabStrip({ pane }: { pane: DesignerPane }) {
                 size="small"
                 icon={<DismissRegular />}
                 aria-label={t.closeTab(tab.label)}
-                className={styles.closeBtn}
+                className={mergeClasses('wb-tab__close', styles.closeBtn)}
                 onClick={e => {
                   e.stopPropagation();
                   closeTab(tab.id);
@@ -300,7 +314,7 @@ export function TabStrip({ pane }: { pane: DesignerPane }) {
           appearance="subtle"
           size="small"
           icon={<DismissSquareMultipleRegular />}
-          className={styles.groupClose}
+          className={mergeClasses('wb-tabstrip__action', styles.groupClose)}
           title={t.closeAllTabs}
           aria-label={t.closeAllTabs}
           onClick={closeAllTabs}
@@ -311,7 +325,7 @@ export function TabStrip({ pane }: { pane: DesignerPane }) {
           appearance="subtle"
           size="small"
           icon={<DismissRegular />}
-          className={styles.groupClose}
+          className={mergeClasses('wb-tabstrip__action', styles.groupClose)}
           title={pane === 'side' ? t.splitCloseSideGroup : t.splitCloseMainGroup}
           aria-label={pane === 'side' ? t.splitCloseSideGroup : t.splitCloseMainGroup}
           onClick={() => closePane(pane)}

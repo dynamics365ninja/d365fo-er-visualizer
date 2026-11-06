@@ -10,7 +10,8 @@
    styles, and the files are ordered so that a later one only wins where it has
    to: globals.css carries the few cross-cutting rules that must beat component
    rules (the focus ring, panel resize handles, Fluent surface overrides).
-   Media queries sit next to the rules they adapt. */
+   Media queries sit next to the rules they adapt — except the touch sizes,
+   which all live in touch.css, loaded last so no later look can undo them. */
 @import "./styles/app-tokens.css"; /* App aliases over the shared tokens + the Indigo Ledger palette */
 @import "./styles/base.css"; /* Document, scrollbars, keyframes, generic elements */
 @import "./styles/controls.css"; /* Shared widgets: filter field, expand slider, badges, tooltips, expressions */
@@ -25,3 +26,4 @@
 @import "./styles/ledger-panels.css"; /* Indigo Ledger: inspector, search, where-used, drill-down, shared controls */
 @import "./styles/ledger-dialogs.css"; /* Indigo Ledger: dialogs, menus, toasts, status bar, F&O panels */
 @import "./styles/globals.css"; /* Cross-cutting rules that must win over components */
+@import "./styles/touch.css"; /* Touch sizes on a tablet: one layer, last, so they always hold */

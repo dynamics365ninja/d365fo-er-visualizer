@@ -2217,34 +2217,3 @@ button.src-chip:hover {
   background: var(--er-surface);
   box-shadow: var(--er-shadow-2);
 }
-
-/* ── Touch: the controls sized here keep their 36px targets ── */
-@media (pointer: coarse) {
-  .app-shell .fmt-header .fmt-stat-btn,
-  .app-shell .fmt-tab-btn,
-  .app-shell .fmt-bind-intent-chip,
-  .app-shell .ds-list-bar__formulas,
-  .app-shell .spec-mode,
-  .app-shell .spec-view__export,
-  .app-shell .doc-preview__action {
-    min-height: 36px;
-  }
-
-  .app-shell .fmt-bind-layout button,
-  .app-shell .spec-view__modes .spec-mode {
-    min-height: 34px;
-  }
-
-  /* 36px tall from controls.css, as everywhere else (see ledger-panels). */
-  .app-shell .fmt-toolbar .expand-slider__option,
-  .app-shell .fmt-header-tools .expand-slider__option {
-    width: 34px;
-  }
-
-  .app-shell .fmt-element-row,
-  .app-shell .ds-row,
-  .app-shell .fb-head--group {
-    min-height: 40px;
-  }
-
-}

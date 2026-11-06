@@ -31,6 +31,9 @@ const useStyles = makeStyles({
     minHeight: 'var(--wb-titlebar-h)',
     flexShrink: 0,
     boxSizing: 'border-box',
+    // The bar spans the work area beside the explorer, not the window: what
+    // gives way below is decided by its own width.
+    containerType: 'inline-size',
   },
   leftGroup: {
     display: 'flex',
@@ -57,9 +60,11 @@ const useStyles = makeStyles({
   hiddenInput: {
     display: 'none',
   },
-  // On a phone the button keeps its icon and tooltip; the words would wrap.
+  // In a narrow bar the button keeps its icon and tooltip; the words would
+  // wrap inside it.
   loadLabel: {
-    '@media (max-width: 480px)': {
+    whiteSpace: 'nowrap',
+    '@container (max-width: 560px)': {
       display: 'none',
     },
   },
@@ -99,9 +104,9 @@ const useStyles = makeStyles({
     color: 'var(--er-text)',
     boxShadow: '0 1px 2px var(--er-shadow-color)',
   },
-  // On a narrow screen the view mode gives way; it is in the explorer too.
+  // In a narrower bar still the view mode gives way; it is in the explorer too.
   viewMode: {
-    '@media (max-width: 720px)': {
+    '@container (max-width: 460px)': {
       display: 'none',
     },
   },
@@ -158,7 +163,7 @@ export function Toolbar() {
 
 
   return (
-    <div className={styles.root}>
+    <div className={mergeClasses('wb-titlebar', styles.root)}>
       <div className={styles.leftGroup}>
         <div className={styles.nav}>
           <Tooltip content={`${t.back} (Alt+←)`} relationship="label" withArrow>
@@ -207,7 +212,7 @@ export function Toolbar() {
       </div>
 
       <div className={styles.rightGroup}>
-        <div className={mergeClasses(styles.segmented, styles.viewMode)} role="group" aria-label={t.viewModeLabel}>
+        <div className={mergeClasses('wb-segmented', styles.segmented, styles.viewMode)} role="group" aria-label={t.viewModeLabel}>
           <button
             type="button"
             className={mergeClasses(styles.segment, !showTechnicalDetails && styles.segmentOn)}
@@ -227,7 +232,7 @@ export function Toolbar() {
             {t.viewTechnicalShort}
           </button>
         </div>
-        <div className={styles.segmented} role="group" aria-label={t.language}>
+        <div className={mergeClasses('wb-segmented', styles.segmented)} role="group" aria-label={t.language}>
           <button
             type="button"
             className={mergeClasses(styles.segment, isCs && styles.segmentOn)}

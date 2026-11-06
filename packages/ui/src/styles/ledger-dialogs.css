@@ -239,13 +239,6 @@ body .fui-MessageBar__icon {
   color: var(--er-text-muted);
 }
 
-@media (pointer: coarse) {
-  .app-shell .app-statusbar {
-    height: 44px;
-    min-height: 44px;
-  }
-}
-
 .app-shell .app-statusbar > span:not([role='button']) {
   align-self: center;
   height: 22px;

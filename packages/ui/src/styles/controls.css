@@ -613,43 +613,6 @@
   animation: tooltip-appear 110ms ease;
 }
 
-@media (pointer: coarse) {
-  .app-shell .expand-slider__option,
-  .app-shell .expand-slider--compact .expand-slider__option {
-    height: 36px;
-    min-height: 36px;
-  }
-
-  .app-shell .filter-field {
-    height: 36px;
-    min-height: 36px;
-    box-sizing: border-box;
-  }
-
-  /* Sizing the wrapper left the bordered input itself at its content height,
-     so the field looked shorter than the controls beside it. */
-  .app-shell .filter-field__input {
-    height: 100%;
-    box-sizing: border-box;
-    padding-top: 0;
-    padding-bottom: 0;
-  }
-
-  /* Spelling the toolbar buttons out leaves the filter squeezed to a couple
-     of characters. Let it claim the rest of the row and wrap onto its own
-     line rather than shrink below a usable width. */
-  .app-shell .fmt-toolbar .filter-field {
-    flex: 1 1 180px;
-    min-width: 180px;
-  }
-
-  .app-shell .expand-slider,
-  .app-shell .expand-slider--compact {
-    align-items: center;
-  }
-
-}
-
 .filter-suggest {
   position: absolute;
   top: calc(100% + 4px);
@@ -711,13 +674,6 @@
   background: none;
   color: var(--er-accent);
   font-weight: 700;
-}
-
-@media (pointer: coarse) {
-  .app-shell .filter-suggest__item {
-    min-height: 36px;
-  }
-
 }
 
 div.path-tooltip-card {

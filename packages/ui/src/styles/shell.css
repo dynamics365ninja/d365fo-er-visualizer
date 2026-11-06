@@ -1,24 +1,10 @@
-/* Shell: the workbench frame that is not styled in TSX — the rail on touch,
-   the status bar and the gap between the cards of the work area. */
+/* Shell: the workbench frame that is not styled in TSX — the status bar and
+   the gap between the cards of the work area. Its touch sizes (the rail's
+   tiles, the status bar) are in touch.css. */
 
 .app-statusbar button,
 .app-statusbar span {
   line-height: 1.1;
-}
-
-@media (pointer: coarse) {
-  .app-shell .app-statusbar {
-    height: 44px;
-    min-height: 44px;
-  }
-
-  .app-shell .app-statusbar > span {
-    min-height: 30px;
-    box-sizing: border-box;
-    padding-top: 0;
-    padding-bottom: 0;
-  }
-
 }
 
 .app-statusbar {
@@ -54,14 +40,4 @@
 
 .wb-card-gap[data-resize-handle-state='drag']::after {
   transition-delay: 0ms;
-}
-
-/* The rail's tiles grow to a touch target on a tablet. */
-@media (pointer: coarse) {
-  .app-shell .activity-bar__btn {
-    min-width: 44px;
-    width: 44px;
-    height: 44px;
-  }
-
 }
