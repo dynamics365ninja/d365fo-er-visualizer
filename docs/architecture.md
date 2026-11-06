@@ -114,8 +114,8 @@ analysis views share, so they always agree:
 | `utils/sequence-diff.ts` | `alignSequences`: two sequences item against item — the longest common run pairs up, the items left between pair by similarity (`textSimilarity`) or stay added / removed; `foldUnchanged` folds long unchanged runs. Used for template rows, preview document lines, formulas and lists |
 | `utils/expression-format.ts` | `formatFormula`: a formula on indented lines, one argument per line once it is long — broken only after `(` / `,` and before `)`, so each line tokenizes (and renders through `ClickablePath`) on its own; `diffFormulaLines` lines two formulas up by their longest common run |
 
-Views on top: `designers/FieldSpecView` (Specification tab), `designers/ElementFillCard` (inspector,
-preview), `designers/DocumentPreview`, `designers/VersionCompareView` (comparison tab: change list, or
+Views on top: `designers/FieldSpecView` (Specification tab), `designers/ElementFillCard` (preview),
+`designers/TraceBar` (trace of the selected element under the designer), `designers/DocumentPreview`, `designers/VersionCompareView` (comparison tab: change list, or
 `designers/ComparePreview` — both Excel templates side by side with every changed cell marked, or the two
 sample XML / text documents line against line),
 `WhereUsedView`, `SearchResultsView`. All of them are pure
