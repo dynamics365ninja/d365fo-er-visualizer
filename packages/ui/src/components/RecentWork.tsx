@@ -12,15 +12,11 @@ import {
 import { useAppStore } from '../state/store';
 import type { RecentFile, RecentSession } from '../state/persistence';
 import { t, useLocale } from '../i18n';
-import { describeRecent, formatRelativeTime, sessionHeadline, type RecentDisplay } from '../utils/recent-display';
-import { DependencyKindIcon, dependencyKindLabel } from './DependencyPromptDialog';
-import { FilterField } from './FilterField';
+import { formatRelativeTime, sessionHeadline, type RecentDisplay } from '../utils/recent-display';
+import { DependencyKindIcon } from './DependencyPromptDialog';
 import { useRelatedRecentLoad } from './useRelatedRecentLoad';
 
 const SESSIONS_SHOWN = 4;
-const CONFIGS_SHOWN = 8;
-/** Below this many entries a filter is more in the way than it helps. */
-const FILTER_FROM = 7;
 
 const kindClass: Record<string, string> = { DataModel: 'model', ModelMapping: 'mapping', Format: 'format' };
 
@@ -38,19 +34,16 @@ function SourceIcon({ source }: { source: 'file' | 'fno' }) {
 }
 
 /**
- * The landing page's recent work: sessions (the sets of configurations that
- * were open together) and the configurations one by one. Both name a
- * configuration the way the workspace does — its name and version, where it
- * came from — rather than by file name or a synthetic F&O key.
+ * The landing page's recent sessions: sets of configurations that were open
+ * together.
  */
 export function RecentWork({ onFilesLoaded }: { onFilesLoaded: () => void }) {
   const recentSessions = useAppStore(s => s.recentSessions);
   const recentFiles = useAppStore(s => s.recentFiles);
-  if (recentSessions.length === 0 && recentFiles.length === 0) return null;
+  if (recentSessions.length === 0) return null;
   return (
     <div className="recent-work">
-      {recentSessions.length > 0 && <RecentSessions sessions={recentSessions} recentFiles={recentFiles} onFilesLoaded={onFilesLoaded} />}
-      {recentFiles.length > 0 && <RecentConfigurations files={recentFiles} onFilesLoaded={onFilesLoaded} />}
+      <RecentSessions sessions={recentSessions} recentFiles={recentFiles} onFilesLoaded={onFilesLoaded} />
     </div>
   );
 }
@@ -205,88 +198,5 @@ function SessionCard({ session, recentFiles, loadingId, setLoadingId, onFilesLoa
       </ul>
       {!available && <p className="recent-session__note">{t.recentSessionUnavailable}</p>}
     </li>
-  );
-}
-
-function RecentConfigurations({ files, onFilesLoaded }: { files: RecentFile[]; onFilesLoaded: () => void }) {
-  const locale = useLocale();
-  const cachedPaths = useAppStore(s => s.cachedPaths);
-  const removeRecentFile = useAppStore(s => s.removeRecentFile);
-  const clearRecentFiles = useAppStore(s => s.clearRecentFiles);
-  const [filter, setFilter] = useState('');
-  const [showAll, setShowAll] = useState(false);
-  // Opening a configuration offers its cached data model, mapping or formats
-  // as well — the same prompt the workspace manager shows.
-  const { load, dialog: dependencyPrompt } = useRelatedRecentLoad(onFilesLoaded);
-
-  const described = useMemo(() => files.map(file => ({ file, display: describeRecent(file) })), [files]);
-  const query = filter.trim().toLowerCase();
-  const matching = query
-    ? described.filter(({ display }) =>
-      [display.title, display.version, display.origin, dependencyKindLabel(display.kind)]
-        .some(part => part?.toLowerCase().includes(query)))
-    : described;
-  const shown = showAll || query ? matching : matching.slice(0, CONFIGS_SHOWN);
-
-  return (
-    <section className="recent-section" aria-labelledby="recent-configs-title">
-      <header className="recent-section__head">
-        <h2 id="recent-configs-title" className="recent-section__title">{t.recentConfigs}</h2>
-        <Button appearance="subtle" size="small" icon={<DeleteRegular />} onClick={clearRecentFiles}>{t.clearRecent}</Button>
-      </header>
-      {files.length >= FILTER_FROM && (
-        <FilterField value={filter} onChange={setFilter} placeholder={t.recentFilterPlaceholder} ariaLabel={t.recentFilterPlaceholder} />
-      )}
-      {shown.length === 0 ? (
-        <p className="recent-section__hint">{t.noResults}</p>
-      ) : (
-        <ul className="recent-configs">
-          {shown.map(({ file, display }) => {
-            const cached = cachedPaths.has(file.path);
-            return (
-              <li key={file.path} className={`recent-config${cached ? '' : ' recent-config--unavailable'}`}>
-                <button
-                  type="button"
-                  className="recent-config__open"
-                  disabled={!cached}
-                  title={cached ? t.recentOpenConfigHint : t.recentNotCachedHint}
-                  onClick={() => load(file)}
-                >
-                  <span className={`recent-config__icon recent-kind--${kindClass[display.kind ?? ''] ?? 'format'}`}>
-                    <DependencyKindIcon kind={display.kind} />
-                  </span>
-                  <span className="recent-config__body">
-                    <span className="recent-config__title">
-                      <span className="recent-config__name">{display.title}</span>
-                      {display.version && <span className="recent-version">v{display.version}</span>}
-                    </span>
-                    <span className="recent-config__meta">
-                      <span>{dependencyKindLabel(display.kind)}</span>
-                      <span className="recent-source"><SourceIcon source={display.source} />{sourceLabel(display)}</span>
-                      <span>{cached ? formatRelativeTime(file.openedAt, locale) : t.recentNotCached}</span>
-                    </span>
-                  </span>
-                </button>
-                <Button
-                  className="recent-config__remove"
-                  appearance="transparent"
-                  size="small"
-                  icon={<DismissRegular />}
-                  aria-label={`${t.removeFromHistory}: ${display.title}`}
-                  title={t.removeFromHistory}
-                  onClick={() => removeRecentFile(file.path)}
-                />
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {!query && matching.length > CONFIGS_SHOWN && (
-        <button type="button" className="recent-section__more" onClick={() => setShowAll(v => !v)}>
-          {showAll ? t.recentShowLess : t.recentShowAll(matching.length)}
-        </button>
-      )}
-      {dependencyPrompt}
-    </section>
   );
 }
