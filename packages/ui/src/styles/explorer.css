@@ -329,13 +329,6 @@
   pointer-events: none;
 }
 
-@media (pointer: coarse) {
-  .vx-row { height: 32px; line-height: 32px; }
-  .vx-row-actions { display: inline-flex; }
-  .vx-row--actions .vx-decorations { display: none; }
-  .vx-action { width: 32px; height: 32px; }
-}
-
 /* Use: <span className={`tree-chevron ${open ? 'open' : ''}`} /> */
 .tree-chevron {
   display: inline-flex;
@@ -746,21 +739,6 @@
   background: var(--er-surface-2);
   font-size: var(--px-text-sm);
   color: var(--er-text-muted);
-}
-
-@media (pointer: coarse) {
-  .app-shell .explorer-tree-shell .tree-node[data-depth='0'],
-  .app-shell .ws-row {
-    min-height: 40px;
-  }
-
-  /* The chevron is the expand/collapse target for the whole tree. */
-  .app-shell .tree-chevron,
-  .app-shell .tree-chevron-placeholder {
-    min-width: 26px;
-    min-height: 26px;
-  }
-
 }
 
 /* Workspace manager: closed by the corner ✕, like the drill-down dialog — a

@@ -145,9 +145,9 @@ body::after {
     -webkit-touch-callout: none;
   }
 
-  .app-shell button {
-    min-height: 36px;
-  }
+  /* Touch sizes of controls are set per component in touch.css. A blanket
+     minimum height here used to push buttons out of the rows and switches
+     that hold them. */
 
   [data-panel-group-direction="horizontal"] > [data-resize-handle]::after {
     content: '';

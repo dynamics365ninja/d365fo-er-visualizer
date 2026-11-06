@@ -22,11 +22,6 @@
 }
 
 @media (pointer: coarse) {
-  .app-shell [role="button"],
-  .app-shell [role="tab"] {
-    min-height: 36px;
-  }
-
   [data-panel-group-direction="horizontal"] > [data-resize-handle],
   [data-panel-group-direction="horizontal"] > [data-resize-handle]:hover,
   [data-panel-group-direction="horizontal"] > [data-resize-handle][data-resize-handle-state="drag"] {

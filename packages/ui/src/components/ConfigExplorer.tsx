@@ -1529,6 +1529,7 @@ const TreeNodeRow = React.memo(function TreeNodeRowView({ node, depth, expanded,
             <VxAction
               icon={<DismissRegular fontSize={14} />}
               label={t.closeConfiguration}
+              className="vx-row-close"
               onClick={event => { event.stopPropagation(); onCloseConfiguration(node); }}
             />
           )}

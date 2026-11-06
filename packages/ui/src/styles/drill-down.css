@@ -1177,23 +1177,6 @@
   font-style: italic;
 }
 
-@media (pointer: coarse) {
-  .app-shell .lin-row,
-  .app-shell .dd-collapsible__trigger {
-    min-height: 40px;
-  }
-
-  .app-shell .dd-hero__btn,
-  .app-shell .lin-chip {
-    min-height: 36px;
-  }
-
-  .app-shell .lin-row__toggle {
-    min-width: 26px;
-    min-height: 26px;
-  }
-
-}
 
 @media (max-width: 900px) {
   /* Drill-down dialogs are sized for a desktop window. */

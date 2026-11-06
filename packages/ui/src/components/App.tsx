@@ -786,14 +786,14 @@ function RightPanel({
   const styles = useAppStyles();
   return (
     <>
-      <div className={styles.rightTabStrip} role="tablist">
+      <div className={mergeClasses('wb-side-tabs', styles.rightTabStrip)} role="tablist">
         {/* Properties belongs here too: the sidebar can switch to it, so
             without this tab the strip showed no selection at all. */}
         <button
           type="button"
           role="tab"
           aria-selected={tab === 'properties'}
-          className={mergeClasses(styles.rightTab, tab === 'properties' && styles.rightTabActive)}
+          className={mergeClasses('wb-side-tabs__tab', styles.rightTab, tab === 'properties' && styles.rightTabActive)}
           onClick={() => onTabChange('properties')}
           title={t.properties}
           aria-label={t.properties}
@@ -805,7 +805,7 @@ function RightPanel({
           type="button"
           role="tab"
           aria-selected={tab === 'search'}
-          className={mergeClasses(styles.rightTab, tab === 'search' && styles.rightTabActive)}
+          className={mergeClasses('wb-side-tabs__tab', styles.rightTab, tab === 'search' && styles.rightTabActive)}
           onClick={() => onTabChange('search')}
           title={t.search}
           aria-label={t.search}
@@ -817,7 +817,7 @@ function RightPanel({
           type="button"
           role="tab"
           aria-selected={tab === 'where-used'}
-          className={mergeClasses(styles.rightTab, tab === 'where-used' && styles.rightTabActive)}
+          className={mergeClasses('wb-side-tabs__tab', styles.rightTab, tab === 'where-used' && styles.rightTabActive)}
           onClick={() => onTabChange('where-used')}
           title={t.whereUsedAction}
           aria-label={t.whereUsedAction}
@@ -826,7 +826,7 @@ function RightPanel({
           {tab === 'where-used' && t.whereUsedAction}
         </button>
         <div className={styles.rightTabSpacer} />
-        <div className={styles.rightTabActions}>
+        <div className={mergeClasses('wb-side-tabs__actions', styles.rightTabActions)}>
           {!hideSizeToggle && (
             <Tooltip content={fullscreen ? t.panelRestore : t.panelMaximize} relationship="label" withArrow>
               <Button

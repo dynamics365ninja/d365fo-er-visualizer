@@ -160,14 +160,6 @@
   color: var(--er-text);
 }
 
-/* Touch: the segments widen with the 36px height controls.css gives them. */
-@media (pointer: coarse) {
-  .expand-slider .expand-slider__option,
-  .app-shell .expand-slider--compact .expand-slider__option {
-    width: 34px;
-  }
-}
-
 /* ── Type badges: capsules in the tint of what they mark, no outline ── */
 .badge {
   gap: 4px;
@@ -471,14 +463,6 @@ div.path-tooltip-card--model-field {
   background: radial-gradient(circle, currentColor 1.1px, transparent 1.5px) 0 0 / 4px 4px;
   clip-path: polygon(100% -1.5px, 100% 100%, -1.5px 100%);
   opacity: 0.6;
-}
-
-@media (pointer: coarse) {
-  .filter-field:not(.vx-filter__field) > .filter-field__input,
-  .search-panel .search-panel__field > .filter-field__input {
-    height: 36px;
-    line-height: 34px;
-  }
 }
 
 /* ═══════════════════════════ Search panel ═══════════════════════════ */
@@ -853,13 +837,6 @@ div.path-tooltip-card--model-field {
   background: var(--er-accent);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'%3E%3Ccircle cx='6.5' cy='6.5' r='4'/%3E%3Cpath d='M10 10l2.5 2.5'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'%3E%3Ccircle cx='6.5' cy='6.5' r='4'/%3E%3Cpath d='M10 10l2.5 2.5'/%3E%3C/svg%3E") center / contain no-repeat;
-}
-
-@media (pointer: coarse) {
-  .app-shell .search-scope-toggle .search-scope-toggle__btn {
-    height: 32px;
-    padding: 0 12px;
-  }
 }
 
 /* ═══════════════════════════ Where-used ═══════════════════════════ */

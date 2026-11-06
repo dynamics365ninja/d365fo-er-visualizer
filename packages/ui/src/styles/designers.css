@@ -630,6 +630,9 @@
   flex: 1;
   overflow: auto;
   background: var(--er-bg-soft);
+  /* Content wider than the pane (the specification table) can size a line
+     to the visible width with `cqw`. */
+  container-type: inline-size;
 }
 
 /* The element tree is plain rows with no group headers of its own. */
@@ -1393,50 +1396,57 @@
 }
 
 @media (pointer: coarse) {
-  .app-shell .fmt-element-row,
-  .app-shell .mm-binding-row,
-  .app-shell .mm-tree-row,
-  .app-shell .ds-row,
-  .app-shell .fmt-bind-card {
-    min-height: 40px;
-  }
-
-  .app-shell .fmt-tab-btn,
-  .app-shell .fmt-sliding-tabs__btn,
-  .app-shell .fmt-stat-btn {
-    min-height: 36px;
-  }
-
-  .app-shell .ds-row-toggle {
-    min-width: 26px;
-    min-height: 26px;
-  }
-
   .app-shell .ds-row-where-used {
     opacity: 1;
   }
 
 }
 
-@media (max-width: 900px) {
-  /* The designer bars deliberately stay on one line — see the touch layer. */
-  .app-shell .fmt-header,
-  .app-shell .fmt-toolbar {
-    flex-wrap: nowrap;
-  }
+/* A designer is narrow whenever the side panels take the room, at any window
+   width: the toolbar's controls wrap under the page tabs rather than squeeze
+   them, and tabs that still do not fit scroll instead of being cut off. */
+.app-shell .fmt-toolbar .fmt-sliding-tabs {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
 
+.app-shell .fmt-toolbar .fmt-sliding-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.app-shell .fmt-toolbar .fmt-sliding-tabs__btn {
+  flex-shrink: 0;
+}
+
+/* Tabs that run past the edge fade out there, so it shows that they scroll.
+   The fade follows the scroll position and is gone at the end (or when
+   nothing overflows, where the scroll timeline is inactive). */
+@property --fmt-tabs-fade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes fmt-tabs-fade {
+  from { --fmt-tabs-fade: 28px; }
+  96% { --fmt-tabs-fade: 28px; }
+  to { --fmt-tabs-fade: 0px; }
+}
+
+@supports (animation-timeline: scroll()) {
   .app-shell .fmt-toolbar .fmt-sliding-tabs {
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--fmt-tabs-fade)), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--fmt-tabs-fade)), transparent);
+    animation: fmt-tabs-fade linear both;
+    animation-timeline: scroll(self inline);
   }
+}
 
-  .app-shell .fmt-toolbar .fmt-sliding-tabs::-webkit-scrollbar {
-    display: none;
-  }
-
-  .app-shell .fmt-sliding-tabs__btn {
-    flex-shrink: 0;
+@media (max-width: 900px) {
+  /* The header stays on one line: its counters drop their words below. */
+  .app-shell .fmt-header {
+    flex-wrap: nowrap;
   }
 
   .app-shell .fmt-header-tools {
@@ -2352,22 +2362,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-@media (pointer: coarse) {
-  .app-shell .ds-row-main .ds-row-name--drill {
-    box-sizing: border-box;
-    padding-block: 0;
-    margin-block: 0;
-    line-height: 36px;
-  }
-
-  .app-shell .ds-row-path,
-  .app-shell .ds-row-meta,
-  .app-shell .ds-row-meta .ds-row-formula {
-    font-size: var(--er-text-sm);
-    line-height: 20px;
-  }
-
-}
 
 /* ── Row hierarchy: a coloured edge by kind, quieter paths, tidy counts ── */
 .ds-row {
@@ -2937,8 +2931,13 @@ button.src-chip:hover { border-color: var(--src-color); }
 
 /* ── Field specification ── */
 
-.spec-view { display: flex; flex-direction: column; min-width: 860px; }
+/* As wide as the grid's columns need at their minimum (a fixed 860px was
+   narrower than that, and the last column hung out of the rows). */
+.spec-view { display: flex; flex-direction: column; min-width: min-content; }
 
+/* The table is wider than a narrow pane and scrolls sideways; its header
+   line keeps to the visible width and stays put, so the modes and the export
+   are never scrolled out of reach. */
 .spec-view__head {
   display: flex;
   align-items: center;
@@ -2947,6 +2946,10 @@ button.src-chip:hover { border-color: var(--src-color); }
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
+  position: sticky;
+  left: 0;
+  box-sizing: border-box;
+  width: min(100%, 100cqw);
 }
 .spec-view__summary { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-size: var(--er-text-xs); color: var(--er-text-muted); }
 .spec-view__total { font-weight: 600; color: var(--er-text); }

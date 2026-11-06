@@ -1,0 +1,365 @@
+/* Touch: how big the workbench is on a tablet (a coarse pointer).
+
+   Every touch size lives here, in one layer loaded after the component and
+   Indigo Ledger stylesheets, so a later look can no longer undo it. Spread
+   over the component files, the touch sizes lost to the ledger rules loaded
+   after them (the explorer rows kept their mouse height), and a blanket
+   minimum height for every button pushed icon buttons and switch segments out
+   of the rows and tracks that hold them.
+
+   The sizes are the touch tokens of app-tokens.css: --wb-touch-target (36px)
+   for a control in a bar — a button, a field, a switch, counted with its
+   track; --wb-touch-compact (32px) for a chip or an icon button inside a row
+   or a tab; --wb-touch-row (40px) for a row of a list or a tree. A container
+   is sized from what it holds, so nothing spills out of it.
+
+   What only reveals on touch what a mouse finds on hover (row actions,
+   arrows) stays next to the rule it adapts. */
+
+@media (pointer: coarse) {
+  :root {
+    --wb-header-h: 44px;
+    --wb-statusbar-h: 44px;
+    /* The bars' controls (fields, Fluent buttons in bars) follow. */
+    --wb-control-h: var(--wb-touch-target);
+  }
+
+  /* ── Shell: the rail's tiles and the status bar ── */
+  .app-shell .activity-bar__btn {
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .app-shell .app-statusbar {
+    height: var(--wb-statusbar-h);
+    min-height: var(--wb-statusbar-h);
+  }
+
+  .app-shell .app-statusbar > span {
+    min-height: 30px;
+    box-sizing: border-box;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  /* ── Fluent buttons: the small ones (24px) grow to the compact target, an
+     icon-only one stays square. The bars and strips below size their own;
+     these selectors are kept as weak as Fluent's so those always win. ── */
+  :is(.app-shell, .fui-DialogSurface, .fui-PopoverSurface) .fui-Button {
+    min-height: var(--wb-touch-compact);
+  }
+
+  :is(.app-shell, .fui-DialogSurface, .fui-PopoverSurface) .fui-Button:where(:has(> .fui-Button__icon:only-child)) {
+    min-width: var(--wb-touch-compact);
+    max-width: none;
+  }
+
+  /* In a bar the controls are full targets (globals.css sets their height
+     from --wb-control-h); the icon-only ones match it in width. */
+  .app-shell :is(.fmt-toolbar, .fmt-header, .explorer-toolbar, .explorer-panel-header, .dd-hero, .search-panel) .fui-Button:where(:has(> .fui-Button__icon:only-child)),
+  .fui-DialogSurface :is(.ws-toolbar, .ws-section-head) .fui-Button:where(:has(> .fui-Button__icon:only-child)) {
+    min-width: var(--wb-control-h);
+  }
+
+  /* Menu items are rows to tap. */
+  .fui-MenuPopover .fui-MenuItem {
+    min-height: var(--wb-touch-row);
+  }
+
+  /* ── Title bar: history, open files, the view / language switches, theme ── */
+  .app-shell .wb-titlebar .fui-Button {
+    min-width: var(--wb-touch-target);
+    max-width: none;
+    height: var(--wb-touch-target);
+  }
+
+  .app-shell .wb-segmented {
+    height: var(--wb-touch-target);
+  }
+
+  .app-shell .wb-titlebar .er-theme-switch {
+    width: var(--wb-touch-target);
+    min-width: var(--wb-touch-target);
+    height: var(--wb-touch-target);
+  }
+
+  /* ── Tab strips: the designer's tabs and the side panel's ── */
+  .app-shell .wb-tab {
+    height: var(--wb-touch-row);
+    padding-right: calc(var(--wb-touch-compact) + 6px);
+  }
+
+  .app-shell .wb-tab[aria-selected='true'] {
+    height: calc(var(--wb-touch-row) + 1px);
+  }
+
+  /* With a close button on every tab, a crowded strip scrolls rather than
+     squeezing the names to a letter (over base.css's ellipsis rule). */
+  .app-shell .wb-tabstrip .wb-tab {
+    min-width: 104px;
+  }
+
+  /* Swiped, not dragged by a bar: base.css's wider touch scrollbar would
+     take the bottom of the tabs. TabBar keeps the open tab in view. */
+  .app-shell .wb-tabstrip__tabs {
+    scrollbar-width: none;
+  }
+
+  .app-shell .wb-tabstrip__tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-shell .wb-tab__close,
+  .app-shell .wb-tabstrip__action,
+  .app-shell .wb-side-tabs__actions .fui-Button {
+    min-width: var(--wb-touch-compact);
+    max-width: none;
+    width: var(--wb-touch-compact);
+    height: var(--wb-touch-compact);
+  }
+
+  .app-shell .wb-tab__close {
+    right: 3px;
+  }
+
+  /* Over base.css's ellipsis rule for tabs, which zeroes the minimum. */
+  .app-shell .wb-side-tabs > .wb-side-tabs__tab {
+    min-width: var(--wb-touch-compact);
+    justify-content: center;
+  }
+
+  /* ── Explorer: rows a finger hits, icon buttons that fit inside them ── */
+  .vx-row {
+    height: 36px;
+    line-height: 36px;
+  }
+
+  .vx-row--root {
+    height: var(--wb-touch-row);
+    line-height: var(--wb-touch-row);
+  }
+
+  .vx-pane__header,
+  .vx-pane:not(.vx-pane--collapsed) > .vx-pane__header {
+    height: var(--wb-touch-row);
+  }
+
+  .vx-titlebar .vx-action,
+  .vx-pane__actions .vx-action,
+  .vx-row-actions .vx-action {
+    width: var(--wb-touch-compact);
+    height: var(--wb-touch-compact);
+  }
+
+  /* Without hover the row's "…" is always shown, in place of the
+     decorations. Closing a configuration is in that menu, so its ✕ gives the
+     name the room. */
+  .vx-row-actions {
+    display: inline-flex;
+  }
+
+  .vx-row--actions .vx-decorations,
+  .vx-row-actions .vx-row-close {
+    display: none;
+  }
+
+  /* The filter box holds the field and the kind toggles. */
+  .vx-filter__box {
+    height: var(--wb-touch-target);
+  }
+
+  .vx .vx-filter__box .filter-field__input {
+    height: calc(var(--wb-touch-target) - 2px);
+  }
+
+  .vx-toggle {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* A narrow explorer gives its title bar to the actions; the rail already
+     says which view is open. */
+  @container (max-width: 300px) {
+    .vx-titlebar__title {
+      visibility: hidden;
+    }
+  }
+
+  .app-shell .explorer-tree-shell .tree-node[data-depth='0'],
+  .app-shell .ws-row {
+    min-height: var(--wb-touch-row);
+  }
+
+  .app-shell .tree-chevron,
+  .app-shell .tree-chevron-placeholder {
+    min-width: 26px;
+    min-height: 26px;
+  }
+
+  /* ── Fields and switches. A switch is counted with its 3px track. ── */
+  .app-shell .filter-field:not(.vx-filter__field) {
+    height: var(--wb-touch-target);
+    min-height: var(--wb-touch-target);
+    box-sizing: border-box;
+  }
+
+  .app-shell .filter-field:not(.vx-filter__field) > .filter-field__input {
+    height: 100%;
+    box-sizing: border-box;
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: calc(var(--wb-touch-target) - 2px);
+  }
+
+  .app-shell .filter-field:not(.vx-filter__field) > .filter-field__input {
+    padding-right: calc(var(--wb-touch-target) - 2px);
+  }
+
+  .filter-field:not(.vx-filter__field) > .filter-field__clear,
+  .vx .vx-filter__box .filter-field__clear {
+    right: 3px;
+    width: calc(var(--wb-touch-target) - 6px);
+    height: calc(var(--wb-touch-target) - 6px);
+  }
+
+  .app-shell .filter-suggest__item {
+    min-height: var(--wb-touch-target);
+  }
+
+  /* A filter in a designer bar keeps a usable width; the bar wraps instead. */
+  .app-shell .fmt-toolbar .filter-field {
+    flex: 1 1 180px;
+    min-width: 180px;
+  }
+
+  .app-shell .expand-slider {
+    align-items: center;
+  }
+
+  .app-shell .expand-slider .expand-slider__option,
+  .app-shell .expand-slider--compact .expand-slider__option {
+    width: 34px;
+    height: calc(var(--wb-touch-target) - 6px);
+  }
+
+  .app-shell .fmt-sliding-tabs__btn,
+  .app-shell .fmt-bind-layout button,
+  .app-shell .spec-view__modes .spec-mode,
+  .app-shell .search-scope-toggle .search-scope-toggle__btn {
+    min-height: calc(var(--wb-touch-target) - 6px);
+  }
+
+  .app-shell .search-scope-toggle .search-scope-toggle__btn {
+    height: auto;
+    padding: 0 12px;
+  }
+
+  /* ── Designer header: every pill the same height ── */
+  .app-shell .fmt-header > span:first-child:not(.fmt-header-title),
+  .app-shell .fmt-header .fmt-stat,
+  .app-shell .fmt-header .fmt-stat-btn {
+    height: var(--wb-touch-compact);
+    min-height: var(--wb-touch-compact);
+  }
+
+  .app-shell .fmt-header-hint {
+    width: var(--wb-touch-compact);
+    height: var(--wb-touch-compact);
+  }
+
+  /* ── Buttons in the designers' bars ── */
+  .app-shell .fmt-tab-btn,
+  .app-shell .fmt-bind-intent-chip,
+  .app-shell .ds-list-bar__formulas,
+  .app-shell .spec-view__export,
+  .app-shell .doc-preview__action {
+    min-height: var(--wb-touch-target);
+  }
+
+  /* ── Rows ── */
+  .app-shell .fmt-element-row,
+  .app-shell .mm-binding-row,
+  .app-shell .mm-tree-row,
+  .app-shell .ds-row,
+  .app-shell .fmt-bind-card,
+  .app-shell .fb-head--group,
+  .app-shell .search-hit {
+    min-height: var(--wb-touch-row);
+  }
+
+  .app-shell .ds-row-toggle {
+    min-width: 26px;
+    min-height: 26px;
+  }
+
+  /* ── Drill-down: in its tab and in its dialog, which is outside .app-shell ── */
+  :is(.app-shell, .fui-DialogSurface) .dd-panel .dd-view-toggle__btn,
+  :is(.app-shell, .fui-DialogSurface) .dd-panel .dd-tree-label-toggle__btn {
+    height: calc(var(--wb-touch-target) - 6px);
+  }
+
+  :is(.app-shell, .fui-DialogSurface) .dd-hero__btn,
+  :is(.app-shell, .fui-DialogSurface) .lin-chip {
+    min-height: var(--wb-touch-target);
+  }
+
+  :is(.app-shell, .fui-DialogSurface) .lin-row,
+  :is(.app-shell, .fui-DialogSurface) .dd-collapsible__trigger {
+    min-height: var(--wb-touch-row);
+  }
+
+  :is(.app-shell, .fui-DialogSurface) .lin-row__toggle {
+    min-width: 26px;
+    min-height: 26px;
+  }
+
+  /* A row's icon buttons are compact targets; the line that holds them grows
+     to fit instead of letting them overlap its padding as the mouse rows do. */
+  .app-shell .ds-row-main {
+    min-height: var(--wb-touch-compact);
+  }
+
+  .app-shell .ds-row-where-used,
+  .app-shell .ds-row-fx,
+  .app-shell .fmt-row-actions,
+  .app-shell .fb-action {
+    width: var(--wb-touch-compact);
+    height: var(--wb-touch-compact);
+    margin-block: 0;
+  }
+
+  .app-shell .ds-row-expander,
+  .app-shell .ds-row-expander-spacer {
+    width: 26px;
+    height: 26px;
+  }
+
+  .app-shell .ds-row-path,
+  .app-shell .ds-row-meta,
+  .app-shell .ds-row-meta .ds-row-formula {
+    font-size: var(--er-text-sm);
+    line-height: 20px;
+  }
+
+  /* ── Graphs: the zoom and fit buttons ── */
+  .app-shell .react-flow__controls-button {
+    width: var(--wb-touch-compact);
+    height: var(--wb-touch-compact);
+  }
+
+  /* ── Search ── */
+  .app-shell .search-reach-toggle {
+    min-width: var(--wb-touch-target);
+    height: var(--wb-touch-target);
+  }
+
+  .app-shell .search-facet {
+    height: var(--wb-touch-compact);
+  }
+
+  .app-shell .search-doc__where-used {
+    width: var(--wb-touch-compact);
+    height: var(--wb-touch-compact);
+  }
+}
