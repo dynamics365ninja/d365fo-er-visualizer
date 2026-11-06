@@ -12,6 +12,7 @@ import type { ERConfiguration, ERFormatContent, ERFormatElement } from '@er-visu
 import { useAppStore } from '../../state/store';
 import { t } from '../../i18n';
 import { useTabState } from '../../utils/tab-view-state';
+import { parseBoolean, usePreference } from '../../utils/ui-preferences';
 import { colToLetter, type XlsxAnchorPoint, type XlsxDrawing, type XlsxSheet, type XlsxWorkbook } from '../../utils/xlsx-parser';
 import type { CellMark, RowMark, SheetComparison, TemplateCellChange } from '../../utils/template-diff';
 import { inlineChange, type ChangeKind, type PropertyChange, type VersionDiff } from '../../utils/version-diff';
@@ -270,7 +271,7 @@ function TemplateCompare({ diff, sideLabels, focus, olderWorkbook, newerWorkbook
 
   const olderScroll = useRef<HTMLDivElement>(null);
   const newerScroll = useRef<HTMLDivElement>(null);
-  const [sync, setSync] = useState(true);
+  const [sync, setSync] = usePreference('compare.syncScroll', true, parseBoolean);
   const lock = useRef<Side | null>(null);
 
   /** Keep the other grid on the same rows — its twin rows, when rows were inserted on one side. */

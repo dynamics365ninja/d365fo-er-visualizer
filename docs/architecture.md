@@ -132,6 +132,15 @@ model + mapping when a format or mapping is added back. On the landing page, `Re
 sessions and recent configurations from the same metadata (named as the explorer names them —
 `utils/recent-display.ts`); closing everything keeps the last workspace as a session.
 
+**View preferences** — how the workspace is laid out survives a reload. The explorer's and the
+right panel's widths are kept by `react-resizable-panels` (`autoSaveId`, one layout per set of
+panels shown, desktop and tablet apart); which side panels are open, the explorer's hierarchy view
+and sort, and the options of the preview, search, where-used and comparison go through
+`utils/ui-preferences.ts` (`usePreference`, keys under `er-visualizer.ui.`). Only the user's own
+choices are written — a drill-down tab hiding the panels, or a narrow window dropping the explorer,
+is not — and typed filters, kind toggles and category chips start fresh. Older preferences keep
+their own keys (`split-ratio.ts`, `explorer-sections.ts`, the model view, the drill-down views).
+
 **Labels** — `utils/label-resolver.ts` turns `@GER_LABEL:…` references into text. The pool for a
 configuration is its own dictionary first, then every other loaded configuration, then a process-wide
 pool harvested by `fno/session.ts` from *every* F&O response — including scout, probe and ancestor

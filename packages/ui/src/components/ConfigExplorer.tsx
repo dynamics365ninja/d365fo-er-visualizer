@@ -73,9 +73,11 @@ import {
   moveSection,
   saveSectionLayout,
 } from '../utils/explorer-sections';
+import { oneOf, parseBoolean, usePreference } from '../utils/ui-preferences';
 
 type ConfigKind = 'DataModel' | 'ModelMapping' | 'Format';
 type SortMode = 'loadOrder' | 'nameAsc' | 'nameDesc';
+const parseSortMode = oneOf<SortMode>(['loadOrder', 'nameAsc', 'nameDesc']);
 
 const KINDS: readonly ConfigKind[] = ['DataModel', 'ModelMapping', 'Format'];
 const KIND_ACCENT: Record<ConfigKind, 'model' | 'mapping' | 'format'> = { DataModel: 'model', ModelMapping: 'mapping', Format: 'format' };
@@ -430,7 +432,9 @@ export function ConfigExplorer() {
   const [filterQuery, setFilterQuery] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [kindFilter, setKindFilter] = useState<Set<ConfigKind>>(new Set(['DataModel', 'ModelMapping', 'Format']));
-  const [sortMode, setSortMode] = useState<SortMode>('loadOrder');
+  // How the tree is laid out is remembered; what it is narrowed to (the text
+  // and the kind toggles) starts fresh.
+  const [sortMode, setSortMode] = usePreference<SortMode>('explorer.sort', 'loadOrder', parseSortMode);
   // The kind sections in the order the user set, and which of them are
   // collapsed — both remembered, as VS Code remembers its views. Every
   // section starts open.
@@ -445,7 +449,7 @@ export function ConfigExplorer() {
   // A section header being dragged to a new place, and where it would land.
   const [sectionDrag, setSectionDrag] = useState<{ kind: ConfigKind; over?: { kind: ConfigKind; place: 'before' | 'after' } } | null>(null);
   const [sectionMenu, setSectionMenu] = useState<{ kind: ConfigKind; target: HTMLElement | PositioningVirtualElement } | null>(null);
-  const [hierarchyView, setHierarchyView] = useState(false);
+  const [hierarchyView, setHierarchyView] = usePreference('explorer.hierarchy', false, parseBoolean);
   // The context menu of one row, opened at its "…" button or at the pointer.
   const [menu, setMenu] = useState<{ node: TreeNode; target: HTMLElement | PositioningVirtualElement } | null>(null);
   const openMenu = useCallback((node: TreeNode, target: HTMLElement | PositioningVirtualElement) => setMenu({ node, target }), []);

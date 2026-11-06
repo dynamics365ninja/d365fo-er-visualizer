@@ -20,6 +20,7 @@ import { WhereUsedView } from './WhereUsedView';
 const SEARCH_PAGE_SIZE = 100;
 import { buildSearchIndex, searchIndex, SEARCH_CATEGORY_ORDER, type SearchCategory, type SearchDoc } from '../utils/search-index';
 import { SearchResultsView } from './SearchResultsView';
+import { parseBoolean, usePreference } from '../utils/ui-preferences';
 
 
 /**
@@ -162,10 +163,12 @@ export function SearchPanel() {
   // A workspace often holds several unrelated model trees, and an unscoped
   // search reports hits from all of them. Default to the open configuration's
   // own tree; the "All" chip opts back into the full sweep.
-  const [searchRelatedOnly, setSearchRelatedOnly] = useState(true);
+  // Both reaches are remembered; the category chip narrows one search and
+  // starts fresh.
+  const [searchRelatedOnly, setSearchRelatedOnly] = usePreference('search.relatedOnly', true, parseBoolean);
   // Where-used answers "what breaks if this changes" — across every loaded
   // configuration by default; the related-only reach is one click away.
-  const [whereUsedRelatedOnly, setWhereUsedRelatedOnly] = useState(false);
+  const [whereUsedRelatedOnly, setWhereUsedRelatedOnly] = usePreference('whereUsed.relatedOnly', false, parseBoolean);
   const relatedOnly = mode === 'search' ? searchRelatedOnly : whereUsedRelatedOnly;
   const setRelatedOnly = mode === 'search' ? setSearchRelatedOnly : setWhereUsedRelatedOnly;
   useEffect(() => { setResultLimit(SEARCH_PAGE_SIZE); }, [searchQuery, searchCategory, relatedOnly]);
