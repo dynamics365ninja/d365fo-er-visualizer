@@ -31,9 +31,7 @@ interface ActivityBarProps {
 }
 
 const useStyles = makeStyles({
-  // The indigo rail carries the brand in both themes (`wb-indigo` re-points
-  // the tokens inside it, so the brand mark gets the bright kind hues). A shade
-  // darker than the explorer beside it, the full height of the window.
+  // Slightly distinguish the rail from the header in light mode.
   root: {
     display: 'flex',
     flexDirection: 'column',
@@ -43,14 +41,14 @@ const useStyles = makeStyles({
     height: '100%',
     boxSizing: 'border-box',
     padding: '10px 0',
-    backgroundColor: 'var(--er-side-rail)',
+    backgroundColor: 'var(--er-activitybar-bg)',
     flexShrink: 0,
   },
   sep: {
     width: '24px',
     height: '1px',
     flexShrink: 0,
-    backgroundColor: 'var(--er-side-line)',
+    backgroundColor: 'var(--er-border)',
     margin: '6px 0',
   },
   btnWrap: {
@@ -59,8 +57,7 @@ const useStyles = makeStyles({
     display: 'flex',
     justifyContent: 'center',
   },
-  // Rounded tiles: muted icons, the open view lifted onto a lighter indigo
-  // tile with a gold icon.
+  // Rounded tiles use the same neutral surfaces and accent as the workspace.
   btn: {
     position: 'relative',
     display: 'flex',
@@ -73,34 +70,34 @@ const useStyles = makeStyles({
     borderRadius: '10px',
     border: 'none',
     backgroundColor: 'transparent',
-    color: 'var(--er-side-muted)',
+    color: 'var(--er-text-muted)',
     cursor: 'pointer',
     fontFamily: tokens.fontFamilyBase,
     transitionProperty: 'color, background-color',
     transitionDuration: 'var(--er-duration-fast)',
     ':hover': {
-      backgroundColor: 'var(--er-side-hover)',
-      color: 'var(--er-side-strong)',
+      backgroundColor: 'var(--er-hover)',
+      color: 'var(--er-text)',
     },
     ':focus-visible': {
-      outline: '2px solid var(--er-gold)',
+      outline: '2px solid var(--er-accent)',
       outlineOffset: '1px',
     },
   },
   btnActive: {
-    backgroundColor: 'var(--er-side-active)',
-    color: 'var(--er-gold)',
+    backgroundColor: 'var(--er-accent-soft)',
+    color: 'var(--er-accent)',
     ':hover': {
-      backgroundColor: 'var(--er-side-active)',
-      color: 'var(--er-gold)',
+      backgroundColor: 'var(--er-accent-soft)',
+      color: 'var(--er-accent)',
     },
   },
   /** The home button is the brand: the "ER" mark on a lifted tile. */
   brandBtn: {
-    backgroundColor: 'var(--er-side-active)',
+    backgroundColor: 'var(--er-accent-soft)',
     marginBottom: '2px',
     ':hover': {
-      backgroundColor: 'var(--er-side-hover)',
+      backgroundColor: 'var(--er-hover)',
     },
   },
   brandMark: {
@@ -116,16 +113,16 @@ const useStyles = makeStyles({
 });
 
 /**
- * The indigo icon rail: the brand mark (home), then the explorer and the
- * panels as icons, each in the same 40px rounded tile. The language, the view
- * mode and the theme are in the header.
+ * The icon rail: the brand mark (home), then the explorer and the panels as
+ * icons, each in the same 40px rounded tile. The language, view mode and theme
+ * are in the header.
  */
 export function ActivityBar(props: ActivityBarProps) {
   const styles = useStyles();
   useLocale(); // the labels and tooltips follow the language switch
 
   return (
-    <nav className={mergeClasses('activity-bar', 'wb-indigo', styles.root)} aria-label={t.activityBarLabel}>
+    <nav className={mergeClasses('activity-bar', styles.root)} aria-label={t.activityBarLabel}>
       <ActivityButton
         brand
         label={t.home}

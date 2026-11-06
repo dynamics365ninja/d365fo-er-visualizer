@@ -21,6 +21,7 @@
     --er-bg-soft: #161930;
     --er-surface: #161930;
     --er-surface-2: #1b1e37;
+    --er-activitybar-bg: var(--er-surface);
     --er-surface-3: #22253f;
     --er-surface-raised: #1b1e37;
     --er-surface-raised-2: #22253f;
@@ -184,6 +185,7 @@
   --er-bg-soft: #ffffff;
   --er-surface: #ffffff;
   --er-surface-2: #f8f9fb;
+  --er-activitybar-bg: #f1f2f7;
   --er-surface-3: #eceef3;
   --er-surface-raised: #ffffff;
   --er-surface-raised-2: #f8f9fb;
@@ -309,6 +311,7 @@
   --er-bg-soft: #161930;
   --er-surface: #161930;
   --er-surface-2: #1b1e37;
+  --er-activitybar-bg: var(--er-surface);
   --er-surface-3: #22253f;
   --er-surface-raised: #1b1e37;
   --er-surface-raised-2: #22253f;
@@ -396,6 +399,7 @@
   --er-bg-soft: #ffffff;
   --er-surface: #ffffff;
   --er-surface-2: #f8f9fb;
+  --er-activitybar-bg: #f1f2f7;
   --er-surface-3: #eceef3;
   --er-surface-raised: #ffffff;
   --er-surface-raised-2: #f8f9fb;

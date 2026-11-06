@@ -402,7 +402,6 @@ export interface Translations {
 
   // Recent files, samples, validator, shortcuts, forward nav
   recentFiles: string;
-  recentConfigs: string;
   recentOpen: string;
   recentAddToOpen: string;
   recentMoreActions: string;
@@ -420,7 +419,6 @@ export interface Translations {
   recentSessionCount: (n: number) => string;
   recentShowAll: (n: number) => string;
   recentShowLess: string;
-  recentFilterPlaceholder: string;
   noRecentFiles: string;
   clearRecent: string;
   recentReloadHint: string;
@@ -1558,7 +1556,6 @@ const cs: Translations = {
   viewTechnicalShort: 'Technický',
 
   recentFiles: 'Nedávné soubory',
-  recentConfigs: 'Nedávné konfigurace',
   recentOpen: 'Otevřít',
   recentAddToOpen: 'Přidat k otevřeným',
   recentMoreActions: 'Další akce',
@@ -1576,7 +1573,6 @@ const cs: Translations = {
   recentSessionContents: (n: number) => `Obsah relace: ${n} ${csPlural(n, 'konfigurace', 'konfigurace', 'konfigurací')}`,
   recentShowAll: (n: number) => `Zobrazit ${csPlural(n, 'celou', 'všechny', 'všech')} ${n}`,
   recentShowLess: 'Zobrazit méně',
-  recentFilterPlaceholder: 'Filtrovat nedávné konfigurace…',
   noRecentFiles: 'Žádné nedávno otevřené soubory.',
   recentReloadHint: 'Znovu načíst soubor',
   recentSessions: 'Nedávné relace',
@@ -2817,7 +2813,6 @@ const en: Translations = {
   viewTechnicalShort: 'Technical',
 
   recentFiles: 'Recent files',
-  recentConfigs: 'Recent configurations',
   recentOpen: 'Open',
   recentAddToOpen: 'Add to open',
   recentMoreActions: 'More actions',
@@ -2835,7 +2830,6 @@ const en: Translations = {
   recentSessionContents: (n: number) => `Session contents: ${n} configuration${n === 1 ? '' : 's'}`,
   recentShowAll: (n: number) => `Show all ${n}`,
   recentShowLess: 'Show less',
-  recentFilterPlaceholder: 'Filter recent configurations…',
   noRecentFiles: 'No recently opened files.',
   recentReloadHint: 'Reload file',
   recentSessions: 'Recent sessions',
@@ -3756,4 +3750,3 @@ export let t: Translations = locale === 'cs' ? cs : en;
 export function getTranslations(forLocale: Locale): Translations {
   return forLocale === 'cs' ? cs : en;
 }
-
