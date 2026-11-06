@@ -19,8 +19,6 @@ import {
 } from '@fluentui/react-icons';
 import { ConfigKindIcon, FormatKindIcon, MappingKindIcon, ModelKindIcon } from './KindIcons';
 import { whereUsedQueryFor, whereUsedTargetFor } from '../utils/where-used-query';
-import { buildFormatLineage, elementFill } from '../utils/format-lineage';
-import { ElementFillCard } from './designers/ElementFillCard';
 
 function getFormatDirectionLabel(direction: ERDirection | undefined): string {
   if (direction === ERDirection.Import) return t.formatDirectionImport;
@@ -519,22 +517,8 @@ function FormatElementProps({ data, configIndex, showTechnicalDetails }: { data:
   )]);
   if (showTechnicalDetails && data.excludedFromDataSource) items.push([t.propExcluded, t.propYes]);
 
-  return (
-    <>
-      <FormatElementFill elementId={data?.id} configIndex={configIndex} />
-      <PropGrid items={items} />
-    </>
-  );
-}
-
-/** How the element is filled, traced through the mapping — leads the inspector. */
-function FormatElementFill({ elementId, configIndex }: { elementId: string | undefined; configIndex: number }) {
-  const configurations = useAppStore(s => s.configurations);
-  const lineage = React.useMemo(() => buildFormatLineage(configurations, configIndex), [configurations, configIndex]);
-  const fill = elementFill(lineage, elementId);
-  if (!lineage || !fill) return null;
-  const target = fill.absorbedInto ? elementFill(lineage, fill.absorbedInto) ?? fill : fill;
-  return <ElementFillCard fill={target} configIndex={configIndex} mappingLoaded={Boolean(lineage.mapping)} />;
+  // How the element is filled is shown in the trace bar under the designer.
+  return <PropGrid items={items} />;
 }
 
 function FormatBindingProps({ data, configIndex, showTechnicalDetails }: { data: any; configIndex: number; showTechnicalDetails: boolean }) {
